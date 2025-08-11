@@ -1,0 +1,61 @@
+//obliga a alinearse a las etiquetas de th para evitar que se haga un salto de linea
+::ng-deep .p-datatable .p-datatable-thead>tr>th {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  /* Esto puede ser útil para mostrar puntos suspensivos si el texto se recorta */
+  //max-width: 50px;
+}
+
+
+// permite como maximo 350px de ancho en las celdas de la tabla
+::ng-deep .p-datatable .p-datatable-tbody>tr>td {
+  max-width: 350px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  /* Opcional: añadir puntos suspensivos si el texto es demasiado largo */
+  white-space: nowrap;
+  /* Opcional: evitar que el texto se divida */
+}
+
+::ng-deep table td:first-child {
+  border-left: none;
+  /* Quita el borde izquierdo */
+}
+
+/* Estilo del buscador (header en esta versión) */
+::ng-deep .p-datatable-header input.p-inputtext {
+  border: 1px solid #b4b7bd;
+  background: linear-gradient(#fcfcfc, #f2f4f7);
+  transition: border-color .15s ease, box-shadow .15s ease, background .15s ease;
+  height: 32px;
+  padding: 0 .65rem;
+  border-radius: 6px;
+  font-size: .85rem;
+  color: #1f2933;
+}
+
+::ng-deep .p-datatable-header input.p-inputtext:hover:not(:disabled) {
+  border-color: #90949b;
+  background: linear-gradient(#ffffff, #e9edf2);
+}
+
+::ng-deep .p-datatable-header input.p-inputtext:focus:not(:disabled) {
+  border-color: #2563eb;
+  /* azul contraste */
+  box-shadow: 0 0 0 2px #2563eb33;
+  outline: none;
+  background: #ffffff;
+}
+
+::ng-deep .p-datatable-header input.p-inputtext:disabled {
+  opacity: .55;
+  cursor: not-allowed;
+}
+
+/* Placeholder más visible sin competir con el texto */
+::ng-deep .p-datatable-header input.p-inputtext::placeholder {
+  color: #525960;
+  font-weight: 500;
+  letter-spacing: .5px;
+}

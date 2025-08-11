@@ -1,0 +1,174 @@
+<div class="layout-topbar-start">
+
+  <a class="layout-topbar-logo" routerLink="/">
+    <img src="/images/logolargo.png" alt="Logo" class="layout-topbar-logo-full" style="height: 40px; width: 140px;" />
+    <img src="/images/logoslim.png" alt="Logo" class="layout-topbar-logo-slim" style="height: 45px; width: 45px;" />
+  </a>
+
+  <a #menuButton class="layout-menu-button" (click)="onMenuButtonClick()" style="right: 0px;">
+    <i class="pi pi-chevron-right"></i>
+  </a>
+
+  <li *ngIf="authS.loggedin" class="layout-topbar-user app-config-mobile-button">
+    <button class="rounded-full overflow-hidden w-10 h-10 flex items-center justify-center"
+      (click)="userMenuVisible = !userMenuVisible" (blur)="hideMenuOnBlur()" tabindex="0">
+      <img src="/images/avatar/amyelsner.png" alt="avatar" class="w-full h-full object-cover" />
+    </button>
+    <ul class="absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg py-2 z-50" *ngIf="userMenuVisible">
+      <li>
+        <a class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 cursor-pointer flex items-center">
+          <i class="pi pi-cog mr-2"></i> Configuración
+        </a>
+      </li>
+      <li *ngIf="authS.loggedin" (click)="toggleConfigSidebar()">
+        <a class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 cursor-pointer flex items-center">
+          <i class="pi pi-palette mr-2"></i>
+          <span>Apariencia</span>
+        </a>
+      </li>
+      <li>
+        <a (click)="logout()"
+          class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 cursor-pointer flex items-center">
+          <i class="pi pi-power-off mr-2"></i> Salir
+        </a>
+      </li>
+    </ul>
+  </li>
+
+  <li *ngIf="!authS.loggedin" class="app-config-mobile-button">
+    <a class="cursor-pointer px-2 py-2 text-white font-semibold hover:underline transition-all duration-150 whitespace-nowrap bg-transparent focus:bg-transparent active:bg-transparent"
+      style="background: none !important; box-shadow: none !important; white-space: nowrap;"
+      (click)="authS.redirectLogin()">
+      Iniciar sesión
+    </a>
+  </li>
+
+  <li class="app-config-mobile-button pt-2">
+    <a (click)="onRightMenuButtonClick()">
+      <i class="pi pi-cart-arrow-down" style="font-size: 2rem;"></i>
+    </a>
+  </li>
+
+  <a #mobileMenuButton *ngIf="authS.loggedin" class="layout-topbar-mobile-button" (click)="onTopbarMenuToggle()">
+    <i class="pi pi-ellipsis-v"></i>
+  </a>
+</div>
+
+
+
+<div class="layout-topbar-end">
+  <div class="w-full" style="padding-right: 15px;" *ngIf="isProductList()">
+    <input pInputText class="w-full p-inputtext-sm" type="text" placeholder="Buscar productos" />
+  </div>
+
+  <div class="layout-topbar-actions-start">
+  </div>
+  <div class="layout-topbar-actions-end">
+    <ul class="layout-topbar-items">
+      <li class="layout-topbar-search" *ngIf="authS.loggedin">
+        <a pStyleClass="@next" enterFromClass="!hidden" enterActiveClass="animate-scalein" leaveToClass="!hidden"
+          leaveActiveClass="animate-fadeout" [hideOnOutsideClick]="true" (click)="focusSearchInput()">
+          <i class="pi pi-search"></i>
+        </a>
+
+        <div class="layout-search-panel !hidden p-input-filled">
+          <i class="pi pi-search"></i>
+          <input #searchInput type="text" pInputText placeholder="Buscador general" />
+          <button pButton pRipple type="button" icon="pi pi-times" rounded text pStyleClass=".layout-search-panel"
+            leaveToClass="!hidden" leaveActiveClass="animate-fadeout"></button>
+        </div>
+      </li>
+      <li *ngIf="authS.loggedin">
+        <a pStyleClass="@next" enterFromClass="hidden" enterActiveClass="animate-scalein" leaveToClass="hidden"
+          leaveActiveClass="animate-fadeout" [hideOnOutsideClick]="true">
+          <p-overlay-badge severity="warn">
+            <i class="pi pi-bell align-middle!"></i>
+          </p-overlay-badge>
+        </a>
+        <div class="hidden">
+          <ul class="list-none p-0 m-0">
+            <li class="px-4 py-1">
+              <span>You have <b>4</b> new notifications</span>
+            </li>
+            <li class="p-4">
+              <div class="flex items-center">
+                <img src="/images/avatar/avatar-1.png" />
+                <div class="flex flex-col ml-4 flex-1">
+                  <div class="flex items-center justify-between mb-1">
+                    <span class="font-bold">Jerome Bell</span>
+                    <small>42 mins ago</small>
+                  </div>
+                  <span class="text-sm leading-normal">How to write content about your photographs?</span>
+                </div>
+              </div>
+            </li>
+          </ul>
+        </div>
+      </li>
+      <li *ngIf="authS.loggedin">
+        <a pStyleClass="@next" enterFromClass="hidden" enterActiveClass="animate-scalein" leaveToClass="hidden"
+          leaveActiveClass="animate-fadeout" [hideOnOutsideClick]="true">
+          <i class="pi pi-table"></i>
+        </a>
+        <div class="hidden">
+          <div class="flex flex-wrap">
+            <div class="w-4/12 flex flex-col items-center p-4">
+              <button pButton pRipple rounded class="mb-2" icon="pi pi-image"></button>
+              <span>Products</span>
+            </div>
+          </div>
+        </div>
+      </li>
+
+      <li *ngIf="authS.loggedin">
+        <a (click)="onRightMenuButtonClick()">
+          <i class="pi pi-cart-arrow-down" style="font-size: 1.5rem;"></i>
+        </a>
+      </li>
+
+      <li *ngIf="authS.loggedin" class="layout-topbar-user">
+        <a pStyleClass="@next" enterFromClass="hidden" enterActiveClass="animate-scalein" leaveToClass="hidden"
+          leaveActiveClass="animate-fadeout" [hideOnOutsideClick]="true">
+          <img src="/images/avatar/amyelsner.png" alt="avatar" class="w-8 h-8" />
+        </a>
+        <div class="hidden">
+          <ul class="list-none p-0 m-0">
+            <li *ngIf="authS.loggedin">
+              <a class="cursor-pointer flex items-center hover:bg-emphasis duration-150 transition-all px-4 py-2"
+                pRipple>
+                <i class="pi pi-cog mr-2"></i>
+                <span>Configuración</span>
+              </a>
+            </li>
+            <li *ngIf="authS.loggedin" (click)="toggleConfigSidebar()">
+              <a class="cursor-pointer flex items-center hover:bg-emphasis duration-150 transition-all px-4 py-2"
+                pRipple>
+                <i class="pi pi-palette mr-2"></i>
+                <span>Apariencia</span>
+              </a>
+            </li>
+            <li *ngIf="authS.loggedin">
+              <a (click)="logout()"
+                class="cursor-pointer flex items-center hover:bg-emphasis duration-150 transition-all px-4 py-2"
+                pRipple>
+                <i class="pi pi-power-off mr-2"></i>
+                <span>Salir</span>
+              </a>
+            </li>
+          </ul>
+        </div>
+      </li>
+
+
+      <li *ngIf="!authS.loggedin" style="padding: 20px;">
+        <a class="cursor-pointer px-2 py-2 text-white font-semibold hover:underline transition-all duration-150 whitespace-nowrap bg-transparent focus:bg-transparent active:bg-transparent"
+          style="background: none !important; box-shadow: none !important; white-space: nowrap;"
+          (click)="authS.redirectLogin()">
+          Iniciar sesión
+        </a>
+      </li>
+
+
+    </ul>
+  </div>
+</div>

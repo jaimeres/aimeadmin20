@@ -1,0 +1,145 @@
+/* Botón flotante con la animación */
+.assistant-fab {
+  position: fixed;
+  right: 20px;
+  bottom: 20px;
+  width: 84px;
+  height: 84px;
+  border-radius: 50%;
+  background: #ffffff;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  z-index: 1000;
+}
+
+.assistant-fab ng-lottie {
+  width: 64px;
+  height: 64px;
+  pointer-events: none;
+  /* para que el click sea en el contenedor */
+}
+
+/* Panel de chat */
+.assistant-panel {
+  position: fixed;
+  right: 20px;
+  bottom: 116px;
+  width: 340px;
+  max-height: 60vh;
+  background: #fff;
+  border-radius: 12px;
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.2);
+  display: none;
+  flex-direction: column;
+  overflow: hidden;
+  z-index: 1001;
+}
+
+.assistant-panel.open {
+  display: flex;
+}
+
+.assistant-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 12px;
+  border-bottom: 1px solid #eee;
+}
+
+.assistant-title {
+  font-weight: 600;
+}
+
+.assistant-close {
+  background: transparent;
+  border: 0;
+  font-size: 20px;
+  cursor: pointer;
+}
+
+.assistant-body {
+  padding: 12px;
+  gap: 8px;
+  display: flex;
+  flex-direction: column;
+  overflow: auto;
+}
+
+.msg {
+  display: flex;
+}
+
+.msg.user {
+  justify-content: flex-end;
+}
+
+.msg.assistant {
+  justify-content: flex-start;
+}
+
+.bubble {
+  max-width: 80%;
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: #f5f7fb;
+}
+
+.msg.user .bubble {
+  background: #e6f0ff;
+}
+
+.bubble.error {
+  background: #ffe6e6;
+}
+
+.bubble.thinking {
+  font-style: italic;
+  opacity: .7;
+}
+
+.assistant-footer {
+  display: flex;
+  gap: 8px;
+  padding: 10px;
+  border-top: 1px solid #eee;
+}
+
+.assistant-footer textarea {
+  flex: 1;
+  resize: none;
+  border-radius: 8px;
+  border: 1px solid #ddd;
+  padding: 8px;
+  font: inherit;
+}
+
+.assistant-footer .send {
+  padding: 8px 12px;
+  border: none;
+  border-radius: 8px;
+  background: #007ad9;
+  color: #fff;
+  cursor: pointer;
+}
+
+.assistant-footer .send:disabled {
+  opacity: .6;
+  cursor: not-allowed;
+}
+
+@media (max-width: 480px) {
+  .assistant-panel {
+    width: calc(100vw - 24px);
+    right: 12px;
+    left: 12px;
+    bottom: 110px;
+  }
+
+  .assistant-fab {
+    right: 12px;
+    bottom: 12px;
+  }
+}

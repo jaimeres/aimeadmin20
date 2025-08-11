@@ -1,0 +1,12 @@
+<p-toast>
+  <ng-template let-message pTemplate="message">
+    <div class="flex flex-column" style="flex: 1">
+      <div class="text-left">
+        <label class="text-lg">{{msgError}}</label>
+        <ul *ngIf="print_errors.length">
+          <li *ngFor="let error of print_errors"> {{error}} </li>
+        </ul>
+      </div>
+    </div>
+  </ng-template>
+</p-toast>

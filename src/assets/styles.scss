@@ -1,0 +1,535 @@
+/* You can add global styles to this file, and also import other style files */
+@use './tailwind.css';
+@use './layout/layout.scss';
+@use 'primeicons/primeicons.css';
+@use './demo/demo.scss';
+
+/* Custom Prime FloatLabel active font size override */
+:root {
+  /* Ajusta aquí el tamaño cuando la etiqueta flotante está activa */
+  --p-floatlabel-active-font-size: 0.65rem !important;
+  /* Tamaño (en reposo / inactiva). Usa esta variable propia y aplícala abajo. */
+  --p-floatlabel-inactive-font-size: 0.80rem;
+  /* modifica a gusto */
+  /* (Si tu versión de Prime ya soporta esta variable nativa, mantenla; si no, la regla custom la usará) */
+  --p-floatlabel-font-size: 0.7rem !important;
+  /* opcional: mantener si tu tema la reconoce */
+  /* valor personalizado */
+  --p-tabs-tab-padding: 0.3rem !important;
+}
+
+
+
+/* Etiqueta flotante en reposo (cuando el input NO tiene foco ni valor) */
+.p-float-label>label,
+.p-floatlabel>label {
+  /* cubre variantes de clase */
+  font-size: var(--p-floatlabel-inactive-font-size) !important;
+  line-height: 1.1;
+}
+
+/* Estado activo (foco o con valor) forzando a usar la variable ya soportada por Prime */
+.p-float-label input:focus~label,
+.p-float-label input.p-filled~label,
+.p-float-label textarea:focus~label,
+.p-float-label textarea.p-filled~label,
+.p-float-label .p-inputwrapper-focus~label,
+.p-float-label .p-inputwrapper-filled~label,
+.p-floatlabel input:focus~label,
+.p-floatlabel input.p-filled~label,
+.p-floatlabel textarea:focus~label,
+.p-floatlabel textarea.p-filled~label,
+.p-floatlabel .p-inputwrapper-focus~label,
+.p-floatlabel .p-inputwrapper-filled~label {
+  font-size: var(--p-floatlabel-active-font-size) !important;
+}
+
+
+
+.width-300px-custom {
+  width: 300px;
+  //min-height: auto;
+  overflow: auto;
+}
+
+.width-400px-custom {
+  width: 400px;
+  //min-height: auto;
+  overflow: auto;
+}
+
+
+.width-500px-custom {
+  width: 500px;
+  //height: 500px;
+  min-height: 30%;
+  overflow: auto;
+}
+
+.width-550px-custom {
+  width: 550px;
+  //min-height: auto;
+  overflow: auto;
+}
+
+
+.width-600px-custom {
+  width: 600px;
+  //min-height: auto;
+  overflow: auto;
+
+}
+
+.width-650px-custom {
+  width: 650px;
+  //min-height: 65%;
+  overflow: auto;
+  border: 3px solid green;
+}
+
+
+.width-700px-custom {
+  width: 700px;
+  overflow: auto;
+}
+
+.width-750px-custom {
+  width: 750px;
+  overflow: auto;
+}
+
+
+.width-800px-custom {
+  width: 800px;
+  overflow: auto;
+}
+
+.width-850px-custom {
+  width: 850px;
+  overflow: auto;
+}
+
+.width-1200px-Custom {
+  width: 1200px;
+  min-height: 90%;
+  overflow: auto;
+}
+
+.width-1000px-Custom {
+  width: 1000px;
+  min-height: 50%;
+  overflow: auto;
+}
+
+
+
+
+
+.min-height-550px-custom {
+  min-height: 550px !important;
+  // min-height permite que el dialog se ajuste al contenido, tiene el inconveniente de que en view tab el dialogo va cambiando de tamaño
+  // dependiendo del contenido de cada pestaña
+}
+
+.height-100px-custom {
+  height: 100px !important;
+}
+
+.height-200px-custom {
+  height: 200px !important;
+}
+
+.height-300px-custom {
+  height: 300px !important;
+}
+
+.height-400px-custom {
+  height: 400px !important;
+}
+
+/*
+.p-tabview .p-tabview-panels {
+  padding: 0;
+}*/
+
+.p-tabpanels {
+  padding: 0px !important;
+}
+
+.p-fieldset {
+  padding: 2px !important;
+}
+
+.p-fieldset-toggle-button {
+  padding: 0px !important;
+}
+
+/* altura de los input*/
+.height-input-custom {
+  height: 31px;
+  width: 100%;
+}
+
+.height-icon-custom {
+  height: 30px;
+  width: 100%;
+}
+
+
+/*
+.p-tabview .p-tabview-nav li .p-tabview-nav-link {
+  padding: 0.5rem 0.5rem 0.5rem 0.5rem;
+  flex: 1;
+}*/
+
+
+.height-table-log-custom {
+  // la trate de utiolizar para calcular la altura de la tabla de log, que esta dentro de un dialog,
+  // pero parece que no funciona, ni dentro de un componente que se importa en el dialog ni poniendo la tabla directo en el dialog
+  //height: calc(100% - 121px);
+  height: 220px;
+}
+
+
+/* Estilos para dispositivos móviles */
+@media only screen and (max-width: 767px) {
+  .table-fit-Custom {
+    height: calc(100vh - 217px);
+    /* Establece la altura del contenedor principal al 100% del viewport */
+  }
+
+  /* Agrega tus estilos aquí para pantallas de hasta 767px de ancho */
+
+  /*oculta en equipos moviles, se que puedo usar los puntos de quiebre sm, md, ñg y xl, pero al usar block
+   descuadra los elementos, por ejemplo hidden sm:block*/
+  .hide-sm-custom {
+    padding-top: 1px;
+    display: none !important;
+  }
+
+
+
+
+  /*icono de calendario del calendario,*/
+  /*.p-fluid .p-button-icon-only {
+    width: 2.4rem;
+    // |||propios
+    height: 36px;
+  }*/
+
+}
+
+/* Estilos para tabletas */
+@media only screen and (min-width: 768px) and (max-width: 1023px) {
+  .table-fit-Custom {
+    height: calc(100vh - 241px);
+    /* Establece la altura del contenedor principal al 100% del viewport */
+
+  }
+
+  /* Agrega tus estilos aquí para pantallas entre 768px y 1023px de ancho */
+
+  /*ocultar en tabletas*/
+  .hide-md-custom {
+    display: none !important;
+  }
+
+
+
+
+  /*icono de calendario del calendario,*/
+  /*.p-fluid .p-button-icon-only {
+    width: 2.35rem;
+    // |||propios
+    height: 34px;
+  }*/
+}
+
+/* Estilos para pantallas de escritorio */
+@media only screen and (min-width: 1024px) {
+  .table-fit-Custom {
+    height: calc(100vh - 152px) !important;
+    /* Establece la altura del contenedor principal al 100% del viewport */
+  }
+
+  /* Agrega tus estilos aquí para pantallas de al menos 1024px de ancho */
+
+  /*rincipalmente para los dialogos de los form,
+  en la pantallas grandes si hay espacio para mostar varios botones, oculta el boton simple*/
+
+  /*ocultar en computadoras y monitores*/
+  .hide-lg-custom {
+    display: none !important;
+  }
+
+
+
+
+  /*icono de calendario del calendario,*/
+  /*.p-fluid .p-button-icon-only {
+    width: 2.2rem;
+    // |||propios
+    height: 27px;
+  }*/
+}
+
+
+/* alineación del numero de las tablas*/
+.align-number-Custom {
+  // min-width:  0.5rem;
+  text-align: center !important;
+}
+
+/* marca el color de las filas seleccionadas, :not(:hover) hace que rowHover tenga prioridad al momento de tener el curso sobre una fila seleccionada */
+tr.selected:not(:hover) {
+  background-color: lightblue !important;
+  color: white !important;
+}
+
+
+/*.p-dropdown .p-inputtext {
+  padding-top: 0.5rem;
+}*/
+
+/*Centra el nombre de los multiselect*/
+.p-multiselect .p-multiselect-label {
+  padding: 0.2rem 0.5rem 0.2rem 0.5rem;
+  transition: background-color 0.2s, color 0.2s, border-color 0.2s, box-shadow 0.2s;
+}
+
+
+/* (Legacy PrimeFlex grid removed: .grid-custom and .grid .col-* spacing) */
+
+/*Reduce el padding de los encabezados de los dialog*/
+.p-dialog .p-dialog-header {
+  padding-left: 0.6rem !important;
+  padding-top: 0 !important;
+  padding-bottom: 0 !important;
+  background-color: #c0bdbd;
+  color: #333;
+}
+
+/*paddin en el cuerpo de dialogo, el top en 1 para que quepa */
+.p-dialog .p-dialog-content {
+  background: #ffffff;
+  color: #495057;
+  // 1rem (button) afecta los tabView , tambien el tercer valor 0.5rem(top) da mucho espacio cuandi utilizo tabView
+  //padding: 1rem 0.8rem 0.5rem 0.8rem; 
+  //padding: 0 0.75rem 0 0.75rem;
+  padding: 0;
+
+
+}
+
+/*footer del dialogo*/
+.p-dialog .p-dialog-footer {
+  padding: 0 0.2rem 0.8rem 0.2rem;
+}
+
+
+/* icono en el header del p-dialog*/
+.p-dialog-icon {
+  margin-left: 1rem !important;
+  margin-right: 1rem !important;
+}
+
+
+// .p-dialog-mask {
+//   z-index: 9999;
+// }
+
+/*recorta el texto de las etiquetas flotantes*/
+/*.p-float-label label {
+  //color: rgb(89, 106, 107);
+  font-size: 0.9em;
+  //tamaño base (reposo)
+  display: inline-block;
+  width: 85%;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: clip;
+  //text-overflow: ellipsis;
+}*/
+
+/*recorta el texto de las etiquetas flotantes para los p-dropdown*/
+/*.p-float-label p-dropdown+label {
+  width: 77%;
+}
+*/
+
+// que tanto se alsa una etiqueta flotante
+/*.p-float-label input:focus~label,
+.p-float-label input.p-filled~label,
+.p-float-label textarea:focus~label,
+.p-float-label textarea.p-filled~label,
+.p-float-label .p-inputwrapper-focus~label,
+.p-float-label .p-inputwrapper-filled~label {
+  top: 0.42rem;
+  left: 0.1rem;
+  right: 0rem;
+  width: 95%;
+  font-size: var(--p-floatlabel-active-font-size);
+  color: #2094e8;
+  //background-color: #ffffff;
+}*/
+
+/* Ejemplo de tamaño alternativo por contexto (opcional) */
+/*.floatlabel-smaller {
+  --p-floatlabel-active-font-size: 0.30rem;
+}
+
+.floatlabel-bigger {
+  --p-floatlabel-active-font-size: 0.4rem;
+}*/
+
+
+/*Personaliza el color del toggle button cuando es falso*/
+.p-togglebutton.p-button {
+  // background: rgb(231, 148, 167);
+  // color: white;
+
+  /* DE ESTA FORMA NO CAMBIA DE COLOR ENTRE TRUE O FALSE*/
+  background: #67487e; //false 
+  border-color: #67487e; //false 
+  //background: #047cec;
+  //border-color: #047cec;
+  color: #ffffff
+}
+
+
+// quita el paddin de los botones de paginación de las tablas
+.p-paginator {
+  padding: 0;
+}
+
+
+//quita el padding de los bottones para subir archivos
+.p-fileupload .p-fileupload-buttonbar {
+  //background: #f8f9fa;
+  padding: 5px;
+  //border: 1px solid #dee2e6;
+  //color: #495057;
+  //border-bottom: 0 none;
+  //border-top-right-radius: 3px;
+  //border-top-left-radius: 3px;
+}
+
+//quita el padding del la presentación de los archivos que se cargan
+.p-fileupload .p-fileupload-row>div {
+  padding: 5px;
+}
+
+//en el depurador del navegador dice que aplica primera en linea, la pongo
+//en los estilos del componete y uso :host ::ng-deep
+.p-fileupload-row>div {
+  flex: 1 1 auto;
+  width: auto;
+}
+
+//espacio entre la informacion de la vista previa de los archivos que se estan cargando
+.p-fileupload .p-fileupload-content {
+  //background: #ffffff;
+  padding: 0.2rem 0.1rem;
+  //border: 1px solid #dee2e6;
+  //color: #495057;
+  //border-bottom-right-radius: 3px;
+  //border-bottom-left-radius: 3px;
+
+  // |||propios
+  height: 200px;
+  overflow: auto;
+}
+
+/*
+puntos de quiebre
+xl: 1200px
+lg: 992px
+md: 768px
+sm: 576px
+*/
+
+.table-fit-remove-tab-custom {
+  height: calc(100vh - 240px);
+  /* Establece la altura del contenedor principal al 100% del viewport */
+}
+
+
+
+.hidden-custom {
+  display: none !important;
+}
+
+.show-custom {
+  display: block !important;
+}
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  margin: 0.2rem 0 0.2rem 0;
+  /* Nuevo margen personalizado */
+}
+
+
+//quita los espacios entre los dias para reducir el tamaño del calendario
+.p-datepicker table td {
+  padding: 0;
+  width: 30px;
+
+}
+
+/*paddin de los botones de hora*/
+.p-datepicker .p-timepicker {
+  padding: 0.5rem 0 0 0;
+}
+
+// quita los espacios entre loses años
+.p-datepicker .p-datepicker-header {
+  padding: 0;
+}
+
+/* circulo al seleccionar el día del calendario */
+.p-datepicker table td>span {
+  width: 2.5rem;
+  height: 2.5rem;
+}
+
+/* reduce el margen entre los margenes del calendario */
+.p-datepicker table {
+  margin: 0;
+}
+
+.p-datepicker .p-timepicker button {
+  height: 1.1rem;
+}
+
+
+
+/*padding de los borden */
+.p-datepicker {
+  padding: 0.1rem;
+}
+
+
+
+.p-toolbar {
+  padding: 0;
+  border: 0;
+}
+
+.p-card .p-card-body {
+  padding: 0;
+}
+
+.p-card .p-card-content {
+  padding: 0;
+}
+
+
+//obliga alñ input del multiselect a expardirse al 100% de lo ancho
+.p-multiselect-panel .p-multiselect-header .p-multiselect-filter-container .p-inputtext {
+  width: 100%;
+}

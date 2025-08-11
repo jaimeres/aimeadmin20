@@ -1,0 +1,27 @@
+<!-- Botón/flotante de la mascota -->
+<div class="assistant-fab" (click)="toggle()" title="Asistente">
+  <ng-lottie [options]="options"></ng-lottie>
+</div>
+
+<!-- Ventana de chat -->
+<div class="assistant-panel" [class.open]="open">
+  <div class="assistant-header">
+    <div class="assistant-title">Asistente</div>
+    <button class="assistant-close" (click)="toggle()" aria-label="Cerrar">×</button>
+  </div>
+
+  <div class="assistant-body">
+    <div *ngFor="let m of messages" [class.user]="m.role==='user'" [class.assistant]="m.role==='assistant'" class="msg">
+      <div class="bubble" [class.error]="m.error">{{ m.content }}</div>
+    </div>
+    <div *ngIf="thinking" class="msg assistant">
+      <div class="bubble thinking">…</div>
+    </div>
+  </div>
+
+  <div class="assistant-footer">
+    <textarea [(ngModel)]="draft" (keydown)="onKeyDown($event)" rows="2"
+      placeholder="Escribe tu pregunta (Ctrl/Cmd + Enter para enviar)"></textarea>
+    <button class="send" (click)="send()" [disabled]="thinking || !draft.trim()">Enviar</button>
+  </div>
+</div>

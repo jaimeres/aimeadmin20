@@ -1,0 +1,90 @@
+#############################
+# Core build artifacts
+#############################
+build
+dist
+node_modules
+tmp
+out-tsc
+*.tsbuildinfo
+
+#############################
+# Angular / tooling caches
+#############################
+.angular
+.sass-cache
+.eslintcache
+
+#############################
+# Capacitor / Android specific
+#############################
+# Android local + build outputs (keep source, ignore generated)
+android/**/build/
+android/.gradle/
+android/local.properties
+# Capacitor copied web assets (optional – uncomment if you do not want to version them)
+# android/app/src/main/assets/public/
+
+#############################
+# Logs & reports
+#############################
+npm-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+*.log
+chrome-profiler-events.json
+speed-measure-plugin.json
+libpeerconnection.log
+testem.log
+coverage
+
+#############################
+# Environment / secrets
+#############################
+.env
+.env.*
+!.env.example
+
+#############################
+# IDEs and editors
+#############################
+.idea
+*.iml
+.project
+.classpath
+.c9/
+*.launch
+.settings/
+*.sublime-workspace
+*.code-workspace
+
+# VSCode (keep recommended project configs)
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+
+#############################
+# Misc & temp
+#############################
+sassdoc
+connect.lock
+typings
+respaldos
+.git123
+
+#############################
+# System Files
+#############################
+.DS_Store
+Thumbs.db
+
+#############################
+# Theming (left commented – uncomment if you generate these)
+#############################
+# src/assets/theme/*.css
+# src/assets/layout/css/*.css
+# src/assets/sass/theme/designer
+
+# Retain .editorconfig (do NOT ignore) – removed from ignore list
