@@ -1,0 +1,63 @@
+<div style="position: absolute; z-index: 2;">
+  <app-custom-button-crud (deleteAction)="delete()" (editAction)="edit()"
+    (refreshAction)="getAll({ force: true, pos: pos() })" (newAction)="openNew({pos:pos()})"
+    [moreOptions]="moreOptions()" [openNewMenu]="openNewMenu()" [getMenu]="getMenu()" [selected]="selected()"
+    [startMenu]="startMenu()" (startAction)="setStatus('I')" />
+</div>
+
+<div class="table-fit-Custom">
+  <app-custom-table class="table-fit-Custom" [value]="items()" [columns]="selectedColumns()" [selected]="selected()"
+    (selectionAction)="onSelection($event)" (rowDoubleClick)="onRowDoubleClick($event)"
+    [exportDialogVisible]="exportDialogVisible()" [field]="fieldExport()"
+    (exportDialogVisibleAction)="onExportDialogVisible($event)" (exportServerAction)="onExportServer($event)"
+    (lazyLoadAction)="onLazyLoad({event:$event})" [rows]="limit()[pos()]" [totalRecords]="totalRecords()[pos()]"
+    [filterDelayTable]="filterDelayTable()" />
+</div>
+
+<app-custom-local-settings [visible]="localSettingsDialogVisible()" [field]="fieldConfig()" [formGroup]="configForm"
+  (saveAction)="saveConfig()" (visibleAction)="onLocalSettingsDialogVisible($event)" />
+
+<app-custom-import [visible]="importDialogVisible()" (visibleAction)="onImportDialogVisible($event)"
+  (saveAction)="onImportSave($event)" />
+
+<app-custom-actions-selection [visible]="actionsSelectionDialogVisible" (visibleChange)="onVisibleChange($event)" />
+
+<!--de aqui para arriba es generico para todas las app y configura la app principal y los componente generales-->
+<p-dialog [(visible)]="formDialogVisible[$any(typeDefault)]" (onHide)="onHide($any(typeDefault))"
+  (onShow)="onShow($any(typeDefault))" styleClass="width-650px-custom width-550px-custom " modal="true">
+
+  <ng-template #header>
+    <div class="p-dialog-title">
+      <span class="p-dialog-title-text">{{headerDialog()}}</span>
+      <button type="button" class="p-dialog-titlebar-icon p-link" (click)="configDialog()">
+        <i class="pi pi-spin pi-cog p-dialog-icon"></i>
+      </button>
+    </div>
+  </ng-template>
+
+  <ng-template #content>
+    <form [formGroup]="form()[$any(typeDefault)]">
+      <p-tabs [scrollable]="true" (onChange)="onTabChange($event)">
+        <p-tabpanels>
+          <p-tabpanel header="General">
+
+            <app-custom-draw-form [drawForm]="drawForm()[$any(typeDefault)]['general']"
+              [formGroup]="form()[$any(typeDefault)]" [customField]="customField()[$any(typeDefault)]"
+              (onSelectAutoCompleteAction)="onSelectAutoComplete($event)"
+              (onChangeDropdownAction)="onChangeDropdown($event)" (onNewIconDropdownAction)="onNewIconDropdown($event)"
+              (onReloadIconDropdownAction)="onReloadIconDropdown($event)"
+              (onChangeToggleAction)="onChangeToggle($event)" (onKeydownEnterTextAction)="onKeydownEnterText($event)"
+              (onClosableIconDropdownAction)="onClosableIconDropdown($event)"
+              (onKeydownEnterNumberAction)="onKeydownEnterNumber($event)" />
+
+          </p-tabpanel>
+        </p-tabpanels>
+      </p-tabs>
+    </form>
+  </ng-template>
+
+  <ng-template #footer>
+    <app-custom-button-footer (saveAction)="save({is_file: true})"
+      (saveNotHideAction)="save({hide:false, is_file: true})" (resetFormAction)="resetFormDialog()" />
+  </ng-template>
+</p-dialog>

@@ -34,7 +34,7 @@ export default [
   ,
   {
     path: 'task',
-    loadComponent: () => import('@/task/task/task.component').then((c) => c.TaskComponent),
+    loadComponent: () => import('@/tasks/task/task.component').then((c) => c.TaskComponent),
     data: { breadcrumb: 'Task' }
   }
 ] as Routes;

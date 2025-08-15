@@ -519,7 +519,7 @@ export class CRUD extends Vars /*implements OnInit*/ {
     }
 
     this.relationships[posIndex] = relationOptions;
-    console.log('formmmmmmmmmmmmmmmmmm', formFields);
+    //console.log('formmmmmmmmmmmmmmmmmm', formFields);
 
     return this.fb.group(formFields);
   }
@@ -529,7 +529,8 @@ export class CRUD extends Vars /*implements OnInit*/ {
     console.log('cols--------------', cols, typeof cols);
 
     if (pos === null) return cols; // Retornar cols vacío si pos es null
-    this.customField()[pos];
+
+
     for (const field in jsonFields) {
       if (jsonFields.hasOwnProperty(field)) {
         const fieldObj = jsonFields[field];
@@ -1099,7 +1100,7 @@ export class CRUD extends Vars /*implements OnInit*/ {
     this.createForm(pos);
 
     //pone el titulo del dialogo
-    this.header.set(`Alta de ${this.singular[pos] || this.singular[0]}`);
+    this.headerDialog.set(`Alta de ${this.singular[pos] || this.singular[0]}`);
   }
 
   // variables para las apps secundarias, no se pone como array ya que solo necesito para la principal o la secundaria,
@@ -1162,7 +1163,7 @@ export class CRUD extends Vars /*implements OnInit*/ {
     //crear o inicializa el form
     this.createForm(pos);
     this.getDetailEdit(this.selected()[0].id);
-    this.header.set(`Editar ${this.singular[pos] || this.singular[0]}`);
+    this.headerDialog.set(`Editar ${this.singular[pos] || this.singular[0]}`);
 
     //recorre selected y pon null en todas las posiciones menos en la 0
     for (let i = 1; i < this.selected().length; i++) {
@@ -1203,7 +1204,7 @@ export class CRUD extends Vars /*implements OnInit*/ {
       this.showFormDialog(pos);
     }
 
-    this.header.set(`Editar ${this.singular[pos] || this.singular[0]}`);
+    this.headerDialog.set(`Editar ${this.singular[pos] || this.singular[0]}`);
 
     //recorre selected y pon null en todas las posiciones menos en la 0
     for (let i = 1; i < this.selectedSecundary()[pos]().length; i++) {
@@ -1400,7 +1401,7 @@ export class CRUD extends Vars /*implements OnInit*/ {
     const include = this.include;
     const filter = this.filter;
 
-    console.log('forrmmmmmmmmmmmmmmmmmm', formData);
+    //console.log('forrmmmmmmmmmmmmmmmmmm', formData);
     //revisar porque la primer seleccion del archivo se envia vacio de asset-document
     if (this.isCreate) {
       this.crudS.saveObject({ formData, include, filter /*, files*/ }).subscribe({
@@ -1522,6 +1523,8 @@ export class CRUD extends Vars /*implements OnInit*/ {
     const coords = this.generalS.getLocationSnapshot();
 
     if (coords) {
+      console.log('***************', safePos, form);
+
       form.get('latitude')?.setValue(coords.latitude);
       form.get('longitude')?.setValue(coords.longitude);
       form.get('time_zone')?.setValue(coords.time_zone);
@@ -1701,7 +1704,7 @@ export class CRUD extends Vars /*implements OnInit*/ {
    * Es llamada cada vez que se abre un dialogo de una app, normalmente tiene que inicializar formularios antes de abrirse
    * @param app app que se va a mostrar
    */
-  onShow(app = null) { }
+  onShow(app: string = '') { }
 
   /**
    * bloquea la pantalla y muestra un gif de carga.
@@ -2714,46 +2717,72 @@ export class CRUD extends Vars /*implements OnInit*/ {
         const element = grids[grid];
 
         if (grid === 'grid' || grid === 'nested') {
-          const elementArray = Object.values(element);
-          const general = this.searchByValueObject(field, elementArray, 'field');
+          // Puede ser Array o un objeto tipo {0:{},1:{}}; tratamos ambos casos
+          const isArray = Array.isArray(element);
+          const elementValues = isArray ? element : Object.values(element);
+          const general = this.searchByValueObject(field, elementValues, 'field');
 
-          //Eliminar si lo encuentra directamente
           if (general[1] >= 0) {
+            // clave/indice real dentro de element
+            const realKey = isArray ? general[1] : Object.keys(element)[general[1]];
             if (del) {
-              // Si se encuentra, eliminar el elemento
-              element.splice(general[1], 1);
-              break;
+              if (isArray) {
+                element.splice(realKey as number, 1);
+              } else {
+                delete element[realKey as any];
+              }
+              break; // deja de buscar en este grid
             }
-            return element.splice(general[1], 1);
-          } else {
-            // Si no lo encuentra, busca dentro de 'card' o 'fieldset'
-            for (const key in element) {
-              if (!element.hasOwnProperty(key)) continue;
+            // Retorna el elemento (sin eliminar). No usar splice porque modifica y rompe cuando es objeto.
+            return isArray ? element[realKey as number] : element[realKey as any];
+          }
 
-              let nestedElement = this.searchByKeyObject('card', element[key]);
-              nestedElement = nestedElement ? nestedElement : this.searchByKeyObject('fieldset', element[key]);
+          // No lo encontró directamente, buscar dentro de card o fieldset de cada item
+          for (const key in element) {
+            if (!element.hasOwnProperty(key)) continue;
 
-              if (nestedElement) {
-                const nestedArray = Object.values(nestedElement);
-                const r = this.searchByValueObject(field, nestedArray, 'field');
+            const current = element[key];
+            if (!current) continue;
 
-                // Eliminar del nestedElement si se encuentra
-                if (r[1] >= 0) {
-                  const nestedKey = Object.keys(nestedElement)[r[1]];
-                  if (nestedKey) {
-                    if (del) {
-                      // Si se encuentra, eliminar el elemento
-                      delete nestedElement[nestedKey]; // También puedes usar `splice` si `nestedElement` es array
-                      break;
+            let nestedElement = this.searchByKeyObject('card', current);
+            if (!nestedElement) nestedElement = this.searchByKeyObject('fieldset', current);
+
+            if (nestedElement) {
+              const nestedValues = Object.values(nestedElement);
+              const r = this.searchByValueObject(field, nestedValues, 'field');
+              if (r[1] >= 0) {
+                const nestedKey = Object.keys(nestedElement)[r[1]];
+                if (nestedKey) {
+                  if (del) {
+                    // eliminar respetando si es array u objeto
+                    const nestedIsArray = Array.isArray(nestedElement);
+                    if (nestedIsArray) {
+                      (nestedElement as any).splice(r[1], 1);
+                    } else {
+                      delete (nestedElement as any)[nestedKey];
                     }
-                    return nestedElement[nestedKey];
+                    break;
                   }
+                  return (nestedElement as any)[nestedKey];
                 }
               }
             }
           }
         }
       }
+    }
+  }
+
+  /**
+   * Retorna la concatenación de las clases de tamaño (width y height) del dialog actual.
+   * Si alguna falta, sólo retorna la existente. Nunca retorna null; string vacío si no hay ninguna.
+   */
+  dialogSizeClass(type: any = this.typeDefault): string {
+    try {
+      const d = this.drawForm()[type]?.dialog || {};
+      return [d.width, d.height].filter(v => !!v).join(' ');
+    } catch (e) {
+      return 'width-850px-custom min-height-550px-custom';
     }
   }
 
@@ -2830,3 +2859,87 @@ export class CRUD extends Vars /*implements OnInit*/ {
     });
   }
 }
+
+
+/**<p-dialog [(visible)]="formDialogVisible[$any(+++++)]" (onHide)="onHide($any(+++++))"
+  (onShow)="onShow($any(+++++))" [styleClass]="dialogSizeClass(+++++)" modal="true">
+
+  <ng-template #header>
+    <div class="p-dialog-title">
+      <span class="p-dialog-title-text">{{headerDialog()}}</span>
+      <button type="button" class="p-dialog-titlebar-icon p-link" (click)="configDialog()">
+        <i class="pi pi-spin pi-cog p-dialog-icon"></i>
+      </button>
+    </div>
+  </ng-template>
+  <form [formGroup]="form()[$any(+++++)]" *ngIf="form()[$any(+++++)]">
+
+    <p-tabs [scrollable]="true" value="0">
+
+      <p-tablist>
+        <p-tab value="0">General</p-tab>
+        <p-tab value="1">Clasificadores</p-tab>
+        <!-- <p-tab value="2">Responsable</p-tab> -->
+        <p-tab value="3">Auditoría</p-tab>
+        <p-tab value="4">Documentos</p-tab>
+      </p-tablist>
+
+      <p-tabpanels>
+
+        <p-tabpanel value="0">
+
+          <app-custom-draw-form *ngIf="form()[$any(+++++)] && drawForm()[+++++]"
+            [drawForm]="drawForm()[+++++]['general']" [formGroup]="form()[$any(+++++)]"
+            [customField]="customField()[+++++]" (onSelectAutoCompleteAction)="onSelectAutoComplete($event)"
+            (onChangeDropdownAction)="onChangeDropdown($event)" (onNewIconDropdownAction)="onNewIconDropdown($event)"
+            (onReloadIconDropdownAction)="onReloadIconDropdown($event)" (onChangeToggleAction)="onChangeToggle($event)"
+            (onKeydownEnterTextAction)="onKeydownEnterText($event)"
+            (onClosableIconDropdownAction)="onClosableIconDropdown($event)"
+            (onKeydownEnterNumberAction)="onKeydownEnterNumber($event)" />
+
+        </p-tabpanel>
+
+        <p-tabpanel header="Clasificadores" value="1">
+
+          <div formArrayName="classifiers" class="pt-3">
+            <div class="p-fluid grid separator-form-small pl-2"
+              *ngFor="let level of classifierLevelsGen()[$any(pos())];  let i = index">
+              <div class="field col-12 md:col-6">
+                <span class="p-float-label">
+                  <p-select styleClass="height-input-custom"
+                    [options]="classifierTypeByLevel(level.classifier_type + 'p',level.level + 'p', i)" optionValue="id"
+                    optionLabel="name" [formControlName]="funAuxFormClassifiers('formControlName',i)"
+                    (onChange)="loadClassifiers($event, level, i)" placeholder="." [showClear]="true">
+                  </p-select>
+                  <label for="dropdown">{{level.name | slice:0:29}}</label>
+                </span>
+              </div>
+            </div>
+          </div>
+
+        </p-tabpanel>
+
+        <!-- <p-tabpanel header="Responsable" value="1"> </p-tabpanel> -->
+
+        <p-tabpanel value="3">
+          <app-custom-audit [cf]="customField()[+++++]" [selected]="selected()" />
+        </p-tabpanel>
+
+        <p-tabpanel value="4">
+          <app-custom-documents [selected]="selected()" [type]="'+++++ asset-document'" [app]="'+++++ assets/asset-document'"
+            [filter]="'+++++ asset'" (newAction)="openNewSecundary('+++++ asset-document-asset')" />
+        </p-tabpanel>
+
+      </p-tabpanels>
+    </p-tabs>
+
+  </form>
+
+  <ng-template #footer>
+    <div class="p-dialog-footer">
+      <app-custom-button-footer (saveAction)="save({pos: ++++++})" (saveNotHideAction)="save({pos: +++++, hide:false})"
+        (resetFormAction)="resetFormDialog()" />
+    </div>
+  </ng-template>
+
+</p-dialog> */

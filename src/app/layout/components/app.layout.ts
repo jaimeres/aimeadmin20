@@ -10,14 +10,15 @@ import { AppSidebar } from './app.sidebar';
 import { AppRightMenu } from '@/layout/components/app.rightmenu';
 import { Toast } from 'primeng/toast';
 import { MessageService as MessageServiceP } from 'primeng/api';
-import { MessageComponent } from '../../component/message/message.component';
-import { LoginComponent } from '../../component/login/login.component';
-import { MessageService } from '../../component/services/message.service';
+import { MessageComponent } from '../../components/message/message.component';
+import { LoginComponent } from '../../components/login/login.component';
+import { MessageService } from '../../components/services/message.service';
 
 
 // import { provideLottieOptions } from 'ngx-lottie';
-import { AssistantWidgetComponent } from '../../component/assistant-widget/assistant-widget.component';
-import { BlockedComponent } from '../../component/blocked/blocked.component';
+import { AssistantWidgetComponent } from '../../components/assistant-widget/assistant-widget.component';
+import { BlockedComponent } from '../../components/blocked/blocked.component';
+import { CookieService } from 'ngx-cookie-service';
 export function playerFactory() { return import('lottie-web'); }
 
 
@@ -72,7 +73,8 @@ export class AppLayout implements OnDestroy {
     public layoutService: LayoutService,
     public renderer: Renderer2,
     public router: Router,
-    private messageS: MessageService
+    private messageS: MessageService,
+    private cookieS: CookieService
   ) {
     this.overlayMenuOpenSubscription = this.layoutService.overlayOpen$.subscribe(() => {
       if (!this.menuOutsideClickListener) {
@@ -178,6 +180,7 @@ export class AppLayout implements OnDestroy {
 
   ngOnInit() {
     this.messageS.showBlocked(false);
+    this.cookieS.delete('refresh');
   }
 }
 

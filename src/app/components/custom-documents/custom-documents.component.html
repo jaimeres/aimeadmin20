@@ -1,0 +1,61 @@
+<!-- no requiero que cargue al abrir el dialogo, hasta que le pique en la pestaña de documentos
+    (onLazyLoad)="loadNodesDocumentsAction.emit($event)" -->
+
+
+<p-treeTable #dt [value]="appDocuments()" [columns]="appDocumentColumns()" [lazy]="true"
+  (onNodeExpand)="onNodeExpandDocuments($event)" [loading]="loadingAppDocument()" size="small"
+  [tableStyle]="{'min-width': '45rem'}" [resizableColumns]="true" columnResizeMode="expand" scrollHeight="flex"
+  [scrollable]="true">
+
+  <ng-template #caption style="padding: 0 !important;">
+
+    <div style="display: flex; align-items: center; justify-content: space-between; padding: 0;">
+      <div>
+        <p-button icon="pi pi-plus" styleClass="p-button-secondary" (click)="newAction.emit()" class="mr-2 ml-2"
+          pTooltip="Nuevo" tooltipPosition="bottom" [disabled]="(selectedSignal()?.length || 0) <= 0" />
+        <p-button icon="pi pi-refresh" styleClass="p-button-info" [disabled]="(selectedSignal()?.length || 0) <= 0"
+          (click)="onLoadNodesDocuments()" pTooltip="Actualizar" tooltipPosition="bottom" />
+      </div>
+
+      <p-iconfield iconPosition="left">
+        <p-inputicon>
+          <i class="pi pi-search"></i>
+        </p-inputicon>
+        <input pInputText type="text" (input)="dt.filterGlobal($event.target.value, 'contains')"
+          placeholder="Buscar..." />
+      </p-iconfield>
+    </div>
+
+  </ng-template>
+
+  <ng-template #header let-columns>
+    <tr>
+      <th style="width: 35px;"></th>
+      <th *ngFor="let col of columns">
+        {{ col.header }}
+      </th>
+      <th>Acciones</th>
+    </tr>
+  </ng-template>
+  <ng-template #body let-rowNode let-rowData="rowData" let-columns="columns">
+    <tr>
+
+      <td style="width: 35px;"><p-treeTableToggler [rowNode]="rowNode"></p-treeTableToggler></td>
+      <td *ngFor="let col of columns; let i = index">
+        {{ rowData[col.field] }}
+      </td>
+      <td>
+        <button pButton pRipple icon="pi pi-trash" class="p-button-rounded p-button-danger mr-1"
+          (click)="deleteDocumentAction.emit(rowData)" *ngIf="rowNode.node.parent"></button>
+        <button pButton pRipple icon="pi pi-eye" class="p-button-rounded p-button-success mr-1"
+          (click)="onShowDocument(rowData.file)" *ngIf="rowNode.node.parent"></button>
+        <button pButton pRipple icon="pi pi-link" class="p-button-rounded p-button-help"
+          (click)="detachDocumentAction.emit(rowData)" *ngIf="rowNode.node.parent"></button>
+      </td>
+    </tr>
+  </ng-template>
+</p-treeTable>
+
+<p-dialog [(visible)]="documentDialogVisible" styleClass="width-750px-custom min-height-document-custom">
+  <iframe *ngIf="blobDocument()" width="100%" height="100%" [src]="blobDocument()"></iframe>
+</p-dialog>

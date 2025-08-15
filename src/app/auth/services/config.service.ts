@@ -22,7 +22,7 @@ export class ConfigService {
 
   //Solo es llamado una vez, ya que tiene .pipe(take(1))
   getConfig() {
-    return this.http.get(`${this._base_url}/configuration/general/`).pipe(
+    return this.http.get(`${this._base_url}/settings/settings/me/`).pipe(
       map((resp: any) => resp.data),
       take(1)
     );
@@ -31,7 +31,7 @@ export class ConfigService {
   saveConfig(formData: any) {
     return this.http
       .patch(
-        `${this._base_url}/configuration/general/`,
+        `${this._base_url}/settings/settings/me/`,
         this.generalS.baseDJA({
           attributes: formData,
           type: 'configuration',

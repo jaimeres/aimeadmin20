@@ -5,7 +5,7 @@ import { environment } from '../../../environments/environment';
 import { HttpClient } from '@angular/common/http';
 import { catchError, map, Observable, of, tap } from 'rxjs';
 import { jwtDecode } from "jwt-decode";
-import { MessageService } from '../../component/services/message.service';
+import { MessageService } from '../../components/services/message.service';
 import { Router } from '@angular/router';
 
 @Injectable({

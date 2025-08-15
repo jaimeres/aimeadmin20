@@ -1,6 +1,6 @@
 import { HttpClient } from '@angular/common/http';
 import { inject, Injectable, signal } from '@angular/core';
-import { map, Observable } from 'rxjs';
+import { map, Observable, shareReplay, take } from 'rxjs';
 import { ConfigService } from 'src/app/auth/services/config.service';
 import { GeneralService } from 'src/app/utils/services/general.service';
 import { environment } from 'src/environments/environment';
@@ -14,6 +14,11 @@ export class CRUDService {
   public type: string = '';
   public app: string = '';
   public relationships: any[] = [];
+
+  // Cache estático compartido para todas las instancias
+  private static configCache$: Observable<any> | null = null;
+  private static instanceCount = 0;
+
   /**
    * Indica si el recurso contiene archivos.
    */
@@ -125,6 +130,31 @@ export class CRUDService {
 
   }
 
+  //public customField = signal<any>({});
+  /*constructor() {
+    this.configS.getConfig().subscribe((config: any) => {
+      console.log('config+++++++++++++++++', config)
+      this.customField.set({
+        ...this.configS.is_activeCF(this.type ?? ''),
+        ...this.configS.nameCF(this.type),
+        ...this.configS.is_defaultCF(this.type),
+        ...this.configS.is_requiredCF(this.type),
+        ...this.configS.is_voidableCF(this.type),
+        ...this.configS.sysCF(this.type),
+        ...this.configS.CRUDCF(this.type),
+        ...this.configS.time_zoneCF(this.type),
+        ...this.configS.classifiersCF(this.type),
+        ...this.configS.configuracionCF(this.type),
+        ...this.configS.taskCF(this.type),
+        ...this.configS.contactCF(this.type),
+        ...this.configS.photoCF(this.type),
+        ...this.configS.configurationCF(this.type),
+        ...this.configS.dateCF(this.type),
+        ...this.customField(),
+        ...config
+      });
+    });
+  }*/
 
   /**
    * Obtiene los nombres de los campos, se accede a ellos por el nombre de campo en ingles.

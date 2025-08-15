@@ -1,0 +1,789 @@
+<!-- falta didsable en la mayoria de los campos -->
+
+<div *ngIf="drawFormSignal()['grid']" class="grid grid-cols-12 gap-2 "> <!-- pt-3 -->
+  <div *ngFor="let entry of drawFormSignal()['grid'] | keyvalue : keyComparator;"
+    [ngClass]="[ entry.value.hide ? 'hidden' : '', entry.value.class || 'col-span-6', entry.value.class_md || 'md:col-span-3']">
+
+    <!--CARD-->
+    <h6 *ngIf="entry.value.title && entry.value?.card" style="margin-top: -0.55rem; margin-bottom: -5px;">
+      <strong>{{entry.value.title}}</strong>
+    </h6>
+
+    <p-card *ngIf="entry.value.card" class="w-full " [style]="{'padding-bottom': '3px'}">
+      <div class="grid grid-cols-12 gap-2">
+        <div *ngFor="let card of entry.value.card | keyvalue : keyComparator;"
+          [ngClass]="[card.value.hide ? 'hidden' : '', card.value.class || 'col-span-6', card.value.class_md || 'md:col-span-3']">
+          <div [ngSwitch]="getType(card.value)">
+
+
+            <div *ngSwitchCase="'input-text'">
+
+              <div class="p-inputgroup" *ngIf="!card.value.autofocus">
+                ---
+                <p-floatlabel variant="on">
+                  <!-- como es un input debe llevar class en lugar de styleClass como los p-  -->
+                  <input type="text" pInputText [formControl]="$any(formGroupSignal()?.get(card.value.field))"
+                    style="padding-top: 0.5rem !important;" />
+                  <label [for]="card.value.field">
+                    {{ card.value?.label && card.value?.label.trim() !== '' ? card.value?.label :
+                    customFieldSignal()[card.value.field] }}
+                  </label>
+                </p-floatlabel>
+              </div>
+
+              <div class="p-inputgroup" *ngIf="card.value.autofocus">
+                <p-floatlabel variant="on">
+                  <!-- como es un input debe llevar class en lugar de styleClasscomo los p-  -->
+                  <input type="text" pInputText [formControl]="$any(formGroupSignal()?.get(card.value.field))"
+                    class="height-input-custom" style="padding-top: 0.5rem !important;" />
+                  <label [for]="card.value.field" [autofocus]="true">
+                    {{ card.value?.label && card.value?.label.trim() !== '' ? card.value?.label :
+                    customFieldSignal()[card.value.field] }}
+                  </label>
+                </p-floatlabel>
+              </div>
+            </div>
+
+            <div class="p-inputgroup" *ngSwitchCase="'dropdown'">
+              <p-floatlabel variant="on">
+                <p-select [options]="dropdownOptionsSignal()[card.value.field]"
+                  [optionValue]="card.value.option_value || 'id'" [optionLabel]="card.value.option_label || 'name'"
+                  placeholder="." [editable]="card.value.editable" [readonly]="card.value.readonly"
+                  [formControl]="$any(formGroupSignal()?.get(card.value.field))"
+                  [scrollHeight]="card.value.scrollHeight || '200px'" (onShow)="onShowDropdownAction.emit($event)"
+                  [showClear]="card.value.showClear !== undefined ? card.value.showClear : true"
+                  [filter]="card.value.filter !== undefined ? card.value.filter : false"
+                  [filterBy]="card.value.filter_by !== undefined ? card.value.filter_by : false"
+                  (onChange)="onChangeDropdown($event, card.value)" [appendTo]="'body'"
+                  styleClass="height-input-custom" />
+
+                <button *ngIf="card.value.new_icon !== undefined ? card.value.new_icon : false" type="button" pButton
+                  icon="pi pi-plus" class="height-icon-custom"
+                  (click)="onNewIconDropdownAction.emit(card.value.field)"></button>
+                <button *ngIf="card.value.reload_icon !== undefined ? card.value.reload_icon : false" type="button"
+                  pButton icon="pi pi-replay" class="height-icon-custom"
+                  (click)="onReloadIconDropdownAction.emit(card.value.field)"></button>
+                <button *ngIf="card.value.closable_icon !== undefined ? card.value.closable_icon : false" type="button"
+                  pButton icon="pi pi-times" class="height-icon-custom"
+                  (click)="onClosableIconDropdownAction.emit(card.value.field)"></button>
+                <label [for]="card.value.field">
+                  {{ card.value?.label && card.value?.label.trim() !== '' ? card.value?.label :
+                  customFieldSignal()[card.value.field] }}
+                </label>
+              </p-floatlabel>
+            </div>
+
+            <div class="p-inputgroup " *ngSwitchCase="'multi-select'">
+              <p-floatlabel variant="on">
+                <p-multiSelect [formControl]="$any(formGroupSignal()?.get(card.value.field))"
+                  [autofocus]="card.value.autofocus" [options]="dropdownOptionsSignal()[card.value.field]"
+                  (onChange)="onChangeDropdown($event, card.value)" [showClear]="true"
+                  [optionValue]="card.value.option_value || 'id'" [optionLabel]="card.value.option_label || 'name'"
+                  display="chip" />
+
+                <button *ngIf="card.value.reload_icon" type="button" pButton icon="pi pi-replay"
+                  class="height-icon-custom" (click)="onReloadIconDropdownAction.emit(card.value.field)"></button>
+                <button *ngIf="card.value.new_icon" type="button" pButton icon="pi pi-plus" class="height-icon-custom"
+                  (click)="onNewIconDropdownAction.emit(card.value.field)"></button>
+                <button *ngIf="card.value.closable_icon" type="button" pButton icon="pi pi-times"
+                  class="height-icon-custom" (click)="onClosableIconDropdownAction.emit(card.value.field)"></button>
+
+                <label [for]="card.value.field">{{ customFieldSignal()[card.value.field] }}</label>
+              </p-floatlabel>
+            </div>
+
+            <div *ngSwitchCase="'toggle-button'">
+              <p-toggleButton *ngIf="!card.value.autofocus" styleClass="height-input-custom"
+                [formControl]="$any(formGroupSignal()?.get(card.value.field))"
+                onLabel="{{ card.value?.label_true && card.value?.label_true.trim() !== '' ? card.value?.label_true : customFieldSignal()[card.value.field + '_true']}}"
+                offLabel="{{ card.value?.label_false && card.value?.label_false.trim() !== '' ? card.value?.label_false : customFieldSignal()[card.value.field + '_false']}}"
+                (onChange)="onChangeToggle($event, card.value.field)"></p-toggleButton>
+
+              <p-toggleButton *ngIf="card.value.autofocus" [autofocus]="true" styleClass="height-input-custom"
+                [formControl]="$any(formGroupSignal()?.get(card.value.field))"
+                onLabel="{{ card.value?.label && card.value?.label.trim() !== '' ? card.value?.label : customFieldSignal()[card.value.field + '_true']  }}"
+                offLabel="{{ card.value?.label && card.value?.label.trim() !== '' ? card.value?.label : customFieldSignal()[card.value.field + '_false'] }}"
+                (onChange)="onChangeToggle($event, card.value.field)"></p-toggleButton>
+            </div>
+
+
+            <div *ngSwitchCase="'textarea'">
+              <textarea rows="2" cols="30" pInputText pTextarea [autoResize]="true" class="w-full"
+                [formControl]="$any(formGroupSignal()?.get(card.value.field))"></textarea>
+            </div>
+
+            <!-- AQUI VOY FALTA EL DECIMAL -->
+            <div *ngSwitchCase="'input-number'">
+              <div class="p-inputgroup" *ngIf="!card.value.autofocus">
+                <p-floatlabel variant="on">
+                  <p-inputNumber [minFractionDigits]="card.value.min_fraction_digits"
+                    [mode]="card.value.mode || 'decimal'" [formControl]="$any(formGroupSignal()?.get(card.value.field))"
+                    [maxFractionDigits]="card.value.max_fraction_digits" [min]="card.value.min"
+                    [prefix]="card.value.prefix" [suffix]="card.value.suffix" [disabled]="card.value.disabled"
+                    [inputStyle]="{'padding-top': '0.5rem'}" [max]="card.value.max"
+                    [showButtons]="card.value.show_buttons" [buttonLayout]="card.value.button_layout"
+                    spinnerMode="card.value.spinner_mode" [decrementButtonClass]="card.value.decrement_button_class"
+                    [incrementButtonClass]="card.value.increment_button_class"
+                    [incrementButtonIcon]="card.value.increment_button_icon"
+                    [decrementButtonIcon]="card.value.decrement_button_icon" [inputId]="card.value.field"
+                    (keydown.enter)="onKeydownEnterNumber($event, card.value.field)"
+                    (keydown.tab)="onKeydownTabNumber($event, card.value.field)" />
+                  <label [for]="card.value.field">
+                    {{ card.value?.label && card.value?.label.trim() !== '' ? card.value?.label
+                    :
+                    customFieldSignal()[card.value.field] }}
+                  </label>
+                </p-floatlabel>
+              </div>
+
+              <div class="p-inputgroup" *ngIf="card.value.autofocus">
+                <p-floatlabel variant="on">
+                  <p-inputNumber [minFractionDigits]="card.value.min_fraction_digits"
+                    [mode]="card.value.mode || 'decimal'" [formControl]="$any(formGroupSignal()?.get(card.value.field))"
+                    [maxFractionDigits]="card.value.max_fraction_digits" [min]="card.value.min"
+                    [prefix]="card.value.prefix" [suffix]="card.value.suffix" [disabled]="card.value.disabled"
+                    [inputStyle]="{'padding-top': '0.5rem'}" [max]="card.value.max"
+                    [showButtons]="card.value.show_buttons" [buttonLayout]="card.value.button_layout"
+                    spinnerMode="card.value.spinner_mode" [decrementButtonClass]="card.value.decrement_button_class"
+                    [incrementButtonClass]="card.value.increment_button_class"
+                    [incrementButtonIcon]="card.value.increment_button_icon"
+                    [decrementButtonIcon]="card.value.decrement_button_icon" [inputId]="card.value.field"
+                    (keydown.enter)="onKeydownEnterNumber($event, card.value.field)"
+                    (keydown.tab)="onKeydownTabNumber($event, card.value.field)" />
+                  <label [for]="card.value.field">
+                    {{ card.value?.label && card.value?.label.trim() !== '' ? card.value?.label
+                    :
+                    customFieldSignal()[card.value.field] }}
+                  </label>
+                </p-floatlabel>
+              </div>
+            </div>
+
+
+            <div class="p-inputgroup" *ngSwitchCase="'tree-select'">
+              <p-floatlabel variant="on">
+                <!-- key y label los optionLabel y optionValue -->
+                <p-treeSelect display="chip" [metaKeySelection]="false" selectionMode="checkbox"
+                  [options]="dropdownOptionsSignal()[card.value.field]" [autofocus]="card.value.autofocus"
+                  [formControl]="$any(formGroupSignal()?.get(card.value.field))" key="id" [appendTo]="'body'"
+                  [showClear]="true" (onClear)="clearTreeSelect(card.value.field)" />
+
+                <button *ngIf="card.value.icon" type="button" pButton [icon]="card.value.icon.icon"></button>
+                <button *ngIf="card.value?.icon2" type="button" pButton [icon]="card.value.icon2.icon"></button>
+                <label [for]="card.value.field">{{customFieldSignal()[card.value.field]}}</label>
+                <!-- <label [for]="card.value.field">{{customFieldSignal()[card.value.field]}}</label> -->
+              </p-floatlabel>
+            </div>
+
+            <div class="p-inputgroup" *ngSwitchCase="'date'">
+              <p-floatlabel variant="on">
+                <p-datepicker [formControl]="$any(formGroupSignal()?.get(card.value.field))"
+                  styleClass="height-input-custom" [appendTo]="'body'" [showIcon]="showIconSignal()"
+                  readonlyInput="card.value.readonlyInput" />
+                <label [for]="card.value.field">
+                  {{ card.value?.label && card.value?.label.trim() !== '' ? card.value?.label :
+                  customFieldSignal()[card.value.field] }}
+                </label>
+              </p-floatlabel>
+            </div>
+
+
+            <div class="p-inputgroup" *ngSwitchCase="'time'">
+              <p-floatlabel variant="on">
+                <p-datepicker [formControl]="$any(formGroupSignal()?.get(card.value.field))" [iconDisplay]="'input'"
+                  [showIcon]="showIconSignal()" styleClass="height-input-custom" [timeOnly]="true" inputId="icondisplay"
+                  [appendTo]="'body'">
+                  <ng-template #inputicon let-clickCallBack="clickCallBack">
+                    <i class="pi pi-user pointer-events-none" (click)="clickCallBack($event)"></i>
+                  </ng-template>
+                </p-datepicker>
+                <label [for]="card.value.field">{{customFieldSignal()[card.value.field]}}</label>
+              </p-floatlabel>
+            </div>
+
+            <div class="p-inputgroup" *ngSwitchCase="'auto-complete'">
+              <!-- field será #°°°DEPRECADO -->
+              <p-floatlabel variant="on">
+                <p-autoComplete #autoCompleteRef minLength="5" showEmptyMessage="true" emptyMessage="No hay resultados"
+                  [suggestions]="suggestions()" (completeMethod)="completeMethod($event, card.value)"
+                  [delay]="card.value.delay"
+                  (onSelect)="onSelectAutoComplete($event, card.value.field, card.value.option_label)"
+                  (onShow)="adjustPanelStyle(autoCompleteRef)" [panelStyle]="panelStyleSignal()"
+                  [autofocus]="card.value.autofocus" [formControl]="$any(formGroupSignal()?.get(card.value.field))">
+                  <ng-template let-row #item>
+                    <div class="grid">
+                      <div *ngFor="let field of card.value.panel.fields | keyvalue"
+                        [ngClass]="[$any(field.value).class, $any(field.value).class_md, 'p-fluid']">
+                        <div class="flex align-items-center gap-2 ">
+                          <img *ngIf="$any(field.value)?.type === 'image'"
+                            [src]="$any($any(row)[$any($any(field.value).field)])" style="width: 35px;" />
+                          <span
+                            *ngIf="$any(field.value)?.type === 'text'">{{$any($any(row)[$any($any(field.value).field)])}}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  </ng-template>
+                </p-autoComplete>
+
+                <button *ngIf="card.value.icon" type="button" pButton [icon]="card.value.icon.icon"
+                  class="height-input-custom"></button>
+                <button *ngIf="card.value?.icon2" type="button" pButton [icon]="card.value.icon2.icon"
+                  class="height-input-custom"></button>
+                <label [for]="card.value.field">
+                  {{ card.value?.label && card.value?.label.trim() !== '' ? card.value?.label :
+                  customFieldSignal()[card.value.field] }}
+                </label>
+              </p-floatlabel>
+              <input *ngIf="card.value.hidden_field" type="hidden"
+                [formControl]="$any(formGroupSignal()?.get(card.value.hidden_field.field))" />
+
+            </div>
+
+          </div>
+        </div>
+      </div>
+
+    </p-card>
+
+
+    <!-- LIBRE -->
+    <div *ngIf="!entry.value?.card && !entry.value?.fieldset" [ngSwitch]="getType(entry.value)"
+      style="padding-top: 5px; padding-bottom: 5px;">
+
+      <div *ngSwitchCase="'input-text'">
+
+        <div class="p-inputgroup" *ngIf="!entry.value.autofocus">
+          <p-floatlabel variant="on">
+            <input type="text" pInputText [formControl]="$any(formGroupSignal()?.get(entry.value.field))"
+              class="height-input-custom" style="padding-top: 0.5rem !important;" />
+            <label [for]="entry.value.field">
+              {{ entry.value.label && entry.value.label.trim() !== '' ? entry.value.label :
+              customFieldSignal()[entry.value.field] }}
+            </label>
+          </p-floatlabel>
+        </div>
+
+        <div class="p-inputgroup" *ngIf="entry.value.autofocus">
+          <p-floatlabel variant="on">
+            <input type="text" pInputText [formControl]="$any(formGroupSignal()?.get(entry.value.field))"
+              class="height-input-custom" style="padding-top: 0.5rem !important;" />
+            <label [for]="entry.value.field" [autofocus]="true">
+              {{ entry.value.label && entry.value.label.trim() !== '' ? entry.value.label :
+              customFieldSignal()[entry.value.field] }}
+            </label>
+          </p-floatlabel>
+        </div>
+      </div>
+
+
+      <div *ngSwitchCase="'toggle-button'">
+        <p-toggleButton *ngIf="!entry.value.autofocus" styleClass="height-input-custom"
+          [formControl]="$any(formGroupSignal()?.get(entry.value.field))"
+          onLabel="{{ entry.value.label_true && entry.value.label_true.trim() !== '' ? entry.value.label_true : customFieldSignal()[entry.value.field + '_true']}}"
+          offLabel="{{ entry.value.label_false && entry.value.label_false.trim() !== '' ? entry.value.label_false : customFieldSignal()[entry.value.field + '_false']}}"
+          (onChange)="onChangeToggle($event, entry.value.field)"></p-toggleButton>
+
+        <p-toggleButton *ngIf="entry.value.autofocus" [autofocus]="true" styleClass="height-input-custom"
+          [formControl]="$any(formGroupSignal()?.get(entry.value.field))"
+          onLabel="{{ entry.value.label && entry.value.label.trim() !== '' ? entry.value.label : customFieldSignal()[entry.value.field + '_true']  }}"
+          offLabel="{{ entry.value.label && entry.value.label.trim() !== '' ? entry.value.label : customFieldSignal()[entry.value.field + '_false'] }}"
+          (onChange)="onChangeToggle($event, entry.value.field)"></p-toggleButton>
+      </div>
+
+      <div *ngSwitchCase="'textarea'">
+        <textarea rows="2" cols="30" pInputText pTextarea [autoResize]="true" class="w-full"
+          [formControl]="$any(formGroupSignal()?.get(entry.value.field))"></textarea>
+      </div>
+
+      <div *ngSwitchCase="'input-number'">
+
+        <div class="p-inputgroup" *ngIf="!entry.value.autofocus">
+          <p-floatlabel variant="on">
+            <p-inputNumber [minFractionDigits]="entry.value.min_fraction_digits" [mode]="entry.value.mode || 'decimal'"
+              [formControl]="$any(formGroupSignal()?.get(entry.value.field))"
+              [maxFractionDigits]="entry.value.max_fraction_digits" [min]="entry.value.min"
+              [prefix]="entry.value.prefix" [suffix]="entry.value.suffix" [disabled]="entry.value.disabled"
+              [inputStyle]="{'padding-top': '0.5rem'}" [max]="entry.value.max" [showButtons]="entry.value.show_buttons"
+              [buttonLayout]="entry.value.button_layout" spinnerMode="entry.value.spinner_mode"
+              [decrementButtonClass]="entry.value.decrement_button_class"
+              [incrementButtonClass]="entry.value.increment_button_class"
+              [incrementButtonIcon]="entry.value.increment_button_icon"
+              [decrementButtonIcon]="entry.value.decrement_button_icon" [inputId]="entry.value.field"
+              (keydown.enter)="onKeydownEnterNumber($event, entry.value.field)"
+              (keydown.tab)="onKeydownTabNumber($event, entry.value.field)" />
+            <label [for]="entry.value.field">
+              {{ entry.value.label && entry.value.label.trim() !== '' ? entry.value.label :
+              customFieldSignal()[entry.value.field] }}
+            </label>
+          </p-floatlabel>
+        </div>
+
+        <div class="p-inputgroup" *ngIf="entry.value.autofocus">
+          <p-floatlabel variant="on">
+            <p-inputNumber [minFractionDigits]="entry.value.min_fraction_digits" [mode]="entry.value.mode || 'decimal'"
+              [formControl]="$any(formGroupSignal()?.get(entry.value.field))"
+              [maxFractionDigits]="entry.value.max_fraction_digits" [min]="entry.value.min"
+              [prefix]="entry.value.prefix" [suffix]="entry.value.suffix" [disabled]="entry.value.disabled"
+              [inputStyle]="{'padding-top': '0.5rem'}" [max]="entry.value.max" [showButtons]="entry.value.show_buttons"
+              [buttonLayout]="entry.value.button_layout" spinnerMode="entry.value.spinner_mode"
+              [decrementButtonClass]="entry.value.decrement_button_class"
+              [incrementButtonClass]="entry.value.increment_button_class"
+              [incrementButtonIcon]="entry.value.increment_button_icon"
+              [decrementButtonIcon]="entry.value.decrement_button_icon" [inputId]="entry.value.field"
+              (keydown.enter)="onKeydownEnterNumber($event, entry.value.field)"
+              (keydown.tab)="onKeydownTabNumber($event, entry.value.field)" />
+            <label [for]="entry.value.field">
+              {{ entry.value.label && entry.value.label.trim() !== '' ? entry.value.label :
+              customFieldSignal()[entry.value.field] }}
+            </label>
+          </p-floatlabel>
+        </div>
+      </div>
+
+      <div class="p-inputgroup" *ngSwitchCase="'auto-complete'">
+
+        <p-floatlabel variant="on">
+          <p-autoComplete [optionLabel]="entry.value.option_label || 'name'" minLength="5" showEmptyMessage="true"
+            emptyMessage="No hay resultados" [suggestions]="suggestions()"
+            (completeMethod)="completeMethod($event, entry.value)" [delay]="entry.value.delay"
+            (onSelect)="onSelectAutoComplete($event, entry.value.field)" [autofocus]="entry.value.autofocus"
+            [formControl]="$any(formGroupSignal()?.get(entry.value.field))">
+            <ng-template let-row #item>
+              <div class="grid">
+                <div *ngFor="let field of entry.value.panel.fields | keyvalue : keyComparator;"
+                  [ngClass]="[field.value.class, field.value.class_md, 'p-fluid']">
+                  <div class="flex align-items-center gap-2">
+                    <img *ngIf="field.value.type == 'image'" [src]="$any(row)[$any(field.value.field)]" [class]="'flag'"
+                      style="width: 35px; padding: 2px;" />
+                    <span *ngIf="field.value.type == 'text'">{{ $any(row)[$any(field.value.field)]}}</span>
+                  </div>
+                </div>
+              </div>
+            </ng-template>
+          </p-autoComplete>
+          <button *ngIf="entry.value.icon" type="button" pButton [icon]="entry.value.icon.icon"
+            class="height-input-custom" style="margin-left: -5px;"></button>
+          <button *ngIf="entry.value?.icon2" type="button" pButton [icon]="entry.value.icon2.icon"
+            class="height-input-custom"></button>
+          <label [for]="entry.value.field">
+            {{ entry.value?.label && entry.value?.label.trim() !== '' ? entry.value?.label :
+            customFieldSignal()[entry.value.field] }}
+          </label>
+        </p-floatlabel>
+
+        <input *ngIf="entry.value.hidden_field" type="hidden"
+          [formControl]="$any(formGroupSignal()?.get(entry.value.hidden_field.field))" />
+      </div>
+
+      <div class="p-inputgroup" *ngSwitchCase="'tree-select'">
+        <p-floatlabel variant="on">
+          <p-treeSelect display="chip" [metaKeySelection]="false" selectionMode="checkbox"
+            [options]="dropdownOptionsSignal()[entry.value.field]" [autofocus]="entry.value.autofocus"
+            [formControl]="$any(formGroupSignal()?.get(entry.value.field))"
+            (onChangeAction)="onChangeDropdown($event, entry.value)" [appendTo]="'body'" [showClear]="true"
+            (onClear)="clearTreeSelect(entry.value.field)"></p-treeSelect>
+
+
+          <button *ngIf="entry.value.icon" type="button" pButton [icon]="entry.value.icon.icon"
+            class="height-input-custom"></button>
+          <button *ngIf="entry.value?.icon2" type="button" pButton [icon]="entry.value.icon2.icon"
+            class="height-input-custom"></button>
+          <label [for]="entry.value.field">{{customFieldSignal()[entry.value.field]}}</label>
+
+          <label [for]="entry.value.field">{{customFieldSignal()[entry.value.field]}}</label>
+
+        </p-floatlabel>
+      </div>
+
+      <div class="p-inputgroup" *ngSwitchCase="'date'">
+
+        <p-floatlabel variant="on">
+          <p-datepicker [formControl]="$any(formGroupSignal()?.get(entry.value.field))" styleClass="height-input-custom"
+            [appendTo]="'body'" [showIcon]="showIconSignal()" readonlyInput="entry.value.readonlyInput"
+            (onFocus)="removeFocus($event)" />
+          <label [for]="entry.value.field">
+            {{ entry.value.label && entry.value.label.trim() !== '' ? entry.value.label :
+            customFieldSignal()[entry.value.field] }}
+          </label>
+
+        </p-floatlabel>
+      </div>
+
+      <div class="p-inputgroup" *ngSwitchCase="'time'">
+
+        <p-floatlabel variant="on">
+
+          <p-datepicker [formControl]="$any(formGroupSignal()?.get(entry.value.field))" [iconDisplay]="'input'"
+            [showIcon]="showIconSignal()" styleClass="height-input-custom" [timeOnly]="true" [appendTo]="'body'">
+
+            <ng-template #inputicon let-clickCallBack="clickCallBack">
+              <i class="pi pi-user pointer-events-none" (click)="clickCallBack($event)"></i>
+            </ng-template>
+
+          </p-datepicker>
+          <label [for]="entry.value.field">{{customFieldSignal()[entry.value.field]}}</label>
+        </p-floatlabel>
+      </div>
+
+      <div class="p-inputgroup" *ngSwitchCase="'dropdown'">
+        <p-floatlabel variant="on">
+          <p-select [options]="dropdownOptionsSignal()[entry.value.field]"
+            [optionValue]="entry.value.option_value || 'id'" [optionLabel]="entry.value.option_label || 'name'"
+            placeholder="." [editable]="entry.value.editable" [readonly]="entry.value.readonly"
+            [formControl]="$any(formGroupSignal()?.get(entry.value.field))"
+            [scrollHeight]="entry.value.scrollHeight || '200px'" (onShow)="onShowDropdownAction.emit($event)"
+            [showClear]="entry.value.showClear !== undefined ? entry.value.showClear : true"
+            [filter]="entry.value.filter !== undefined ? entry.value.filter : false"
+            [filterBy]="entry.value.filter_by !== undefined ? entry.value.filter_by : false"
+            (onChange)="onChangeDropdown($event, entry.value )" [appendTo]="'body'" styleClass="height-input-custom" />
+
+          <button *ngIf="entry.value.new_icon !== undefined ? entry.value.new_icon : false" type="button" pButton
+            icon="pi pi-plus" class="height-icon-custom"
+            (click)="onNewIconDropdownAction.emit(entry.value.field)"></button>
+          <button *ngIf="entry.value.reload_icon !== undefined ? entry.value.reload_icon : false" type="button" pButton
+            icon="pi pi-replay" class="height-icon-custom" (click)="dataDropdown(entry.value, true)"></button>
+          <button *ngIf="entry.value.closable_icon !== undefined ? entry.value.closable_icon : false" type="button"
+            pButton icon="pi pi-times" class="height-icon-custom"
+            (click)="onClosableIconDropdownAction.emit(entry.value.field)"></button>
+          <label [for]="entry.value.field">
+            {{ entry.value.label && entry.value.label.trim() !== '' ? entry.value.label :
+            customFieldSignal()[entry.value.field] }}
+          </label>
+        </p-floatlabel>
+      </div>
+
+      <div class="p-inputgroup " *ngSwitchCase="'multi-select'">
+        <p-floatlabel variant="on">
+          <p-multiSelect [formControl]="$any(formGroupSignal()?.get(entry.value.field))"
+            [autofocus]="entry.value.autofocus" [options]="dropdownOptionsSignal()[entry.value.field]"
+            (onChange)="onChangeDropdown($event, entry.value)" [showClear]="true"
+            [optionValue]="entry.value.option_value || 'id'" [optionLabel]="entry.value.option_label || 'name'"
+            display="chip" styleClass="height-input-custom" />
+
+
+          <button *ngIf="entry.value.reload_icon" type="button" pButton icon="pi pi-replay" class="height-icon-custom"
+            (click)="onReloadIconDropdownAction.emit(entry.value.field)"></button>
+          <button *ngIf="entry.value.new_icon" type="button" pButton icon="pi pi-plus" class="height-icon-custom"
+            (click)="onNewIconDropdownAction.emit(entry.value.field)"></button>
+          <button *ngIf="entry.value.closable_icon" type="button" pButton icon="pi pi-times" class="height-icon-custom"
+            (click)="onClosableIconDropdownAction.emit(entry.value.field)"></button>
+
+          <label [for]="entry.value.field">{{ customFieldSignal()[entry.value.field] }}</label>
+
+        </p-floatlabel>
+      </div>
+
+      <label *ngSwitchCase="'select-button'">
+        <label *ngIf="entry.value.description">
+          {{ entry.value.description }}
+        </label>
+      </label>
+      <p-selectButton *ngSwitchCase="'select-button'" styleClass="height-input-custom"
+        [formControl]="$any(formGroupSignal()?.get(entry.value.field))" [options]="entry.value.options"
+        [optionLabel]="entry.value.option_label || 'name'" [optionValue]="entry.value.option_value || 'id'" />
+
+      <p-splitbutton *ngSwitchCase="'document'" styleClass="height-input-custom"
+        label="{{ entry.value?.label && entry.value?.label.trim() !== '' ? entry.value?.label : customFieldSignal()[entry.value.field] }}"
+        (onClick)="previewCamera()" />
+
+    </div>
+
+    <!--FIELDSET-->
+    <div *ngIf="!closeFieldset()" style=" margin-top: -0.65rem;">
+      <p-fieldset *ngIf="entry.value.fieldset" [toggleable]="true">
+        <ng-template #header>
+          <div class="fieldset-header">{{entry.value.title}}</div>
+        </ng-template>
+
+        <div class="grid grid-cols-12 gap-2">
+
+          <div *ngFor="let card of entry.value.fieldset | keyvalue : keyComparator;"
+            [ngClass]="[card.value.hide ? 'hidden' : '', card.value.class || 'col-span-6', card.value.class_md || 'md:col-span-3']">
+
+            <div [ngSwitch]="getType(card.value)">
+
+              <div *ngSwitchCase="'input-text'">
+                <div class="p-inputgroup">
+                  <p-floatlabel variant="on">
+                    <input type="text" pInputText [formControl]="$any(formGroupSignal()?.get(card.value.field))"
+                      class="height-input-custom" style="padding-top: 0.5rem !important;" />
+                    <label [for]="card.value.field" [autofocus]="card.value.autofocus"
+                      [pAutoFocus]="card.value.autofocus">
+                      {{ card.value?.label && card.value?.label.trim() !== '' ? card.value?.label
+                      :
+                      customFieldSignal()[card.value.field] }}
+                    </label>
+                  </p-floatlabel>
+                </div>
+              </div>
+
+
+              <p-input-group *ngSwitchCase="'dropdown'">
+                <!-- no uso -inputgroup-addon porque se deforma los iconos -->
+                <!-- uso padding-bottom: 4px !important; porque quedan muy pegados los select-->
+                <!-- height-input-custom" porque la altura del select es del doble que el resto de los elementos, 
+                 no veo css desponsable por eso uso la clase -->
+                <p-floatlabel variant="on">
+                  <p-select [options]="dropdownOptionsSignal()[card.value.field]"
+                    [optionValue]="card.value.option_value || 'id'" [optionLabel]="card.value.option_label || 'name'"
+                    placeholder="." [editable]="card.value.editable" [readonly]="card.value.readonly"
+                    [formControl]="$any(formGroupSignal()?.get(card.value.field))"
+                    [scrollHeight]="card.value.scrollHeight || '200px'" (onShow)="onShowDropdownAction.emit($event)"
+                    [showClear]="card.value.showClear !== undefined ? card.value.showClear : true"
+                    [filter]="card.value.filter !== undefined ? card.value.filter : false"
+                    [filterBy]="card.value.filter_by !== undefined ? card.value.filter_by : false"
+                    (onChange)="onChangeDropdown($event, card.value)" [appendTo]="'body'"
+                    styleClass="height-input-custom" />
+
+                  <button *ngIf="card.value.new_icon !== undefined ? card.value.new_icon : false" type="button" pButton
+                    icon="pi pi-plus" class="height-icon-custom"
+                    (click)="onNewIconDropdownAction.emit(card.value.field)"></button>
+
+                  <button *ngIf="card.value.reload_icon !== undefined ? card.value.reload_icon : false" type="button"
+                    pButton icon="pi pi-replay" class="height-icon-custom"
+                    (click)="onReloadIconDropdownAction.emit(card.value.field)" style="margin-left: -5px;"
+                    variant="text"></button>
+
+                  <button *ngIf="card.value.closable_icon !== undefined ? card.value.closable_icon : false"
+                    type="button" pButton icon="pi pi-times" class="height-icon-custom"
+                    (click)="onClosableIconDropdownAction.emit(card.value.field)"></button>
+
+                  <label [for]="card.value.field">
+                    {{ card.value?.label && card.value?.label.trim() !== '' ? card.value?.label :
+                    customFieldSignal()[card.value.field] }}
+                  </label>
+
+                </p-floatlabel>
+              </p-input-group>
+
+
+              <div class="p-inputgroup " *ngSwitchCase="'multi-select'">
+                <p-floatlabel variant="on">
+                  <p-multiSelect [formControl]="$any(formGroupSignal()?.get(card.value.field))"
+                    [autofocus]="card.value.autofocus" [options]="dropdownOptionsSignal()[card.value.field]"
+                    (onChange)="onChangeDropdown($event, card.value)" [showClear]="true"
+                    [optionValue]="card.value.option_value || 'id'" [optionLabel]="card.value.option_label || 'name'"
+                    display="chip" styleClass="height-input-custom" />
+
+                  <button *ngIf="card.value.reload_icon" type="button" pButton icon="pi pi-replay"
+                    class="height-icon-custom" (click)="onReloadIconDropdownAction.emit(card.value.field)"></button>
+                  <button *ngIf="card.value.new_icon" type="button" pButton icon="pi pi-plus" class="height-icon-custom"
+                    (click)="onNewIconDropdownAction.emit(card.value.field)"></button>
+                  <button *ngIf="card.value.closable_icon" type="button" pButton icon="pi pi-times"
+                    class="height-icon-custom" (click)="onClosableIconDropdownAction.emit(card.value.field)"></button>
+
+                  <label [for]="card.value.field">{{ customFieldSignal()[card.value.field] }}</label>
+                </p-floatlabel>
+              </div>
+
+              <div *ngSwitchCase="'toggle-button'">
+                <p-toggleButton *ngIf="!card.value.autofocus" styleClass="height-input-custom"
+                  [formControl]="$any(formGroupSignal()?.get(card.value.field))"
+                  onLabel="{{ card.value?.label_true && card.value?.label_true.trim() !== '' ? card.value?.label_true : customFieldSignal()[card.value.field + '_true']}}"
+                  offLabel="{{ card.value?.label_false && card.value?.label_false.trim() !== '' ? card.value?.label_false : customFieldSignal()[card.value.field + '_false']}}"
+                  (onChange)="onChangeToggle($event, card.value.field)"></p-toggleButton>
+
+                <p-toggleButton *ngIf="card.value.autofocus" [autofocus]="true" styleClass="height-input-custom"
+                  [formControl]="$any(formGroupSignal()?.get(card.value.field))"
+                  onLabel="{{ card.value?.label && card.value?.label.trim() !== '' ? card.value?.label : customFieldSignal()[card.value.field + '_true']  }}"
+                  offLabel="{{ card.value?.label && card.value?.label.trim() !== '' ? card.value?.label : customFieldSignal()[card.value.field + '_false'] }}"
+                  (onChange)="onChangeToggle($event, card.value.field)"></p-toggleButton>
+              </div>
+
+
+              <div *ngSwitchCase="'textarea'">
+                <textarea rows="5" cols="30" pInputText pTextarea [autoResize]="true" class="w-full"
+                  [formControl]="$any(formGroupSignal()?.get(card.value.field))"></textarea>
+              </div>
+
+              <div *ngSwitchCase="'input-number'">
+
+
+                <div class="p-inputgroup" *ngIf="!card.value.autofocus">
+                  <p-floatlabel variant="on">
+                    <p-inputNumber [minFractionDigits]="card.value.min_fraction_digits"
+                      [mode]="card.value.mode || 'decimal'"
+                      [formControl]="$any(formGroupSignal()?.get(card.value.field))"
+                      [maxFractionDigits]="card.value.max_fraction_digits" [min]="card.value.min"
+                      [prefix]="card.value.prefix" [suffix]="card.value.suffix" [disabled]="card.value.disabled"
+                      [inputStyle]="{'padding-top': '0.5rem'}" [max]="card.value.max"
+                      [showButtons]="card.value.show_buttons" [buttonLayout]="card.value.button_layout"
+                      spinnerMode="card.value.spinner_mode" [decrementButtonClass]="card.value.decrement_button_class"
+                      [incrementButtonClass]="card.value.increment_button_class"
+                      [incrementButtonIcon]="card.value.increment_button_icon"
+                      [decrementButtonIcon]="card.value.decrement_button_icon" [inputId]="card.value.field"
+                      (keydown.enter)="onKeydownEnterNumber($event, card.value.field)"
+                      (keydown.tab)="onKeydownTabNumber($event, card.value.field)" />
+                    <label [for]="card.value.field">
+                      {{ card.value.label && card.value.label.trim() !== '' ? card.value.label :
+                      customFieldSignal()[card.value.field] }}
+                    </label>
+                  </p-floatlabel>
+                </div>
+
+
+              </div>
+
+              <!-- <div class="p-inputgroup" *ngIf="card.value.autofocus">
+                  <p-floatlabel variant="on">
+                    <p-inputNumber [minFractionDigits]="card.value.min_fraction_digits"
+                      [mode]="card.value.mode || 'decimal'"
+                      [formControl]="$any(formGroupSignal()?.get(card.value.field))"
+                      [maxFractionDigits]="card.value.max_fraction_digits" [min]="card.value.min"
+                      [prefix]="card.value.prefix" [suffix]="card.value.suffix" [disabled]="card.value.disabled"
+                      [inputStyle]="{'padding-top': '0.5rem'}" [max]="card.value.max"
+                      [showButtons]="card.value.show_buttons" [buttonLayout]="card.value.button_layout"
+                      spinnerMode="card.value.spinner_mode" [decrementButtonClass]="card.value.decrement_button_class"
+                      [incrementButtonClass]="card.value.increment_button_class"
+                      [incrementButtonIcon]="card.value.increment_button_icon"
+                      [decrementButtonIcon]="card.value.decrement_button_icon" [inputId]="card.value.field"
+                      (keydown.enter)="onKeydownEnterNumber($event, card.value.field)"
+                      (keydown.tab)="onKeydownTabNumber($event, card.value.field)" [autofocus]="true" />
+                    <label [for]="card.value.field">
+                      {{ card.value?.label && card.value?.label.trim() !== '' ? card.value?.label
+                      :
+                      customFieldSignal()[card.value.field] }}
+                    </label>
+                  </p-floatlabel>
+                </div> 
+
+            </div>-->
+
+              <p-inputgroup *ngSwitchCase="'tree-select'">
+                <p-floatlabel variant="on">
+                  <p-treeSelect display="chip" [metaKeySelection]="false" selectionMode="checkbox"
+                    [options]="dropdownOptionsSignal()[card.value.field]" [autofocus]="card.value.autofocus"
+                    [formControl]="$any(formGroupSignal()?.get(card.value.field))" key="id" [appendTo]="'body'"
+                    [showClear]="true" (onClear)="clearTreeSelect(card.value.field)" styleClass="height-input-custom" />
+                  <label [for]="card.value.field">{{customFieldSignal()[card.value.field]}}</label>
+                </p-floatlabel>
+                <p-inputgroup-addon>
+                  <i class="pi pi-refresh"></i>
+                  <button *ngIf="card.value.icon" type="button" pButton [icon]="card.value.icon.icon"></button>
+                  <button *ngIf="card.value?.icon2" type="button" pButton [icon]="card.value.icon2.icon"></button>
+                </p-inputgroup-addon>
+              </p-inputgroup>
+
+              <div *ngSwitchCase="'date'">
+                <p-floatlabel variant="on">
+                  <p-datepicker [formControl]="$any(formGroupSignal()?.get(card.value.field))" [appendTo]="'body'"
+                    [showIcon]="showIconSignal()" readonlyInput="card.value.readonlyInput"
+                    styleClass="height-input-custom" />
+                  <label [for]="card.value.field">
+                    {{ card.value?.label && card.value?.label.trim() !== '' ? card.value?.label :
+                    customFieldSignal()[card.value.field] }}
+                  </label>
+                </p-floatlabel>
+              </div>
+
+              <div class="p-inputgroup" *ngSwitchCase="'time'">
+                <p-floatlabel variant="on">
+                  <p-datepicker [formControl]="$any(formGroupSignal()?.get(card.value.field))" [iconDisplay]="'input'"
+                    [showIcon]="showIconSignal()" [timeOnly]="true" inputId="icondisplay" [appendTo]="'body'"
+                    styleClass="height-input-custom">
+                    <ng-template #inputicon let-clickCallBack="clickCallBack">
+                      <i class="pi pi-user pointer-events-none" (click)="clickCallBack($event)"></i>
+                    </ng-template>
+                  </p-datepicker>
+                  <label [for]="card.value.field">{{customFieldSignal()[card.value.field]}}</label>
+                </p-floatlabel>
+              </div>
+
+              <div class="p-inputgroup" *ngSwitchCase="'auto-complete'">
+                <p-floatlabel variant="on">
+                  <p-autoComplete #autoCompleteRef minLength="5" showEmptyMessage="true"
+                    emptyMessage="No hay resultados" [suggestions]="suggestions()"
+                    (completeMethod)="completeMethod($event, card.value)" [delay]="card.value.delay"
+                    [optionLabel]="card.value.option_label || 'name'"
+                    (onSelect)="onSelectAutoComplete($event, card.value.field)"
+                    (onShow)="adjustPanelStyle(autoCompleteRef)" [panelStyle]="panelStyleSignal()"
+                    [autofocus]="card.value.autofocus" [formControl]="$any(formGroupSignal()?.get(card.value.field))"
+                    styleClass="height-input-custom">>
+                    <ng-template let-row #item>
+                      <div class="grid">
+                        <div *ngFor="let field of card.value.panel.fields | keyvalue"
+                          [ngClass]="[$any(field.value).class, $any(field.value).class_md]">
+                          <div class="flex align-items-center gap-2 ">
+                            <img *ngIf="$any(field.value).type === 'image'" [src]="$any(row)[$any(field.value).field]"
+                              style="width: 35px;" />
+                            <span *ngIf="$any(field.value).type === 'text'">{{
+                              $any(row)[$any(field.value).field] }}</span>
+                          </div>
+                        </div>
+                      </div>
+
+                    </ng-template>
+                  </p-autoComplete>
+
+
+                  <button *ngIf="card.value.icon" class="height-icon-custom" type="button" pButton
+                    [icon]="card.value.icon.icon"></button>
+                  <button *ngIf="card.value?.icon2" class="height-icon-custom" type="button" pButton
+                    [icon]="card.value.icon2.icon"></button>
+                  <label [for]="card.value.field">
+                    {{ card.value?.label && card.value?.label.trim() !== '' ? card.value?.label :
+                    customFieldSignal()[card.value.field] }}
+                  </label>
+                </p-floatlabel>
+
+                <input *ngIf="card.value.hidden_field" type="hidden"
+                  [formControl]="$any(formGroupSignal()?.get($any(card.value.hidden_field).field))" />
+
+              </div>
+
+
+            </div>
+          </div>
+
+        </div>
+
+
+      </p-fieldset>
+    </div>
+
+  </div>
+</div>
+
+
+<p-dialog [(visible)]="previewCameraDialogVisible" styleClass="width-650px-custom" (onHide)="onHidePreviousCamera()">
+  <video #videoElement autoplay></video>
+  <canvas #canvasElement style="display:none;"></canvas>
+  <ng-template #footer>
+    <p-button *ngIf="timeVideo()==6" (click)="previewCamera()">
+      <i class="pi pi-video"></i>
+      &nbsp;
+      Camara
+
+    </p-button>
+    <p-button *ngIf="timeVideo()==6" (click)="captureMedia('image')">
+      <i class="pi pi-bolt"></i>
+      Fotografia
+    </p-button>
+    <p-button *ngIf="timeVideo()==6" (click)="captureMedia('video')">
+      <i class="pi pi-bolt"></i>
+      Video 6s
+    </p-button>
+    <h1 *ngIf="timeVideo()!=6"> {{timeVideo()}}</h1>
+  </ng-template>
+</p-dialog>
+
+<div style="overflow: auto; height: 200px;" *ngIf="files64.length > 0">
+
+  <div class="flex flex-wrap gap-4">
+    <div *ngFor="let file of files64; let i = index" class="relative">
+
+      <p-image *ngIf="file.type=='image'" [src]="file.file" alt="Imagen capturada" width="140"
+        [preview]="true">...</p-image>
+
+      <video *ngIf="file.type === 'video'" width="140" controls>
+        <source [src]="file.file" type="video/mp4">
+        Video no soportado.
+      </video>
+
+      <p-button icon="pi pi-trash" class="w-full mt-3" severity="danger" [text]="true"
+        [style]="{ position: 'absolute', left: '11%', transform: 'translateX(-50%)',  }" (click)="removeImage(i )">
+      </p-button>
+    </div>
+  </div>
+</div>

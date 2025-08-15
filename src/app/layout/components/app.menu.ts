@@ -36,14 +36,22 @@ export class AppMenu {
         {
           label: 'Compras',
           items: [
-            {
-              label: 'Solicitudes',
-              routerLink: ['/purchases/request']
-            },
-            {
-              label: 'Pedidos',
-              routerLink: ['/purchases/orders']
-            },
+            { label: 'Solicitudes', routerLink: ['/purchases/request'] },
+            { label: 'Pedidos', routerLink: ['/purchases/orders'] },
+          ]
+        },
+      ]
+    },
+
+    {
+      label: 'Activos',
+      items: [
+        {
+          label: 'Activos',
+          items: [
+            { label: 'Equipos y activos', routerLink: ['/assets/asset'] },
+            { label: 'Mantenimiento', routerLink: ['/assets/maintenance'] },
+            { label: 'Herramientas y refacciones', routerLink: ['/assets/tool_spare'] },
           ]
         },
       ]
@@ -190,7 +198,7 @@ export class AppMenu {
         // ...existing code...
       ]
     },
-    {
+    /*{
       label: 'UI Kit',
       icon: 'pi pi-fw pi-star-fill',
       items: [
@@ -300,8 +308,8 @@ export class AppMenu {
           target: '_blank'
         }
       ]
-    },
-    {
+    },*/
+    /*{
       label: 'Pages',
       icon: 'pi pi-fw pi-briefcase',
       items: [
@@ -402,7 +410,7 @@ export class AppMenu {
           routerLink: ['/pages/contact']
         }
       ]
-    },
+    },*/
     {
       label: 'E-Commerce',
       icon: 'pi pi-fw pi-wallet',
@@ -444,7 +452,7 @@ export class AppMenu {
         }
       ]
     },
-    {
+    /*{
       label: 'User Management',
       icon: 'pi pi-fw pi-user',
       items: [
@@ -459,8 +467,8 @@ export class AppMenu {
           routerLink: ['profile/create']
         }
       ]
-    },
-    {
+    },*/
+    /*{
       label: 'Hierarchy',
       icon: 'pi pi-fw pi-align-left',
       items: [
@@ -529,6 +537,6 @@ export class AppMenu {
           ]
         }
       ]
-    }
+    }*/
   ];
 }

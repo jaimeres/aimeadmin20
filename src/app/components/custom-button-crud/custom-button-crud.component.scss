@@ -1,0 +1,56 @@
+// Estilos para el menú contextual móvil
+:host ::ng-deep .context-menu-mobile {
+  .p-menu {
+    // Posicionamiento más controlado
+    transform: translateY(-10px) !important;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15) !important;
+    border-radius: 8px !important;
+    border: 1px solid #e9ecef !important;
+
+    .p-menuitem {
+      .p-menuitem-link {
+        padding: 0.75rem 1rem !important;
+
+        .p-menuitem-text {
+          font-size: 0.9rem !important;
+        }
+
+        .p-menuitem-icon {
+          margin-right: 0.75rem !important;
+        }
+      }
+
+      &:first-child .p-menuitem-link {
+        border-top-left-radius: 6px !important;
+        border-top-right-radius: 6px !important;
+      }
+
+      &:last-child .p-menuitem-link {
+        border-bottom-left-radius: 6px !important;
+        border-bottom-right-radius: 6px !important;
+      }
+    }
+
+    .p-separator {
+      margin: 0.25rem 0 !important;
+    }
+  }
+}
+
+// Ajuste para el speeddial en móvil
+:host ::ng-deep .p-speeddial {
+  position: relative;
+
+  .p-speeddial-list {
+    .p-speeddial-item {
+      .p-speeddial-action {
+        width: 3rem !important;
+        height: 3rem !important;
+
+        .p-button-icon {
+          font-size: 1.1rem !important;
+        }
+      }
+    }
+  }
+}

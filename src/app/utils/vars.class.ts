@@ -2,7 +2,7 @@ import { ChangeDetectorRef, Injectable, computed, inject, signal } from '@angula
 import { FormBuilder, FormGroup } from '@angular/forms';
 import { ConfirmationService, MenuItem } from 'primeng/api';
 import { ConfigService } from 'src/app/auth/services/config.service';
-import { MessageService } from 'src/app/component/services/message.service';
+import { MessageService } from '@/components/services/message.service';
 import { CRUDService } from './services/crud.service';
 import { GeneralService } from './services/general.service';
 import { SharedDynamicDataService } from './services/shared-dynamic-data.service';
@@ -87,7 +87,7 @@ export class Vars {
   /**
    * Encabezado del dialogo para el crud, contiene el encabezado de la app ACTUAL
    */
-  public header = signal('');
+  public headerDialog = signal('');
 
   /**
    * Contiene los elementos seleccionados de la tabla de la app ACTUAL
@@ -181,7 +181,7 @@ export class Vars {
   /**
    * muestra u oculta el dialogo del crud
    */
-  protected formDialogVisible: boolean[] = [false];
+  protected formDialogVisible: { [key: string]: boolean } = { '0': false };
 
   /**
    * form temporal que contiene los forularios de las app
@@ -374,7 +374,7 @@ export class Vars {
   /**
    * Campos que se deben excluir de la tabla, por ejemplo, id, description, sys_data
    */
-  excludeFieldsCols: any[][] = [];
+  excludeFieldsCols: { [key: string]: any[] } = {};
 
   //selectedColumns = computed(() => this.cols().filter(col =>  !this.removeColumns().includes(col.field)));
   selectedColumns = computed(() => {
@@ -404,7 +404,7 @@ export class Vars {
    * Las funciones que se mostrarán en el boton de nuevo registro, se inicializan en las clases heredadas
    * si no es un array se muestra como un botton simple, si esta inicializado como splitButton
    */
-  public openNewMenu: MenuItem = signal<MenuItem[]>([]);
+  public openNewMenu = signal<MenuItem[]>([]);
   /**
    * Las funciones que se mostrarán en el boton de recargar los datos, se inicializan en las clases heredadas
    * si no es un array se muestra como un botton simple, si esta inicializado como splitButton
@@ -2266,7 +2266,7 @@ export class Vars {
 
     'asset-document': {
       dialog: {
-        width: 'width-1200px-Custom',
+        width: 'width-600px-Custom',
         height: 'min-height-550px-custom'
       },
       general: {
@@ -2347,10 +2347,144 @@ export class Vars {
       }
     },
 
+    'asset-type': {
+      dialog: {
+        width: 'width-550px-custom',
+        height: 'height-300px-custom',
+        singular: 'tipo de activo',
+        plural: 'tipos de activos',
+        singularIndefiniteArticle: 'el tipo de activo',
+        pluralDefiniteArticle: 'los tipos de activos'
+      },
+      general: {
+        grid: {
+          0: {
+            class: 'col-span-4',
+            class_md: 'md:col-span-3',
+            field: 'code',
+            type: 'input-text',
+            autofocus: true
+          },
+          1: {
+            class: 'col-span-8',
+            class_md: 'md:col-span-5',
+            field: 'name',
+            hide: false,
+            random_name: {
+              compressed_random_name2: true,
+              maximum_characters_random: 5
+            },
+            type: 'input-text',
+            autofocus: false
+          },
+          2: {
+            class: 'col-span-6',
+            class_md: 'md:col-span-4',
+            field: 'is_active',
+            type: 'toggle-button',
+            hide: false,
+            autofocus: true
+          },
+
+          3: {
+            class: 'col-span-6',
+            class_md: 'md:col-span-8',
+            field: 'name2',
+            type: 'input-text',
+            autofocus: false
+          },
+          4: {
+            class: 'col-span-6',
+            class_md: 'md:col-span-4',
+            field: 'short_name',
+            type: 'input-text',
+            autofocus: false
+          },
+          5: {
+            class: 'col-span-12',
+            class_md: 'md:col-span-12',
+            field: 'description',
+            type: 'textarea',
+            autofocus: false
+          }
+
+        }
+      }
+    },
+
+    'capacity-type': {
+
+      dialog: {
+        width: 'width-550px-custom',
+        height: 'height-300px-custom',
+        singular: 'tipo de capacidad',
+        plural: 'tipos de capacidad',
+        singularIndefiniteArticle: 'el tipo de capacidad',
+        pluralDefiniteArticle: 'los tipos de capacidad'
+      },
+      general: {
+        grid: {
+          0: {
+            class: 'col-span-4',
+            class_md: 'md:col-span-3',
+            field: 'code',
+            type: 'input-text',
+            autofocus: true
+          },
+          1: {
+            class: 'col-span-8',
+            class_md: 'md:col-span-5',
+            field: 'name',
+            hide: false,
+            random_name: {
+              compressed_random_name2: true,
+              maximum_characters_random: 5
+            },
+            type: 'input-text',
+            autofocus: false
+          },
+          2: {
+            class: 'col-span-6',
+            class_md: 'md:col-span-4',
+            field: 'is_active',
+            type: 'toggle-button',
+            hide: false,
+            autofocus: true
+          },
+          3: {
+            class: 'col-span-6',
+            class_md: 'md:col-span-8',
+            field: 'name2',
+            type: 'input-text',
+            autofocus: false
+          },
+          4: {
+            class: 'col-span-6',
+            class_md: 'md:col-span-4',
+            field: 'short_name',
+            type: 'input-text',
+            autofocus: false
+          },
+          5: {
+            class: 'col-span-12',
+            class_md: 'md:col-span-12',
+            field: 'description',
+            type: 'textarea',
+            autofocus: false
+          }
+        }
+      }
+
+
+    },
     asset: {
       dialog: {
-        width: 'width-1200px-Custom',
-        height: 'min-height-550px-custom'
+        width: 'width-850px-custom',
+        height: 'min-height-550px-custom',
+        singular: 'activo',
+        plural: 'activos',
+        singularIndefiniteArticle: 'el activo',
+        pluralDefiniteArticle: 'los activos'
       },
       general: {
         grid: {
@@ -3045,8 +3179,9 @@ export class Vars {
 
     'request-detail': {
       dialog: {
-        width: 'width-650px-custom',
-        height: 'min-height-550px-custom'
+        width: 'width-850px-custom',
+        height: 'min-height-550px-custom',
+        title: 'Detalles de la solicitud'
       },
       general: {
         grid: {
@@ -3226,656 +3361,662 @@ export class Vars {
 
                         }
                     },*/
-          3: {
+          /*3: {
             class: 'col-span-12',
             class_md: 'md:col-span-12',
             title: 'Datalle',
-            fieldset: {
-              0: {
-                class: 'col-span-6',
-                class_md: 'md:col-span-3',
-                field: 'Componente',
-                label: 'Componente',
-                editable: false,
-                filter: true,
-                filter_by: 'name',
-                type: 'dropdown',
-                hide: false,
-                autofocus: false,
-                reload_icon: false,
-                new_icon: false,
-                closable_icon: false,
-                //"option_value": "value",
-                //"option_label": "display_name",
-                cascading: {
-                  field: 'Subcomponente', //campo que debe existir en el mismo formulario
-                  filter: 'group', //en el caso del remoto es el id del componente para el filtro, en el caso local es agrupador
-                  searchLocale: true //para que busque en options en lugar de hacerlo al servidor
+            card: {*/
+          3: {
+            class: 'col-span-6',
+            class_md: 'md:col-span-3',
+            field: 'Componente',
+            label: 'Componente',
+            editable: false,
+            filter: true,
+            filter_by: 'name',
+            type: 'dropdown',
+            hide: false,
+            autofocus: false,
+            reload_icon: false,
+            new_icon: true,
+            closable_icon: false,
+            //"option_value": "value",
+            //"option_label": "display_name",
+            cascading: {
+              field: 'Subcomponente', //campo que debe existir en el mismo formulario
+              filter: 'group', //en el caso del remoto es el id del componente para el filtro, en el caso local es agrupador
+              searchLocale: true //para que busque en options en lugar de hacerlo al servidor
+            },
+            options: [
+              { id: 'C010', name: 'Tuberia', group: 'TUBERIA' },
+              { id: 'C100', name: 'Cabina', group: 'MECANICA' },
+              { id: 'C110', name: 'Caja de Transferencia', group: 'MECANICA' },
+              { id: 'C120', name: 'Chasis', group: 'MECANICA' },
+              { id: 'C130', name: 'Diferenciales', group: 'MECANICA' },
+              { id: 'C140', name: 'Dirección', group: 'MECANICA' },
+              { id: 'C150', name: 'Embrague (Clutch)', group: 'MECANICA' },
+              { id: 'C160', name: 'Estabilizadores', group: 'MECANICA' },
+              { id: 'C170', name: 'Estructura de la Pluma', group: 'MECANICA' },
+              { id: 'C180', name: 'Frenos', group: 'MECANICA' },
+              { id: 'C190', name: 'Imagen', group: 'MECANICA' },
+              { id: 'C200', name: 'Llantas', group: 'MECANICA' },
+              { id: 'C210', name: 'Masas', group: 'MECANICA' },
+              { id: 'C220', name: 'Motor', group: 'MECANICA' },
+              { id: 'C230', name: 'Sistema Eléctrico de Bombeo', group: 'MECANICA' },
+              { id: 'C240', name: 'Sistema Eléctrico del camión', group: 'MECANICA' },
+              { id: 'C250', name: 'Sistema Hidráulico de bombeo', group: 'MECANICA' },
+              { id: 'C260', name: 'Sistema Mecánico de bombeo', group: 'MECANICA' },
+              { id: 'C270', name: 'Suspensión Delantera', group: 'MECANICA' },
+              { id: 'C280', name: 'Suspensión Trasera', group: 'MECANICA' },
+              { id: 'C290', name: 'Transmisión', group: 'MECANICA' }, //aqui voy estor poniedno los drop depednientes, tanto mnual como automatico de sistema
+              { id: 'C400', name: 'Taller mantenimiento', group: '', disable: true, required: false }, //son para el componente hijo
+              { id: 'C410', name: 'MOE pago por iguala para Mantto.', group: '', disable: true, required: false }, //disable, deshabilita el componente
+              { id: 'C420', name: 'Herramientas para mantenimiento', group: '', disable: true, required: false }, //disable, deshabilita el componente dependiente
+              { id: 'C430', name: 'Herramientas para operaciones', group: '', disable: true, required: false }, //disable, deshabilita el componente dependiente
+              { id: 'C440', name: 'Materiales para Stock', group: '', disable: true, required: false }, //disable, deshabilita el componente dependiente
+              { id: 'C450', name: 'Materiales para Operaciones', group: '', disable: true, required: false }, //disable, deshabilita el componente dependiente
+              { id: 'C460', name: 'MOE para Operaciones', group: '', disable: true, required: false }, //disable, deshabilita el componente dependiente
+              { id: 'C470', name: 'Vehículos Utilitarios', group: '', disable: true, required: false }, //disable, deshabilita el componente dependiente
+              { id: 'C480', name: 'Servicio de grúa para arrastre', group: '', disable: true, required: false } //disable, deshabilita el componente dependiente
+            ]
+          },
+
+          4: {
+            class: 'col-span-6',
+            class_md: 'md:col-span-3',
+            field: 'Subcomponente',
+            label: 'Subcomponente',
+            type: 'dropdown',
+            hide: false,
+            autofocus: false,
+            reload_icon: false,
+            new_icon: false,
+            closable_icon: false,
+            //"option_value": "value",
+            //"option_label": "display_name",
+            options: [
+              { id: 'SC010', name: 'Codo', group: 'TUBERIA' },
+              { id: 'SC020', name: 'Abrazadera', group: 'TUBERIA' },
+              { id: 'SC030', name: 'Empaque', group: 'TUBERIA' },
+              { id: 'SC040', name: 'Tubo', group: 'TUBERIA' },
+              { id: 'SC050', name: 'Manguera 1 casquillo', group: 'TUBERIA' },
+              { id: 'SC060', name: 'Manguera 2 casquillos', group: 'TUBERIA' },
+              { id: 'SC070', name: 'Reductor', group: 'TUBERIA' },
+              { id: 'SC080', name: 'Boquilla', group: 'TUBERIA' },
+              { id: 'SC090', name: 'Fabricacion a medida', group: 'TUBERIA' },
+              { id: 'SC200', name: 'Ajuste de Puertas y Cofre', group: 'MECANICA' },
+              { id: 'SC210', name: 'Alerones', group: 'MECANICA' },
+              { id: 'SC220', name: 'Aletillas', group: 'MECANICA' },
+              { id: 'SC230', name: 'Alineación de las Ruedas', group: 'MECANICA' },
+              { id: 'SC240', name: 'Almohadillas para estabilizar (Pads)', group: 'MECANICA' },
+              { id: 'SC250', name: 'Amortiguadores', group: 'MECANICA' },
+              { id: 'SC260', name: 'Anillo de Chapaletas', group: 'MECANICA' },
+              { id: 'SC270', name: 'Anillo de Corte e Inserto', group: 'MECANICA' },
+              { id: 'SC280', name: 'Arneses eléctricos', group: 'MECANICA' },
+              { id: 'SC290', name: 'Asientos y Respaldos', group: 'MECANICA' },
+              { id: 'SC300', name: 'Baleros', group: 'MECANICA' },
+              { id: 'SC310', name: 'Barra Telescópica', group: 'MECANICA' },
+              { id: 'SC320', name: 'Barra Torsional', group: 'MECANICA' },
+              { id: 'SC330', name: 'Bastidor del modulo de Bombeo', group: 'MECANICA' },
+              { id: 'SC340', name: 'Birlos', group: 'MECANICA' },
+              { id: 'SC350', name: 'Block de bombeo', group: 'MECANICA' },
+              { id: 'SC360', name: 'Block de la pluma', group: 'MECANICA' },
+              { id: 'SC370', name: 'Bomba de Agua para lavado', group: 'MECANICA' },
+              { id: 'SC380', name: 'Bomba de Combustible', group: 'MECANICA' },
+              { id: 'SC390', name: 'Bomba de la Dirección', group: 'MECANICA' },
+              { id: 'SC400', name: 'Bomba hidráulica principal', group: 'MECANICA' },
+              { id: 'SC410', name: 'Bomba de refrigerante', group: 'MECANICA' },
+              { id: 'SC420', name: 'Bujes de Flecha de la Válvula Rock', group: 'MECANICA' },
+              { id: 'SC430', name: 'Caja de Contactores', group: 'MECANICA' },
+              { id: 'SC440', name: 'Caja de control', group: 'MECANICA' },
+              { id: 'SC450', name: 'Caja de Dirección', group: 'MECANICA' },
+              { id: 'SC460', name: 'Cardanes del tren motriz (1) (2) (3)', group: 'MECANICA' },
+              { id: 'SC470', name: 'Cárter', group: 'MECANICA' },
+              { id: 'SC480', name: 'Cilindro de transporte', group: 'MECANICA' },
+              { id: 'SC490', name: 'Cilindros Diferenciales', group: 'MECANICA' },
+              { id: 'SC500', name: 'Cilindros Hidráulicos de la pluma', group: 'MECANICA' },
+              { id: 'SC510', name: 'Cilindros o Motor de giro de la pluma', group: 'MECANICA' },
+              { id: 'SC520', name: 'Cincho de pluma', group: 'MECANICA' },
+              { id: 'SC530', name: 'Cinchos para manipulación de tubería', group: 'MECANICA' },
+              { id: 'SC540', name: 'Cinto de Rebote', group: 'MECANICA' },
+              { id: 'SC550', name: 'Cinturón de seguridad piloto y copiloto', group: 'MECANICA' },
+              { id: 'SC560', name: 'Códigos de Falla en Motor', group: 'MECANICA' },
+              { id: 'SC570', name: 'Columpios', group: 'MECANICA' },
+              { id: 'SC580', name: 'Compresor y Tanques de aire (Purgas)', group: 'MECANICA' },
+              { id: 'SC590', name: 'Condiciones de la Tolva', group: 'MECANICA' },
+              { id: 'SC600', name: 'Condiciones de tubería y codos', group: 'MECANICA' },
+              { id: 'SC610', name: 'Condiciones del tablero', group: 'MECANICA' },
+              { id: 'SC620', name: 'Conos herméticos', group: 'MECANICA' },
+              { id: 'SC630', name: 'Control Crucero', group: 'MECANICA' },
+              { id: 'SC640', name: 'Correcto Funcionamiento del A/C', group: 'MECANICA' },
+              { id: 'SC650', name: 'Cristales Delanteros', group: 'MECANICA' },
+              { id: 'SC660', name: 'Cristales Traseros', group: 'MECANICA' },
+              { id: 'SC670', name: 'Cruceta de barras cardan', group: 'MECANICA' },
+              { id: 'SC680', name: 'Crucetas de Freno Magnético', group: 'MECANICA' },
+              { id: 'SC690', name: 'Dispositivo atrapa bolas', group: 'MECANICA' },
+              { id: 'SC700', name: 'Émbolos de empuje', group: 'MECANICA' },
+              { id: 'SC710', name: 'Empaque y abrazaderas', group: 'MECANICA' },
+              { id: 'SC720', name: 'Enfriador de Aceite de transmisión', group: 'MECANICA' },
+              { id: 'SC730', name: 'Enfriador de Aceite Hidráulico', group: 'MECANICA' },
+              { id: 'SC740', name: 'Engrasado General', group: 'MECANICA' },
+              { id: 'SC750', name: 'Engrasadora automática', group: 'MECANICA' },
+              { id: 'SC760', name: 'Engrase General de estabilizadores', group: 'MECANICA' },
+              { id: 'SC770', name: 'Escaleras de acceso al modulo', group: 'MECANICA' },
+              { id: 'SC780', name: 'Escape y/o Silenciador', group: 'MECANICA' },
+              { id: 'SC790', name: 'Espejo Banquetero', group: 'MECANICA' },
+              { id: 'SC800', name: 'Espejo de punto ciego frontal derecho', group: 'MECANICA' },
+              { id: 'SC810', name: 'Espejo de punto ciego frontal izquierdo', group: 'MECANICA' },
+              { id: 'SC820', name: 'Espejos convexos (Der-Izq)', group: 'MECANICA' },
+              { id: 'SC830', name: 'Espejos Laterales (Der-Izq)', group: 'MECANICA' },
+              { id: 'SC840', name: 'Estado de bandas del motor', group: 'MECANICA' },
+              { id: 'SC850', name: 'Estado de los Hules de la Suspensión Trasera', group: 'MECANICA' },
+              { id: 'SC860', name: 'Estado de los Hules Tensores', group: 'MECANICA' },
+              { id: 'SC870', name: 'Estado Físico de las llantas Delanteras', group: 'MECANICA' },
+              { id: 'SC880', name: 'Estado Físico de las llantas Traseras', group: 'MECANICA' },
+              { id: 'SC890', name: 'Estribos antiderrapantes', group: 'MECANICA' },
+              { id: 'SC900', name: 'Estructura de la cuarta sección', group: 'MECANICA' },
+              { id: 'SC910', name: 'Estructura de la primera sección', group: 'MECANICA' },
+              { id: 'SC920', name: 'Estructura de la quinta sección', group: 'MECANICA' },
+              { id: 'SC930', name: 'Estructura de la segunda sección', group: 'MECANICA' },
+              { id: 'SC940', name: 'Estructura de la Suspensión', group: 'MECANICA' },
+              { id: 'SC950', name: 'Estructura de la tercera sección', group: 'MECANICA' },
+              { id: 'SC960', name: 'Estructura de los Estabilizadores y Placas de Apoyo', group: 'MECANICA' },
+              { id: 'SC970', name: 'Extinguidor', group: 'MECANICA' },
+              { id: 'SC980', name: 'Fan Clutch y ventilador.', group: 'MECANICA' },
+              { id: 'SC990', name: 'Filtro de aceite', group: 'MECANICA' },
+              { id: 'SC1000', name: 'Filtro de Combustible', group: 'MECANICA' },
+              { id: 'SC1010', name: 'Filtro de refrigerante', group: 'MECANICA' },
+              { id: 'SC1020', name: 'Filtros de Aire', group: 'MECANICA' },
+              { id: 'SC1030', name: 'Filtros hidráulicos', group: 'MECANICA' },
+              { id: 'SC1040', name: 'Flecha del agitador', group: 'MECANICA' },
+              { id: 'SC1050', name: 'Freno Auxiliar', group: 'MECANICA' },
+              { id: 'SC1060', name: 'Fuelles', group: 'MECANICA' },
+              { id: 'SC1070', name: 'Fugas de Aceite', group: 'MECANICA' },
+              { id: 'SC1080', name: 'Funcionamiento Alarma de Reversa', group: 'MECANICA' },
+              { id: 'SC1090', name: 'Funcionamiento de Alarmas de Baja', group: 'MECANICA' },
+              { id: 'SC1100', name: 'Funcionamiento de control remoto alámbrico', group: 'MECANICA' },
+              { id: 'SC1110', name: 'Funcionamiento de control remoto inalámbrico', group: 'MECANICA' },
+              { id: 'SC1120', name: 'Funcionamiento de Cornetas', group: 'MECANICA' },
+              { id: 'SC1130', name: 'Funcionamiento de Elevadores', group: 'MECANICA' },
+              { id: 'SC1140', name: 'Funcionamiento de Embrague (Clutch)', group: 'MECANICA' },
+              { id: 'SC1150', name: 'Funcionamiento de Mangueras, Tubos hidráulicos y válvulas de seguridad de estabilizadores', group: 'MECANICA' },
+              { id: 'SC1160', name: 'Funcionamiento de paro de emergencia de tolva', group: 'MECANICA' },
+              { id: 'SC1170', name: 'Funcionamiento de paros de emergencia', group: 'MECANICA' },
+              { id: 'SC1180', name: 'Funcionamiento de Válvula de Estacionamiento', group: 'MECANICA' },
+              { id: 'SC1190', name: 'Funcionamiento de válvulas de seguridad de los cilindros de la pluma', group: 'MECANICA' },
+              { id: 'SC1200', name: 'Funcionamiento frenos de servicio', group: 'MECANICA' },
+              { id: 'SC1210', name: 'Funcionamiento General de los Diferenciales', group: 'MECANICA' },
+              { id: 'SC1220', name: 'Funcionamiento General del motor del camión', group: 'MECANICA' },
+              { id: 'SC1230', name: 'Funcionamiento Manija, Puerta y Cerradura', group: 'MECANICA' },
+              { id: 'SC1240', name: 'Guardafangos', group: 'MECANICA' },
+              { id: 'SC1250', name: 'Hermeticidad en Tubería de Admisión y Filtro de Vacío', group: 'MECANICA' },
+              { id: 'SC1260', name: 'Juego libre Pedal y Embrague', group: 'MECANICA' },
+              { id: 'SC1270', name: 'Limpiabrisas', group: 'MECANICA' },
+              { id: 'SC1280', name: 'Limpieza Externa', group: 'MECANICA' },
+              { id: 'SC1290', name: 'Limpieza Interna', group: 'MECANICA' },
+              { id: 'SC1300', name: 'Loderas', group: 'MECANICA' },
+              { id: 'SC1310', name: 'Lubricación del Collarín y Barras', group: 'MECANICA' },
+              { id: 'SC1320', name: 'Luces Delanteras', group: 'MECANICA' },
+              { id: 'SC1330', name: 'Luces Direccionales e Intermitentes', group: 'MECANICA' },
+              { id: 'SC1340', name: 'Luces Reversa', group: 'MECANICA' },
+              { id: 'SC1350', name: 'Luces Stop', group: 'MECANICA' },
+              { id: 'SC1360', name: 'Luces Traseras', group: 'MECANICA' },
+              { id: 'SC1370', name: 'Mango y Perno de la Dirección', group: 'MECANICA' },
+              { id: 'SC1380', name: 'Mangueras de descarga y sujetador', group: 'MECANICA' },
+              { id: 'SC1390', name: 'Mangueras y Tubos hidráulicos', group: 'MECANICA' },
+              { id: 'SC1400', name: 'Medidores de Temperatura de los Diferenciales y Transmisión', group: 'MECANICA' },
+              { id: 'SC1410', name: 'Motor Hidráulico del agitador', group: 'MECANICA' },
+              { id: 'SC1420', name: 'Muelles y Abrazaderas', group: 'MECANICA' },
+              { id: 'SC1430', name: 'Nivel de Aceite', group: 'MECANICA' },
+              { id: 'SC1440', name: 'Nivel y limpieza de agua en caja de enfriamiento', group: 'MECANICA' },
+              { id: 'SC1450', name: 'Nivel/Fugas de aceite de depósito de dirección', group: 'MECANICA' },
+              { id: 'SC1460', name: 'Nivel/Fugas de aceite motor', group: 'MECANICA' },
+              { id: 'SC1470', name: 'Nivel/Fugas de aceite sistema hidráulico', group: 'MECANICA' },
+              { id: 'SC1480', name: 'Nivel/Fugas de combustible', group: 'MECANICA' },
+              { id: 'SC1490', name: 'Nivel/Fugas de refrigerante motor', group: 'MECANICA' },
+              { id: 'SC1500', name: 'Pasamanos', group: 'MECANICA' },
+              { id: 'SC1510', name: 'Pasillos', group: 'MECANICA' },
+              { id: 'SC1520', name: 'Pedestal de giro', group: 'MECANICA' },
+              { id: 'SC1530', name: 'Perchas', group: 'MECANICA' },
+              { id: 'SC1540', name: 'Pintura y Carrocería del Chasis Cabina', group: 'MECANICA' },
+              { id: 'SC1550', name: 'Pintura y Carrocería del Modulo', group: 'MECANICA' },
+              { id: 'SC1560', name: 'Pistón de la Válvula Rock o Válvula "S"', group: 'MECANICA' },
+              { id: 'SC1570', name: 'Pistones Hidráulicos', group: 'MECANICA' },
+              { id: 'SC1580', name: 'Plataforma para limpieza de tolva', group: 'MECANICA' },
+              { id: 'SC1590', name: 'Postenfriador', group: 'MECANICA' },
+              { id: 'SC1600', name: 'Presión de agitador', group: 'MECANICA' },
+              { id: 'SC1610', name: 'Protección zona CERO', group: 'MECANICA' },
+              { id: 'SC1620', name: 'Punto de anclaje, línea de vida y Arnés de seguridad.', group: 'MECANICA' },
+              { id: 'SC1630', name: 'Puntos de engrase', group: 'MECANICA' },
+              { id: 'SC1640', name: 'Radiador', group: 'MECANICA' },
+              { id: 'SC1650', name: 'Radio para comunicación', group: 'MECANICA' },
+              { id: 'SC1660', name: 'Reemplazo de aceite', group: 'MECANICA' },
+              { id: 'SC1670', name: 'Refrigerante de acuerdo a especificación Premezclado 50/50', group: 'MECANICA' },
+              { id: 'SC1680', name: 'Revisión de Barras de Dirección', group: 'MECANICA' },
+              { id: 'SC1690', name: 'Revisión de Batería,Cableado,Soporte y Tapa', group: 'MECANICA' },
+              { id: 'SC1700', name: 'Revisión de Hules de las Puertas', group: 'MECANICA' },
+              { id: 'SC1710', name: 'Revisión de Largueros', group: 'MECANICA' },
+              { id: 'SC1720', name: 'Revisión de Puentes del Chasis', group: 'MECANICA' },
+              { id: 'SC1730', name: 'Revisión de Uniones del chasis con bases del sist.Hid.', group: 'MECANICA' },
+              { id: 'SC1740', name: 'Revisión de Uniones del Chasis con Cabina', group: 'MECANICA' },
+              { id: 'SC1750', name: 'Revisión de Uniones del chasis con el módulo', group: 'MECANICA' },
+              { id: 'SC1760', name: 'Revisión del Turbo', group: 'MECANICA' },
+              { id: 'SC1770', name: 'Rines', group: 'MECANICA' },
+              { id: 'SC1780', name: 'Secador de Aire', group: 'MECANICA' },
+              { id: 'SC1790', name: 'Sello Riñón y Luneta', group: 'MECANICA' },
+              { id: 'SC1800', name: 'Sensor de nivel de Refrigerante y Filtro', group: 'MECANICA' },
+              { id: 'SC1810', name: 'Sensores de proximidad', group: 'MECANICA' },
+              { id: 'SC1820', name: 'Sensores y válvulas ABS', group: 'MECANICA' },
+              { id: 'SC1830', name: 'Señalética de seguridad', group: 'MECANICA' },
+              { id: 'SC1840', name: 'Sistema EGR (Sistema de recirculación de gases)', group: 'MECANICA' },
+              { id: 'SC1850', name: 'Soportes de Freno Magnético', group: 'MECANICA' },
+              { id: 'SC1860', name: 'Soportes de motor', group: 'MECANICA' },
+              { id: 'SC1870', name: 'Tablero de Instrumentos Medidores de Aceite', group: 'MECANICA' },
+              { id: 'SC1880', name: 'Tablero de Instrumentos Medidores de Aire', group: 'MECANICA' },
+              { id: 'SC1890', name: 'Tablero de Instrumentos Medidores de Combustible', group: 'MECANICA' },
+              { id: 'SC1900', name: 'Tablero de Instrumentos Medidores de Horómetro', group: 'MECANICA' },
+              { id: 'SC1910', name: 'Tablero de Instrumentos Medidores de Tacómetro RPM', group: 'MECANICA' },
+              { id: 'SC1920', name: 'Tablero de Instrumentos Medidores de Temperatura', group: 'MECANICA' },
+              { id: 'SC1930', name: 'Tablero de Instrumentos Medidores de Velocímetro', group: 'MECANICA' },
+              { id: 'SC1940', name: 'Tablero de Instrumentos Medidores de Voltaje', group: 'MECANICA' },
+              { id: 'SC1950', name: 'Tacones de la Caja de Transferencia', group: 'MECANICA' },
+              { id: 'SC1960', name: 'Tacones de la pluma', group: 'MECANICA' },
+              { id: 'SC1970', name: 'Tacones de la tolva y rejilla', group: 'MECANICA' },
+              { id: 'SC1980', name: 'Tacones para tubería horizontal', group: 'MECANICA' },
+              { id: 'SC1990', name: 'Tanque de Aceite Hidráulico', group: 'MECANICA' },
+              { id: 'SC2000', name: 'Tanque de agua', group: 'MECANICA' },
+              { id: 'SC2010', name: 'Tanques de combustible', group: 'MECANICA' },
+              { id: 'SC2020', name: 'Terminales de Dirección', group: 'MECANICA' },
+              { id: 'SC2030', name: 'Topes para bloqueo de ruedas', group: 'MECANICA' },
+              { id: 'SC2040', name: 'Tubo reductor', group: 'MECANICA' },
+              { id: 'SC2050', name: 'Válvula de alivio', group: 'MECANICA' },
+              { id: 'SC2060', name: 'Válvula de Transferencia', group: 'MECANICA' },
+              { id: 'SC2070', name: 'Yugo, pernos y bujes de la horquilla del pistón de la valv. Rock o valv."S"', group: 'MECANICA' },
+              { id: 'SC2080', name: 'Yugos y crucetas', group: 'MECANICA' },
+              { id: 'SC2090', name: 'Zepelines', group: 'MECANICA' }
+            ]
+          },
+
+          5: {
+            class: 'col-span-6',
+            class_md: 'md:col-span-3',
+            field: 'Sintoma de falla',
+            label: 'Sintoma de falla',
+            type: 'dropdown',
+            hide: false,
+            autofocus: false,
+            reload_icon: false,
+            new_icon: false,
+            closable_icon: false,
+            options: [
+              { id: 'SF010', name: 'Primer brazo', group: 'TUBERIA' },
+              { id: 'SF020', name: 'Segundo brazo', group: 'TUBERIA' },
+              { id: 'SF030', name: 'Tercer brazo', group: 'TUBERIA' },
+              { id: 'SF040', name: 'Cuarto brazo', group: 'TUBERIA' },
+              { id: 'SF050', name: 'Quinto brazo', group: 'TUBERIA' },
+              { id: 'SF060', name: 'Salida tolva', group: 'TUBERIA' },
+              { id: 'SF070', name: 'Pasillo/Torre BP', group: 'TUBERIA' },
+              { id: 'SF080', name: 'Obra vertical', group: 'TUBERIA' },
+              { id: 'SF090', name: 'Obra horizontal', group: 'TUBERIA' },
+              { id: 'SF100', name: 'Obra otro', group: 'TUBERIA' },
+              { id: 'SF300', name: 'Abrasión', group: 'MECANICA' },
+              { id: 'SF310', name: 'Aflojamiento/Juego Mecánico', group: 'MECANICA' },
+              { id: 'SF320', name: 'Agua de Mala Calidad', group: 'MECANICA' },
+              { id: 'SF330', name: 'Bajo Rendimiento', group: 'MECANICA' },
+              { id: 'SF340', name: 'Cables Tocando Partes de Metal', group: 'MECANICA' },
+              { id: 'SF350', name: 'Carga Excesiva', group: 'MECANICA' },
+              { id: 'SF360', name: 'Contaminación', group: 'MECANICA' },
+              { id: 'SF370', name: 'Corrosión', group: 'MECANICA' },
+              { id: 'SF380', name: 'Corto Circuito', group: 'MECANICA' },
+              { id: 'SF390', name: 'Desajuste', group: 'MECANICA' },
+              { id: 'SF400', name: 'Desalineamiento', group: 'MECANICA' },
+              { id: 'SF410', name: 'Desbalance', group: 'MECANICA' },
+              { id: 'SF420', name: 'Descalibración', group: 'MECANICA' },
+              { id: 'SF430', name: 'Desgaste', group: 'MECANICA' },
+              { id: 'SF440', name: 'Desnivelamiento', group: 'MECANICA' },
+              { id: 'SF450', name: 'Diseño/Fabricación Débil', group: 'MECANICA' },
+              { id: 'SF460', name: 'Eje Doblado', group: 'MECANICA' },
+              { id: 'SF470', name: 'Energía inapropiada', group: 'MECANICA' },
+              { id: 'SF480', name: 'Erosión', group: 'MECANICA' },
+              { id: 'SF490', name: 'Estiramiento', group: 'MECANICA' },
+              { id: 'SF500', name: 'Exceso de Lubricación', group: 'MECANICA' },
+              { id: 'SF510', name: 'Exceso de Temperatura', group: 'MECANICA' },
+              { id: 'SF520', name: 'Exceso de Vibración', group: 'MECANICA' },
+              { id: 'SF530', name: 'Excesos de Intentos de Arranques', group: 'MECANICA' },
+              { id: 'SF540', name: 'Falla de Agua', group: 'MECANICA' },
+              { id: 'SF550', name: 'Falla de Aire', group: 'MECANICA' },
+              { id: 'SF560', name: 'Falla Eléctrica C/T', group: 'MECANICA' },
+              { id: 'SF570', name: 'Falla en Equipo de Control', group: 'MECANICA' },
+              { id: 'SF580', name: 'Falla Mecánica C/T', group: 'MECANICA' },
+              { id: 'SF590', name: 'Falla Operación C/T', group: 'MECANICA' },
+              { id: 'SF600', name: 'Falla Por Mala Operación C/T', group: 'MECANICA' },
+              { id: 'SF610', name: 'Falla Software / Programación', group: 'MECANICA' },
+              { id: 'SF620', name: 'Falta de Aire', group: 'MECANICA' },
+              { id: 'SF630', name: 'Falta de Energía', group: 'MECANICA' },
+              { id: 'SF640', name: 'Falta de Limpieza', group: 'MECANICA' },
+              { id: 'SF650', name: 'Falta de Limpieza o Material Extraño', group: 'MECANICA' },
+              { id: 'SF660', name: 'Falta de Lubricación', group: 'MECANICA' },
+              { id: 'SF670', name: 'Fatiga', group: 'MECANICA' },
+              { id: 'SF680', name: 'Frenado', group: 'MECANICA' },
+              { id: 'SF690', name: 'Fuga de Aceite', group: 'MECANICA' },
+              { id: 'SF700', name: 'Fuga de Agua', group: 'MECANICA' },
+              { id: 'SF710', name: 'Fuga de Aire', group: 'MECANICA' },
+              { id: 'SF720', name: 'Fuga de Lubricante', group: 'MECANICA' },
+              { id: 'SF730', name: 'Fuga o Emisión', group: 'MECANICA' },
+              { id: 'SF740', name: 'Incendio', group: 'MECANICA' },
+              { id: 'SF750', name: 'Incrustación', group: 'MECANICA' },
+              { id: 'SF760', name: 'Lubricante Contaminado', group: 'MECANICA' },
+              { id: 'SF770', name: 'Lubricante de Baja Calidad', group: 'MECANICA' },
+              { id: 'SF780', name: 'Lubricante Viscosidad Baja', group: 'MECANICA' },
+              { id: 'SF790', name: 'Mal Ensamble', group: 'MECANICA' },
+              { id: 'SF800', name: 'Mantenimiento; Ejecución Deficiente', group: 'MECANICA' },
+              { id: 'SF810', name: 'Material Inadecuado/Baja Calidad', group: 'MECANICA' },
+              { id: 'SF820', name: 'Motor Dañado', group: 'MECANICA' },
+              { id: 'SF830', name: 'No Abre', group: 'MECANICA' },
+              { id: 'SF840', name: 'No Arranca', group: 'MECANICA' },
+              { id: 'SF850', name: 'No Cierra', group: 'MECANICA' },
+              { id: 'SF860', name: 'No Opera Correctamente', group: 'MECANICA' },
+              { id: 'SF870', name: 'Objeto Extraño', group: 'MECANICA' },
+              { id: 'SF880', name: 'Obstrucción/Bloqueo', group: 'MECANICA' },
+              { id: 'SF890', name: 'Parte de Equipo Roto', group: 'MECANICA' },
+              { id: 'SF900', name: 'Paso de Engrane', group: 'MECANICA' },
+              { id: 'SF910', name: 'Rozamiento', group: 'MECANICA' },
+              { id: 'SF920', name: 'Soltura Mecánica', group: 'MECANICA' },
+              { id: 'SF930', name: 'Temperatura Anormal', group: 'MECANICA' },
+              { id: 'SF940', name: 'Torque Inadecuado', group: 'MECANICA' },
+              { id: 'SF950', name: 'Uso de Herramientas Inadecuado', group: 'MECANICA' },
+              { id: 'SF960', name: 'Vandalismo', group: 'MECANICA' },
+              { id: 'SF970', name: 'Vida Útil Vencida', group: 'MECANICA' },
+              { id: 'SF980', name: 'Mejora', group: 'MECANICA' }
+            ]
+          },
+
+          6: {
+            class: 'col-span-6',
+            class_md: 'md:col-span-3',
+            field: 'Tipo de gasto',
+            label: 'Tipo de gasto',
+            type: 'dropdown',
+            hide: false,
+            autofocus: false,
+            reload_icon: false,
+            new_icon: false,
+            closable_icon: false,
+            options: [
+              { id: 'TG010', name: 'Desgaste', group: 'TUBERIA' },
+              { id: 'TG020', name: 'Ruptura', group: 'TUBERIA' },
+              { id: 'TG030', name: 'Taponamiento', group: 'TUBERIA' },
+              { id: 'TG100', name: 'Capex', group: 'MECANICA' },
+              { id: 'TG110', name: 'Correctivo', group: 'MECANICA' },
+              { id: 'TG120', name: 'Correctivo planeado', group: 'MECANICA' },
+              { id: 'TG130', name: 'Mala Operación', group: 'MECANICA' },
+              { id: 'TG140', name: 'Preventivo', group: 'MECANICA' },
+              { id: 'TG150', name: 'Siniestro por desastre natural', group: 'MECANICA' },
+              { id: 'TG160', name: 'Campañas', group: 'MECANICA' },
+              { id: 'TG170', name: 'Proyecto', group: 'MECANICA' }
+            ]
+          },
+
+          /*7: {
+                            "class": "col-span-6",
+                            "class_md": "md:col-span-3",
+                            "field": "warehouse",
+                            "type": "dropdown",
+                            "hide": false,
+                            "autofocus": false,
+                            "data_type": "warehouse",
+                            "reload_icon": true,
+                            "new_icon": false,
+                            "closable_icon": true,
+                        },
+                        8: {
+                            "class": "col-span-6",
+                            "class_md": "md:col-span-3",
+                            "field": "section",
+                            "type": "dropdown",
+                            "hide": false,
+                            "autofocus": false,
+                            "data_type": "section",
+                            "reload_icon": true,
+                            "new_icon": false,
+                            "closable_icon": true,
+                        },
+                        9: {
+                            "class": "col-span-6",
+                            "class_md": "md:col-span-3",
+                            "field": "rack",
+                            "type": "dropdown",
+                            "hide": false,
+                            "autofocus": false,
+                            "data_type": "rack",
+                            "reload_icon": true,
+                            "new_icon": false,
+                            "closable_icon": true,
+                        },
+                        10: {
+                            "class": "col-span-6",
+                            "class_md": "md:col-span-3",
+                            "field": "slots",
+                            "type": "dropdown",
+                            "hide": false,
+                            "autofocus": false,
+                            "data_type": "slot",
+                            "reload_icon": true,
+                            "new_icon": true,
+                            "closable_icon": true,
+                        },*/
+          11: {
+            class: 'col-span-6',
+            class_md: 'md:col-span-3',
+            field: 'asset',
+            type: 'dropdown',
+            hide: false,
+            autofocus: false,
+            data_type: 'asset',
+            reload_icon: false,
+            closable_icon: false
+          },
+
+          16: {
+            class: 'col-span-6',
+            class_md: 'md:col-span-3',
+            field: 'supplier',
+            type: 'dropdown',
+            hide: false,
+            autofocus: false,
+            data_type: 'supplier',
+            reload_icon: true,
+            new_icon: false,
+            closable_icon: false
+          },
+
+          17: {
+            class: 'col-span-6',
+            class_md: 'md:col-span-3',
+            field: 'persons',
+            type: 'dropdown',
+            hide: false,
+            autofocus: false,
+            data_type: 'person',
+            filter: true,
+            filter_by: 'name',
+            reload_icon: true,
+            new_icon: false,
+            closable_icon: false
+          },
+          18: {
+            class: 'col-span-6',
+            class_md: 'md:col-span-3'
+          },
+
+          19: {
+            class: 'col-span-6',
+            class_md: 'md:col-span-2',
+            field: 'code',
+            type: 'input-text',
+            hide: false,
+            autofocus: true
+          },
+          20: {
+            class: 'col-span-7',
+            class_md: 'md:col-span-4',
+            field: 'search_name',
+            type: 'auto-complete',
+            hide: false,
+            autofocus: false,
+            delay: 400,
+            option_label: 'base_product__name',
+            data_type: 'product',
+            include: 'base_product,slots',
+            additionalFieldsIncluded: {
+              base_product: [
+                { original_field: 'description', renamed_fields: 'description' },
+                { original_field: 'short_name', renamed_fields: 'short_name' },
+                { original_field: 'name2', renamed_fields: 'name2' },
+                { original_field: 'code', renamed_fields: 'code' }
+              ]
+            },
+            icon2: {
+              icon: 'pi pi-qrcode',
+              styleClass: 'p-button-success'
+            },
+            icon: {
+              icon: 'pi pi-camera',
+              styleClass: 'p-button-success'
+            },
+            panel: {
+              fields: {
+                0: {
+                  field: 'url',
+                  header: 'Imagen',
+                  type: 'image',
+                  class: 'col-span-1',
+                  class_md: 'col-span-2'
                 },
-                options: [
-                  { id: 'C010', name: 'Tuberia', group: 'TUBERIA' },
-                  { id: 'C100', name: 'Cabina', group: 'MECANICA' },
-                  { id: 'C110', name: 'Caja de Transferencia', group: 'MECANICA' },
-                  { id: 'C120', name: 'Chasis', group: 'MECANICA' },
-                  { id: 'C130', name: 'Diferenciales', group: 'MECANICA' },
-                  { id: 'C140', name: 'Dirección', group: 'MECANICA' },
-                  { id: 'C150', name: 'Embrague (Clutch)', group: 'MECANICA' },
-                  { id: 'C160', name: 'Estabilizadores', group: 'MECANICA' },
-                  { id: 'C170', name: 'Estructura de la Pluma', group: 'MECANICA' },
-                  { id: 'C180', name: 'Frenos', group: 'MECANICA' },
-                  { id: 'C190', name: 'Imagen', group: 'MECANICA' },
-                  { id: 'C200', name: 'Llantas', group: 'MECANICA' },
-                  { id: 'C210', name: 'Masas', group: 'MECANICA' },
-                  { id: 'C220', name: 'Motor', group: 'MECANICA' },
-                  { id: 'C230', name: 'Sistema Eléctrico de Bombeo', group: 'MECANICA' },
-                  { id: 'C240', name: 'Sistema Eléctrico del camión', group: 'MECANICA' },
-                  { id: 'C250', name: 'Sistema Hidráulico de bombeo', group: 'MECANICA' },
-                  { id: 'C260', name: 'Sistema Mecánico de bombeo', group: 'MECANICA' },
-                  { id: 'C270', name: 'Suspensión Delantera', group: 'MECANICA' },
-                  { id: 'C280', name: 'Suspensión Trasera', group: 'MECANICA' },
-                  { id: 'C290', name: 'Transmisión', group: 'MECANICA' }, //aqui voy estor poniedno los drop depednientes, tanto mnual como automatico de sistema
-                  { id: 'C400', name: 'Taller mantenimiento', group: '', disable: true, required: false }, //son para el componente hijo
-                  { id: 'C410', name: 'MOE pago por iguala para Mantto.', group: '', disable: true, required: false }, //disable, deshabilita el componente
-                  { id: 'C420', name: 'Herramientas para mantenimiento', group: '', disable: true, required: false }, //disable, deshabilita el componente dependiente
-                  { id: 'C430', name: 'Herramientas para operaciones', group: '', disable: true, required: false }, //disable, deshabilita el componente dependiente
-                  { id: 'C440', name: 'Materiales para Stock', group: '', disable: true, required: false }, //disable, deshabilita el componente dependiente
-                  { id: 'C450', name: 'Materiales para Operaciones', group: '', disable: true, required: false }, //disable, deshabilita el componente dependiente
-                  { id: 'C460', name: 'MOE para Operaciones', group: '', disable: true, required: false }, //disable, deshabilita el componente dependiente
-                  { id: 'C470', name: 'Vehículos Utilitarios', group: '', disable: true, required: false }, //disable, deshabilita el componente dependiente
-                  { id: 'C480', name: 'Servicio de grúa para arrastre', group: '', disable: true, required: false } //disable, deshabilita el componente dependiente
-                ]
-              },
-
-              1: {
-                class: 'col-span-6',
-                class_md: 'md:col-span-3',
-                field: 'Subcomponente',
-                label: 'Subcomponente',
-                type: 'dropdown',
-                hide: false,
-                autofocus: false,
-                reload_icon: false,
-                new_icon: false,
-                closable_icon: false,
-                //"option_value": "value",
-                //"option_label": "display_name",
-                options: [
-                  { id: 'SC010', name: 'Codo', group: 'TUBERIA' },
-                  { id: 'SC020', name: 'Abrazadera', group: 'TUBERIA' },
-                  { id: 'SC030', name: 'Empaque', group: 'TUBERIA' },
-                  { id: 'SC040', name: 'Tubo', group: 'TUBERIA' },
-                  { id: 'SC050', name: 'Manguera 1 casquillo', group: 'TUBERIA' },
-                  { id: 'SC060', name: 'Manguera 2 casquillos', group: 'TUBERIA' },
-                  { id: 'SC070', name: 'Reductor', group: 'TUBERIA' },
-                  { id: 'SC080', name: 'Boquilla', group: 'TUBERIA' },
-                  { id: 'SC090', name: 'Fabricacion a medida', group: 'TUBERIA' },
-                  { id: 'SC200', name: 'Ajuste de Puertas y Cofre', group: 'MECANICA' },
-                  { id: 'SC210', name: 'Alerones', group: 'MECANICA' },
-                  { id: 'SC220', name: 'Aletillas', group: 'MECANICA' },
-                  { id: 'SC230', name: 'Alineación de las Ruedas', group: 'MECANICA' },
-                  { id: 'SC240', name: 'Almohadillas para estabilizar (Pads)', group: 'MECANICA' },
-                  { id: 'SC250', name: 'Amortiguadores', group: 'MECANICA' },
-                  { id: 'SC260', name: 'Anillo de Chapaletas', group: 'MECANICA' },
-                  { id: 'SC270', name: 'Anillo de Corte e Inserto', group: 'MECANICA' },
-                  { id: 'SC280', name: 'Arneses eléctricos', group: 'MECANICA' },
-                  { id: 'SC290', name: 'Asientos y Respaldos', group: 'MECANICA' },
-                  { id: 'SC300', name: 'Baleros', group: 'MECANICA' },
-                  { id: 'SC310', name: 'Barra Telescópica', group: 'MECANICA' },
-                  { id: 'SC320', name: 'Barra Torsional', group: 'MECANICA' },
-                  { id: 'SC330', name: 'Bastidor del modulo de Bombeo', group: 'MECANICA' },
-                  { id: 'SC340', name: 'Birlos', group: 'MECANICA' },
-                  { id: 'SC350', name: 'Block de bombeo', group: 'MECANICA' },
-                  { id: 'SC360', name: 'Block de la pluma', group: 'MECANICA' },
-                  { id: 'SC370', name: 'Bomba de Agua para lavado', group: 'MECANICA' },
-                  { id: 'SC380', name: 'Bomba de Combustible', group: 'MECANICA' },
-                  { id: 'SC390', name: 'Bomba de la Dirección', group: 'MECANICA' },
-                  { id: 'SC400', name: 'Bomba hidráulica principal', group: 'MECANICA' },
-                  { id: 'SC410', name: 'Bomba de refrigerante', group: 'MECANICA' },
-                  { id: 'SC420', name: 'Bujes de Flecha de la Válvula Rock', group: 'MECANICA' },
-                  { id: 'SC430', name: 'Caja de Contactores', group: 'MECANICA' },
-                  { id: 'SC440', name: 'Caja de control', group: 'MECANICA' },
-                  { id: 'SC450', name: 'Caja de Dirección', group: 'MECANICA' },
-                  { id: 'SC460', name: 'Cardanes del tren motriz (1) (2) (3)', group: 'MECANICA' },
-                  { id: 'SC470', name: 'Cárter', group: 'MECANICA' },
-                  { id: 'SC480', name: 'Cilindro de transporte', group: 'MECANICA' },
-                  { id: 'SC490', name: 'Cilindros Diferenciales', group: 'MECANICA' },
-                  { id: 'SC500', name: 'Cilindros Hidráulicos de la pluma', group: 'MECANICA' },
-                  { id: 'SC510', name: 'Cilindros o Motor de giro de la pluma', group: 'MECANICA' },
-                  { id: 'SC520', name: 'Cincho de pluma', group: 'MECANICA' },
-                  { id: 'SC530', name: 'Cinchos para manipulación de tubería', group: 'MECANICA' },
-                  { id: 'SC540', name: 'Cinto de Rebote', group: 'MECANICA' },
-                  { id: 'SC550', name: 'Cinturón de seguridad piloto y copiloto', group: 'MECANICA' },
-                  { id: 'SC560', name: 'Códigos de Falla en Motor', group: 'MECANICA' },
-                  { id: 'SC570', name: 'Columpios', group: 'MECANICA' },
-                  { id: 'SC580', name: 'Compresor y Tanques de aire (Purgas)', group: 'MECANICA' },
-                  { id: 'SC590', name: 'Condiciones de la Tolva', group: 'MECANICA' },
-                  { id: 'SC600', name: 'Condiciones de tubería y codos', group: 'MECANICA' },
-                  { id: 'SC610', name: 'Condiciones del tablero', group: 'MECANICA' },
-                  { id: 'SC620', name: 'Conos herméticos', group: 'MECANICA' },
-                  { id: 'SC630', name: 'Control Crucero', group: 'MECANICA' },
-                  { id: 'SC640', name: 'Correcto Funcionamiento del A/C', group: 'MECANICA' },
-                  { id: 'SC650', name: 'Cristales Delanteros', group: 'MECANICA' },
-                  { id: 'SC660', name: 'Cristales Traseros', group: 'MECANICA' },
-                  { id: 'SC670', name: 'Cruceta de barras cardan', group: 'MECANICA' },
-                  { id: 'SC680', name: 'Crucetas de Freno Magnético', group: 'MECANICA' },
-                  { id: 'SC690', name: 'Dispositivo atrapa bolas', group: 'MECANICA' },
-                  { id: 'SC700', name: 'Émbolos de empuje', group: 'MECANICA' },
-                  { id: 'SC710', name: 'Empaque y abrazaderas', group: 'MECANICA' },
-                  { id: 'SC720', name: 'Enfriador de Aceite de transmisión', group: 'MECANICA' },
-                  { id: 'SC730', name: 'Enfriador de Aceite Hidráulico', group: 'MECANICA' },
-                  { id: 'SC740', name: 'Engrasado General', group: 'MECANICA' },
-                  { id: 'SC750', name: 'Engrasadora automática', group: 'MECANICA' },
-                  { id: 'SC760', name: 'Engrase General de estabilizadores', group: 'MECANICA' },
-                  { id: 'SC770', name: 'Escaleras de acceso al modulo', group: 'MECANICA' },
-                  { id: 'SC780', name: 'Escape y/o Silenciador', group: 'MECANICA' },
-                  { id: 'SC790', name: 'Espejo Banquetero', group: 'MECANICA' },
-                  { id: 'SC800', name: 'Espejo de punto ciego frontal derecho', group: 'MECANICA' },
-                  { id: 'SC810', name: 'Espejo de punto ciego frontal izquierdo', group: 'MECANICA' },
-                  { id: 'SC820', name: 'Espejos convexos (Der-Izq)', group: 'MECANICA' },
-                  { id: 'SC830', name: 'Espejos Laterales (Der-Izq)', group: 'MECANICA' },
-                  { id: 'SC840', name: 'Estado de bandas del motor', group: 'MECANICA' },
-                  { id: 'SC850', name: 'Estado de los Hules de la Suspensión Trasera', group: 'MECANICA' },
-                  { id: 'SC860', name: 'Estado de los Hules Tensores', group: 'MECANICA' },
-                  { id: 'SC870', name: 'Estado Físico de las llantas Delanteras', group: 'MECANICA' },
-                  { id: 'SC880', name: 'Estado Físico de las llantas Traseras', group: 'MECANICA' },
-                  { id: 'SC890', name: 'Estribos antiderrapantes', group: 'MECANICA' },
-                  { id: 'SC900', name: 'Estructura de la cuarta sección', group: 'MECANICA' },
-                  { id: 'SC910', name: 'Estructura de la primera sección', group: 'MECANICA' },
-                  { id: 'SC920', name: 'Estructura de la quinta sección', group: 'MECANICA' },
-                  { id: 'SC930', name: 'Estructura de la segunda sección', group: 'MECANICA' },
-                  { id: 'SC940', name: 'Estructura de la Suspensión', group: 'MECANICA' },
-                  { id: 'SC950', name: 'Estructura de la tercera sección', group: 'MECANICA' },
-                  { id: 'SC960', name: 'Estructura de los Estabilizadores y Placas de Apoyo', group: 'MECANICA' },
-                  { id: 'SC970', name: 'Extinguidor', group: 'MECANICA' },
-                  { id: 'SC980', name: 'Fan Clutch y ventilador.', group: 'MECANICA' },
-                  { id: 'SC990', name: 'Filtro de aceite', group: 'MECANICA' },
-                  { id: 'SC1000', name: 'Filtro de Combustible', group: 'MECANICA' },
-                  { id: 'SC1010', name: 'Filtro de refrigerante', group: 'MECANICA' },
-                  { id: 'SC1020', name: 'Filtros de Aire', group: 'MECANICA' },
-                  { id: 'SC1030', name: 'Filtros hidráulicos', group: 'MECANICA' },
-                  { id: 'SC1040', name: 'Flecha del agitador', group: 'MECANICA' },
-                  { id: 'SC1050', name: 'Freno Auxiliar', group: 'MECANICA' },
-                  { id: 'SC1060', name: 'Fuelles', group: 'MECANICA' },
-                  { id: 'SC1070', name: 'Fugas de Aceite', group: 'MECANICA' },
-                  { id: 'SC1080', name: 'Funcionamiento Alarma de Reversa', group: 'MECANICA' },
-                  { id: 'SC1090', name: 'Funcionamiento de Alarmas de Baja', group: 'MECANICA' },
-                  { id: 'SC1100', name: 'Funcionamiento de control remoto alámbrico', group: 'MECANICA' },
-                  { id: 'SC1110', name: 'Funcionamiento de control remoto inalámbrico', group: 'MECANICA' },
-                  { id: 'SC1120', name: 'Funcionamiento de Cornetas', group: 'MECANICA' },
-                  { id: 'SC1130', name: 'Funcionamiento de Elevadores', group: 'MECANICA' },
-                  { id: 'SC1140', name: 'Funcionamiento de Embrague (Clutch)', group: 'MECANICA' },
-                  { id: 'SC1150', name: 'Funcionamiento de Mangueras, Tubos hidráulicos y válvulas de seguridad de estabilizadores', group: 'MECANICA' },
-                  { id: 'SC1160', name: 'Funcionamiento de paro de emergencia de tolva', group: 'MECANICA' },
-                  { id: 'SC1170', name: 'Funcionamiento de paros de emergencia', group: 'MECANICA' },
-                  { id: 'SC1180', name: 'Funcionamiento de Válvula de Estacionamiento', group: 'MECANICA' },
-                  { id: 'SC1190', name: 'Funcionamiento de válvulas de seguridad de los cilindros de la pluma', group: 'MECANICA' },
-                  { id: 'SC1200', name: 'Funcionamiento frenos de servicio', group: 'MECANICA' },
-                  { id: 'SC1210', name: 'Funcionamiento General de los Diferenciales', group: 'MECANICA' },
-                  { id: 'SC1220', name: 'Funcionamiento General del motor del camión', group: 'MECANICA' },
-                  { id: 'SC1230', name: 'Funcionamiento Manija, Puerta y Cerradura', group: 'MECANICA' },
-                  { id: 'SC1240', name: 'Guardafangos', group: 'MECANICA' },
-                  { id: 'SC1250', name: 'Hermeticidad en Tubería de Admisión y Filtro de Vacío', group: 'MECANICA' },
-                  { id: 'SC1260', name: 'Juego libre Pedal y Embrague', group: 'MECANICA' },
-                  { id: 'SC1270', name: 'Limpiabrisas', group: 'MECANICA' },
-                  { id: 'SC1280', name: 'Limpieza Externa', group: 'MECANICA' },
-                  { id: 'SC1290', name: 'Limpieza Interna', group: 'MECANICA' },
-                  { id: 'SC1300', name: 'Loderas', group: 'MECANICA' },
-                  { id: 'SC1310', name: 'Lubricación del Collarín y Barras', group: 'MECANICA' },
-                  { id: 'SC1320', name: 'Luces Delanteras', group: 'MECANICA' },
-                  { id: 'SC1330', name: 'Luces Direccionales e Intermitentes', group: 'MECANICA' },
-                  { id: 'SC1340', name: 'Luces Reversa', group: 'MECANICA' },
-                  { id: 'SC1350', name: 'Luces Stop', group: 'MECANICA' },
-                  { id: 'SC1360', name: 'Luces Traseras', group: 'MECANICA' },
-                  { id: 'SC1370', name: 'Mango y Perno de la Dirección', group: 'MECANICA' },
-                  { id: 'SC1380', name: 'Mangueras de descarga y sujetador', group: 'MECANICA' },
-                  { id: 'SC1390', name: 'Mangueras y Tubos hidráulicos', group: 'MECANICA' },
-                  { id: 'SC1400', name: 'Medidores de Temperatura de los Diferenciales y Transmisión', group: 'MECANICA' },
-                  { id: 'SC1410', name: 'Motor Hidráulico del agitador', group: 'MECANICA' },
-                  { id: 'SC1420', name: 'Muelles y Abrazaderas', group: 'MECANICA' },
-                  { id: 'SC1430', name: 'Nivel de Aceite', group: 'MECANICA' },
-                  { id: 'SC1440', name: 'Nivel y limpieza de agua en caja de enfriamiento', group: 'MECANICA' },
-                  { id: 'SC1450', name: 'Nivel/Fugas de aceite de depósito de dirección', group: 'MECANICA' },
-                  { id: 'SC1460', name: 'Nivel/Fugas de aceite motor', group: 'MECANICA' },
-                  { id: 'SC1470', name: 'Nivel/Fugas de aceite sistema hidráulico', group: 'MECANICA' },
-                  { id: 'SC1480', name: 'Nivel/Fugas de combustible', group: 'MECANICA' },
-                  { id: 'SC1490', name: 'Nivel/Fugas de refrigerante motor', group: 'MECANICA' },
-                  { id: 'SC1500', name: 'Pasamanos', group: 'MECANICA' },
-                  { id: 'SC1510', name: 'Pasillos', group: 'MECANICA' },
-                  { id: 'SC1520', name: 'Pedestal de giro', group: 'MECANICA' },
-                  { id: 'SC1530', name: 'Perchas', group: 'MECANICA' },
-                  { id: 'SC1540', name: 'Pintura y Carrocería del Chasis Cabina', group: 'MECANICA' },
-                  { id: 'SC1550', name: 'Pintura y Carrocería del Modulo', group: 'MECANICA' },
-                  { id: 'SC1560', name: 'Pistón de la Válvula Rock o Válvula "S"', group: 'MECANICA' },
-                  { id: 'SC1570', name: 'Pistones Hidráulicos', group: 'MECANICA' },
-                  { id: 'SC1580', name: 'Plataforma para limpieza de tolva', group: 'MECANICA' },
-                  { id: 'SC1590', name: 'Postenfriador', group: 'MECANICA' },
-                  { id: 'SC1600', name: 'Presión de agitador', group: 'MECANICA' },
-                  { id: 'SC1610', name: 'Protección zona CERO', group: 'MECANICA' },
-                  { id: 'SC1620', name: 'Punto de anclaje, línea de vida y Arnés de seguridad.', group: 'MECANICA' },
-                  { id: 'SC1630', name: 'Puntos de engrase', group: 'MECANICA' },
-                  { id: 'SC1640', name: 'Radiador', group: 'MECANICA' },
-                  { id: 'SC1650', name: 'Radio para comunicación', group: 'MECANICA' },
-                  { id: 'SC1660', name: 'Reemplazo de aceite', group: 'MECANICA' },
-                  { id: 'SC1670', name: 'Refrigerante de acuerdo a especificación Premezclado 50/50', group: 'MECANICA' },
-                  { id: 'SC1680', name: 'Revisión de Barras de Dirección', group: 'MECANICA' },
-                  { id: 'SC1690', name: 'Revisión de Batería,Cableado,Soporte y Tapa', group: 'MECANICA' },
-                  { id: 'SC1700', name: 'Revisión de Hules de las Puertas', group: 'MECANICA' },
-                  { id: 'SC1710', name: 'Revisión de Largueros', group: 'MECANICA' },
-                  { id: 'SC1720', name: 'Revisión de Puentes del Chasis', group: 'MECANICA' },
-                  { id: 'SC1730', name: 'Revisión de Uniones del chasis con bases del sist.Hid.', group: 'MECANICA' },
-                  { id: 'SC1740', name: 'Revisión de Uniones del Chasis con Cabina', group: 'MECANICA' },
-                  { id: 'SC1750', name: 'Revisión de Uniones del chasis con el módulo', group: 'MECANICA' },
-                  { id: 'SC1760', name: 'Revisión del Turbo', group: 'MECANICA' },
-                  { id: 'SC1770', name: 'Rines', group: 'MECANICA' },
-                  { id: 'SC1780', name: 'Secador de Aire', group: 'MECANICA' },
-                  { id: 'SC1790', name: 'Sello Riñón y Luneta', group: 'MECANICA' },
-                  { id: 'SC1800', name: 'Sensor de nivel de Refrigerante y Filtro', group: 'MECANICA' },
-                  { id: 'SC1810', name: 'Sensores de proximidad', group: 'MECANICA' },
-                  { id: 'SC1820', name: 'Sensores y válvulas ABS', group: 'MECANICA' },
-                  { id: 'SC1830', name: 'Señalética de seguridad', group: 'MECANICA' },
-                  { id: 'SC1840', name: 'Sistema EGR (Sistema de recirculación de gases)', group: 'MECANICA' },
-                  { id: 'SC1850', name: 'Soportes de Freno Magnético', group: 'MECANICA' },
-                  { id: 'SC1860', name: 'Soportes de motor', group: 'MECANICA' },
-                  { id: 'SC1870', name: 'Tablero de Instrumentos Medidores de Aceite', group: 'MECANICA' },
-                  { id: 'SC1880', name: 'Tablero de Instrumentos Medidores de Aire', group: 'MECANICA' },
-                  { id: 'SC1890', name: 'Tablero de Instrumentos Medidores de Combustible', group: 'MECANICA' },
-                  { id: 'SC1900', name: 'Tablero de Instrumentos Medidores de Horómetro', group: 'MECANICA' },
-                  { id: 'SC1910', name: 'Tablero de Instrumentos Medidores de Tacómetro RPM', group: 'MECANICA' },
-                  { id: 'SC1920', name: 'Tablero de Instrumentos Medidores de Temperatura', group: 'MECANICA' },
-                  { id: 'SC1930', name: 'Tablero de Instrumentos Medidores de Velocímetro', group: 'MECANICA' },
-                  { id: 'SC1940', name: 'Tablero de Instrumentos Medidores de Voltaje', group: 'MECANICA' },
-                  { id: 'SC1950', name: 'Tacones de la Caja de Transferencia', group: 'MECANICA' },
-                  { id: 'SC1960', name: 'Tacones de la pluma', group: 'MECANICA' },
-                  { id: 'SC1970', name: 'Tacones de la tolva y rejilla', group: 'MECANICA' },
-                  { id: 'SC1980', name: 'Tacones para tubería horizontal', group: 'MECANICA' },
-                  { id: 'SC1990', name: 'Tanque de Aceite Hidráulico', group: 'MECANICA' },
-                  { id: 'SC2000', name: 'Tanque de agua', group: 'MECANICA' },
-                  { id: 'SC2010', name: 'Tanques de combustible', group: 'MECANICA' },
-                  { id: 'SC2020', name: 'Terminales de Dirección', group: 'MECANICA' },
-                  { id: 'SC2030', name: 'Topes para bloqueo de ruedas', group: 'MECANICA' },
-                  { id: 'SC2040', name: 'Tubo reductor', group: 'MECANICA' },
-                  { id: 'SC2050', name: 'Válvula de alivio', group: 'MECANICA' },
-                  { id: 'SC2060', name: 'Válvula de Transferencia', group: 'MECANICA' },
-                  { id: 'SC2070', name: 'Yugo, pernos y bujes de la horquilla del pistón de la valv. Rock o valv."S"', group: 'MECANICA' },
-                  { id: 'SC2080', name: 'Yugos y crucetas', group: 'MECANICA' },
-                  { id: 'SC2090', name: 'Zepelines', group: 'MECANICA' }
-                ]
-              },
-
-              2: {
-                class: 'col-span-6',
-                class_md: 'md:col-span-3',
-                field: 'Sintoma de falla',
-                label: 'Sintoma de falla',
-                type: 'dropdown',
-                hide: false,
-                autofocus: false,
-                reload_icon: false,
-                new_icon: false,
-                closable_icon: false,
-                options: [
-                  { id: 'SF010', name: 'Primer brazo', group: 'TUBERIA' },
-                  { id: 'SF020', name: 'Segundo brazo', group: 'TUBERIA' },
-                  { id: 'SF030', name: 'Tercer brazo', group: 'TUBERIA' },
-                  { id: 'SF040', name: 'Cuarto brazo', group: 'TUBERIA' },
-                  { id: 'SF050', name: 'Quinto brazo', group: 'TUBERIA' },
-                  { id: 'SF060', name: 'Salida tolva', group: 'TUBERIA' },
-                  { id: 'SF070', name: 'Pasillo/Torre BP', group: 'TUBERIA' },
-                  { id: 'SF080', name: 'Obra vertical', group: 'TUBERIA' },
-                  { id: 'SF090', name: 'Obra horizontal', group: 'TUBERIA' },
-                  { id: 'SF100', name: 'Obra otro', group: 'TUBERIA' },
-                  { id: 'SF300', name: 'Abrasión', group: 'MECANICA' },
-                  { id: 'SF310', name: 'Aflojamiento/Juego Mecánico', group: 'MECANICA' },
-                  { id: 'SF320', name: 'Agua de Mala Calidad', group: 'MECANICA' },
-                  { id: 'SF330', name: 'Bajo Rendimiento', group: 'MECANICA' },
-                  { id: 'SF340', name: 'Cables Tocando Partes de Metal', group: 'MECANICA' },
-                  { id: 'SF350', name: 'Carga Excesiva', group: 'MECANICA' },
-                  { id: 'SF360', name: 'Contaminación', group: 'MECANICA' },
-                  { id: 'SF370', name: 'Corrosión', group: 'MECANICA' },
-                  { id: 'SF380', name: 'Corto Circuito', group: 'MECANICA' },
-                  { id: 'SF390', name: 'Desajuste', group: 'MECANICA' },
-                  { id: 'SF400', name: 'Desalineamiento', group: 'MECANICA' },
-                  { id: 'SF410', name: 'Desbalance', group: 'MECANICA' },
-                  { id: 'SF420', name: 'Descalibración', group: 'MECANICA' },
-                  { id: 'SF430', name: 'Desgaste', group: 'MECANICA' },
-                  { id: 'SF440', name: 'Desnivelamiento', group: 'MECANICA' },
-                  { id: 'SF450', name: 'Diseño/Fabricación Débil', group: 'MECANICA' },
-                  { id: 'SF460', name: 'Eje Doblado', group: 'MECANICA' },
-                  { id: 'SF470', name: 'Energía inapropiada', group: 'MECANICA' },
-                  { id: 'SF480', name: 'Erosión', group: 'MECANICA' },
-                  { id: 'SF490', name: 'Estiramiento', group: 'MECANICA' },
-                  { id: 'SF500', name: 'Exceso de Lubricación', group: 'MECANICA' },
-                  { id: 'SF510', name: 'Exceso de Temperatura', group: 'MECANICA' },
-                  { id: 'SF520', name: 'Exceso de Vibración', group: 'MECANICA' },
-                  { id: 'SF530', name: 'Excesos de Intentos de Arranques', group: 'MECANICA' },
-                  { id: 'SF540', name: 'Falla de Agua', group: 'MECANICA' },
-                  { id: 'SF550', name: 'Falla de Aire', group: 'MECANICA' },
-                  { id: 'SF560', name: 'Falla Eléctrica C/T', group: 'MECANICA' },
-                  { id: 'SF570', name: 'Falla en Equipo de Control', group: 'MECANICA' },
-                  { id: 'SF580', name: 'Falla Mecánica C/T', group: 'MECANICA' },
-                  { id: 'SF590', name: 'Falla Operación C/T', group: 'MECANICA' },
-                  { id: 'SF600', name: 'Falla Por Mala Operación C/T', group: 'MECANICA' },
-                  { id: 'SF610', name: 'Falla Software / Programación', group: 'MECANICA' },
-                  { id: 'SF620', name: 'Falta de Aire', group: 'MECANICA' },
-                  { id: 'SF630', name: 'Falta de Energía', group: 'MECANICA' },
-                  { id: 'SF640', name: 'Falta de Limpieza', group: 'MECANICA' },
-                  { id: 'SF650', name: 'Falta de Limpieza o Material Extraño', group: 'MECANICA' },
-                  { id: 'SF660', name: 'Falta de Lubricación', group: 'MECANICA' },
-                  { id: 'SF670', name: 'Fatiga', group: 'MECANICA' },
-                  { id: 'SF680', name: 'Frenado', group: 'MECANICA' },
-                  { id: 'SF690', name: 'Fuga de Aceite', group: 'MECANICA' },
-                  { id: 'SF700', name: 'Fuga de Agua', group: 'MECANICA' },
-                  { id: 'SF710', name: 'Fuga de Aire', group: 'MECANICA' },
-                  { id: 'SF720', name: 'Fuga de Lubricante', group: 'MECANICA' },
-                  { id: 'SF730', name: 'Fuga o Emisión', group: 'MECANICA' },
-                  { id: 'SF740', name: 'Incendio', group: 'MECANICA' },
-                  { id: 'SF750', name: 'Incrustación', group: 'MECANICA' },
-                  { id: 'SF760', name: 'Lubricante Contaminado', group: 'MECANICA' },
-                  { id: 'SF770', name: 'Lubricante de Baja Calidad', group: 'MECANICA' },
-                  { id: 'SF780', name: 'Lubricante Viscosidad Baja', group: 'MECANICA' },
-                  { id: 'SF790', name: 'Mal Ensamble', group: 'MECANICA' },
-                  { id: 'SF800', name: 'Mantenimiento; Ejecución Deficiente', group: 'MECANICA' },
-                  { id: 'SF810', name: 'Material Inadecuado/Baja Calidad', group: 'MECANICA' },
-                  { id: 'SF820', name: 'Motor Dañado', group: 'MECANICA' },
-                  { id: 'SF830', name: 'No Abre', group: 'MECANICA' },
-                  { id: 'SF840', name: 'No Arranca', group: 'MECANICA' },
-                  { id: 'SF850', name: 'No Cierra', group: 'MECANICA' },
-                  { id: 'SF860', name: 'No Opera Correctamente', group: 'MECANICA' },
-                  { id: 'SF870', name: 'Objeto Extraño', group: 'MECANICA' },
-                  { id: 'SF880', name: 'Obstrucción/Bloqueo', group: 'MECANICA' },
-                  { id: 'SF890', name: 'Parte de Equipo Roto', group: 'MECANICA' },
-                  { id: 'SF900', name: 'Paso de Engrane', group: 'MECANICA' },
-                  { id: 'SF910', name: 'Rozamiento', group: 'MECANICA' },
-                  { id: 'SF920', name: 'Soltura Mecánica', group: 'MECANICA' },
-                  { id: 'SF930', name: 'Temperatura Anormal', group: 'MECANICA' },
-                  { id: 'SF940', name: 'Torque Inadecuado', group: 'MECANICA' },
-                  { id: 'SF950', name: 'Uso de Herramientas Inadecuado', group: 'MECANICA' },
-                  { id: 'SF960', name: 'Vandalismo', group: 'MECANICA' },
-                  { id: 'SF970', name: 'Vida Útil Vencida', group: 'MECANICA' },
-                  { id: 'SF980', name: 'Mejora', group: 'MECANICA' }
-                ]
-              },
-
-              3: {
-                class: 'col-span-6',
-                class_md: 'md:col-span-3',
-                field: 'Tipo de gasto',
-                label: 'Tipo de gasto',
-                type: 'dropdown',
-                hide: false,
-                autofocus: false,
-                reload_icon: false,
-                new_icon: false,
-                closable_icon: false,
-                options: [
-                  { id: 'TG010', name: 'Desgaste', group: 'TUBERIA' },
-                  { id: 'TG020', name: 'Ruptura', group: 'TUBERIA' },
-                  { id: 'TG030', name: 'Taponamiento', group: 'TUBERIA' },
-                  { id: 'TG100', name: 'Capex', group: 'MECANICA' },
-                  { id: 'TG110', name: 'Correctivo', group: 'MECANICA' },
-                  { id: 'TG120', name: 'Correctivo planeado', group: 'MECANICA' },
-                  { id: 'TG130', name: 'Mala Operación', group: 'MECANICA' },
-                  { id: 'TG140', name: 'Preventivo', group: 'MECANICA' },
-                  { id: 'TG150', name: 'Siniestro por desastre natural', group: 'MECANICA' },
-                  { id: 'TG160', name: 'Campañas', group: 'MECANICA' },
-                  { id: 'TG170', name: 'Proyecto', group: 'MECANICA' }
-                ]
-              },
-
-              /*4: {
-                                "class": "col-span-6",
-                                "class_md": "md:col-span-3",
-                                "field": "warehouse",
-                                "type": "dropdown",
-                                "hide": false,
-                                "autofocus": false,
-                                "data_type": "warehouse",
-                                "reload_icon": true,
-                                "new_icon": false,
-                                "closable_icon": true,
-                            },
-                            5: {
-                                "class": "col-span-6",
-                                "class_md": "md:col-span-3",
-                                "field": "section",
-                                "type": "dropdown",
-                                "hide": false,
-                                "autofocus": false,
-                                "data_type": "section",
-                                "reload_icon": true,
-                                "new_icon": false,
-                                "closable_icon": true,
-                            },
-                            6: {
-                                "class": "col-span-6",
-                                "class_md": "md:col-span-3",
-                                "field": "rack",
-                                "type": "dropdown",
-                                "hide": false,
-                                "autofocus": false,
-                                "data_type": "rack",
-                                "reload_icon": true,
-                                "new_icon": false,
-                                "closable_icon": true,
-                            },
-                            7: {
-                                "class": "col-span-6",
-                                "class_md": "md:col-span-3",
-                                "field": "slots",
-                                "type": "dropdown",
-                                "hide": false,
-                                "autofocus": false,
-                                "data_type": "slot",
-                                "reload_icon": true,
-                                "new_icon": true,
-                                "closable_icon": true,
-                            },*/
-              8: {
-                class: 'col-span-6',
-                class_md: 'md:col-span-3',
-                field: 'asset',
-                type: 'dropdown',
-                hide: false,
-                autofocus: false,
-                data_type: 'asset',
-                reload_icon: false,
-                closable_icon: false
-              },
-
-              16: {
-                class: 'col-span-6',
-                class_md: 'md:col-span-3',
-                field: 'supplier',
-                type: 'dropdown',
-                hide: false,
-                autofocus: false,
-                data_type: 'supplier',
-                reload_icon: true,
-                new_icon: false,
-                closable_icon: false
-              },
-
-              17: {
-                class: 'col-span-6',
-                class_md: 'md:col-span-3',
-                field: 'persons',
-                type: 'dropdown',
-                hide: false,
-                autofocus: false,
-                data_type: 'person',
-                filter: true,
-                filter_by: 'name',
-                reload_icon: true,
-                new_icon: false,
-                closable_icon: false
-              },
-              18: {
-                class: 'col-span-6',
-                class_md: 'md:col-span-3'
-              },
-
-              /*19: {
-                class: 'col-span-6',
-                class_md: 'md:col-span-2',
-                field: 'code',
-                type: 'input-text',
-                hide: false,
-                autofocus: true
-              },*/
-              20: {
-                class: 'col-span-7',
-                class_md: 'md:col-span-4',
-                field: 'search_name',
-                type: 'auto-complete',
-                hide: false,
-                autofocus: false,
-                delay: 400,
-                option_label: 'base_product__name',
-                data_type: 'product',
-                include: 'base_product,slots',
-                additionalFieldsIncluded: {
-                  base_product: [
-                    { original_field: 'description', renamed_fields: 'description' },
-                    { original_field: 'short_name', renamed_fields: 'short_name' },
-                    { original_field: 'name2', renamed_fields: 'name2' },
-                    { original_field: 'code', renamed_fields: 'code' }
-                  ]
+                1: {
+                  field: 'base_product_code',
+                  //no tiene doble guiin porque son campos adicionales de la relacion
+                  header: 'Código',
+                  type: 'text',
+                  class: 'col-span-3',
+                  class_md: 'col-span-2'
                 },
-                icon2: {
-                  icon: 'pi pi-qrcode',
-                  styleClass: 'p-button-success'
+                2: {
+                  field: 'base_product__name',
+                  // tiene doble guion porque po defecto en a las relaciones se les asigna por denefcot __name
+                  type: 'text',
+                  class: 'col-span-4',
+                  class_md: 'md:col-span-4'
                 },
-                icon: {
-                  icon: 'pi pi-camera',
-                  styleClass: 'p-button-success'
+                //esta informacion aun no se muestra porque son relaciones y no estan directo en el modelo de product
+                3: {
+                  field: 'stock',
+                  header: 'Existencia',
+                  type: 'text',
+                  class: 'col-span-2',
+                  class_md: 'md:col-span-3'
                 },
-                panel: {
-                  fields: {
-                    0: {
-                      field: 'url',
-                      header: 'Imagen',
-                      type: 'image',
-                      class: 'col-span-1',
-                      class_md: 'col-span-2'
-                    },
-                    1: {
-                      field: 'base_product_code',
-                      //no tiene doble guiin porque son campos adicionales de la relacion
-                      header: 'Código',
-                      type: 'text',
-                      class: 'col-span-3',
-                      class_md: 'col-span-2'
-                    },
-                    2: {
-                      field: 'base_product__name',
-                      // tiene doble guion porque po defecto en a las relaciones se les asigna por denefcot __name
-                      type: 'text',
-                      class: 'col-span-4',
-                      class_md: 'md:col-span-4'
-                    },
-                    //esta informacion aun no se muestra porque son relaciones y no estan directo en el modelo de product
-                    3: {
-                      field: 'stock',
-                      header: 'Existencia',
-                      type: 'text',
-                      class: 'col-span-2',
-                      class_md: 'md:col-span-3'
-                    },
-                    4: {
-                      field: 'price',
-                      header: 'Precio',
-                      type: 'text',
-                      class: 'col-span-2',
-                      class_md: 'md:col-span-1'
-                    },
-                    5: {
-                      field: 'warehouse',
-                      header: 'warehouse',
-                      type: 'text',
-                      class: 'col-span-2',
-                      class_md: 'md:col-span-2'
-                    }
-                  }
+                4: {
+                  field: 'price',
+                  header: 'Precio',
+                  type: 'text',
+                  class: 'col-span-2',
+                  class_md: 'md:col-span-1'
+                },
+                5: {
+                  field: 'warehouse',
+                  header: 'warehouse',
+                  type: 'text',
+                  class: 'col-span-2',
+                  class_md: 'md:col-span-2'
                 }
-              },
-              21: {
-                class: 'col-span-7',
-                class_md: 'md:col-span-4',
-                field: 'name',
-                type: 'input-text',
-                hide: true,
-                random_name: {
-                  compressed_random_name2: true,
-                  maximum_characters_random: 5
-                },
-                autofocus: false
-              },
-              22: {
-                class: 'col-span-3',
-                class_md: 'md:col-span-1',
-                field: 'price',
-                type: 'input-number',
-                mode: 'decimal',
-                min_fraction_digits: 5,
-                max_fraction_digits: 5,
-                //"min": 0,
-                max: 1000000,
-                prefix: '$'
-              },
-
-              23: {
-                class: 'col-span-2',
-                class_md: 'md:col-span-1',
-                field: 'requested',
-                autofocus: false,
-                type: 'input-number',
-                mode: 'decimal',
-                min_fraction_digits: 2,
-                max_fraction_digits: 2,
-                min: 0,
-                max: 1000000
-                //"suffix": "cm",
-              },
-              24: {
-                class: 'col-span-6',
-                class_md: 'md:col-span-2',
-                field: 'currency',
-                type: 'dropdown',
-                hide: false,
-                autofocus: false,
-                data_type: 'currency'
-              },
-
-              25: {
-                class: 'col-span-6',
-                class_md: 'md:col-span-2',
-                field: 'is_manual',
-                type: 'toggle-button',
-                hide: false,
-                autofocus: false
               }
             }
-          }
-          /*0: {
-                      "class": "col-span-4",
-                      "class_md": "md:col-span-4",
-                      "field": "description",
-                      "type": "auto-complete",
-                      "hide": false,
-                      "autofocus": true,
-                    },*/
+          },
+          21: {
+            class: 'col-span-7',
+            class_md: 'md:col-span-4',
+            field: 'name',
+            type: 'input-text',
+            hide: true,
+            random_name: {
+              compressed_random_name2: true,
+              maximum_characters_random: 5
+            },
+            autofocus: false
+          },
+          22: {
+            class: 'col-span-3',
+            class_md: 'md:col-span-1',
+            field: 'price',
+            type: 'input-number',
+            mode: 'decimal',
+            min_fraction_digits: 5,
+            max_fraction_digits: 5,
+            //"min": 0,
+            max: 1000000,
+            prefix: '$'
+          },
 
-          /*8: { // esto va en los tipos de respuestas
-                      "class": "col-span-6",
-                      "class_md": "md:col-span-4",
-                      "field": "supplier",
-                      "type": "dropdown",
-                      "hide": false,
-                      "autofocus": false,
-                      "data_type": "supplier",       
-                    },*/
+          23: {
+            class: 'col-span-2',
+            class_md: 'md:col-span-1',
+            field: 'requested',
+            autofocus: false,
+            type: 'input-number',
+            mode: 'decimal',
+            min_fraction_digits: 2,
+            max_fraction_digits: 2,
+            min: 0,
+            max: 1000000
+            //"suffix": "cm",
+          },
+          24: {
+            class: 'col-span-6',
+            class_md: 'md:col-span-2',
+            field: 'currency',
+            type: 'dropdown',
+            hide: false,
+            autofocus: false,
+            data_type: 'currency'
+          },
+
+          25: {
+            class: 'col-span-6',
+            class_md: 'md:col-span-2',
+            field: 'is_manual',
+            type: 'toggle-button',
+            hide: false,
+            autofocus: false
+          }
         }
-      }
+      },
+
+
+
+
+
+
+      /*0: {
+                  "class": "col-span-4",
+                  "class_md": "md:col-span-4",
+                  "field": "description",
+                  "type": "auto-complete",
+                  "hide": false,
+                  "autofocus": true,
+                },*/
+
+      /*8: { // esto va en los tipos de respuestas
+                  "class": "col-span-6",
+                  "class_md": "md:col-span-4",
+                  "field": "supplier",
+                  "type": "dropdown",
+                  "hide": false,
+                  "autofocus": false,
+                  "data_type": "supplier",       
+                },*/
+      /*}
+    }*/
     },
 
     inventory: {

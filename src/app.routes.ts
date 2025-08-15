@@ -61,12 +61,19 @@ export const appRoutes: Routes = [
         path: 'tasks',
         data: { breadcrumb: 'Gestión de Tareas' },
         canActivate: [appCanActivateGuardChild],
-        loadChildren: () => import('./app/task/task.routes')
-      }, {
+        loadChildren: () => import('./app/tasks/task.routes')
+      },
+      {
         path: 'purchases',
         data: { breadcrumb: 'Compras' },
         canActivate: [appCanActivateGuardChild],
-        loadChildren: () => import('./app/purchase/purchase.routes')
+        loadChildren: () => import('./app/purchases/purchase.routes')
+      },
+      {
+        path: 'assets',
+        data: { breadcrumb: 'Activos' },
+        canActivate: [appCanActivateGuardChild],
+        loadChildren: () => import('./app/assets/assets.routes').then(m => m.ASSETS_ROUTES)
       }
     ]
   },

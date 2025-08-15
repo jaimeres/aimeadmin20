@@ -16,9 +16,17 @@
   /* opcional: mantener si tu tema la reconoce */
   /* valor personalizado */
   --p-tabs-tab-padding: 0.3rem !important;
+  //--p-button-icon-only-width: 2.4rem !important;
+
+  --p-card-body-padding: 2px !important;
 }
 
-
+//ewdusco explicitamente el icono de cerra de dialogo no uso -p-button-icon-only-width porque es general
+p-dialog .p-button-icon-only.p-button-rounded {
+  height: 2rem !important;
+  width: 2rem !important;
+  //dale enfasis al icono
+}
 
 /* Etiqueta flotante en reposo (cuando el input NO tiene foco ni valor) */
 .p-float-label>label,
@@ -44,8 +52,6 @@
   font-size: var(--p-floatlabel-active-font-size) !important;
 }
 
-
-
 .width-300px-custom {
   width: 300px;
   //min-height: auto;
@@ -57,7 +63,6 @@
   //min-height: auto;
   overflow: auto;
 }
-
 
 .width-500px-custom {
   width: 500px;
@@ -72,12 +77,10 @@
   overflow: auto;
 }
 
-
 .width-600px-custom {
   width: 600px;
   //min-height: auto;
   overflow: auto;
-
 }
 
 .width-650px-custom {
@@ -86,7 +89,6 @@
   overflow: auto;
   border: 3px solid green;
 }
-
 
 .width-700px-custom {
   width: 700px;
@@ -97,7 +99,6 @@
   width: 750px;
   overflow: auto;
 }
-
 
 .width-800px-custom {
   width: 800px;
@@ -121,10 +122,6 @@
   overflow: auto;
 }
 
-
-
-
-
 .min-height-550px-custom {
   min-height: 550px !important;
   // min-height permite que el dialog se ajuste al contenido, tiene el inconveniente de que en view tab el dialogo va cambiando de tamaño
@@ -139,25 +136,45 @@
   height: 200px !important;
 }
 
+.height-250px-custom {
+  height: 250px !important;
+}
+
 .height-300px-custom {
   height: 300px !important;
+}
+
+.height-350px-custom {
+  height: 350px !important;
 }
 
 .height-400px-custom {
   height: 400px !important;
 }
 
-/*
-.p-tabview .p-tabview-panels {
-  padding: 0;
-}*/
+.height-450px-custom {
+  height: 450px !important;
+}
+
+.height-500px-custom {
+  height: 500px !important;
+}
+
+.height-550px-custom {
+  height: 550px !important;
+}
+
+.height-600px-custom {
+  height: 600px !important;
+}
 
 .p-tabpanels {
   padding: 0px !important;
 }
 
+//padding de fieldset
 .p-fieldset {
-  padding: 2px !important;
+  padding: 1px !important;
 }
 
 .p-fieldset-toggle-button {
@@ -166,35 +183,19 @@
 
 /* altura de los input*/
 .height-input-custom {
-  height: 31px;
+  height: 32px;
   width: 100%;
 }
 
 .height-icon-custom {
-  height: 30px;
+  height: 32px;
   width: 100%;
 }
-
-
-/*
-.p-tabview .p-tabview-nav li .p-tabview-nav-link {
-  padding: 0.5rem 0.5rem 0.5rem 0.5rem;
-  flex: 1;
-}*/
-
-
-.height-table-log-custom {
-  // la trate de utiolizar para calcular la altura de la tabla de log, que esta dentro de un dialog,
-  // pero parece que no funciona, ni dentro de un componente que se importa en el dialog ni poniendo la tabla directo en el dialog
-  //height: calc(100% - 121px);
-  height: 220px;
-}
-
 
 /* Estilos para dispositivos móviles */
 @media only screen and (max-width: 767px) {
   .table-fit-Custom {
-    height: calc(100vh - 217px);
+    height: calc(100vh - 117px);
     /* Establece la altura del contenedor principal al 100% del viewport */
   }
 
@@ -206,49 +207,27 @@
     padding-top: 1px;
     display: none !important;
   }
-
-
-
-
-  /*icono de calendario del calendario,*/
-  /*.p-fluid .p-button-icon-only {
-    width: 2.4rem;
-    // |||propios
-    height: 36px;
-  }*/
-
 }
 
 /* Estilos para tabletas */
 @media only screen and (min-width: 768px) and (max-width: 1023px) {
   .table-fit-Custom {
-    height: calc(100vh - 241px);
+    height: calc(100vh - 112px);
     /* Establece la altura del contenedor principal al 100% del viewport */
 
   }
 
   /* Agrega tus estilos aquí para pantallas entre 768px y 1023px de ancho */
-
   /*ocultar en tabletas*/
   .hide-md-custom {
     display: none !important;
   }
-
-
-
-
-  /*icono de calendario del calendario,*/
-  /*.p-fluid .p-button-icon-only {
-    width: 2.35rem;
-    // |||propios
-    height: 34px;
-  }*/
 }
 
 /* Estilos para pantallas de escritorio */
 @media only screen and (min-width: 1024px) {
   .table-fit-Custom {
-    height: calc(100vh - 152px) !important;
+    height: calc(100vh - 112px) !important;
     /* Establece la altura del contenedor principal al 100% del viewport */
   }
 
@@ -261,18 +240,7 @@
   .hide-lg-custom {
     display: none !important;
   }
-
-
-
-
-  /*icono de calendario del calendario,*/
-  /*.p-fluid .p-button-icon-only {
-    width: 2.2rem;
-    // |||propios
-    height: 27px;
-  }*/
 }
-
 
 /* alineación del numero de las tablas*/
 .align-number-Custom {
@@ -280,25 +248,17 @@
   text-align: center !important;
 }
 
-/* marca el color de las filas seleccionadas, :not(:hover) hace que rowHover tenga prioridad al momento de tener el curso sobre una fila seleccionada */
+//marca el color de las filas seleccionadas, :not(:hover) hace que rowHover tenga prioridad al momento de tener el curso sobre una fila seleccionada
 tr.selected:not(:hover) {
   background-color: lightblue !important;
   color: white !important;
 }
 
-
-/*.p-dropdown .p-inputtext {
-  padding-top: 0.5rem;
-}*/
-
-/*Centra el nombre de los multiselect*/
+//Centra el nombre de los multiselect
 .p-multiselect .p-multiselect-label {
   padding: 0.2rem 0.5rem 0.2rem 0.5rem;
   transition: background-color 0.2s, color 0.2s, border-color 0.2s, box-shadow 0.2s;
 }
-
-
-/* (Legacy PrimeFlex grid removed: .grid-custom and .grid .col-* spacing) */
 
 /*Reduce el padding de los encabezados de los dialog*/
 .p-dialog .p-dialog-header {
@@ -306,33 +266,89 @@ tr.selected:not(:hover) {
   padding-top: 0 !important;
   padding-bottom: 0 !important;
   background-color: #c0bdbd;
-  color: #333;
+  color: #333333;
 }
 
-/*paddin en el cuerpo de dialogo, el top en 1 para que quepa */
+
+//paddin en el cuerpo de dialogo, el top en 1 para que quepa
 .p-dialog .p-dialog-content {
   background: #ffffff;
   color: #495057;
-  // 1rem (button) afecta los tabView , tambien el tercer valor 0.5rem(top) da mucho espacio cuandi utilizo tabView
-  //padding: 1rem 0.8rem 0.5rem 0.8rem; 
-  //padding: 0 0.75rem 0 0.75rem;
-  padding: 0;
-
-
+  padding: 5px;
 }
 
-/*footer del dialogo*/
+//footer del dialogo
 .p-dialog .p-dialog-footer {
-  padding: 0 0.2rem 0.8rem 0.2rem;
+  padding: 0.2rem;
+}
+
+/*
+puntos de quiebre
+xl: 1200px
+lg: 992px
+md: 768px
+sm: 576px
+*/
+.hidden-custom {
+  display: none !important;
+}
+
+.show-custom {
+  display: block !important;
+}
+
+// Fix simple para mantener los botones del footer en su lugar - PrimeNG 20
+.p-dialog .p-dialog-footer {
+  margin-top: auto !important;
+  position: sticky !important;
+  bottom: 0 !important;
+  //z-index: 1000 !important;
 }
 
 
-/* icono en el header del p-dialog*/
-.p-dialog-icon {
+//corrije el problema
+.p-treetable .p-treetable-header,
+.p-datatable .p-datatable-header {
+  /*.p-iconfield {
+      width: auto !important;
+      min-width: 200px !important;
+      max-width: 250px !important;
+    }*/
+
+  .p-iconfield input,
+  .p-iconfield input.p-inputtext {
+    width: 200px !important;
+    height: 32px !important;
+    padding: 0.2rem 0.4rem 0.2rem 1.8rem !important;
+    border: 1px solid #ced4da !important;
+    border-radius: 4px !important;
+    font-size: 13px !important;
+    line-height: 1.2 !important;
+    box-sizing: border-box !important;
+    vertical-align: middle !important;
+  }
+
+  /*.p-inputicon {
+      color: #6c757d !important;
+    }*/
+
+  .p-button {
+    height: 31px !important;
+    min-height: 31px !important;
+  }
+}
+
+.p-treetable.p-treetable-sm .p-treetable-header,
+.p-datatable.p-datatable-sm .p-datatable-header {
+  padding: 0.1rem !important;
+}
+
+
+
+/*icono en el header del p-dialog .p-dialog-icon {
   margin-left: 1rem !important;
   margin-right: 1rem !important;
-}
-
+}*/
 
 // .p-dialog-mask {
 //   z-index: 9999;
@@ -384,19 +400,19 @@ tr.selected:not(:hover) {
 
 
 /*Personaliza el color del toggle button cuando es falso*/
-.p-togglebutton.p-button {
+/*.p-togglebutton.p-button {
   // background: rgb(231, 148, 167);
   // color: white;
 
-  /* DE ESTA FORMA NO CAMBIA DE COLOR ENTRE TRUE O FALSE*/
+  //DE ESTA FORMA NO CAMBIA DE COLOR ENTRE TRUE O FALSE
   background: #67487e; //false 
   border-color: #67487e; //false 
   //background: #047cec;
   //border-color: #047cec;
   color: #ffffff
-}
+}*/
 
-
+/*
 // quita el paddin de los botones de paginación de las tablas
 .p-paginator {
   padding: 0;
@@ -438,42 +454,12 @@ tr.selected:not(:hover) {
   // |||propios
   height: 200px;
   overflow: auto;
-}
+}*/
 
-/*
-puntos de quiebre
-xl: 1200px
-lg: 992px
-md: 768px
-sm: 576px
-*/
-
-.table-fit-remove-tab-custom {
-  height: calc(100vh - 240px);
-  /* Establece la altura del contenedor principal al 100% del viewport */
-}
 
 
 
-.hidden-custom {
-  display: none !important;
-}
-
-.show-custom {
-  display: block !important;
-}
-
-h1,
-h2,
-h3,
-h4,
-h5,
-h6 {
-  margin: 0.2rem 0 0.2rem 0;
-  /* Nuevo margen personalizado */
-}
-
-
+/*
 //quita los espacios entre los dias para reducir el tamaño del calendario
 .p-datepicker table td {
   padding: 0;
@@ -481,7 +467,7 @@ h6 {
 
 }
 
-/*paddin de los botones de hora*/
+//paddin de los botones de hora
 .p-datepicker .p-timepicker {
   padding: 0.5rem 0 0 0;
 }
@@ -491,13 +477,13 @@ h6 {
   padding: 0;
 }
 
-/* circulo al seleccionar el día del calendario */
+//circulo al seleccionar el día del calendario
 .p-datepicker table td>span {
   width: 2.5rem;
   height: 2.5rem;
 }
 
-/* reduce el margen entre los margenes del calendario */
+//reduce el margen entre los margenes del calendario
 .p-datepicker table {
   margin: 0;
 }
@@ -508,7 +494,7 @@ h6 {
 
 
 
-/*padding de los borden */
+//padding de los bordes
 .p-datepicker {
   padding: 0.1rem;
 }
@@ -532,4 +518,34 @@ h6 {
 //obliga alñ input del multiselect a expardirse al 100% de lo ancho
 .p-multiselect-panel .p-multiselect-header .p-multiselect-filter-container .p-inputtext {
   width: 100%;
-}
+}*/
+
+
+
+
+/*icono de calendario del calendario,*/
+/*.p-fluid .p-button-icon-only {
+    width: 2.2rem;
+    // |||propios
+    height: 27px;
+  }*/
+
+
+
+/*
+.p-tabview .p-tabview-nav li .p-tabview-nav-link {
+  padding: 0.5rem 0.5rem 0.5rem 0.5rem;
+  flex: 1;
+}*/
+
+
+/*.p-dropdown .p-inputtext {
+  padding-top: 0.5rem;
+}*/
+
+
+
+/*
+.p-tabview .p-tabview-panels {
+  padding: 0;
+}*/

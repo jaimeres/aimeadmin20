@@ -1,0 +1,92 @@
+<div class="grid grid-cols-12 gap-2">
+
+  <div class="col-span-5 md:col-span-2">
+    {{cfSignal()?.created_by}}:
+  </div>
+
+  <div class="col-span-7 md:col-span-4">
+    {{selectedSignal()[0]?.created_by__name}}
+  </div>
+
+  <div class="col-span-5 md:col-span-2">
+    {{cfSignal()?.utc_created_at}}:
+  </div>
+
+  <div class="col-span-7 md:col-span-4">
+    {{selectedSignal()[0]?.utc_created_at}}
+  </div>
+
+
+  <div class="col-span-5 md:col-span-2">
+    {{cfSignal()?.modified_by}}:
+  </div>
+
+  <div class="col-span-7 md:col-span-4">
+    {{selectedSignal()[0]?.modified_by__name}}
+  </div>
+
+  <div class="col-span-5 md:col-span-2">
+    {{cfSignal()?.utc_modified_at}}:
+  </div>
+
+  <div class="col-span-7 md:col-span-4">
+    {{selectedSignal()[0]?.utc_modified_at}}
+  </div>
+
+  <div class="col-span-5 md:col-span-2">
+    {{cfSignal()?.inactivated_by}}:
+  </div>
+
+  <div class="col-span-7 md:col-span-4">
+    {{selectedSignal()[0]?.inactivated_by__name}}
+  </div>
+
+  <div class="col-span-5 md:col-span-2">
+    {{cfSignal()?.utc_inactivated_at}}:
+  </div>
+
+  <div class="col-span-7 md:col-span-4">
+    {{selectedSignal()[0]?.utc_inactivated_at}}
+  </div>
+</div>
+
+
+<p-table #dt [globalFilterFields]="['name', 'status']" [value]="items()" [tableStyle]="{ 'min-width': '20rem' }"
+  [scrollable]="true" dataKey="id" size="small" scrollHeight="flex">
+
+  <ng-template #caption style="padding: 0 !important;">
+    <div style="display: flex; align-items: center; justify-content: space-between; padding: 0;">
+      <p-button [outlined]="true" icon="pi pi-filter-slash" />
+      <p-iconfield iconPosition="left">
+        <p-inputicon>
+          <i class="pi pi-search"></i>
+        </p-inputicon>
+        <input pInputText type="text" (input)="dt.filterGlobal($event.target.value, 'contains')"
+          placeholder="Buscar..." />
+      </p-iconfield>
+    </div>
+  </ng-template>
+
+  <ng-template #header>
+    <tr>
+      <th>Id usuario</th>
+      <th>Usuario</th>
+      <th>Id registro</th>
+      <th>Fecha</th>
+      <th>Es migración</th>
+      <th>Acción</th>
+    </tr>
+  </ng-template>
+
+  <ng-template #body let-document>
+    <tr>
+      <td>{{document.user_id}}</td>
+      <td>{{document.username}}</td>
+      <td>{{document.item_id}}</td>
+      <td>{{document.timestamp}}</td>
+      <td>{{document.is_migration ? 'Migración' : 'Sistema'}}</td>
+      <td>{{document.action}}</td>
+    </tr>
+  </ng-template>
+
+</p-table>
