@@ -72,7 +72,7 @@ export class CustomDrawFormComponent {
   @Input() drawForm: any;
   @Input() app: any;
   @Input() tabPanel!: string;
-  @Input() customField: any;
+  //@Input() customField: any;
   @Input() optionLabel: any = 'label';
   @Input() showIcon: boolean = true;
 
@@ -97,7 +97,7 @@ export class CustomDrawFormComponent {
   drawFormSignal = signal<any>(null);
   appSignal = signal<string>('');
   tabPanelSignal = signal<string>('');
-  customFieldSignal = signal<any>(null);
+  //customFieldSignal = signal<any>(null);
   optionLabelSignal = signal<any>('label');
   showIconSignal = signal<boolean>(true);
 
@@ -208,9 +208,9 @@ export class CustomDrawFormComponent {
     if (changes['tabPanel']) {
       this.tabPanelSignal.set(changes['tabPanel'].currentValue);
     }
-    if (changes['customField']) {
+    /*if (changes['customField']) {
       this.customFieldSignal.set(changes['customField'].currentValue);
-    }
+    }*/
     if (changes['optionLabel']) {
       this.optionLabelSignal.set(changes['optionLabel'].currentValue);
     }

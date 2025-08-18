@@ -21,12 +21,12 @@ export class ConfigService {
   ) { }
 
   //Solo es llamado una vez, ya que tiene .pipe(take(1))
-  getConfig() {
+  /*getConfig() {
     return this.http.get(`${this._base_url}/settings/settings/me/`).pipe(
       map((resp: any) => resp.data),
       take(1)
     );
-  }
+  }*/
 
   saveConfig(formData: any) {
     return this.http

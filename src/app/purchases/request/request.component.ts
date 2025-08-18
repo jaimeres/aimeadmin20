@@ -916,17 +916,4 @@ export class RequestComponent extends CRUD implements OnInit {
     this.ctx.clearRect(0, 0, canvas.width, canvas.height);
   }
 
-  /**
-   * Retorna la concatenación de las clases de tamaño (width y height) del dialog actual.
-   * Si alguna falta, sólo retorna la existente. Nunca retorna null; string vacío si no hay ninguna.
-   */
-  /*override dialogSizeClass(type: any = this.typeDefault): string {
-    try {
-      const d = this.drawForm()[type]?.dialog || {};
-      return [d.width, d.height].filter(v => !!v).join(' ');
-    } catch (e) {
-      return '';
-    }
-  }*/
-
 }

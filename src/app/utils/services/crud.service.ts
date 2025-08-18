@@ -1,14 +1,16 @@
 import { HttpClient } from '@angular/common/http';
 import { inject, Injectable, signal } from '@angular/core';
-import { map, Observable, shareReplay, take } from 'rxjs';
+import { map, Observable } from 'rxjs';
 import { ConfigService } from 'src/app/auth/services/config.service';
 import { GeneralService } from 'src/app/utils/services/general.service';
 import { environment } from 'src/environments/environment';
+import { AuthService } from '../../auth/services/auth.service';
 
 @Injectable({
   providedIn: 'root'
 })
 export class CRUDService {
+
 
   protected _base_url: String = environment.base_url;
   public type: string = '';
@@ -16,8 +18,6 @@ export class CRUDService {
   public relationships: any[] = [];
 
   // Cache estático compartido para todas las instancias
-  private static configCache$: Observable<any> | null = null;
-  private static instanceCount = 0;
 
   /**
    * Indica si el recurso contiene archivos.
@@ -28,6 +28,7 @@ export class CRUDService {
   protected http: HttpClient = inject(HttpClient);
   //protected messageS: MessageService = inject(MessageService);
   public generalS: GeneralService = inject(GeneralService);
+  public authS = inject(AuthService);
 
   /**
    * Contiene el app y el type para consumir el servicio de la API, debe ser la misma que la posición de cada app
@@ -130,31 +131,15 @@ export class CRUDService {
 
   }
 
-  //public customField = signal<any>({});
-  /*constructor() {
-    this.configS.getConfig().subscribe((config: any) => {
-      console.log('config+++++++++++++++++', config)
-      this.customField.set({
-        ...this.configS.is_activeCF(this.type ?? ''),
-        ...this.configS.nameCF(this.type),
-        ...this.configS.is_defaultCF(this.type),
-        ...this.configS.is_requiredCF(this.type),
-        ...this.configS.is_voidableCF(this.type),
-        ...this.configS.sysCF(this.type),
-        ...this.configS.CRUDCF(this.type),
-        ...this.configS.time_zoneCF(this.type),
-        ...this.configS.classifiersCF(this.type),
-        ...this.configS.configuracionCF(this.type),
-        ...this.configS.taskCF(this.type),
-        ...this.configS.contactCF(this.type),
-        ...this.configS.photoCF(this.type),
-        ...this.configS.configurationCF(this.type),
-        ...this.configS.dateCF(this.type),
-        ...this.customField(),
-        ...config
-      });
-    });
-  }*/
+
+  config_cols(module: string) {
+    return this.authS.config[module]['config_cols']
+  }
+
+  drawForm(module: string) {
+    return this.authS.config[module]['draw'];
+
+  }
 
   /**
    * Obtiene los nombres de los campos, se accede a ellos por el nombre de campo en ingles.
@@ -177,7 +162,6 @@ export class CRUDService {
     ...this.configS.photoCF(this.type),
     ...this.configS.configurationCF(this.type),
     ...this.configS.dateCF(this.type),
-
   });
 
   baseUrl(app: string = '') {

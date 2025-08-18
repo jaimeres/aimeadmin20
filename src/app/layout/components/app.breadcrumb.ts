@@ -16,6 +16,60 @@ interface Breadcrumb {
   selector: '[app-breadcrumb]',
   standalone: true,
   imports: [CommonModule, RouterModule, ButtonModule, RippleModule, InputTextModule],
+  styles: [`
+    .layout-breadcrumb-container {
+      min-height: 2rem !important;
+      height: 2rem !important;
+      padding: 0.25rem 0 !important;
+    }
+    
+    .layout-breadcrumb {
+      height: 2rem !important;
+      display: flex;
+      align-items: center;
+    }
+    
+    .layout-breadcrumb ol {
+      margin: 0 !important;
+      padding: 0 !important;
+      display: flex;
+      align-items: center;
+      height: 100%;
+    }
+    
+    .layout-breadcrumb ol li {
+      display: flex;
+      align-items: center;
+      height: 100%;
+      margin: 0 !important;
+      padding: 0 0.25rem !important;
+      font-size: 0.875rem;
+    }
+    
+    .layout-breadcrumb-buttons {
+      height: 2rem !important;
+      display: flex;
+      align-items: center;
+    }
+    
+    .layout-breadcrumb-buttons button {
+      width: 2rem !important;
+      height: 2rem !important;
+      min-width: 2rem !important;
+    }
+    
+    .app-config-mobile-button {
+      height: 2rem !important;
+      display: flex;
+      align-items: center;
+    }
+    
+    .app-config-mobile-button input {
+      height: 2rem !important;
+      padding: 0.25rem 0.5rem !important;
+      font-size: 0.875rem !important;
+    }
+  `],
   template: `
 
     <div *ngIf="isProductList()" class="app-config-mobile-button">
@@ -25,7 +79,7 @@ interface Breadcrumb {
 
     <nav class="layout-breadcrumb" *ngIf="!isProductList()">
       <ol>
-        <li><i class="pi pi-home"></i></li>
+        <!--<li><i class="pi pi-home"></i></li>-->
         <ng-template ngFor let-item let-last="last" [ngForOf]="breadcrumbs$ | async">
           <li><i class="pi pi-angle-right"></i></li>
           <li>

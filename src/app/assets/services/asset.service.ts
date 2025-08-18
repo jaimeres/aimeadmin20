@@ -1,4 +1,4 @@
-import { Injectable } from '@angular/core';
+import { inject, Injectable } from '@angular/core';
 import { CRUDService } from '../../utils/services/crud.service';
 
 @Injectable({
@@ -8,7 +8,19 @@ export class AssetService extends CRUDService {
 
   constructor() {
     super();
-    this.customField.update(current => {
+
+    this.customField.set({
+      'asset': this.authS.config['asset']['cols'],
+      //'maintenance': this.authS.config['maintenance']['cols'],
+      //'other': this.authS.config['other']['cols'],
+      //'asset-type': this.authS.config['asset-type']['cols'],
+      'capacity-type': this.authS.config['capacity-type']['cols'],
+      //'asset-document': this.authS.config['asset-document']['cols'],
+      //'asset-document-asset': this.authS.config['asset-document-asset']['cols']
+
+    });
+
+    /*this.customField.update(current => {
       return {
         'maintenance': {
           ...current,
@@ -172,6 +184,7 @@ export class AssetService extends CRUDService {
           ...current,
         }
       }
-    })
+  });*/
+
   }
 }

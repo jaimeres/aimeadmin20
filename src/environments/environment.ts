@@ -8,5 +8,4 @@ export const environment = {
   base_url: 'http://127.0.0.1:8000/v1',
   mk: 'localhost',
   erp: 'localhost',
-  mk_red: 'http://localhost:4200'
 };

@@ -23,7 +23,7 @@
 <app-custom-actions-selection [visible]="actionsSelectionDialogVisible" (visibleChange)="onVisibleChange($event)" />
 
 <p-dialog [(visible)]="formDialogVisible[$any(typeDefault)]" (onHide)="onHide($any(typeDefault))"
-  (onShow)="onShow($any(typeDefault))" [styleClass]="dialogSizeClass(typeDefault)" modal="true">
+  (onShow)="onShow($any(typeDefault))" [styleClass]="styleClassDialog()" modal="true">
 
   <ng-template #header>
     <div class="p-dialog-title">
@@ -51,7 +51,7 @@
 
           <app-custom-draw-form *ngIf="form()[$any(typeDefault)] && drawForm()[typeDefault]"
             [drawForm]="drawForm()[typeDefault]['general']" [formGroup]="form()[$any(typeDefault)]"
-            [customField]="customField()[typeDefault]" (onSelectAutoCompleteAction)="onSelectAutoComplete($event)"
+            (onSelectAutoCompleteAction)="onSelectAutoComplete($event)"
             (onChangeDropdownAction)="onChangeDropdown($event)" (onNewIconDropdownAction)="onNewIconDropdown($event)"
             (onReloadIconDropdownAction)="onReloadIconDropdown($event)" (onChangeToggleAction)="onChangeToggle($event)"
             (onKeydownEnterTextAction)="onKeydownEnterText($event)"
@@ -106,7 +106,7 @@
 </p-dialog>
 
 <p-dialog [(visible)]="formDialogVisible[$any('asset-type')]" (onHide)="onHide($any(formDialogVisible['asset-type']))"
-  (onShow)="onShow('asset-type')" [styleClass]="dialogSizeClass('asset-type')" modal="true">
+  (onShow)="onShow('asset-type')" [styleClass]="styleClassDialog()" modal="true">
 
   <ng-template #header>
     <div class="p-dialog-title">
@@ -130,7 +130,7 @@
         <p-tabpanel value="0">
           <app-custom-draw-form *ngIf="form()[$any('asset-type')] && drawForm()['asset-type']"
             [drawForm]="drawForm()['asset-type']['general']" [formGroup]="form()[$any('asset-type')]"
-            [customField]="customField()['asset-type']" (onSelectAutoCompleteAction)="onSelectAutoComplete($event)"
+            (onSelectAutoCompleteAction)="onSelectAutoComplete($event)"
             (onChangeDropdownAction)="onChangeDropdown($event)" (onNewIconDropdownAction)="onNewIconDropdown($event)"
             (onReloadIconDropdownAction)="onReloadIconDropdown($event)" (onChangeToggleAction)="onChangeToggle($event)"
             (onKeydownEnterTextAction)="onKeydownEnterText($event)"
@@ -157,7 +157,7 @@
 </p-dialog>
 
 <p-dialog [(visible)]="formDialogVisible[$any('capacity-type')]" (onHide)="onHide($any('capacity-type'))"
-  (onShow)="onShow($any('capacity-type'))" [styleClass]="dialogSizeClass('capacity-type')" modal="true">
+  (onShow)="onShow($any('capacity-type'))" [styleClass]="styleClassDialog()" modal="true">
 
   <ng-template #header>
     <div class="p-dialog-title">
@@ -184,7 +184,7 @@
 
           <app-custom-draw-form *ngIf="form()[$any('capacity-type')] && drawForm()['capacity-type']"
             [drawForm]="drawForm()['capacity-type']['general']" [formGroup]="form()[$any('capacity-type')]"
-            [customField]="customField()['capacity-type']" (onSelectAutoCompleteAction)="onSelectAutoComplete($event)"
+            (onSelectAutoCompleteAction)="onSelectAutoComplete($event)"
             (onChangeDropdownAction)="onChangeDropdown($event)" (onNewIconDropdownAction)="onNewIconDropdown($event)"
             (onReloadIconDropdownAction)="onReloadIconDropdown($event)" (onChangeToggleAction)="onChangeToggle($event)"
             (onKeydownEnterTextAction)="onKeydownEnterText($event)"
@@ -237,19 +237,19 @@
 
 </p-dialog>
 
-<app-custom-documents *ngIf="form() && form()[$any('asset-document')]" (selectFileDocumentAction)="onSelectFile($event)"
+<!-- <app-custom-documents *ngIf="form() && form()[$any('asset-document')]" (selectFileDocumentAction)="onSelectFile($event)"
   (hideDocumentAction)="formDialogVisible['asset-document'] = false" (resetFormAction)="resetFormDialog()"
-  (saveNotHideAction)="save($any($event))" (saveAction)="save($any($event))" />
+  (saveNotHideAction)="save($any($event))" (saveAction)="save($any($event))" /> -->
 
 
 <!-- [selectedDocument]="selected()" [dataApp]="assets()" [fieldApp]="'asset'"  [customFieldDocument]="customField()[$any('asset-document')]" 
   [headerDocument]="header()" [formDocument]="form()[$any('asset-document')]" [visible]="formDialogVisible[$any('asset-document')]" -->
 
 
-<app-custom-documents (selectFileDocumentAction)="onSelectFile($event)"
+<!-- <app-custom-documents (selectFileDocumentAction)="onSelectFile($event)"
   (saveAction)="saveSecundary({pos:'asset-document-asset'})"
   (saveNotHideAction)="saveSecundary({pos:'asset-document-asset',hide:false})"
-  (hideDocumentAction)="formDialogVisible['asset-document-asset'] = false" (resetFormAction)="resetFormDialog()" />
+  (hideDocumentAction)="formDialogVisible['asset-document-asset'] = false" (resetFormAction)="resetFormDialog()" /> -->
 
 <!-- [dataApp]="assets()" [readonlyApp]="true" [appDefaultValue]="{'asset':selected()[0]?.id}"  [customFieldDocument]="customField()"
  [visible]="formDialogVisible['asset-document-asset']"  [formDocument]="form()" [fieldApp]="'asset'" [headerDocument]="headerSecundary()"

@@ -195,7 +195,7 @@ p-dialog .p-button-icon-only.p-button-rounded {
 /* Estilos para dispositivos móviles */
 @media only screen and (max-width: 767px) {
   .table-fit-Custom {
-    height: calc(100vh - 117px);
+    height: calc(100vh - 100px);
     /* Establece la altura del contenedor principal al 100% del viewport */
   }
 
@@ -212,7 +212,7 @@ p-dialog .p-button-icon-only.p-button-rounded {
 /* Estilos para tabletas */
 @media only screen and (min-width: 768px) and (max-width: 1023px) {
   .table-fit-Custom {
-    height: calc(100vh - 112px);
+    height: calc(100vh - 98px);
     /* Establece la altura del contenedor principal al 100% del viewport */
 
   }
@@ -227,7 +227,7 @@ p-dialog .p-button-icon-only.p-button-rounded {
 /* Estilos para pantallas de escritorio */
 @media only screen and (min-width: 1024px) {
   .table-fit-Custom {
-    height: calc(100vh - 112px) !important;
+    height: calc(100vh - 98px) !important;
     /* Establece la altura del contenedor principal al 100% del viewport */
   }
 

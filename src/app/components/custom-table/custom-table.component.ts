@@ -12,14 +12,14 @@ import { IconFieldModule } from 'primeng/iconfield';
 import { InputIconModule } from 'primeng/inputicon';
 import { MultiSelectModule } from 'primeng/multiselect';
 import { ContextMenuModule } from 'primeng/contextmenu';
-import { ConfigService } from '../../auth/services/config.service';
+import { TooltipModule } from 'primeng/tooltip';
 
 
 
 @Component({
   selector: 'app-custom-table',
   imports: [CommonModule, ReactiveFormsModule, ButtonModule, MultiSelectModule, ToggleButtonModule, SelectModule, DialogModule, TableModule,
-    ContextMenuModule, InputIconModule, IconFieldModule
+    ContextMenuModule, InputIconModule, IconFieldModule, TooltipModule
   ],
   templateUrl: './custom-table.component.html',
   styleUrl: './custom-table.component.scss',
@@ -30,7 +30,6 @@ export class CustomTableComponent implements OnChanges {
   optionsExport = signal<any[]>([{ id: 'excel', name: 'Excel' }, { id: 'pdf', name: 'PDF' }, { id: 'csv', name: 'CSV' }]);
   form = signal<FormGroup | null>(null);
   protected fb: FormBuilder = inject(FormBuilder);
-  protected configS: ConfigService = inject(ConfigService);
   items!: MenuItem[];
 
   //https://www.npmjs.com/package/ngx-export-as
@@ -182,6 +181,27 @@ export class CustomTableComponent implements OnChanges {
 
   j(e: any) {
     this.lazyLoadAction.emit(e);
+  }
+
+  // Métodos para el paginador responsive
+  getFirstRecord(): number {
+    if (!this.valueSignal() || this.valueSignal().length === 0) return 0;
+    return 1; // Simplificado para el primer registro mostrado
+  }
+
+  getLastRecord(): number {
+    const current = this.valueSignal().length;
+    const total = this.totalRecordsSignal();
+    return Math.min(current, total);
+  }
+
+  getPaginatorTooltip(): string {
+    const first = this.getFirstRecord();
+    const last = this.getLastRecord();
+    const total = this.totalRecordsSignal();
+    const selected = this.selectedSignal().length;
+
+    return `Mostrar del ${first} al ${last} de ${total} registros - ${selected} seleccionados`;
   }
 
 }

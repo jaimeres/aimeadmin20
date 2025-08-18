@@ -16,13 +16,13 @@ import { Vars } from './vars.class';
 })*/
 export class CRUD extends Vars /*implements OnInit*/ {
   // cada vez que cambian los customField se actuakliza
-  customField = computed(() => this.crudS.customField());
+  public customField = computed(() => this.crudS.customField());
   // calcula el estilo del dialogo, cada vez que hay un cambio de aplicacion
-  styleClassDialog = computed(() => {
-    const dialog = this.drawForm()[this.pos() ?? 0]['dialog'];
-    let width = dialog['height'] ? dialog['height'] : 'width-650px-custom';
-    let height = dialog['width'] ? dialog['width'] : 'min-height-550px-custom';
-    return `${width} ${height}`;
+
+  //AQUI VOY VOTY A CAMBIAR dialogSizeClass Y ENL COSNTRUCTOR ASI COLO LOS VERSOSE
+  public styleClassDialog = computed(() => {
+    const pos = this.pos() ?? 0;
+    return this.dialogSizeClass();
   });
 
   // convierte pos de string a number para usar como índice de array
@@ -31,10 +31,14 @@ export class CRUD extends Vars /*implements OnInit*/ {
     return pos ? parseInt(pos, 10) : 0;
   });
 
+
+
   // No usar inject() en clases base no decoradas. Usar DI por constructor en componentes decorados.
 
-  constructor(protected override crudS: CRUDService) {
+  constructor(protected override crudS: CRUDService, pos = '') {
     super(crudS);
+    this.drawForm()[pos] = this.crudS.drawForm(pos);
+    this.verboseDialog(pos);
     this.commonSettings();
     // va en el constructor para que se ejecute antes que el ngOnInit, para que no
     //afecte si es llamado nuevamente en la clase hija
@@ -57,6 +61,32 @@ export class CRUD extends Vars /*implements OnInit*/ {
     this.getClassifierLevelsGlogal();
     this.getClassifierGlobal();
     this.searchRemote = undefined;
+  }
+
+  verboseDialog(pos: string) {
+    this.typeDefault = pos;
+    this.type[this.typeDefault] = this.typeDefault;
+    this.singular[this.typeDefault] = this.drawForm()[pos]['dialog'].singular;
+    this.plural[this.typeDefault] = this.drawForm()[pos]['dialog'].plural;
+    this.singularIndefiniteArticle[this.typeDefault] = this.drawForm()[pos]['dialog'].singularIndefiniteArticle;
+    this.pluralDefiniteArticle[this.typeDefault] = this.drawForm()[pos]['dialog'].pluralDefiniteArticle;
+  }
+
+  dialogSizeClass() {
+    if (!this.drawForm()[this.pos()]) {
+      this.drawForm()[this.pos()] = this.crudS.drawForm(this.pos());
+    }
+    const drawFormData = this.drawForm()[this.pos()];
+
+    // Verificar que drawFormData existe y tiene dialog
+    if (!drawFormData || !drawFormData['dialog']) {
+      return 'width-650px-custom min-height-550px-custom'; // Valores por defecto
+    }
+
+    const dialog = drawFormData['dialog'];
+    let width = dialog['height'] ? dialog['height'] : 'width-650px-custom';
+    let height = dialog['width'] ? dialog['width'] : 'min-height-550px-custom';
+    return `${width} ${height}`;
   }
 
   /**
@@ -382,6 +412,11 @@ export class CRUD extends Vars /*implements OnInit*/ {
     const pos = this.pos() ?? 0; // Asegurar que pos no sea null
     const posIndex = pos as string; // Cast explícito a string
 
+    /*if (!this.drawForm()[posIndex]) {
+      this.drawForm()[posIndex] = this.crudS.drawForm(posIndex);
+    }
+    this.verboseDialog(posIndex);*/
+
     // se desestructura el array para para poder eliminar los campos afectados y optimizar la busqueda
     const boolLocal = this.fieldsBool[0][posIndex] ? [...this.fieldsBool][0][posIndex] : [];
     const relationshipsLocal = this.relationships[posIndex] ? [...this.relationships[posIndex]] : [];
@@ -530,6 +565,12 @@ export class CRUD extends Vars /*implements OnInit*/ {
 
     if (pos === null) return cols; // Retornar cols vacío si pos es null
 
+    // Obtener configuración de columnas
+    const configCols = this.crudS.config_cols(pos) || {};
+
+    // La configuración está directamente en configCols, no en configCols.cols
+    const colsConfig = configCols;
+    const safePos = pos ?? 0; // Crear una variable segura para usar como índice
 
     for (const field in jsonFields) {
       if (jsonFields.hasOwnProperty(field)) {
@@ -577,18 +618,21 @@ export class CRUD extends Vars /*implements OnInit*/ {
           continue;
         }
 
+        // Crear el objeto columna base
+        let columnObj: any = {};
+
         if (fieldObj.type == 'Relationship' || fieldObj.type == 'Serializer') {
-          cols.push({
+          columnObj = {
             field: field_prefix + field + '__name',
             header: this.customField()[pos][field_relationship + field] + ' ' + header_prefix,
-            sortable: true
-          });
+            //sortable: true
+          };
         } else if (fieldObj.type == 'Boolean') {
-          cols.push({
+          columnObj = {
             field: field_prefix + field + '__text',
             header: this.customField()[pos][field_relationship + field] + ' ' + header_prefix,
-            sortable: true
-          });
+            //sortable: true
+          };
           if (!this.fieldsBool[pos]) {
             this.fieldsBool[pos] = [];
           }
@@ -596,7 +640,7 @@ export class CRUD extends Vars /*implements OnInit*/ {
           this.fieldsBool[pos].push({ field: field_relationship + field /*, default: fieldObj.initial */ });
           //this.fieldsBool[pos].push({ field: field_prefix + '__' + field/*, default: fieldObj.initial */ });
         } else if (fieldObj.type == 'Choice') {
-          cols.push({ field: field_prefix + field + '__text', header: this.customField()[pos][field_relationship + field] + ' ' + header_prefix, sortable: true });
+          columnObj = { field: field_prefix + field + '__text', header: this.customField()[pos][field_relationship + field] + ' ' + header_prefix, /*sortable: true*/ };
           if (!this.moreFields[pos]) {
             this.moreFields[pos] = [];
           }
@@ -607,13 +651,67 @@ export class CRUD extends Vars /*implements OnInit*/ {
           //agregar __text a los fieldObj.type == 'DateTime' para que se muestre la fecha en la tabla siempre y cuando existan en this.timeZone
           // usando la funcion searchByValue
         } else if (fieldObj.type == 'DateTime' && this.searchByValue(field, this.timeZone, false) !== -1) {
-          cols.push({ field: field_prefix + field + '__text', header: this.customField()[pos][field_relationship + field] + ' ' + header_prefix, sortable: true });
+          columnObj = { field: field_prefix + field + '__text', header: this.customField()[pos][field_relationship + field] + ' ' + header_prefix, /*sortable: true*/ };
         } else {
-          cols.push({ field: field_prefix + field, header: this.customField()[pos][field_relationship + field] + header_prefix, sortable: true });
+          columnObj = { field: field_prefix + field, header: this.customField()[pos][field_relationship + field] + header_prefix, /*sortable: true*/ };
         }
+
+        // Aplicar configuración de cols si existe
+        if (colsConfig && colsConfig[field]) {
+          const fieldConfig = colsConfig[field];
+
+          // Aplicar sortable de la configuración
+          if (fieldConfig.hasOwnProperty('sortable')) {
+            columnObj.sortable = fieldConfig.sortable;
+          }
+
+          // Si hide es true, agregar a itemsRemove
+          if (fieldConfig.hide === true) {
+            if (!this.itemsRemove[safePos]) {
+              this.itemsRemove[safePos] = [];
+            }
+            this.itemsRemove[safePos].push(columnObj.field);
+          }
+
+          // Asignar orden para uso posterior (convertir a número)
+          if (fieldConfig.hasOwnProperty('order')) {
+            const orderValue = parseInt(fieldConfig.order, 10);
+            columnObj._order = orderValue;
+          }
+        }
+
+        cols.push(columnObj);
       }
     }
-    console.log('colssssssss', cols);
+
+
+    // Ordenar columnas por orden si se especificó
+    cols.sort((a: any, b: any) => {
+      // Si ambos tienen orden, comparar numéricamente
+      if (a._order !== undefined && b._order !== undefined) {
+        const result = a._order - b._order;
+        return result;
+      }
+      // Si solo 'a' tiene orden, va primero
+      else if (a._order !== undefined && b._order === undefined) {
+        return -1;
+      }
+      // Si solo 'b' tiene orden, va primero
+      else if (a._order === undefined && b._order !== undefined) {
+        return 1;
+      }
+      // Si ninguno tiene orden, mantener orden original
+      return 0;
+    });
+
+
+    // Limpiar la propiedad temporal _order
+    cols.forEach((col: any) => {
+      delete col._order;
+    });
+
+    console.log('colssssssss ordenadas:', cols);
+
 
     return cols;
   }
@@ -721,13 +819,18 @@ export class CRUD extends Vars /*implements OnInit*/ {
     } else {
       // si ya se consulto al servidor, no se vuelve a consultar
       if (this.optionsFields[safePos]) {
+        console.log('getAll if');
+
         this.columns[safePos] = this.generateJSONColumns(this.optionsFields[safePos]);
         this.getAll2({ pos: safePos, node, filter, force });
+
       } else {
         const app = this.app[safePos];
         this.showBlocked();
         this.crudS.options(app).subscribe({
           next: (resp: any) => {
+            console.log('getAll else');
+
             this.optionsFields[safePos] = resp.data.actions.POST;
             this.columns[safePos] = this.generateJSONColumns(this.optionsFields[safePos]);
             this.showBlocked(false);
@@ -1523,8 +1626,6 @@ export class CRUD extends Vars /*implements OnInit*/ {
     const coords = this.generalS.getLocationSnapshot();
 
     if (coords) {
-      console.log('***************', safePos, form);
-
       form.get('latitude')?.setValue(coords.latitude);
       form.get('longitude')?.setValue(coords.longitude);
       form.get('time_zone')?.setValue(coords.time_zone);
@@ -2773,18 +2874,6 @@ export class CRUD extends Vars /*implements OnInit*/ {
     }
   }
 
-  /**
-   * Retorna la concatenación de las clases de tamaño (width y height) del dialog actual.
-   * Si alguna falta, sólo retorna la existente. Nunca retorna null; string vacío si no hay ninguna.
-   */
-  dialogSizeClass(type: any = this.typeDefault): string {
-    try {
-      const d = this.drawForm()[type]?.dialog || {};
-      return [d.width, d.height].filter(v => !!v).join(' ');
-    } catch (e) {
-      return 'width-850px-custom min-height-550px-custom';
-    }
-  }
 
   onChangeDropdown(e: any) {
     const field = e?.field;
@@ -2862,7 +2951,7 @@ export class CRUD extends Vars /*implements OnInit*/ {
 
 
 /**<p-dialog [(visible)]="formDialogVisible[$any(+++++)]" (onHide)="onHide($any(+++++))"
-  (onShow)="onShow($any(+++++))" [styleClass]="dialogSizeClass(+++++)" modal="true">
+  (onShow)="onShow($any(+++++))" [styleClass]="styleClassDialog()" modal="true">
 
   <ng-template #header>
     <div class="p-dialog-title">

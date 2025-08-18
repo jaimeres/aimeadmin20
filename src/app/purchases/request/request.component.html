@@ -23,7 +23,7 @@
 <app-custom-actions-selection [visible]="actionsSelectionDialogVisible" (visibleChange)="onVisibleChange($event)" />
 
 <p-dialog [(visible)]="formDialogVisible[$any(typeDefault)]" (onHide)="onHide($any(typeDefault))"
-  (onShow)="onShow($any(typeDefault))" [styleClass]="dialogSizeClass(typeDefault)" modal="true">
+  (onShow)="onShow($any(typeDefault))" [styleClass]="styleClassDialog()" modal="true">
 
   <ng-template #header>
     <div class="p-dialog-title">
@@ -56,7 +56,7 @@
 
               <app-custom-draw-form *ngIf="form()[$any(typeDefault)] && drawForm()[typeDefault]"
                 [drawForm]="drawForm()[typeDefault]['general']" [formGroup]="form()[$any(typeDefault)]"
-                [customField]="customField()[typeDefault]" (onSelectAutoCompleteAction)="onSelectAutoComplete($event)"
+                (onSelectAutoCompleteAction)="onSelectAutoComplete($event)"
                 (onChangeDropdownAction)="onChangeDropdown($event)"
                 (onNewIconDropdownAction)="onNewIconDropdown($event)"
                 (onReloadIconDropdownAction)="onReloadIconDropdown($event)"

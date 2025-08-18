@@ -47,6 +47,8 @@ declare type SurfacesType = {
     <p-drawer [(visible)]="visible" (onHide)="layoutService.hideConfigSidebar()" position="right" [transitionOptions]="'.3s cubic-bezier(0, 0, 0.2, 1)'" styleClass="layout-config-sidebar w-80" header="Settings">
       <div class="flex flex-col gap-4">
         <div>
+
+        -----------------
           <span class="text-lg font-semibold">Primary</span>
           <div class="pt-2 flex gap-2 flex-wrap">
             @for (primaryColor of primaryColors(); track primaryColor.name) {

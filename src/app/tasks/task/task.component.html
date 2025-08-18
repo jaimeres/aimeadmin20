@@ -42,8 +42,7 @@
           <p-tabpanel header="General">
 
             <app-custom-draw-form [drawForm]="drawForm()[$any(typeDefault)]['general']"
-              [formGroup]="form()[$any(typeDefault)]" [customField]="customField()[$any(typeDefault)]"
-              (onSelectAutoCompleteAction)="onSelectAutoComplete($event)"
+              [formGroup]="form()[$any(typeDefault)]" (onSelectAutoCompleteAction)="onSelectAutoComplete($event)"
               (onChangeDropdownAction)="onChangeDropdown($event)" (onNewIconDropdownAction)="onNewIconDropdown($event)"
               (onReloadIconDropdownAction)="onReloadIconDropdown($event)"
               (onChangeToggleAction)="onChangeToggle($event)" (onKeydownEnterTextAction)="onKeydownEnterText($event)"

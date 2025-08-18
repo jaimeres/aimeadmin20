@@ -19,8 +19,6 @@
         class="ml-auto" />
     </div>
   </ng-template> -->
-
-
   <ng-template #caption style="padding: 0 !important;">
 
     <div style="display: flex; align-items: center; justify-content: space-between; padding: 0;">
@@ -48,7 +46,7 @@
       </th>
       <th *ngFor="let col of columns" [pSortableColumn]="col.field">
         {{ col.header }}
-        <p-sortIcon [field]="col.field"></p-sortIcon>
+        <p-sortIcon *ngIf="col.sortable" [field]="col.field"></p-sortIcon>
       </th>
     </tr>
   </ng-template>

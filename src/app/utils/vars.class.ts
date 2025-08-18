@@ -1,7 +1,6 @@
-import { ChangeDetectorRef, Injectable, computed, inject, signal } from '@angular/core';
+import { computed, inject, signal } from '@angular/core';
 import { FormBuilder, FormGroup } from '@angular/forms';
 import { ConfirmationService, MenuItem } from 'primeng/api';
-import { ConfigService } from 'src/app/auth/services/config.service';
 import { MessageService } from '@/components/services/message.service';
 import { CRUDService } from './services/crud.service';
 import { GeneralService } from './services/general.service';
@@ -16,7 +15,6 @@ import { SharedDynamicDataService } from './services/shared-dynamic-data.service
 export class Vars {
   protected fb: FormBuilder = inject(FormBuilder); // para crear el formulario
   protected messageS: MessageService = inject(MessageService); // para mostrar mensajes
-  protected configS: ConfigService = inject(ConfigService); // configuración del sistema
   protected generalS: GeneralService = inject(GeneralService); // funciones generales
   protected confirmationS: ConfirmationService = inject(ConfirmationService); // para confirmar acciones
   //protected classifierS: ClassifierService = inject(ClassifierService); // para clasificadores
@@ -500,7 +498,8 @@ export class Vars {
   public initialDisabledForm: { [key: string]: boolean } = {}; //
 
   // no tiene caso la opcion espacio en blanco ya que el usuario puede mover el tamaño
-  public drawForm = signal<any>({
+  public drawForm = signal<any>({});
+  public drawForm2 = signal<any>({
     unit: {
       //app
       dialog: {
@@ -1169,7 +1168,6 @@ export class Vars {
                 hide: false,
                 autofocus: false
               },
-
               39: {
                 //la estructura es personalizada y se genera en componente de los impuestos
                 class: 'col-span-12',
@@ -2668,6 +2666,37 @@ export class Vars {
             autofocus: false
           },
           24: {
+            "required": true,
+            "class": "col-span-6",
+            "class_md": "md:col-span-3",
+            "editable": false,
+            "input_editable": true,
+            "filter": true,
+            "filter_by": "name",
+            "type": "dropdown",
+            "hide": false,
+            "reload_icon": false,
+            "new_icon": false,
+            "closable_icon": false,
+            "autofocus": false,
+            "field": "subsidiary",
+            "default": {
+              "active": false,
+              "value": "",
+              "edit": true,
+              "result_position": "first",
+              "id": "",
+              "field_name": "name",
+              "field": "subsidiary",
+              "code": "",
+              "created_at": "",
+              "created_by": "",
+              "modified_by": "",
+              "status": "",
+              "modules": []
+            }
+          },
+          25: {
             class: 'col-span-12',
             class_md: 'md:col-span-12',
             field: 'description',
@@ -2675,7 +2704,7 @@ export class Vars {
             autofocus: false
           }
         }
-      }
+      },
     },
     maintenance: {
       dialog: {

@@ -11,6 +11,8 @@ export const appCanActivateGuardChild: CanActivateFn = (route, state) => {
   return authS.tokenValidate().pipe(
     take(1),
     map(valid => {
+      console.log('appCanActivateGuardChild::::::::::::::::::::::::::::', valid);
+
       if (!valid) {
         authS.redirectMP();
         return false;

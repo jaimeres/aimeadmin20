@@ -74,8 +74,9 @@ export class AppLayout implements OnDestroy {
     public renderer: Renderer2,
     public router: Router,
     private messageS: MessageService,
-    private cookieS: CookieService
+    private cookieS: CookieService,
   ) {
+    console.log('AppLayout initialized--------------------');
     this.overlayMenuOpenSubscription = this.layoutService.overlayOpen$.subscribe(() => {
       if (!this.menuOutsideClickListener) {
         this.menuOutsideClickListener = this.renderer.listen('document', 'click', (event) => {
@@ -182,5 +183,9 @@ export class AppLayout implements OnDestroy {
     this.messageS.showBlocked(false);
     this.cookieS.delete('refresh');
   }
+
+
+
+
 }
 

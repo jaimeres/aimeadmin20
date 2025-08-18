@@ -82,7 +82,7 @@ export class AssetComponent extends CRUD implements OnInit {
   public costCenter = signal<any[]>([]); //los centros de costo
 
   constructor(crudS: AssetService) {
-    super(crudS);
+    super(crudS, 'asset');
   }
 
   ngOnInit(): void {
@@ -121,13 +121,7 @@ export class AssetComponent extends CRUD implements OnInit {
     ]);
 
     //Inicializa los valores por defecto para completar las funciones crud del servicio
-    this.typeDefault = 'asset';
-    this.type[this.typeDefault] = this.typeDefault;
     this.app[this.typeDefault] = 'assets/asset';
-    this.singular[this.typeDefault] = 'activo';
-    this.plural[this.typeDefault] = 'activos';
-    this.singularIndefiniteArticle[this.typeDefault] = 'el activo';
-    this.pluralDefiniteArticle[this.typeDefault] = 'los activos';
     this.module[this.typeDefault] = 'A';
 
     this.excludeFieldsForm[this.typeDefault] = [

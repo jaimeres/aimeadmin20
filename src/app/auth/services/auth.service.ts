@@ -1,9 +1,9 @@
-import { Injectable } from '@angular/core';
+import { Injectable, signal } from '@angular/core';
 import { User } from '../../types/user';
 import { CookieOptions, CookieService } from 'ngx-cookie-service';
 import { environment } from '../../../environments/environment';
 import { HttpClient } from '@angular/common/http';
-import { catchError, map, Observable, of, tap } from 'rxjs';
+import { catchError, map, Observable, of, switchMap, tap } from 'rxjs';
 import { jwtDecode } from "jwt-decode";
 import { MessageService } from '../../components/services/message.service';
 import { Router } from '@angular/router';
@@ -17,6 +17,7 @@ export class AuthService {
   private _tokenRefresh: string = '';
   private _base_url: String = environment.base_url;
   private _loggedin: boolean = false;
+  private _config: any = {};
   private _cookieOptions: CookieOptions = {
     expires: 1, // la cookie expirará en 1 día
     path: '/', // la cookie solo puede ser leída por scripts cargados desde el camino raíz del sitio
@@ -29,9 +30,9 @@ export class AuthService {
   constructor(private http: HttpClient, private cookieS: CookieService, private messageS: MessageService, private router: Router) {
     // Solo se agrega una vez al inicializar el servicio
     window.addEventListener('unload', () => {
-      alert('Refrescando cookie...');
       this.refreshCookie();
     });
+
     this.messageS.currentLogin.subscribe(
       (resp: any) => {
         this.login(resp).subscribe({
@@ -50,8 +51,6 @@ export class AuthService {
    */
   redirectMP() {
     this.router.navigateByUrl('/ecommerce/product-list');
-    //window.location.href = environddment.mk_red;
-    //ya no deberia existir mk
   }
 
   /**Redireccionar a login */
@@ -104,7 +103,6 @@ export class AuthService {
   */
   tokenValidate(): Observable<boolean> {
 
-
     if (!this.refresh) {
       this.messageS.showLoginDialog();
       return of(false);
@@ -128,8 +126,24 @@ export class AuthService {
         this.refresh = resp.data.refresh;
         this.loggedin = true;
       }),
-      map(resp => {
-        return true
+      switchMap((resp: any) => {
+        // Si no existe config, consultar settings/me
+        if (!this._config || Object.keys(this._config).length === 0) {
+          return this.http.get(`${this._base_url}/settings/settings/me/`).pipe(
+            tap((config: any) => {
+              this.config = config; // Asignar la configuración
+            }),
+            map(() => true), // Retornar true para indicar éxito
+            catchError((configError) => {
+              console.warn('Warning: Could not load configuration after refresh:', configError);
+              // No fallar el refresh si la configuración falla, solo advertir
+              return of(true);
+            })
+          );
+        } else {
+          // Si ya existe config, solo retornar true
+          return of(true);
+        }
       }),
       catchError(resp => {
         this.messageS.changeMessage('Su sesión ha terminado');
@@ -151,7 +165,6 @@ export class AuthService {
    */
   tokenValidateInterceptor(): Observable<string> {
     console.log('tokenValidateInterceptor fiu llamado');
-    alert('tokenValidateInterceptor fiu llamado');
 
     if (!this.refresh) {
       this.messageS.showLoginDialog();
@@ -215,7 +228,25 @@ export class AuthService {
         this.refresh = resp.data.refresh; // dja
         this.loggedin = true;
       }),
-      map(resp => resp.data.user) // dja
+      switchMap((resp: any) => {
+        // Hacer llamada a configuración después del login exitoso
+        return this.http.get(`${this._base_url}/settings/settings/me/`).pipe(
+          tap((config: any) => {
+            this.config = config; // Guardar la configuración en el servicio
+
+          }),
+          map(() => resp.data.user), // Retornar el usuario original
+          catchError((configError) => {
+            console.warn('Warning: Could not load configuration after login:', configError);
+            // No fallar el login si la configuración falla, solo advertir
+            return of(resp.data.user);
+          })
+        );
+      }),
+      catchError((loginError) => {
+        // Manejar errores del login original
+        throw loginError;
+      })
     );
   }
 
@@ -319,5 +350,203 @@ export class AuthService {
       terms: 'Terminos',
     }
   }
+
+  get config(): any {
+    return this._config
+  }
+
+  set config(value: any) {
+    // Recorrer recursivamente la estructura de attributes
+
+    this._config = this.getCustomField(value?.data?.attributes);
+    console.log('Config::::::::', this._config);
+  }
+
+
+
+
+
+  /**
+   * Procesa la configuración de draw para una aplicación específica
+   * @param draw Objeto que contiene la configuración de draw
+   * @param fields Objeto que contiene los campos con su configuración detallada
+   * @param appKey Clave de la aplicación (clave2)
+   * @param customField Objeto donde se almacenará la configuración procesada
+   */
+  private processDrawConfig(draw: any, fields: any, appKey: string, customField: any): void {
+    if (!draw || typeof draw !== "object") return;
+
+    // Inicializar la estructura si no existe
+    if (!customField[appKey]) {
+      customField[appKey] = {};
+    }
+
+    // Inicializar draw si no existe
+    if (!customField[appKey]['draw']) {
+      customField[appKey]['draw'] = {};
+    }
+
+    // Procesar cada hijo de draw
+    for (const [drawKey, drawValue] of Object.entries(draw)) {
+      if (drawKey === 'dialog') {
+        // Dialog se pasa tal como viene
+        customField[appKey]['draw'][drawKey] = drawValue;
+      } else {
+        // Para el resto de hijos, procesar recursivamente
+        customField[appKey]['draw'][drawKey] = this.processDrawSection(drawValue, fields);
+      }
+    }
+  }
+
+  /**
+   * Procesa una sección de draw recursivamente hasta encontrar los objetos más profundos
+   * @param section Sección actual del draw
+   * @param fields Objeto fields para obtener la configuración de los campos
+   * @returns Objeto procesado con la configuración reemplazada
+   */
+  private processDrawSection(section: any, fields: any): any {
+    if (!section || typeof section !== "object") return section;
+
+    const result: any = {};
+
+    for (const [key, value] of Object.entries(section)) {
+      if (value && typeof value === "object") {
+        // Si el objeto tiene una propiedad 'field', es un objeto terminal
+        if ((value as any).hasOwnProperty('field')) {
+          const fieldName = (value as any).field;
+
+          // Buscar la configuración en fields y reemplazar el contenido
+          if (fields && fields[fieldName]) {
+            // Mantener algunas propiedades originales si existen
+            const originalField = value as any;
+            result[key] = {
+              ...fields[fieldName], // Configuración completa del campo desde fields
+              field: fieldName, // Asegurar que el field se mantiene
+              // Preservar propiedades específicas del draw original si existen
+              ...(originalField.class && { class: originalField.class }),
+              ...(originalField.class_md && { class_md: originalField.class_md }),
+              ...(originalField.autofocus !== undefined && { autofocus: originalField.autofocus }),
+              ...(originalField.hide !== undefined && { hide: originalField.hide }),
+              ...(originalField.random_name && { random_name: originalField.random_name })
+            };
+          } else {
+            // Si no se encuentra en fields, mantener el objeto original
+            result[key] = value;
+          }
+        } else {
+          // Si no tiene 'field', continuar navegando recursivamente
+          result[key] = this.processDrawSection(value, fields);
+        }
+      } else {
+        // Si no es un objeto, mantener el valor tal como está
+        result[key] = value;
+      }
+    }
+
+    return result;
+  }
+
+  /**
+   * Procesa la configuración de columnas para una aplicación específica
+   * @param cols Objeto que contiene la configuración de columnas
+   * @param appKey Clave de la aplicación (clave2)
+   * @param customField Objeto donde se almacenará la configuración procesada
+   */
+  private processColumnsConfig(cols: any, appKey: string, customField: any): void {
+    if (!cols || typeof cols !== "object") return;
+
+    // Inicializar la estructura si no existe
+    if (!customField[appKey]) {
+      customField[appKey] = {};
+    }
+
+    // Inicializar cols y config_cols si no existen
+    if (!customField[appKey]['cols']) {
+      customField[appKey]['cols'] = {};
+    }
+    if (!customField[appKey]['config_cols']) {
+      customField[appKey]['config_cols'] = {};
+    }
+
+    // Procesar todos los hijos de cols
+    for (const [claveHijo, hijo] of Object.entries(cols)) {
+      const hijoObj = hijo as any;
+
+      // Almacenar la etiqueta del campo
+      customField[appKey]['cols'][hijoObj['field']] = hijoObj['label'];
+
+      // Configuración de columnas (orden, visibilidad, ordenamiento)
+      customField[appKey]['config_cols'][hijoObj['field']] = {
+        'order': claveHijo,
+        'hide': hijoObj['hide'],
+        'sortable': hijoObj['sortable']
+      };
+    }
+  }
+
+  getCustomField(data: any): any {
+    if (!data || typeof data !== "object") return {};
+
+    console.log('originallllllllllllll', data);
+
+    // Declaración de customField con estructura que incluye cols, config_cols, draw, general, fields
+    const customField: {
+      [key: string]: {
+        cols?: { [field: string]: string };
+        config_cols?: { [field: string]: any };
+        draw?: any;
+        general?: any;
+        fields?: any;
+      }
+    } = {};
+
+    // 1er nivel: dinámico (addresses, assets, etc.)
+    for (const [clave1, nivel1] of Object.entries(data)) {
+      if (!nivel1 || typeof nivel1 !== "object") {
+        continue;
+      }
+
+      // 2º nivel: dinámico (accessory, asset, etc.)
+      for (const [clave2, nivel2] of Object.entries(nivel1)) {
+        if (!nivel2 || typeof nivel2 !== "object") {
+          continue;
+        }
+
+        // Inicializar la estructura para esta aplicación
+        if (!customField[clave2]) {
+          customField[clave2] = {};
+        }
+
+        // 3er nivel: verificar si existen las claves fijas 'cols', 'draw', 'general', 'fields'
+        const cols = (nivel2 as any)["cols"];
+        const draw = (nivel2 as any)["draw"];
+        const general = (nivel2 as any)["general"];
+        const fields = (nivel2 as any)["fields"];
+
+        // Procesar cols si existe
+        if (cols && typeof cols === "object") {
+          this.processColumnsConfig(cols, clave2, customField);
+        }
+
+        // Procesar draw si existe
+        if (draw && typeof draw === "object") {
+          this.processDrawConfig(draw, fields, clave2, customField);
+        }
+
+        // Agregar general directamente si existe
+        if (general && typeof general === "object") {
+          customField[clave2]['general'] = general;
+        }
+
+        // Agregar fields directamente si existe
+        if (fields && typeof fields === "object") {
+          customField[clave2]['fields'] = fields;
+        }
+      }
+    }
+
+    return customField;
+  }
+
 
 }
