@@ -1,4 +1,5 @@
 import { Component } from '@angular/core';
+import { CRUDService } from 'src/app/utils/services/crud.service';
 import { ActivatedRouteSnapshot, NavigationEnd, Router, RouterModule } from '@angular/router';
 import { BehaviorSubject } from 'rxjs';
 import { filter } from 'rxjs/operators';
@@ -20,7 +21,7 @@ interface Breadcrumb {
     .layout-breadcrumb-container {
       min-height: 2rem !important;
       height: 2rem !important;
-      padding: 0.25rem 0 !important;
+      padding: 0 !important;
     }
     
     .layout-breadcrumb {
@@ -42,7 +43,7 @@ interface Breadcrumb {
       align-items: center;
       height: 100%;
       margin: 0 !important;
-      padding: 0 0.25rem !important;
+      padding: 0 !important;
       font-size: 0.875rem;
     }
     
@@ -66,7 +67,7 @@ interface Breadcrumb {
     
     .app-config-mobile-button input {
       height: 2rem !important;
-      padding: 0.25rem 0.5rem !important;
+      padding: 0 0.5rem !important;
       font-size: 0.875rem !important;
     }
   `],
@@ -89,9 +90,9 @@ interface Breadcrumb {
       </ol>
     </nav>
     <div class="layout-breadcrumb-buttons" *ngIf="!isProductList()">
-      <button pButton pRipple type="button" icon="pi pi-cloud-upload" class="p-button-rounded p-button-text p-button-plain"></button>
-      <button pButton pRipple type="button" icon="pi pi-bookmark" class="p-button-rounded p-button-text p-button-plain"></button>
-      <button pButton pRipple type="button" icon="pi pi-power-off" class="p-button-rounded p-button-text p-button-plain"></button>
+      <ng-container *ngFor="let item of lastVisited">
+        <button pButton pRipple type="button" [icon]="item.icon" class="p-button-rounded p-button-text p-button-plain" [title]="item.name" (click)="router.navigateByUrl(item.url)"></button>
+      </ng-container>
     </div>
   `,
   host: {
@@ -103,14 +104,45 @@ export class AppBreadcrumb {
 
   readonly breadcrumbs$ = this._breadcrumbs$.asObservable();
 
-  constructor(private router: Router) {
-    this.router.events.pipe(filter((event) => event instanceof NavigationEnd)).subscribe((event) => {
+  public lastVisited: Array<{ icon: string; url: string; name: string }> = [];
+  constructor(public router: Router, private crudService: CRUDService) {
+    this.loadLastVisited();
+    this.router.events.pipe(filter((event) => event instanceof NavigationEnd)).subscribe((event: any) => {
       const root = this.router.routerState.snapshot.root;
       const breadcrumbs: Breadcrumb[] = [];
       this.addBreadcrumb(root, [], breadcrumbs);
 
+      // Extraer el parámetro 'pos' del query string
+      const urlSearchParams = new URLSearchParams(event.url.split('?')[1] || '');
+      let posParam = urlSearchParams.get('pos');
+      if (posParam) {
+        const key = posParam.replace(/-/g, '_');
+        const appTypeObj = this.crudService.appType[key as keyof typeof this.crudService.appType];
+        if (appTypeObj && breadcrumbs.length > 0) {
+          breadcrumbs[breadcrumbs.length - 1].label += ` / ${appTypeObj.name}`;
+          this.saveLastVisited({
+            icon: appTypeObj.icon,
+            url: event.url,
+            name: appTypeObj.name
+          });
+        }
+      }
+
       this._breadcrumbs$.next(breadcrumbs);
     });
+  }
+
+  private saveLastVisited(item: { icon: string; url: string; name: string }) {
+    let history = JSON.parse(localStorage.getItem('lastVisited') || '[]');
+    history = history.filter((h: any) => h.url !== item.url);
+    history.unshift(item);
+    if (history.length > 5) history = history.slice(0, 5);
+    localStorage.setItem('lastVisited', JSON.stringify(history));
+    this.lastVisited = history;
+  }
+
+  private loadLastVisited() {
+    this.lastVisited = JSON.parse(localStorage.getItem('lastVisited') || '[]');
   }
 
   isProductList(): boolean {

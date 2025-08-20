@@ -23,12 +23,6 @@ export const appRoutes: Routes = [
         loadChildren: () => import('@/pages/uikit/uikit.routes')
       },
       {
-        path: 'documentation',
-        data: { breadcrumb: 'Documentation' },
-        canActivate: [appCanActivateGuardChild],
-        loadComponent: () => import('@/pages/documentation/documentation').then((c) => c.Documentation)
-      },
-      {
         path: 'pages',
         data: { breadcrumb: 'Pages' },
         canActivate: [appCanActivateGuardChild],

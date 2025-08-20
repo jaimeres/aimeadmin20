@@ -5,6 +5,7 @@ import { MessageService } from '@/components/services/message.service';
 import { CRUDService } from './services/crud.service';
 import { GeneralService } from './services/general.service';
 import { SharedDynamicDataService } from './services/shared-dynamic-data.service';
+import { Router } from '@angular/router';
 
 /**
   Contiene las declaraciones y las importaciones de curd 
@@ -296,7 +297,7 @@ export class Vars {
    * Los campos que contienen fechas y horas y que se deben formatear a la hora local
    */
 
-  protected timeZone: string[] = []; //['start_date', 'end_date', 'scheduled_date', 'required_date', 'expiration_date'];
+  protected timeZone: { [key: string]: string[] } = {}; // Permite asignar arrays por tipo
   public getTimeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
   /**
    * id, name, description
@@ -480,12 +481,12 @@ export class Vars {
   /**
    * contiene los clasificadores para cargar los combos, ya que es una consulta general para todos las apps
    */
-  public classifierLevelsGlobal = signal<any[]>([]);
+  //public classifierLevelsGlobal = signal<any[]>([]);
 
   /**
    * contiene los clasificadores para cargar los combos, ya que es una consulta general para todos las apps
    */
-  public classifiersGlobal = signal<any[]>([]);
+  //public classifiersGlobal = signal<any[]>([]);
 
   /**
    * Contiene os estados a nivel global

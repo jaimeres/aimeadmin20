@@ -11,22 +11,17 @@ import { AuthService } from '../../auth/services/auth.service';
 })
 export class CRUDService {
 
-
   protected _base_url: String = environment.base_url;
   public type: string = '';
   public app: string = '';
   public relationships: any[] = [];
 
-  // Cache estático compartido para todas las instancias
-
   /**
    * Indica si el recurso contiene archivos.
    */
   public file: boolean = false;
-
   protected configS: ConfigService = inject(ConfigService);
   protected http: HttpClient = inject(HttpClient);
-  //protected messageS: MessageService = inject(MessageService);
   public generalS: GeneralService = inject(GeneralService);
   public authS = inject(AuthService);
 
@@ -34,103 +29,152 @@ export class CRUDService {
    * Contiene el app y el type para consumir el servicio de la API, debe ser la misma que la posición de cada app
    * #por seguridad se crea este diccinario para que solo se ponga la clave en el servidor
    */
-  appType = {
+  public readonly appType = {
     "unit": {
       "app": "units/unit",
       "type": "unit",
+      "name": "Unidades",
+      "icon": "pi pi-box"
     },
     "currency": {
       "app": "currencies/currency",
       "type": "currency",
+      "name": "Monedas",
+      "icon": "pi pi-dollar"
     },
     "group": {
       "app": "companies/group",
       "type": "group",
+      "name": "Grupos",
+      "icon": "pi pi-sitemap"
     },
     "company": {
       "app": "companies/company",
       "type": "company",
+      "name": "Empresas",
+      "icon": "pi pi-building"
     },
     "subsidiary": {
       "app": "companies/subsidiary",
       "type": "subsidiary",
+      "name": "Sucursales",
+      "icon": "pi pi-home"
     },
     "warehouse": {
       "app": "companies/warehouse",
       "type": "warehouse",
+      "name": "Almacenes",
+      "icon": "pi pi-warehouse"
     },
     "rack": {
       "app": "companies/rack",
       "type": "rack",
+      "name": "Racks",
+      "icon": "pi pi-th-large"
     },
     "section": {
       "app": "companies/section",
       "type": "section",
-    },
-    "asset": {
-      "app": "assets/asset",
-      "type": "asset",
+      "name": "Secciones",
+      "icon": "pi pi-grid"
     },
     "supplier": {
       "app": "suppliers/supplier",
       "type": "supplier",
+      "name": "Proveedores",
+      "icon": "pi pi-truck"
     },
     "product": {
       "app": "products/product",
       "type": "product",
+      "name": "Productos",
+      "icon": "pi pi-shopping-bag"
     },
     "base_product": {
       "app": "products/base-product",
       "type": "base-product",
+      "name": "Productos Base",
+      "icon": "pi pi-clone"
     },
-
     "purchase_unit": {
       "app": "products/unit",
       "type": "unit",
+      "name": "Unidades de Compra",
+      "icon": "pi pi-shopping-cart"
     },
     "status": {
       "app": "status/status",
       "type": "status",
+      "name": "Estados",
+      "icon": "pi pi-flag"
     },
     "file_type": {
       "app": "files/file-type",
       "type": "file-type",
+      "name": "Tipos de Archivo",
+      "icon": "pi pi-file"
+    },
+    "asset": {
+      "app": "assets/asset",
+      "type": "asset",
+      "name": "Activos",
+      "icon": "pi pi-desktop"
+    },
+    "maintenance": {
+      "app": "assets/maintenance",
+      "type": "maintenance",
+      "name": "Mantenimiento",
+      "icon": "pi pi-wrench"
     },
     "asset_type": {
       "app": "assets/asset-type",
       "type": "asset-type",
+      "name": "Tipos de Activos",
+      "icon": "pi pi-tags"
     },
     "capacity_type": {
       "app": "assets/capacity-type",
       "type": "capacity-type",
+      "name": "Tipos de Capacidad",
+      "icon": "pi pi-chart-bar"
     },
     "asset_other": {
       "app": "assets/asset-other",
       "type": "asset-other",
+      "name": "Otros Activos",
+      "icon": "pi pi-ellipsis-h"
     },
     "asset_document": {
       "app": "assets/asset-document",
       "type": "asset-document",
+      "name": "Documentos de Activos",
+      "icon": "pi pi-file-pdf"
     },
     "person": {
       "app": "persons/person",
-      "type": "person"
+      "type": "person",
+      "name": "Personas",
+      "icon": "pi pi-user"
     },
     "contact": {
       "app": "contacts/contact",
-      "type": "contact"
+      "type": "contact",
+      "name": "Contactos",
+      "icon": "pi pi-address-book"
     },
     "user": {
       "app": "users/local-user",
-      "type": "user"
+      "type": "user",
+      "name": "Usuarios",
+      "icon": "pi pi-users"
     },
     "movement_type": {
       "app": "inventories/movement-type",
       "type": "movement-type",
+      "name": "Tipos de Movimiento",
+      "icon": "pi pi-arrows-alt"
     }
-
-  }
-
+  };
 
   config_cols(module: string) {
     return this.authS.config[module]['config_cols']
@@ -138,7 +182,6 @@ export class CRUDService {
 
   drawForm(module: string) {
     return this.authS.config[module]['draw'];
-
   }
 
   /**
@@ -147,7 +190,7 @@ export class CRUDService {
   public customField = signal<any>({
     // la idea es que se puede obtner del servicio de configuracion, que a su vez se obtiene del servidor, 
     // la idea es que tome los valores por defecto o configurados por el usuario
-    ...this.configS.is_activeCF(this.type ?? ''),
+    /*...this.configS.is_activeCF(this.type ?? ''),
     ...this.configS.nameCF(this.type),
     ...this.configS.is_defaultCF(this.type),
     ...this.configS.is_requiredCF(this.type),
@@ -161,7 +204,7 @@ export class CRUDService {
     ...this.configS.contactCF(this.type),
     ...this.configS.photoCF(this.type),
     ...this.configS.configurationCF(this.type),
-    ...this.configS.dateCF(this.type),
+    ...this.configS.dateCF(this.type),*/
   });
 
   baseUrl(app: string = '') {

@@ -7,6 +7,7 @@ import { CRUD } from '../../utils/crud.class';
 import { AssetService } from '../services/asset.service';
 import { ConfirmationService, PRIME_MODULES } from '../../shared/primeng.index';
 import { LOCAL_BASE } from '../../shared/components.index';
+import { MenuItem } from 'primeng/api';
 
 @Component({
   selector: 'app-asset',
@@ -24,6 +25,39 @@ import { LOCAL_BASE } from '../../shared/components.index';
   providers: [ConfirmationService]
 })
 export class AssetComponent extends CRUD implements OnInit {
+
+
+  override openNewMenu = signal<MenuItem[]>([{
+    label: 'Activo',
+    command: () => this.openNew({ pos: 'asset' })
+  },
+  {
+    label: 'Tipo de activo',
+    command: () => this.openNew({ pos: 'asset-type' })
+  },
+  {
+    label: 'Tipo de capacidad',
+    command: () => this.openNew({ pos: 'capacity-type' })
+  }, {
+    label: 'Documento',
+    command: () => this.openNew({ pos: 'asset-document' })
+  }
+  ]);
+
+  override getMenu = signal<MenuItem[]>([{
+    label: 'Activos',
+    command: () => this.getAll({ pos: 'asset' })
+  }, {
+    label: 'Tipos de activo',
+    command: () => this.getAll({ pos: 'asset-type' }),
+  }, {
+    label: 'Tipos de capacidad',
+    command: () => this.getAll({ pos: 'capacity-type' })
+  }, {
+    label: 'Documentos',
+    command: () => this.getAll({ pos: 'asset-document' })
+  }
+  ]);
 
   drawAccessorySignal = signal<any>({
     //app
@@ -87,47 +121,16 @@ export class AssetComponent extends CRUD implements OnInit {
 
   ngOnInit(): void {
 
-    this.openNewMenu.set([{
-      label: 'Activo',
-      command: () => this.openNew()
-    },
-    {
-      label: 'Tipo de activo',
-      command: () => this.openNew({ pos: 'asset-type' })
-    },
-    {
-      label: 'Tipo de capacidad',
-      command: () => this.openNew({ pos: 'capacity-type' })
-    }, {
-      label: 'Documento',
-      command: () => this.openNew({ pos: 'asset-document' })
-    }
-    ]);
 
-    // consultas
-    this.getMenu.set([{
-      label: 'Activos',
-      command: () => this.getAll({ pos: 'asset' })
-    }, {
-      label: 'Tipos de activo',
-      command: () => this.getAll({ pos: 'asset-type' }),
-    }, {
-      label: 'Tipos de capacidad',
-      command: () => this.getAll({ pos: 'capacity-type' })
-    }, {
-      label: 'Documentos',
-      command: () => this.getAll({ pos: 'asset-document' })
-    }
-    ]);
 
     //Inicializa los valores por defecto para completar las funciones crud del servicio
+    this.typeDefault = 'asset';
     this.app[this.typeDefault] = 'assets/asset';
     this.module[this.typeDefault] = 'A';
 
     this.excludeFieldsForm[this.typeDefault] = [
       { field: 'classifiers', default: this.fb.array([]), reemplace: true },
     ];
-
     this.excludeFieldsCols[this.typeDefault] = [
       { field: 'other' },
     ];

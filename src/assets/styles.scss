@@ -124,8 +124,8 @@ p-dialog .p-button-icon-only.p-button-rounded {
 
 .min-height-550px-custom {
   min-height: 550px !important;
-  // min-height permite que el dialog se ajuste al contenido, tiene el inconveniente de que en view tab el dialogo va cambiando de tamaño
-  // dependiendo del contenido de cada pestaña
+  // min-height permite que el dialog se ajuste al contenido, tiene el inconveniente de que en view tab el dialogo 
+  //va cambiando de tamaño dependiendo del contenido de cada pestaña
 }
 
 .height-100px-custom {
@@ -159,6 +159,7 @@ p-dialog .p-button-icon-only.p-button-rounded {
 .height-500px-custom {
   height: 500px !important;
 }
+
 
 .height-550px-custom {
   height: 550px !important;

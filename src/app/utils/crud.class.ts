@@ -1,5 +1,6 @@
-import { computed, signal } from '@angular/core';
+import { computed, signal, effect, inject } from '@angular/core';
 import { FormArray, FormControl, FormGroup, Validators } from '@angular/forms';
+import { Router } from '@angular/router';
 import { MenuItem, TreeNode } from 'primeng/api';
 import { CRUDService } from './services/crud.service';
 import {
@@ -19,65 +20,53 @@ export class CRUD extends Vars /*implements OnInit*/ {
   public customField = computed(() => this.crudS.customField());
   // calcula el estilo del dialogo, cada vez que hay un cambio de aplicacion
 
-  //AQUI VOY VOTY A CAMBIAR dialogSizeClass Y ENL COSNTRUCTOR ASI COLO LOS VERSOSE
-  public styleClassDialog = computed(() => {
+  // Inyección directa del Router
+  protected router = inject(Router);
+
+  /*public styleClassDialog = computed(() => {
     const pos = this.pos() ?? 0;
     return this.dialogSizeClass();
-  });
-
-  // convierte pos de string a number para usar como índice de array
-  posNumber = computed(() => {
-    const pos = this.pos();
-    return pos ? parseInt(pos, 10) : 0;
-  });
-
-
-
-  // No usar inject() en clases base no decoradas. Usar DI por constructor en componentes decorados.
+  });*/
 
   constructor(protected override crudS: CRUDService, pos = '') {
     super(crudS);
-    this.drawForm()[pos] = this.crudS.drawForm(pos);
-    this.verboseDialog(pos);
-    this.commonSettings();
-    // va en el constructor para que se ejecute antes que el ngOnInit, para que no
-    //afecte si es llamado nuevamente en la clase hija
-  }
-  // en español las palabras "los" y "el" son artículos definidos, "un" y "una" son artículos
-  //indefinidos
 
-  initCRUD(options?: { node?: boolean; filter?: string }): void {
-    if (!options) {
-      options = {};
-    }
+    // Obtener pos de la URL si existe, si no usar el del constructor
+    const urlParams = new URLSearchParams(this.router.url.split('?')[1] || '');
+    const posFromUrl = urlParams.get('pos');
+    const finalPos = posFromUrl || pos;
+    this.changePos(finalPos);
+    this.commonSettings();
+  }
+
+  /**
+   * Inicializa la carga de datos
+   * @param options filtros iniciale de la consulta
+   */
+  initCRUD(options: { node?: boolean; filter?: string } = {}): void {
 
     const node = options.node ?? false;
     const filter = options.filter ?? '';
 
-    this.getAll({ pos: this.typeDefault, node, filter }); // carga los elementos al inicio
+    this.getAll({ pos: this.pos(), node, filter }); // carga los elementos al inicio
     this.configForm = this.fb.group({
       columns: [this.selectedColumns().map((column: any) => column.field), [Validators.required]]
     });
-    this.getClassifierLevelsGlogal();
-    this.getClassifierGlobal();
+    //this.getClassifierLevelsGlogal();
+    //this.getClassifierGlobal();
     this.searchRemote = undefined;
   }
 
-  verboseDialog(pos: string) {
-    this.typeDefault = pos;
-    this.type[this.typeDefault] = this.typeDefault;
-    this.singular[this.typeDefault] = this.drawForm()[pos]['dialog'].singular;
-    this.plural[this.typeDefault] = this.drawForm()[pos]['dialog'].plural;
-    this.singularIndefiniteArticle[this.typeDefault] = this.drawForm()[pos]['dialog'].singularIndefiniteArticle;
-    this.pluralDefiniteArticle[this.typeDefault] = this.drawForm()[pos]['dialog'].pluralDefiniteArticle;
+  initApp(pos: string, drawFormData: any) {
+    // en español las palabras "los" y "el" son artículos definidos, "un" y "una" son artículos indefinidos
+    this.type[pos] = pos;
+    this.singular[this.type[pos]] = drawFormData['dialog'].singular;
+    this.plural[this.type[pos]] = drawFormData['dialog'].plural;
+    this.singularIndefiniteArticle[this.type[pos]] = drawFormData['dialog'].singularIndefiniteArticle;
+    this.pluralDefiniteArticle[this.type[pos]] = drawFormData['dialog'].pluralDefiniteArticle;
   }
 
-  dialogSizeClass() {
-    if (!this.drawForm()[this.pos()]) {
-      this.drawForm()[this.pos()] = this.crudS.drawForm(this.pos());
-    }
-    const drawFormData = this.drawForm()[this.pos()];
-
+  dialogSizeClass(drawFormData: any): string {
     // Verificar que drawFormData existe y tiene dialog
     if (!drawFormData || !drawFormData['dialog']) {
       return 'width-650px-custom min-height-550px-custom'; // Valores por defecto
@@ -129,6 +118,8 @@ export class CRUD extends Vars /*implements OnInit*/ {
     //actualización, pero supongo que da lo mismo
   }
 
+  styleClassDialog = signal<string>('width-650px-custom min-height-550px-custom');
+
   /**
    * Identifica si se campio de app e inicializa los valores correnpondientes
    * @param pos nombre de la app/posición
@@ -137,13 +128,35 @@ export class CRUD extends Vars /*implements OnInit*/ {
     //||| pos this.pos() se debe inicializar aqui
 
     this.pos.set(pos);
+    if (!this.drawForm()[pos]) {
+      const drawForm = this.crudS.drawForm(pos);
+      this.drawForm()[pos] = drawForm;
+      this.initApp(pos, drawForm);
+    }
+
     const safePos = pos ?? 0; // Crear una variable segura para usar como índice
     this.crudS.type = this.type[safePos];
     this.crudS.app = this.app[safePos];
 
     if (this.posBefore != pos) {
+
+      // Actualizar la URL con el parámetro pos
+      if (this.router && pos) {
+        const currentUrl = this.router.url;
+        const urlWithoutParams = currentUrl.split('?')[0];
+        const newUrl = `${urlWithoutParams}?pos=${pos}`;
+        this.router.navigateByUrl(newUrl);
+      }
+
+
       this.removeColumns.set(this.itemsRemove[safePos] || this.itemsRemove[0]);
       this.cols.set((this.columns[safePos] || []) as any);
+
+      // Asegurar que dialogSizeClass devuelve un string válido
+      const dialogClass = this.dialogSizeClass(this.drawForm()[pos]);
+      this.styleClassDialog.set(dialogClass || 'width-650px-custom min-height-550px-custom');
+      /*const pos_shareable = pos.toString().replace(/-/g, '_');
+      this.crudS.registerVisit(pos_shareable);*/
 
       // no utilizo directamente this.cols() al enviar la columna porque this.fieldConfig() es un objecto de varios valores,
       // y en este caso solo estoy inicializando la propiedad cols de objecto this.fieldConfig()
@@ -152,19 +165,7 @@ export class CRUD extends Vars /*implements OnInit*/ {
       //por lo tanto podria no utilizar el objecto
       this.fieldExport().cols = this.cols();
       this.iniParam();
-    } /*else{
-            //verifica si on lñas mismas columnas this.cols() == this.columns[pos]
-            //si no son las mismas columnas, se debe inicializar this.cols() con this.columns[pos]
-            
-            //en algunos casos cuando se llama changePos
-            if (this.cols() != this.columns[pos]){
-                
-                this.cols.set(this.columns[pos]);
-                this.fieldConfig().cols = this.cols();
-                this.fieldExport().cols = this.cols();
-                this.iniParam();
-            }
-        }*/
+    }
     if (this.columns[safePos]) {
       //aveces cuanso se llama a changePos todavia no hay this.columns[pos], si ese es el caso
       //no actualiza tthis.posBefore para que en la nueva llamada que ya aya columnas, se actualice
@@ -206,7 +207,6 @@ export class CRUD extends Vars /*implements OnInit*/ {
   searchByKeyObject(field: string, objs: any = {}, deleteFlag?: boolean) {
     if (objs.hasOwnProperty(field)) {
       const foundObject = objs[field];
-      //alert(field)
       if (deleteFlag) {
         delete objs[field];
       }
@@ -395,6 +395,9 @@ export class CRUD extends Vars /*implements OnInit*/ {
    * @returns {number} - El índice del valor en el array, o -1 si no se encuentra.
    */
   searchByValue(value: any, values: any[], deleteVal = true) {
+    if (!Array.isArray(values)) {
+      return -1;
+    }
     const index = values.indexOf(value);
     if (index !== -1 && deleteVal) {
       values.splice(index, 1);
@@ -650,7 +653,7 @@ export class CRUD extends Vars /*implements OnInit*/ {
 
           //agregar __text a los fieldObj.type == 'DateTime' para que se muestre la fecha en la tabla siempre y cuando existan en this.timeZone
           // usando la funcion searchByValue
-        } else if (fieldObj.type == 'DateTime' && this.searchByValue(field, this.timeZone, false) !== -1) {
+        } else if (fieldObj.type == 'DateTime' && this.searchByValue(field, this.timeZone[pos], false) !== -1) {
           columnObj = { field: field_prefix + field + '__text', header: this.customField()[pos][field_relationship + field] + ' ' + header_prefix, /*sortable: true*/ };
         } else {
           columnObj = { field: field_prefix + field, header: this.customField()[pos][field_relationship + field] + header_prefix, /*sortable: true*/ };
@@ -808,7 +811,7 @@ export class CRUD extends Vars /*implements OnInit*/ {
    */
   getAll(options: getAllOptions = {}) {
     // para que las apps principales no tengan que poner la tipo en cada llamada
-    let { pos = this.typeDefault, node = false, filter = '', force = false } = options;
+    let { pos, node = false, filter = '', force = false } = options;
     //console.log('inicio getAll----------------------------', filter, options);
 
     const safePos = pos as any; // Type assertion para índices de array
@@ -819,7 +822,7 @@ export class CRUD extends Vars /*implements OnInit*/ {
     } else {
       // si ya se consulto al servidor, no se vuelve a consultar
       if (this.optionsFields[safePos]) {
-        console.log('getAll if');
+        //console.log('getAll if');
 
         this.columns[safePos] = this.generateJSONColumns(this.optionsFields[safePos]);
         this.getAll2({ pos: safePos, node, filter, force });
@@ -829,7 +832,7 @@ export class CRUD extends Vars /*implements OnInit*/ {
         this.showBlocked();
         this.crudS.options(app).subscribe({
           next: (resp: any) => {
-            console.log('getAll else');
+            //console.log('getAll else');
 
             this.optionsFields[safePos] = resp.data.actions.POST;
             this.columns[safePos] = this.generateJSONColumns(this.optionsFields[safePos]);
@@ -843,9 +846,8 @@ export class CRUD extends Vars /*implements OnInit*/ {
   }
 
   getAll2(options: getAllOptions = {}) {
-    let { pos = null, node = false, filter = null, force = false } = options;
+    let { pos, node = false, filter = null, force = false } = options;
     //console.log('inicio getAll2', filter, this.pos());
-    pos = pos || this.typeDefault;
     const safePos = pos as any; // Type assertion para índices de array
 
     //lo limpio porque donde las app que combinan valores copn node y sin node,
@@ -905,7 +907,7 @@ export class CRUD extends Vars /*implements OnInit*/ {
    */
   getAllSecundary(options: getAllSecundaryOptions = {}) {
     // para que las apps principales no tengan que poner la tipo en cada llamada
-    let { pos = this.typeDefault, node = false, filter = '', force = false, sort = '', fields = '', include = '', app = '', type = '' } = options;
+    let { pos, node = false, filter = '', force = false, sort = '', fields = '', include = '', app = '', type = '' } = options;
 
     const safePos = pos as any; // Type assertion para índices de array
 
@@ -937,7 +939,7 @@ export class CRUD extends Vars /*implements OnInit*/ {
   }
 
   getAll2Secundary(options: getAllSecundaryOptions = {}) {
-    let { pos = this.typeDefault, node = false, filter = null, force = false, sort = null, fields = null, include = '', app = null, type = null } = options;
+    let { pos, node = false, filter = null, force = false, sort = null, fields = null, include = '', app = null, type = null } = options;
 
     const safePos = pos as any; // Type assertion para índices de array
     this.showBlocked(); // muestra el bloqueo de la pantalla
@@ -1117,13 +1119,7 @@ export class CRUD extends Vars /*implements OnInit*/ {
         const data = this.DJAtoObject({ resp, additionalFieldsAppCols });
 
         //obtener los campos classifers del formulario form()
-        // if (this.classifierFormGen) {
         this.classifierLevelsDropdown(data);
-        // }else{
-        //   this.resetFormDialog(data);
-        //   this.selected.set([]);
-        //   this.selected()[0] = data;
-        // }
       },
       error: (err: any) => {
         this.showBlocked(false);
@@ -1156,7 +1152,7 @@ export class CRUD extends Vars /*implements OnInit*/ {
    * @param node true para convertir el formato para node
    */
   openNew(options?: { pos?: string | null; node?: boolean; filter?: string }) {
-    const pos: any = options?.pos ?? this.typeDefault;
+    const pos: any = options?.pos ?? this.pos();
     const node = options?.node ?? false;
     const filter = options?.filter ?? '';
 
@@ -1467,7 +1463,7 @@ export class CRUD extends Vars /*implements OnInit*/ {
    * @param pos Posición de la app en el array
    */
   commonVisibilityDialog(options: any) {
-    const { pos = this.typeDefault, hide = true, reset = true, is_file = false, node = false, selected = null, update_item = true } = options;
+    const { pos, hide = true, reset = true, is_file = false, node = false, selected = null, update_item = true } = options;
 
     // cuando hide es true, se cierra el dialogo, cuando es false, se deja abierto para crear otro elemento
     if (hide) {
@@ -1495,7 +1491,7 @@ export class CRUD extends Vars /*implements OnInit*/ {
   submitForm(options: saveOptions = {}) {
     //pepepepepep
 
-    const { pos = this.typeDefault, hide = true, reset = true, is_file = false, node = false, selected = null, update_item = true, data = null } = options;
+    const { pos, hide = true, reset = true, is_file = false, node = false, selected = null, update_item = true, data = null } = options;
 
     const safePos = pos as any; // Type assertion para índices de array
 
@@ -1581,7 +1577,7 @@ export class CRUD extends Vars /*implements OnInit*/ {
     this.enableForm();
   }
   file(options: saveOptions = {}) {
-    const { pos = this.typeDefault, hide = true, reset = true, is_file = false, node = false, selected = null, update_item = true, data = null } = options;
+    const { pos, hide = true, reset = true, is_file = false, node = false, selected = null, update_item = true, data = null } = options;
 
     const base64FilesPromises = [];
 
@@ -1617,7 +1613,7 @@ export class CRUD extends Vars /*implements OnInit*/ {
    * @param update_item true para actualizar el item de la app principal, false para no hacerlo
    */
   save(options: saveOptions = {}) {
-    const { pos = this.typeDefault, hide = true, reset = true, is_file = false, node = false, selected = null, update_item = true, data = null } = options;
+    const { pos, hide = true, reset = true, is_file = false, node = false, selected = null, update_item = true, data = null } = options;
 
     const safePos = pos as any; // Type assertion para índices de array
 
@@ -1670,7 +1666,7 @@ export class CRUD extends Vars /*implements OnInit*/ {
   }
 
   saveSecundary(options: saveOptions = {}) {
-    const { pos = this.typeDefault, hide = true, reset = true, is_file = false, node = false } = options;
+    const { pos, hide = true, reset = true, is_file = false, node = false } = options;
 
     const safePos = pos as any; // Type assertion para índices de array
 
@@ -2166,13 +2162,6 @@ export class CRUD extends Vars /*implements OnInit*/ {
   loadClassifiers(classifier_id: any, classifierLevel: any, i: any) {
     classifier_id = classifier_id.value;
     if (!classifier_id) return;
-    //let filter;
-    /*if (level === 1) {
-          filters = 'filter[classifier_level]=' + classifier_level_id;
-        } else {*/
-    //const  filter = `filter[classifier_level.level]=${(parseInt(level) + 1)}`;
-    //}
-    //console.log('inicio loadClassifiers');
 
     const filter = `filter[classifiers]=${classifier_id}`; //${(parseInt(level) + 1)}
     const app = 'classifiers/classifier';
@@ -2182,14 +2171,7 @@ export class CRUD extends Vars /*implements OnInit*/ {
 
     this.crudS.getObject({ include, fields, filter, app, type }).subscribe(
       (data: any) => {
-        // este  objecto es para que agregar campos adicionales al objecto principal desde la relación incluida
-        /*const fields_include = {
-                  'classifier_level': [
-                    { original_field: 'level', renamed_fields: 'level' },
-                    { original_field: 'classifier_type', renamed_fields: 'classifier_type' },
-                    { original_field: 'is_required', renamed_fields: 'is_required' },
-                  ]
-                };*/
+
         // los array vacios es para que DJAtoObject no tome los valores por default o de la app donde se estan cargado
         //los clasificadores y evitar iteraciones innecesarias
         //const classifiers = this.DJAtoObject(data, null, [], [], []);
@@ -2202,11 +2184,6 @@ export class CRUD extends Vars /*implements OnInit*/ {
         //let classifier_is_required = classifierLevel.classifier_is_required;
         let classifier_level_is_required = classifierLevel.is_required;
 
-        /*// en el nivel 1, no debe haber clasificadores anteriores, por lo que no se requiere
-                if (level > 0) {
-                  classifiers_is_required = this.classifiersGen()[classifier_type + 'p'][level + 'p'];
-                  //classifiers_is_required = classifiers_is_required.find((classifier) => classifier.id === classifier.value)
-                  }*/
 
         // Ya que al seleccionar el elemto solo envia el ID, tengo que filtrar this.classifiers para obtener el resto de los valires, sobre todo is_required
         const currentPos = this.pos();
@@ -2239,7 +2216,6 @@ export class CRUD extends Vars /*implements OnInit*/ {
         (this.messageS as any).changeMessage('Hay un error al cargar los clasificadores.', err, {});
       }
     );
-    //console.log('fin loadClassifiers');
   }
 
   /**
@@ -2291,11 +2267,9 @@ export class CRUD extends Vars /*implements OnInit*/ {
    * para los clasificadores que van en los documentos
    */
   classifierLevelsDropdown(data = null, pos: any = null) {
-    //console.log('inicio classifierLevelsDropdown');
 
     pos = pos || this.pos();
-    pos = pos ?? 0; // si no se envia pos, se asume que es la app principal
-
+    pos = pos ?? 0;
     if (this.classifierLevelsGen()[pos]) {
       this.unifyRestoreForm(data);
       return;
@@ -2305,51 +2279,12 @@ export class CRUD extends Vars /*implements OnInit*/ {
       return;
     }
 
-    //const filter = `filter[classifier_type]=${this.module[pos]}`;
-    //const sort = 'classifier_type, level';
-    //const app = 'classifiers/classifier-level';
-
     const include = 'classifier_level';
     const filter = `filter[classifier_level.classifier_type]=${this.module[pos]}`; //'filter[classifier_level.classifier_type.in]=' + classifiers_type
     const fields = 'classifier_level,name,is_required';
     const app = 'classifiers/classifier';
     const type = 'classifier';
-    //return this.crudS.get(include, filter, '', fields, '', 'classifiers/classifier', 'classifier');
 
-    ///////////TEMPORAL
-    // una vez que el seagreguen los campos de los clasificadores, se restablece el formulario
-    //this.unifyRestoreForm(data);
-
-    /*const filters = 'filter[app_classifier_type]=P';
-        const sort = 'app_classifier_type';
-        const apps = 'classifiers/app-classifier-type';
-
-        this.crudS.get('classifier_level', filters, sort, '', '', apps).pipe(
-            map((app_classifier_type: any) => {
-
-                let classifiers_type = '';
-                // busca por classifier_level entre app_classifier_type y classifier_level, para encontrar el classifier_type de classifier_level,
-                // solo busco los classifier_type de los app_classifier_type que tienen classifier_level
-                for (let data of app_classifier_type?.data) {
-                    const id_classifier_level = data.relationships.classifier_level.data.id;
-                    for (let included of app_classifier_type.included) {
-                        if (included.id === id_classifier_level) {
-                            classifiers_type += included.attributes.classifier_type + ',';
-                            break;
-                        }
-                    }
-                }
-                return classifiers_type.slice(0, -1);
-            }),
-
-            // Me traigo los clasificadores del primer nivel
-            switchMap((classifiers_type: any) => {
-                const include = 'classifier_level';
-                const filter = 'filter[classifier_level.classifier_type.in]=' + classifiers_type// + '&filter[classifier_level.level]=1'
-                const fields = 'classifier_level,name,is_required';
-                return this.crudS.get(include, filter, '', fields, '', 'classifiers/classifier', 'classifier');
-            })
-        ).*/
     this.crudS
       .getObject({ include, filter, fields, app, type })
       .pipe()
@@ -2460,13 +2395,7 @@ export class CRUD extends Vars /*implements OnInit*/ {
           this.messageS.changeMessage(`Hay un error al cargar los clasificadores.`, err);
         }
       });
-    //console.log('fin classifierLevelsDropdown');
   }
-
-  //cuando se expande agrega los hijos al array por eso tengo que filtrar
-  // nodeSelect(event) {
-  //   this.selectClassifierLevelTreeTable = this.selectClassifierLevelTreeTable.filter(selec => !selec.parent);
-  // }
 
   onTabChange(e: any) {
     const tab = e.originalEvent.target.innerText;
@@ -2475,150 +2404,6 @@ export class CRUD extends Vars /*implements OnInit*/ {
       // deberia existir una variable que le indique al componende de documentos app que se ingreso a la pestaña de documentos
       //para que sean cargados los documentos en lugar de que se acrguen cada vez que se abre el dialogo
     }
-  }
-
-  /**
-   * es especial, por lo regular se usa para obtener los datos de un combo de los niveles de clasificadores, ya que es comun para
-   * todas las apps, lo puedo utilizar en todos los que im´plementen el servicio
-   * @param filter_id filtro para obtener los niveles de clasificadores
-   */
-  getClassifierLevelsGlogal(options: levelsOptions = {}) {
-    //°°° se tiene que recargar por cada creacion de cada nivel clasificador
-    const { filter_id = [], filter_level = [], filter_app = [], force = false } = options;
-
-    //console.log('inicio getClassifierLevelsGlogal');
-
-    // si se envia filter_id y force es falso, es porque se quiere filtrar classifierLevelsGlobal, no se colsulta al servidor,
-    // y los id deben enviarse en filter en forma de array
-    if (!force && filter_id.length > 0) {
-      return this.classifierLevelsGlobal().filter((item: any) => filter_id.includes(item.id));
-    }
-
-    // si se envia filter_level y force es falso, es porque se quiere filtrar classifierLevelsGlobal, no se colsulta al servidor,
-    // y los niveles deben enviarse en filter en forma de array
-    if (!force && filter_level.length > 0) {
-      return this.classifierLevelsGlobal().filter((item: any) => filter_level.includes(item.level));
-    }
-
-    // si se envia filter_app y force es falso, es porque se quiere filtrar classifierLevelsGlobal, no se colsulta al servidor,
-    // y los niveles deben enviarse en filter en forma de array
-    if (!force && filter_app.length > 0) {
-      return this.classifierLevelsGlobal().filter((item: any) => filter_app.includes(item.app));
-    }
-
-    if (!force && this.classifierLevelsGlobal().length > 0) return null;
-
-    this.messageS.showBlocked();
-
-    let return_filter: any = null;
-
-    this.crudS.getObject({ sort: 'classifier_type,level', app: 'classifiers/classifier-level', type: 'classifier-level' }).subscribe({
-      next: (resp: any) => {
-        const data = this.DJAtoObject({
-          resp: resp,
-          fieldsBool: null,
-          moreFields: null
-        });
-
-        this.classifierLevelsGlobal.set(data);
-
-        // mismo caso pero el filtro se hace despues de que se cargan los datos
-        if (force && filter_id.length > 0) {
-          return_filter = this.classifierLevelsGlobal().filter((item: any) => filter_id.includes(item.id));
-        }
-
-        // mismo caso pero el filtro se hace despues de que se cargan los datos
-        if (force && filter_level.length > 0) {
-          return_filter = this.classifierLevelsGlobal().filter((item: any) => filter_level.includes(item.level));
-        }
-
-        // mismo caso pero el filtro se hace despues de que se cargan los datos
-        if (force && filter_app.length > 0) {
-          return_filter = this.classifierLevelsGlobal().filter((item: any) => filter_app.includes(item.app_classifier_type));
-        }
-
-        this.messageS.showBlocked(false);
-
-        // retorna el filtro si se envia, si no, retorna null
-        return return_filter;
-      },
-      error: (error: any) => {
-        this.messageS.changeMessage('Hay un error al cangar los clasificadores', error);
-      }
-    });
-    //console.log('fin getClassifierLevelsGlogal');
-
-    return null;
-  }
-
-  /**
-   * especial para obtener todos los clasificadores
-   */
-  getClassifierGlobal(options: classifierOptions = {}) {
-    //°°° se tiene que recargar por cada creacion de cada clasificador
-    const { filter_id = [], filter_level = [], level_id = [], force = false } = options;
-
-    //console.log('inicio getClassifierGlobal');
-
-    // si se envia filter_id y force es falso, es porque se quiere filtrar classifierLevelsGlobal, no se colsulta al servidor,
-    // y los id deben enviarse en filter en forma de array
-    if (!force && filter_id.length > 0) {
-      return this.classifiersGlobal().filter((item: any) => filter_id.includes(item.id));
-    }
-
-    // si se envia filter_level y force es falso, es porque se quiere filtrar classifierLevelsGlobal, no se colsulta al servidor,
-    // y los niveles deben enviarse en filter en forma de array
-    if (!force && filter_level.length > 0) {
-      return this.classifiersGlobal().filter((item: any) => filter_level.includes(item.level));
-    }
-
-    // si se envia level_id y force es falso, es porque se quiere filtrar classifierLevelsGlobal, no se colsulta al servidor,
-    // y los niveles deben enviarse en filter en forma de array
-    if (!force && level_id.length > 0) {
-      return this.classifiersGlobal().filter((item: any) => level_id.includes(item.classifier_level_id));
-    }
-
-    if (!force && this.classifiersGlobal().length > 0) return null;
-
-    this.messageS.showBlocked();
-
-    let return_filter: any = null;
-
-    this.crudS.getObject({ app: 'classifiers/classifier', type: 'classifier' }).subscribe({
-      next: (resp: any) => {
-        const data = this.DJAtoObject({
-          resp: resp,
-          fieldsBool: null,
-          moreFields: null
-        });
-        this.classifiersGlobal.set(data);
-
-        // mismo caso pero el filtro se hace despues de que se cargan los datos
-        if (force && filter_id.length > 0) {
-          return_filter = this.classifiersGlobal().filter((item: any) => filter_id.includes(item.id));
-        }
-
-        // mismo caso pero el filtro se hace despues de que se cargan los datos
-        if (force && filter_level.length > 0) {
-          return_filter = this.classifiersGlobal().filter((item: any) => filter_level.includes(item.level));
-        }
-
-        // mismo caso pero el filtro se hace despues de que se cargan los datos
-        if (force && level_id.length > 0) {
-          return_filter = this.classifiersGlobal().filter((item: any) => level_id.includes(item.classifier_level_id));
-        }
-        this.messageS.showBlocked(false);
-
-        // retorna el filtro si se envia, si no, retorna null
-        return return_filter;
-      },
-      error: (error: any) => {
-        this.messageS.changeMessage('Hay un error al cangar los clasificadores', error);
-      }
-    });
-    //console.log('fin getClassifierGlobal');
-
-    return null;
   }
 
   /**
@@ -2761,11 +2546,6 @@ export class CRUD extends Vars /*implements OnInit*/ {
   onImportSave(data: any) {
     const pos = this.pos();
 
-    //this.submitForm({ pos: this.pos(), data })
-
-    // const { pos = this.typeDefault, hide = true, reset = true,
-    //     is_file = false, node = false, selected = null, update_item = true, data = null } = options;
-
     this.isCreate = true; // para que no se muestre el boton de editar
     data.forEach((data: any) => {
       this.resetFormDialog({ selected: data.attributes });
@@ -2802,7 +2582,7 @@ export class CRUD extends Vars /*implements OnInit*/ {
    * searchFieldDrawForm('fieldName', 'formPosition', true);
    * ```
    */
-  searchFieldDrawForm(field: any, pos = this.typeDefault, del = false) {
+  searchFieldDrawForm(field: any, pos = this.pos(), del = false) {
     const safePos: any = pos ?? 0; // Asegura que pos sea un número válido, si no se envía, se usa 0
 
     const draw = this.drawForm()[safePos];
@@ -2942,93 +2722,9 @@ export class CRUD extends Vars /*implements OnInit*/ {
       fieldsBool: fieldsBool === null ? this.fieldsBool[safePos] || [] /*|| this.fieldsBool[0]*/ : fieldsBool,
       // si se envia el desde la funcion, se toma ese valor, si no se busca el valor de la app actual,
       moreFields: moreFields === null ? this.moreFields[safePos] : moreFields,
-      timeZone: this.timeZone,
+      timeZone: this.timeZone[safePos],
       node: node,
       additionalFieldsAppCols: additionalFieldsAppCols
     });
   }
 }
-
-
-/**<p-dialog [(visible)]="formDialogVisible[$any(+++++)]" (onHide)="onHide($any(+++++))"
-  (onShow)="onShow($any(+++++))" [styleClass]="styleClassDialog()" modal="true">
-
-  <ng-template #header>
-    <div class="p-dialog-title">
-      <span class="p-dialog-title-text">{{headerDialog()}}</span>
-      <button type="button" class="p-dialog-titlebar-icon p-link" (click)="configDialog()">
-        <i class="pi pi-spin pi-cog p-dialog-icon"></i>
-      </button>
-    </div>
-  </ng-template>
-  <form [formGroup]="form()[$any(+++++)]" *ngIf="form()[$any(+++++)]">
-
-    <p-tabs [scrollable]="true" value="0">
-
-      <p-tablist>
-        <p-tab value="0">General</p-tab>
-        <p-tab value="1">Clasificadores</p-tab>
-        <!-- <p-tab value="2">Responsable</p-tab> -->
-        <p-tab value="3">Auditoría</p-tab>
-        <p-tab value="4">Documentos</p-tab>
-      </p-tablist>
-
-      <p-tabpanels>
-
-        <p-tabpanel value="0">
-
-          <app-custom-draw-form *ngIf="form()[$any(+++++)] && drawForm()[+++++]"
-            [drawForm]="drawForm()[+++++]['general']" [formGroup]="form()[$any(+++++)]"
-            [customField]="customField()[+++++]" (onSelectAutoCompleteAction)="onSelectAutoComplete($event)"
-            (onChangeDropdownAction)="onChangeDropdown($event)" (onNewIconDropdownAction)="onNewIconDropdown($event)"
-            (onReloadIconDropdownAction)="onReloadIconDropdown($event)" (onChangeToggleAction)="onChangeToggle($event)"
-            (onKeydownEnterTextAction)="onKeydownEnterText($event)"
-            (onClosableIconDropdownAction)="onClosableIconDropdown($event)"
-            (onKeydownEnterNumberAction)="onKeydownEnterNumber($event)" />
-
-        </p-tabpanel>
-
-        <p-tabpanel header="Clasificadores" value="1">
-
-          <div formArrayName="classifiers" class="pt-3">
-            <div class="p-fluid grid separator-form-small pl-2"
-              *ngFor="let level of classifierLevelsGen()[$any(pos())];  let i = index">
-              <div class="field col-12 md:col-6">
-                <span class="p-float-label">
-                  <p-select styleClass="height-input-custom"
-                    [options]="classifierTypeByLevel(level.classifier_type + 'p',level.level + 'p', i)" optionValue="id"
-                    optionLabel="name" [formControlName]="funAuxFormClassifiers('formControlName',i)"
-                    (onChange)="loadClassifiers($event, level, i)" placeholder="." [showClear]="true">
-                  </p-select>
-                  <label for="dropdown">{{level.name | slice:0:29}}</label>
-                </span>
-              </div>
-            </div>
-          </div>
-
-        </p-tabpanel>
-
-        <!-- <p-tabpanel header="Responsable" value="1"> </p-tabpanel> -->
-
-        <p-tabpanel value="3">
-          <app-custom-audit [cf]="customField()[+++++]" [selected]="selected()" />
-        </p-tabpanel>
-
-        <p-tabpanel value="4">
-          <app-custom-documents [selected]="selected()" [type]="'+++++ asset-document'" [app]="'+++++ assets/asset-document'"
-            [filter]="'+++++ asset'" (newAction)="openNewSecundary('+++++ asset-document-asset')" />
-        </p-tabpanel>
-
-      </p-tabpanels>
-    </p-tabs>
-
-  </form>
-
-  <ng-template #footer>
-    <div class="p-dialog-footer">
-      <app-custom-button-footer (saveAction)="save({pos: ++++++})" (saveNotHideAction)="save({pos: +++++, hide:false})"
-        (resetFormAction)="resetFormDialog()" />
-    </div>
-  </ng-template>
-
-</p-dialog> */

@@ -61,7 +61,7 @@ export class GeneralService {
     let relationshipsResp = [];
     // genera el objeto relationships
     for (let relation of relationships) {
-      console.log('relationship', relation, relation.id, relation.field, relation.type);
+      //console.log('relationship', relation, relation.id, relation.field, relation.type);
 
       if (Array.isArray(relation.id)) {
         // si es un array de id, lo convierte en un array de objetos, para las relaciones m2m
@@ -657,7 +657,7 @@ export class GeneralService {
     this.latitude = position.coords.latitude;
     this.longitude = position.coords.longitude;
     this.sysTimeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
-    console.log('Ubicación actualizada con Capacitor:', this.latitude, this.longitude, this.sysTimeZone);
+    //console.log('Ubicación actualizada con Capacitor:', this.latitude, this.longitude, this.sysTimeZone);
   }
 
   // ***********************ADAPTADO PARA CAPACITOR*********************
@@ -686,7 +686,7 @@ export class GeneralService {
     this.latitude = pos.coords.latitude;
     this.longitude = pos.coords.longitude;
     this.sysTimeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
-    console.log('Ubicación actualizada:', this.latitude, this.longitude, this.sysTimeZone);
+    //console.log('Ubicación actualizada:', this.latitude, this.longitude, this.sysTimeZone);
   }
 
   // Devuelve el objeto con coordenadas y zona horaria
@@ -708,14 +708,14 @@ export class GeneralService {
           this.location$.next(this.getCoords());
         })
         .catch((err) => {
-          console.error('Error al refrescar ubicación con Capacitor:', err);
+          //console.error('Error al refrescar ubicación con Capacitor:', err);
           // Fallback a navegador nativo en caso de error
           navigator.geolocation.getCurrentPosition(
             (pos) => {
               this.updateCoords(pos);
               this.location$.next(this.getCoords());
             },
-            (fallbackErr) => console.error('Error al refrescar ubicación con navegador nativo:', fallbackErr)
+            (fallbackErr) => 1 //console.error('Error al refrescar ubicación con navegador nativo:', fallbackErr)
           );
         });
     }, 30000);
