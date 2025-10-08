@@ -88,7 +88,7 @@
 
         <p-tabpanel value="4">
           <app-custom-documents [selected]="selected()" [type]="'asset-document'" [app]="'assets/asset-document'"
-            [filter]="'asset'" (newAction)="openNewSecundary('asset-document-asset')" />
+            [filter]="'asset'" (newAction)="openNewSecundary({pos:'asset-document-asset'})" />
         </p-tabpanel>
 
       </p-tabpanels>
@@ -181,7 +181,6 @@
       <p-tabpanels>
 
         <p-tabpanel value="0">
-
           <app-custom-draw-form *ngIf="form()[$any('capacity-type')] && drawForm()['capacity-type']"
             [drawForm]="drawForm()['capacity-type']['general']" [formGroup]="form()[$any('capacity-type')]"
             (onSelectAutoCompleteAction)="onSelectAutoComplete($event)"
@@ -190,11 +189,9 @@
             (onKeydownEnterTextAction)="onKeydownEnterText($event)"
             (onClosableIconDropdownAction)="onClosableIconDropdown($event)"
             (onKeydownEnterNumberAction)="onKeydownEnterNumber($event)" />
-
         </p-tabpanel>
 
         <p-tabpanel header="Clasificadores" value="1">
-
           <div formArrayName="classifiers" class="pt-3">
             <div class="p-fluid grid separator-form-small pl-2"
               *ngFor="let level of classifierLevelsGen()[$any(pos())];  let i = index">
@@ -210,7 +207,6 @@
               </div>
             </div>
           </div>
-
         </p-tabpanel>
 
         <p-tabpanel value="3">
@@ -220,7 +216,7 @@
         <p-tabpanel value="4">
           <app-custom-documents [selected]="selected()" [type]="'capacity-type asset-document'"
             [app]="'capacity-type assets/asset-document'" [filter]="'capacity-type asset'"
-            (newAction)="openNewSecundary('capacity-type asset-document-asset')" />
+            (newAction)="openNewSecundary({pos:'capacity-type'})" />
         </p-tabpanel>
 
       </p-tabpanels>

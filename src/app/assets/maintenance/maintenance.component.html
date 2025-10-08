@@ -1,8 +1,9 @@
+{{this.generalS.getLocationSnapshot() | json}}
 <div style="position: absolute; z-index: 2;">
   <app-custom-button-crud (deleteAction)="delete()" (editAction)="edit()"
     (refreshAction)="getAll({ force: true, pos: pos() })" (newAction)="openNew({pos:pos()})"
     [moreOptions]="moreOptions()" [getMenu]="getMenu()" [openNewMenu]="openNewMenu()" [selected]="selected()"
-    [startMenu]="startMenu()" />
+    [startMenu]="startMenu()" (startAction)="setStatus($event)" />
 </div>
 
 <div class="table-fit-Custom">
@@ -56,7 +57,8 @@
             (onReloadIconDropdownAction)="onReloadIconDropdown($event)" (onChangeToggleAction)="onChangeToggle($event)"
             (onKeydownEnterTextAction)="onKeydownEnterText($event)"
             (onClosableIconDropdownAction)="onClosableIconDropdown($event)"
-            (onKeydownEnterNumberAction)="onKeydownEnterNumber($event)" />
+            (onKeydownEnterNumberAction)="onKeydownEnterNumber($event)" (files64Action)="onFiles64($event)"
+            (filesAction)="onFiles($event)" />
 
         </p-tabpanel>
 
@@ -98,9 +100,13 @@
 
   <ng-template #footer>
     <div class="p-dialog-footer">
-      <app-custom-button-footer (saveAction)="save({pos: typeDefault})"
-        (saveNotHideAction)="save({pos: typeDefault, hide:false})" (resetFormAction)="resetFormDialog()" />
+      <app-custom-button-footer (saveAction)="save({pos: typeDefault, is_file: true})"
+        (saveNotHideAction)="save({pos: typeDefault, hide:false, is_file: true})"
+        (resetFormAction)="resetFormDialog()" />
     </div>
   </ng-template>
 
 </p-dialog>
+
+
+<!-- <app-request [showComponent]="tasks_module['RE']" (closeDialog)="closeDialogRequest()"> </app-request> -->

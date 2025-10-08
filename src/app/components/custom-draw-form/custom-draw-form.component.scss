@@ -1,0 +1,16 @@
+/*
+Solo para inputnumber de este componente
+*/
+
+:host ::ng-deep p-inputnumber {
+  width: 100% !important;
+  max-width: 100% !important;
+  overflow: hidden;
+}
+
+:host ::ng-deep p-inputnumber .p-inputnumber-input {
+  width: 100% !important;
+  max-width: 100% !important;
+  box-sizing: border-box;
+  overflow-x: hidden;
+}

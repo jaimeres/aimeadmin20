@@ -1,8 +1,8 @@
 <div style="position: absolute; z-index: 2;">
   <app-custom-button-crud (deleteAction)="delete()" (editAction)="edit()"
     (refreshAction)="getAll({ force: true, pos: pos() })" (newAction)="openNew({pos:pos()})"
-    [moreOptions]="moreOptions()" [openNewMenu]="openNewMenu()" [getMenu]="getMenu()" [selected]="selected()"
-    [startMenu]="startMenu()" (startAction)="setStatus('I')" />
+    [moreOptions]="moreOptions()" [getMenu]="getMenu()" [openNewMenu]="openNewMenu()" [selected]="selected()"
+    [startMenu]="startMenu()" (startAction)="openNewSecundary({pos: 'task-detail', parent_id: 'task'})" />
 </div>
 
 <div class="table-fit-Custom">
@@ -22,9 +22,9 @@
 
 <app-custom-actions-selection [visible]="actionsSelectionDialogVisible" (visibleChange)="onVisibleChange($event)" />
 
-<!--de aqui para arriba es generico para todas las app y configura la app principal y los componente generales-->
+
 <p-dialog [(visible)]="formDialogVisible[$any(typeDefault)]" (onHide)="onHide($any(typeDefault))"
-  (onShow)="onShow($any(typeDefault))" styleClass="width-650px-custom width-550px-custom " modal="true">
+  (onShow)="onShow($any(typeDefault))" [styleClass]="styleClassDialog()" modal="true">
 
   <ng-template #header>
     <div class="p-dialog-title">
@@ -34,29 +34,128 @@
       </button>
     </div>
   </ng-template>
+  <form [formGroup]="form()[$any(typeDefault)]" *ngIf="form()[$any(typeDefault)]">
+    <p-tabs [scrollable]="true" [value]="tabVisible()">
 
-  <ng-template #content>
-    <form [formGroup]="form()[$any(typeDefault)]">
-      <p-tabs [scrollable]="true" (onChange)="onTabChange($event)">
-        <p-tabpanels>
-          <p-tabpanel header="General">
+      <p-tablist>
+        <p-tab [value]="0">General</p-tab>
+        <p-tab [value]="1">Clasificadores</p-tab>
+        <!-- <p-tab [value]="2">Responsable</p-tab> -->
+        <p-tab [value]="3">Auditoría</p-tab>
+        <p-tab [value]="4">Documentos</p-tab>
+      </p-tablist>
 
-            <app-custom-draw-form [drawForm]="drawForm()[$any(typeDefault)]['general']"
-              [formGroup]="form()[$any(typeDefault)]" (onSelectAutoCompleteAction)="onSelectAutoComplete($event)"
-              (onChangeDropdownAction)="onChangeDropdown($event)" (onNewIconDropdownAction)="onNewIconDropdown($event)"
-              (onReloadIconDropdownAction)="onReloadIconDropdown($event)"
-              (onChangeToggleAction)="onChangeToggle($event)" (onKeydownEnterTextAction)="onKeydownEnterText($event)"
-              (onClosableIconDropdownAction)="onClosableIconDropdown($event)"
-              (onKeydownEnterNumberAction)="onKeydownEnterNumber($event)" />
+      <p-tabpanels>
+        <p-tabpanel [value]="0">
 
-          </p-tabpanel>
-        </p-tabpanels>
-      </p-tabs>
-    </form>
-  </ng-template>
+          <app-custom-draw-form *ngIf="form()[$any(typeDefault)] && drawForm()[typeDefault]"
+            [drawForm]="drawForm()[typeDefault]['general']" [formGroup]="form()[$any(typeDefault)]"
+            (onSelectAutoCompleteAction)="onSelectAutoComplete($event)"
+            (onChangeDropdownAction)="onChangeDropdown($event)" (onNewIconDropdownAction)="onNewIconDropdown($event)"
+            (onReloadIconDropdownAction)="onReloadIconDropdown($event)" (onChangeToggleAction)="onChangeToggle($event)"
+            (onKeydownEnterTextAction)="onKeydownEnterText($event)"
+            (onClosableIconDropdownAction)="onClosableIconDropdown($event)"
+            (onKeydownEnterNumberAction)="onKeydownEnterNumber($event)" (files64Action)="onFiles64($event)"
+            (filesAction)="onFiles($event)" />
+
+        </p-tabpanel>
+
+        <p-tabpanel [value]="1">
+
+          <div formArrayName="classifiers" class="pt-3">
+            <div class="p-fluid grid separator-form-small pl-2"
+              *ngFor="let level of classifierLevelsGen()[$any(pos())];  let i = index">
+              <div class="field col-12 md:col-6">
+                <span class="p-float-label">
+                  <p-select styleClass="height-input-custom"
+                    [options]="classifierTypeByLevel(level.classifier_type + 'p',level.level + 'p', i)" optionValue="id"
+                    optionLabel="name" [formControlName]="funAuxFormClassifiers('formControlName',i)"
+                    (onChange)="loadClassifiers($event, level, i)" placeholder="." [showClear]="true">
+                  </p-select>
+                  <label for="dropdown">{{level.name | slice:0:29}}</label>
+                </span>
+              </div>
+            </div>
+          </div>
+
+        </p-tabpanel>
+
+        <p-tabpanel [value]="3">
+          <app-custom-audit [cf]="customField()[typeDefault]" [selected]="selected()" />
+        </p-tabpanel>
+
+      </p-tabpanels>
+    </p-tabs>
+  </form>
 
   <ng-template #footer>
-    <app-custom-button-footer (saveAction)="save({is_file: true})"
-      (saveNotHideAction)="save({hide:false, is_file: true})" (resetFormAction)="resetFormDialog()" />
+    <div class="p-dialog-footer">
+      <app-custom-button-footer (saveAction)="save({pos: typeDefault, is_file: true})"
+        (saveNotHideAction)="save({pos: typeDefault, hide:false, is_file: true})"
+        (resetFormAction)="resetFormDialog()" />
+    </div>
   </ng-template>
+
+</p-dialog>
+
+
+<p-dialog [(visible)]="formDialogVisible[$any('task-detail')]" (onHide)="onHide($any('task-detail'))"
+  (onShow)="onShow($any('task-detail'))" [styleClass]="styleClassSecundaryDialog()" modal="true" maximizable="true">
+
+  <ng-template #header>
+    <div class="p-dialog-title">
+      <span class="p-dialog-title-text">{{headerDialogSecundary()}}</span>
+      <button type="button" class="p-dialog-titlebar-icon p-link" (click)="configDialog()">
+        <i class="pi pi-spin pi-cog p-dialog-icon"></i>
+      </button>
+    </div>
+  </ng-template>
+
+  <form [formGroup]="form()[$any('task-detail')]" *ngIf="form()[$any('task-detail')]">
+    <p-tabs [scrollable]="true" [value]="tabVisibleSecundary()">
+
+      <p-tablist>
+        <p-tab [value]="0">General</p-tab>
+        <p-tab [value]="1">Datos</p-tab>
+      </p-tablist>
+
+      <p-tabpanels>
+
+        <p-tabpanel [value]="0">
+          <app-custom-draw-form *ngIf="form()[$any('task-detail')] && drawForm()['task-detail']"
+            [drawForm]="drawForm()['task-detail']['general']" [formGroup]="form()[$any('task-detail')]"
+            (onSelectAutoCompleteAction)="onSelectAutoComplete($event)"
+            (onChangeDropdownAction)="onChangeDropdown($event)" (onNewIconDropdownAction)="onNewIconDropdown($event)"
+            (onReloadIconDropdownAction)="onReloadIconDropdown($event)" (onChangeToggleAction)="onChangeToggle($event)"
+            (onKeydownEnterTextAction)="onKeydownEnterText($event)"
+            (onClosableIconDropdownAction)="onClosableIconDropdown($event)"
+            (onKeydownEnterNumberAction)="onKeydownEnterNumber($event)" (files64Action)="onFiles64($event)"
+            (filesAction)="onFiles($event)" />
+        </p-tabpanel>
+
+        <p-tabpanel [value]="1">
+          <app-custom-draw-form *ngIf="form()[$any('task-detail')] && drawForm()['task-detail_child_form_fields']"
+            [drawForm]="drawForm()['task-detail_child_form_fields']" [formGroup]="form()[$any('task-detail')]"
+            (onSelectAutoCompleteAction)="onSelectAutoComplete($event)"
+            (onChangeDropdownAction)="onChangeDropdown($event)" (onNewIconDropdownAction)="onNewIconDropdown($event)"
+            (onReloadIconDropdownAction)="onReloadIconDropdown($event)" (onChangeToggleAction)="onChangeToggle($event)"
+            (onKeydownEnterTextAction)="onKeydownEnterText($event)"
+            (onClosableIconDropdownAction)="onClosableIconDropdown($event)"
+            (onKeydownEnterNumberAction)="onKeydownEnterNumber($event)" (files64Action)="onFiles64($event)"
+            (filesAction)="onFiles($event)" />
+        </p-tabpanel>
+
+      </p-tabpanels>
+
+    </p-tabs>
+  </form>
+
+  <ng-template #footer>
+    <div class="p-dialog-footer">
+      <app-custom-button-footer (saveAction)="saveSecundary({pos: 'task-detail', is_file: true })"
+        (saveNotHideAction)="saveSecundary({pos: 'task-detail', hide:false, is_file: true})"
+        (resetFormAction)="resetFormDialog()" />
+    </div>
+  </ng-template>
+
 </p-dialog>

@@ -9,25 +9,25 @@ export const appRoutes: Routes = [
     component: AppLayout,
     //canActivate: [appCanActivateGuard],
     children: [
-      { path: '', redirectTo: '/dashboards', pathMatch: 'full' },
+      { path: '', redirectTo: '/biometric-test', pathMatch: 'full' },
       {
         path: 'dashboards',
         data: { breadcrumb: 'Indicadores' },
         canActivate: [appCanActivateGuardChild],
         loadChildren: () => import('@/pages/dashboard/dashboard.routes')
       },
-      {
+      /*{
         path: 'uikit',
         data: { breadcrumb: 'UI Kit' },
         canActivate: [appCanActivateGuardChild],
         loadChildren: () => import('@/pages/uikit/uikit.routes')
-      },
-      {
+      },*/
+      /*{
         path: 'pages',
         data: { breadcrumb: 'Pages' },
         canActivate: [appCanActivateGuardChild],
         loadChildren: () => import('@/pages/pages.routes')
-      },
+      },*/
       {
         path: 'apps',
         data: { breadcrumb: 'Apps' },
@@ -39,7 +39,7 @@ export const appRoutes: Routes = [
         data: { breadcrumb: 'E-Commerce' },
         loadChildren: () => import('@/pages/ecommerce/ecommerce.routes')
       },
-      {
+      /*{
         path: 'blocks',
         data: { breadcrumb: 'Prime Blocks' },
         canActivate: [appCanActivateGuardChild],
@@ -50,13 +50,15 @@ export const appRoutes: Routes = [
         data: { breadcrumb: 'User Management' },
         canActivate: [appCanActivateGuardChild],
         loadChildren: () => import('@/pages/usermanagement/usermanagement.routes')
-      },
-      {
+      },*/
+      /*{
         path: 'tasks',
         data: { breadcrumb: 'Gestión de Tareas' },
         canActivate: [appCanActivateGuardChild],
         loadChildren: () => import('./app/tasks/task.routes')
-      },
+      },*/
+
+
       {
         path: 'purchases',
         data: { breadcrumb: 'Compras' },
@@ -69,6 +71,25 @@ export const appRoutes: Routes = [
         canActivate: [appCanActivateGuardChild],
         loadChildren: () => import('./app/assets/assets.routes').then(m => m.ASSETS_ROUTES)
       }
+      ,
+      {
+        path: 'catalogues',
+        data: { breadcrumb: 'Catálogos' },
+        canActivate: [appCanActivateGuardChild],
+        loadChildren: () => import('./app/catalogues/catalogues.routes').then(m => m.CATALOGUES_ROUTES)
+      },
+
+      {
+        path: 'tasks',
+        data: { breadcrumb: 'Tareas' },
+        canActivate: [appCanActivateGuardChild],
+        loadChildren: () => import('./app/tasks/task.routes')
+      },
+      {
+        path: 'biometric-test',
+        data: { breadcrumb: 'Test Biométrico' },
+        loadComponent: () => import('./app/pages/biometric-test/biometric-test.component').then(c => c.BiometricTestComponent)
+      },
     ]
   },
   { path: 'auth', loadChildren: () => import('@/pages/auth/auth.routes') },

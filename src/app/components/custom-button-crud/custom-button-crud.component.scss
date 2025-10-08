@@ -54,3 +54,17 @@
     }
   }
 }
+
+// Posicionamiento específico para botones de inicio en móvil
+.start-button-mobile-position {
+  @media only screen and (max-width: 767px) {
+    position: absolute !important;
+    margin-left: 60px !important;
+  }
+}
+
+
+:host ::ng-deep .p-button-icon-only.p-button-rounded {
+  border-radius: 50% !important;
+  height: 34px !important;
+}

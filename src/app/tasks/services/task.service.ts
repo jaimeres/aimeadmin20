@@ -9,7 +9,17 @@ export class TaskService extends CRUDService {
 
   constructor() {
     super();
-    this.customField.update(current => {
+
+
+    //console.log('takssssssssssssss', this.authS.config);
+    this.customField.set({
+      'task': this.authS.config['task']['cols'],
+      'task-detail': this.authS.config['task-detail']['cols'],
+    });
+
+
+
+    /*this.customField.update(current => {
       return {
         'task': {
           ...current,
@@ -56,7 +66,7 @@ export class TaskService extends CRUDService {
 
         }
       }
-    });
+    });*/
 
 
 

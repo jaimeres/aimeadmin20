@@ -2,6 +2,7 @@ import { Injectable } from '@angular/core';
 import { BehaviorSubject, interval } from 'rxjs';
 // ***********************ADAPTADO PARA CAPACITOR*********************
 import { Geolocation } from '@capacitor/geolocation';
+import { Device } from '@capacitor/device';
 
 /**
  * Servicio general que maneja operaciones comunes incluyendo geolocalización
@@ -536,15 +537,16 @@ export class GeneralService {
       moreFields.forEach((field) => {
         // Obtiene el id del de respuesta del servidor en base al nombre del campo
         const id = dja.attributes[field[0]];
-        for (const item of field[1]) {
-          // Itera el array donde buscara la clave que se envía en la respuesta del servidor
-
-          //|||id y name se cambian por value y display_name porque asi reponde el servidor los tipo choice, en lugar de ponerse manualmente,
-          // se toma de las consulta options que se hace en el servidor
-          if (item.value == id) {
-            //compara el Id del array vs el id del servidor
-            data[field[0] + '__text'] = item.display_name;
-            break; // Detiene la iteración cuando se encuentra la coincidencia
+        if (Array.isArray(field[1])) {
+          for (const item of field[1]) {
+            // Itera el array donde buscara la clave que se envía en la respuesta del servidor
+            //|||id y name se cambian por value y display_name porque asi reponde el servidor los tipo choice, en lugar de ponerse manualmente,
+            // se toma de las consulta options que se hace en el servidor
+            if (item.value == id) {
+              //compara el Id del array vs el id del servidor
+              data[field[0] + '__text'] = item.display_name;
+              break; // Detiene la iteración cuando se encuentra la coincidencia
+            }
           }
         }
       });
@@ -628,6 +630,48 @@ export class GeneralService {
   }
 
   // ***********************ADAPTADO PARA CAPACITOR*********************
+  // Método para detectar si es móvil o web
+  public isMobile(): boolean {
+    return !!(window && (window as any).Capacitor && (window as any).Capacitor.isNativePlatform());
+  }
+
+  public isDesktop(): boolean {
+    //es temporal, hasta que tenga una forma mejor de detectar si es desktop o web
+    return !this.isMobile();
+  }
+
+  /**
+   * 
+   * @returns Verifica el estado de la red, en web usa navigator.onLine, en móvil usaría Capacitor Network plugin
+   */
+  public networkStatus(): string {
+    if (this.isDesktop()) {
+      return navigator.onLine ? 'online' : 'offline';
+    }
+    if (this.isMobile()) {
+      // Aquí podrías usar Capacitor Network plugin para obtener el estado de la red en móviles
+      return 'mobile network status not implemented'; // Placeholder
+    } else {
+      return navigator.onLine ? 'online' : 'offline';
+    }
+  }
+
+  // ***********************NUEVO MÉTODO*********************
+  // Método público para obtener device_id solo en móviles
+  public async getDeviceId(): Promise<string | null> {
+    if (this.isMobile()) {
+      try {
+        const info = await Device.getId();
+        return info.identifier || null;
+      } catch (error) {
+        console.error('Error obteniendo device_id:', error);
+        return null;
+      }
+    }
+    return null; // No devolvemos device_id en web
+  }
+
+  // ***********************ADAPTADO PARA CAPACITOR*********************
   // Método para obtener ubicación usando Capacitor Geolocation
   private async getCurrentPositionCapacitor(): Promise<any> {
     try {
@@ -635,7 +679,7 @@ export class GeneralService {
       const permissions = await Geolocation.requestPermissions();
 
       if (permissions.location !== 'granted') {
-        throw new Error('Permisos de geolocalización denegados');
+        throw new Error(`Permisos denegados: ${permissions.location}`);
       }
 
       // Obtener la posición actual
@@ -645,9 +689,9 @@ export class GeneralService {
       });
 
       return position;
-    } catch (error) {
-      //console.error('Error con Capacitor Geolocation:', error);
-      throw error;
+    } catch (error: any) {
+      // Retornar el error exacto tal como viene
+      throw new Error(error.message || error.toString());
     }
   }
 
@@ -722,8 +766,96 @@ export class GeneralService {
   }
 
   // Para obtener las coordenadas actuales desde otro componente
-  public getLocationSnapshot(): { latitude: number; longitude: number; time_zone: string } | null {
-    return this.location$.getValue();
+  public getLocationSnapshot(): { latitude: number; longitude: number; time_zone: string; msg: string } {
+    const currentValue = this.location$.getValue();
+    const defaultCoords = this.getCoords();
+
+    if (!currentValue) {
+      return {
+        ...defaultCoords,
+        msg: defaultCoords.latitude !== 0 && defaultCoords.longitude !== 0 ? 'ok' : 'Sin coordenadas iniciales'
+      };
+    }
+
+    return {
+      ...currentValue,
+      msg: currentValue.latitude !== 0 && currentValue.longitude !== 0 ? 'ok' : 'Coordenadas en 0,0'
+    };
+  }
+
+  // ***********************NUEVO MÉTODO*********************
+  // Método mejorado para obtener ubicación con manejo de errores reales
+  public async getCurrentLocation(): Promise<{ latitude: number; longitude: number; time_zone: string; msg: string }> {
+    const defaultCoords = this.getCoords();
+
+    if (this.isMobile()) {
+      // Lógica para móvil usando Capacitor
+      try {
+        const position = await this.getCurrentPositionCapacitor();
+        this.updateCoordsFromCapacitor(position);
+        const coords = this.getCoords();
+        this.location$.next(coords);
+        return {
+          ...coords,
+          msg: 'ok'
+        };
+      } catch (error: any) {
+        return {
+          ...defaultCoords,
+          msg: `Error móvil: ${error.message}`
+        };
+      }
+    } else {
+      // Lógica para web usando navigator.geolocation
+      return new Promise((resolve) => {
+        if (!navigator.geolocation) {
+          resolve({
+            ...defaultCoords,
+            msg: 'Geolocalización no soportada en este navegador'
+          });
+          return;
+        }
+
+        navigator.geolocation.getCurrentPosition(
+          (pos) => {
+            this.updateCoords(pos);
+            const coords = this.getCoords();
+            this.location$.next(coords);
+            resolve({
+              ...coords,
+              msg: 'ok'
+            });
+          },
+          (error) => {
+            let errorMsg = '';
+            switch (error.code) {
+              case error.PERMISSION_DENIED:
+                errorMsg = `Permisos denegados: ${error.message}`;
+                break;
+              case error.POSITION_UNAVAILABLE:
+                errorMsg = `Posición no disponible: ${error.message}`;
+                break;
+              case error.TIMEOUT:
+                errorMsg = `Timeout: ${error.message}`;
+                break;
+              default:
+                errorMsg = `Error web: ${error.message}`;
+                break;
+            }
+            resolve({
+              ...defaultCoords,
+              msg: errorMsg
+            });
+          }
+        );
+      });
+    }
+  }
+
+  // ***********************NUEVO MÉTODO*********************
+  // Método para forzar actualización de ubicación
+  public async forceLocationUpdate(): Promise<{ latitude: number; longitude: number; time_zone: string; msg: string }> {
+    return await this.getCurrentLocation();
   }
 
   // Para suscribirse a actualizaciones (si lo necesitas)
@@ -767,12 +899,141 @@ export class GeneralService {
   // ***********************ADAPTADO PARA CAPACITOR*********************
   // Método para verificar permisos de geolocalización
   public async checkPermissions(): Promise<any> {
-    return await Geolocation.checkPermissions();
+    if (this.isMobile()) {
+      return await Geolocation.checkPermissions();
+    } else {
+      // Para web, simular estructura de permisos
+      return new Promise((resolve) => {
+        if (!navigator.geolocation) {
+          resolve({ location: 'denied' });
+          return;
+        }
+
+        navigator.geolocation.getCurrentPosition(
+          () => resolve({ location: 'granted' }),
+          (error) => {
+            switch (error.code) {
+              case error.PERMISSION_DENIED:
+                resolve({ location: 'denied' });
+                break;
+              default:
+                resolve({ location: 'prompt' });
+                break;
+            }
+          },
+          { timeout: 1000 }
+        );
+      });
+    }
   }
 
   // ***********************ADAPTADO PARA CAPACITOR*********************
   // Método para solicitar permisos de geolocalización
   public async requestPermissions(): Promise<any> {
-    return await Geolocation.requestPermissions();
+    if (this.isMobile()) {
+      return await Geolocation.requestPermissions();
+    } else {
+      // Para web, intentar obtener ubicación (esto solicita permisos automáticamente)
+      return new Promise((resolve) => {
+        if (!navigator.geolocation) {
+          resolve({ location: 'denied' });
+          return;
+        }
+
+        navigator.geolocation.getCurrentPosition(
+          () => resolve({ location: 'granted' }),
+          (error) => {
+            switch (error.code) {
+              case error.PERMISSION_DENIED:
+                resolve({ location: 'denied' });
+                break;
+              default:
+                resolve({ location: 'prompt' });
+                break;
+            }
+          }
+        );
+      });
+    }
+  }
+
+  // ***********************NUEVO MÉTODO*********************
+  // Método para probar permisos y obtener ubicación con mensajes reales
+  public async testAndRequestLocationPermissions(): Promise<{
+    permissionsGranted: boolean;
+    coordinates: { latitude: number; longitude: number; time_zone: string } | null;
+    msg: string;
+    error?: string;
+  }> {
+    try {
+      // Verificar permisos actuales
+      const currentPermissions = await this.checkPermissions();
+      let permissionsGranted = currentPermissions.location === 'granted';
+      let msg = `Permisos actuales: ${currentPermissions.location}`;
+
+      // Si no están concedidos, solicitarlos
+      if (!permissionsGranted) {
+        const requestResult = await this.requestPermissions();
+        permissionsGranted = requestResult.location === 'granted';
+        msg = `Resultado solicitud: ${requestResult.location}`;
+
+        if (!permissionsGranted) {
+          return {
+            permissionsGranted: false,
+            coordinates: null,
+            msg: `Permisos no concedidos: ${requestResult.location}`,
+            error: `Estado final: ${requestResult.location}`
+          };
+        }
+      }
+
+      // Si los permisos están concedidos, obtener coordenadas
+      let coordinates = null;
+      if (permissionsGranted) {
+        try {
+          const locationResult = await this.getCurrentLocation();
+
+          if (locationResult.msg === 'ok') {
+            coordinates = {
+              latitude: locationResult.latitude,
+              longitude: locationResult.longitude,
+              time_zone: locationResult.time_zone
+            };
+            msg = `Ubicación obtenida: ${locationResult.latitude}, ${locationResult.longitude}`;
+          } else {
+            msg = `Error ubicación: ${locationResult.msg}`;
+            return {
+              permissionsGranted: true,
+              coordinates: null,
+              msg,
+              error: locationResult.msg
+            };
+          }
+        } catch (locationError: any) {
+          const errorMsg = `Error al obtener coordenadas: ${locationError.message}`;
+          return {
+            permissionsGranted: true,
+            coordinates: null,
+            msg: errorMsg,
+            error: locationError.message
+          };
+        }
+      }
+
+      return {
+        permissionsGranted,
+        coordinates,
+        msg
+      };
+
+    } catch (error: any) {
+      const errorMsg = `Error en test permisos: ${error.message}`;
+      return {
+        permissionsGranted: false,
+        coordinates: null,
+        msg: errorMsg,
+        error: error.message
+      };
+    }
   }
 }

@@ -24,6 +24,8 @@ import { InputGroupModule } from 'primeng/inputgroup';
 import { InputGroupAddonModule } from 'primeng/inputgroupaddon';
 import { AutoFocusModule } from 'primeng/autofocus';
 
+import { SplitButtonModule } from 'primeng/splitbutton';
+
 import { CRUDService } from '../../utils/services/crud.service';
 import { SharedDynamicDataService } from '@/utils/services/shared-dynamic-data.service';
 import { GeneralService } from '@/utils/services/general.service';
@@ -54,6 +56,8 @@ import { GeneralService } from '@/utils/services/general.service';
     InputGroupModule,
     InputGroupAddonModule,
     AutoFocusModule,
+
+    SplitButtonModule
   ],
   templateUrl: './custom-draw-form.component.html',
   styleUrl: './custom-draw-form.component.scss',
@@ -103,29 +107,36 @@ export class CustomDrawFormComponent {
 
   dropdownOptionsSignal = signal<any>([]);
 
-  dataDropdown(element: any, force = false) {
+  //funcion para verificar si los datos ya existen en sharedS.data o sharedS.drawDropdown
+  dataDropdownExists(element: any, force = false): boolean {
     // si tiene opciones no se consulta al servidor    
     //aqui voy estoy revisando porque option no se inicializa con los dartos del choice y como se parseMarkerlos dropdawn en sabe al modulo
     //no lleva force ya que no consulta al servidor
     if (element.options) {
-      this.dropdownOptionsSignal()[element.field] = element.options;
-      return;//continue;
+      return element.options;
     }
 
     //si ya existe datos para ese dropdown no se vuelve a consultar
-
     if (this.sharedS.data[element.field] && !force) {
-      this.dropdownOptionsSignal()[element.field] = this.sharedS.data[element.field];
-      return;//continue;
+      return this.sharedS.data[element.field];
     }
 
     //si ya existe datos para ese dropdown no se vuelve a consultar, va depsues de la validación de generalS.data,
     // porque seguramente trae los datos mas actualizados, por ejemplo cuando se agregan  o eliminan elementos
     if (this.sharedS.drawDropdown[element.field] && !force) {
-      this.dropdownOptionsSignal()[element.field] = this.sharedS.drawDropdown[element.field];
-      return;//continue;
+      return this.sharedS.drawDropdown[element.field];
     }
 
+    return false;
+  }
+
+  dataDropdown(element: any, force = false) {
+
+    const dropdownOptions = this.dataDropdownExists(element, force);
+    if (dropdownOptions && !force) {
+      this.dropdownOptionsSignal()[element.field] = dropdownOptions;
+      return;
+    }
     //si no existe datos para ese dropdown se consulta al servidor,
     // en lugar de poner la app y el type en cada campo de json que genera el draw se pone una referencia
     // a un objeto que tiene la app y el type para evitar que esta info se guarde en el servidor y se pueda inyectar en el componente
@@ -134,18 +145,25 @@ export class CustomDrawFormComponent {
     if (app && type) {
 
       this.crudS.getObject({ app, type }).subscribe((data: any) => {
-        let dataDropdown = data.data.map((item: any) => {
-          return {
-            id: item.id,
-            name: item.attributes.name,
-            module: item.attributes.module,
-          }
+        //let dataDropdown = data.data.map((item: any) => {
+        let dataDropdown = this.generalS.DJAtoObject({
+          respDJA: data,
+          additionalFieldsIncluded: []
         });
+        /*return {
+          id: item.id,
+          name: item.attributes.name,
+          module: item.attributes.module,
+          "rear_plate": 222
+        }*/
+        //console.log('++++++++', dataDropdown);
+
+        //return item;
+        //});
 
         // Verificamos si al menos un objeto tiene un 'module' diferente de null,
         //esto es para los registros que tienen module, es decir, deferencia a que app pertenece
         const hasNonNullModule = dataDropdown.some((item: any) => item.module !== undefined);
-
 
         // Si existe al menos un module no nulo, filtramos solo los que sean 'MA'
         if (hasNonNullModule) {
@@ -163,18 +181,18 @@ export class CustomDrawFormComponent {
       for (const key in drawForm.grid) {
         if (drawForm.grid.hasOwnProperty(key)) {
           const element = drawForm.grid[key];
-                    /*if(element.type=='choice'){
-                    #esto esta cubierto arriba porque aunque no diga explicitamente que es choice, cae en la segunda doncición,
-                    # y tiene la ventaja que si se envia options sobreescribe choices que se cargan en generar el fiormulario
-                        this.dropdownOptionsSignal()[element.field] = this.sharedS.data[element.field];
-                        ademas ya esta diseñado para cambiar optionValue y optionLabel por id y name, seria contraproducente
-                        agregar otro elemento
+          /*if(element.type=='choice'){
+          #esto esta cubierto arriba porque aunque no diga explicitamente que es choice, cae en la segunda doncición,
+          # y tiene la ventaja que si se envia options sobreescribe choices que se cargan en generar el fiormulario
+              this.dropdownOptionsSignal()[element.field] = this.sharedS.data[element.field];
+              ademas ya esta diseñado para cambiar optionValue y optionLabel por id y name, seria contraproducente
+              agregar otro elemento
 
-                    }else*/ if (element.type == 'dropdown' || element.type == 'tree-select' || element.type == 'multi-select') {
+          }else*/ if (element?.type == 'dropdown' || element?.type == 'tree-select' || element?.type == 'multi-select') {
             this.dataDropdown(element);
 
-          } else if (element.card || element.fieldset) {
-            const nestedElements = element.card || element.fieldset; //data_type //field
+          } else if (element?.card || element?.fieldset) {
+            const nestedElements = element.card || element.fieldset;
 
             for (const key2 in nestedElements) {
               if (nestedElements.hasOwnProperty(key2)) {
@@ -245,13 +263,114 @@ export class CustomDrawFormComponent {
 
 
   /**
+   * Busca un objeto en un array de objetos por un campo específico y opcionalmente lo elimina.
+   *
+   * @param {any} value - El valor a buscar en el campo especificado de los objetos.
+   * @param {Object[]} cols - El array de objetos en el que buscar.
+   * @param {string} [field='field'] - El campo del objeto en el que buscar el valor. Por defecto es 'field'.
+   * @param {boolean} [deleteCol=true] - Si se debe eliminar el objeto si se encuentra. Por defecto es true.
+   * @returns {[Object|null, number]} - Una tupla con el objeto encontrado (o null si no se encuentra) y el índice del objeto en el array (o -1 si no se encuentra).
+   */
+  searchByValueObject(value: string, cols: any = [], field: string = 'field', deleteCol = true) {
+    if (cols.length === 0) return [null, -1];
+
+    const index = cols.findIndex((item: any) => item[field] === value);
+    if (index === -1) return [null, -1];
+
+    const col = cols[index];
+    if (deleteCol) {
+      cols.splice(index, 1);
+    }
+
+    return [col, index];
+  }
+
+
+  /**
    * Emite un evento cuando se modifica un dropdown
    * @param event evento del dropdown
    * @param object objeto que contiene el evento y el campo que se esta modificando
    */
   onChangeDropdown(event: any, object: any) {
     const field = object.field; //se obtiene el campo del objeto
-    this.onChangeDropdownAction.emit({ event, field, object })
+    const currentValue = this.formGroupSignal()?.get(field)?.value;
+    const formValues = this.formGroupSignal()?.value;
+
+    // Crear el objeto con la información completa
+    const changeInfo = {
+      event,
+      field,
+      object,
+      formValues,       // Todos los valores del formulario
+      currentValue,  // Valor actual del campo que cambió
+      changedField: field, // Campo específico que cambió (redundante pero claro)
+      changedValue: currentValue // Valor específico que cambió (redundante pero claro)
+    };
+
+    this.onChangeDropdownAction.emit(changeInfo);
+    const config = object || {};
+    const children = config.children || {};
+    const childrenActive = children?.active || false;
+    const fields = children?.fields || {};
+
+    if (childrenActive) {
+      for (const key in fields) {
+        let setCurrentValue = '';
+
+        if (fields.hasOwnProperty(key)) {
+
+
+          const dropdownOptions = this.dataDropdownExists(object);
+          let currentDropdownOption: any = [];
+          if (dropdownOptions) {
+            currentDropdownOption = this.searchByValueObject(currentValue, dropdownOptions, 'id', false)[0];
+          }
+
+          const final = fields[key]?.final; //active
+          const manual = fields[key]?.manual;
+          const remote = fields[key]?.remote;
+          if (final) {
+
+            const filterGroup = final?.filter_group;
+            const dataType = final?.data_type;
+            const fieldName = final?.field_name;
+            const resultPosition = final?.result_position;
+            const defaultField = final?.default_field;
+
+            if (fieldName) {
+              //°°°SI NO EXISTE VA UN IF CON ONSULTA POE ADTE TYPE, SI TRAE field_name A ESE SINO AL MISMO DEL COMBO
+              if (currentDropdownOption[fieldName]) {
+                this.formGroupSignal()?.get(key)?.setValue(currentDropdownOption[fieldName]);
+              }
+              //}
+            }
+          } else if (manual) {
+
+            //datos del hijo de combo que se está seleccionado
+            const filterGroup = manual?.filter_group;
+            const defaultField = manual?.default_field;
+            const resultPosition = manual?.result_position;
+            const options = manual?.options;
+            this.dropdownOptionsSignal()[key] = []
+
+            setCurrentValue = options;
+            if (filterGroup) {
+              setCurrentValue = options.filter((item: any) => item[filterGroup] === currentDropdownOption[filterGroup]);
+            }
+
+            //para los select no funciona el this.formGroupSignal()?.get(key)?.setValue
+            //°°°pendiente de revisar si afecta las cargar cuando esta filtrado
+            this.dropdownOptionsSignal()[key] = setCurrentValue;
+
+          } else if (remote) {
+            const fieldName = remote?.field_name;
+
+            if (fieldName) {
+            }
+          }
+        }
+      }
+    }
   }
 
   /**
@@ -277,7 +396,6 @@ export class CustomDrawFormComponent {
     this.formGroup.get(field)?.setValue([]);
 
   }
-
 
   panelStyleSignal = signal<{ [key: string]: string }>({});
 
@@ -345,7 +463,7 @@ export class CustomDrawFormComponent {
 
   // ************************ADAPTADO PARA CAPACITOR*********************
   private isCapacitorNative(): boolean {
-    return !!(window && (window as any).Capacitor && (window as any).Capacitor.isNativePlatform);
+    return !!(window && (window as any).Capacitor && (window as any).Capacitor.isNativePlatform && (window as any).Capacitor.getPlatform() !== 'web');
   }
 
   private currentCameraIndex: number = -1;
@@ -355,6 +473,7 @@ export class CustomDrawFormComponent {
   async previewCamera() {
     if (this.isCapacitorNative()) {
       // Usar Capacitor Camera en móvil
+
       try {
         const photo = await Camera.getPhoto({
           quality: 90,

@@ -130,6 +130,7 @@ export class AssetComponent extends CRUD implements OnInit {
 
     this.excludeFieldsForm[this.typeDefault] = [
       { field: 'classifiers', default: this.fb.array([]), reemplace: true },
+      //{ field: 'subsidiary', },
     ];
     this.excludeFieldsCols[this.typeDefault] = [
       { field: 'other' },
@@ -155,7 +156,6 @@ export class AssetComponent extends CRUD implements OnInit {
     this.pluralDefiniteArticle['capacity-type'] = 'los tipos de capacidades';
     this.module['capacity-type'] = 'A';
 
-
     this.type['asset-document'] = 'asset-document';
     this.app['asset-document'] = 'assets/asset-document';
     this.singular['asset-document'] = 'documento';
@@ -167,7 +167,6 @@ export class AssetComponent extends CRUD implements OnInit {
     this.excludeFieldsForm['asset-document'] = [
       { field: 'status', },
     ];
-
 
     //-----------------------------
     this.type['asset-document-asset'] = 'asset-document';
@@ -196,7 +195,6 @@ export class AssetComponent extends CRUD implements OnInit {
     this.module['accessory'] = 'A';
 
     this.initCRUD();
-
   }
 
   onSelectFile(event: any) {

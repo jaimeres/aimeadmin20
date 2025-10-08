@@ -57,14 +57,15 @@ export class CRUD extends Vars /*implements OnInit*/ {
     this.searchRemote = undefined;
   }
 
-  initApp(pos: string, drawFormData: any) {
+  /*initApp(pos: string, drawFormData: any) {
     // en español las palabras "los" y "el" son artículos definidos, "un" y "una" son artículos indefinidos
     this.type[pos] = pos;
-    this.singular[this.type[pos]] = drawFormData['dialog'].singular;
-    this.plural[this.type[pos]] = drawFormData['dialog'].plural;
-    this.singularIndefiniteArticle[this.type[pos]] = drawFormData['dialog'].singularIndefiniteArticle;
-    this.pluralDefiniteArticle[this.type[pos]] = drawFormData['dialog'].pluralDefiniteArticle;
-  }
+    this.unifyDialog(pos, drawFormData?.dialog);
+    //this.singular[this.type[pos]] = drawFormData['dialog'].singular;
+    //this.plural[this.type[pos]] = drawFormData['dialog'].plural;
+    //this.singularIndefiniteArticle[this.type[pos]] = drawFormData['dialog'].singularIndefiniteArticle;
+    //this.pluralDefiniteArticle[this.type[pos]] = drawFormData['dialog'].pluralDefiniteArticle;
+  }*/
 
   dialogSizeClass(drawFormData: any): string {
     // Verificar que drawFormData existe y tiene dialog
@@ -87,7 +88,7 @@ export class CRUD extends Vars /*implements OnInit*/ {
   iniParam(arr: any[] = []): void {
     let include: string = '';
     // siempre debe incluir sys, para que en la edición se pueda saber si es un elemento del sistema
-    let fields: string = 'sys,';
+    let fields: string = 'sys,status,tasks,';
 
     // si no envia nada, toma los seleccionados
     const selectedColumns = arr.length > 0 ? arr : this.selectedColumns();
@@ -113,7 +114,7 @@ export class CRUD extends Vars /*implements OnInit*/ {
 
     //.update(cont => include.slice(0, -1) ); //porngo update en lugar de set porque es una
     //actualización, pero supongo que da lo mismo
-    this.fields = include + fields.slice(0, -1);
+    this.fields[this.pos()] += include + fields.slice(0, -1);
     //.update( cont => include + fields.slice(0, -1)); //porngo update en lugar de set porque es una
     //actualización, pero supongo que da lo mismo
   }
@@ -131,7 +132,9 @@ export class CRUD extends Vars /*implements OnInit*/ {
     if (!this.drawForm()[pos]) {
       const drawForm = this.crudS.drawForm(pos);
       this.drawForm()[pos] = drawForm;
-      this.initApp(pos, drawForm);
+      //this.initApp(pos, drawForm);
+      this.type[pos] = pos;
+      this.unifyDialog(pos, drawForm?.dialog);
     }
 
     const safePos = pos ?? 0; // Crear una variable segura para usar como índice
@@ -147,7 +150,6 @@ export class CRUD extends Vars /*implements OnInit*/ {
         const newUrl = `${urlWithoutParams}?pos=${pos}`;
         this.router.navigateByUrl(newUrl);
       }
-
 
       this.removeColumns.set(this.itemsRemove[safePos] || this.itemsRemove[0]);
       this.cols.set((this.columns[safePos] || []) as any);
@@ -215,6 +217,74 @@ export class CRUD extends Vars /*implements OnInit*/ {
     }
 
     return null; // Si no se encuentra el campo
+  }
+
+
+  openTasksDetail(options: { pos: any, formFields: any, childFormFields: any }) {
+
+    const pos = options.pos;
+    const formFields = options.formFields;
+    let draw = options.childFormFields?.draw;
+    const fields = options.childFormFields?.fields;
+
+    const draw_child: any = []
+
+    if (draw) {
+
+      // Verifica si el primer elemento es 'grid' o 'nested'
+      const firstKey = Object.keys(draw)[0];
+
+      if (firstKey === 'grid' || firstKey === 'nested') {
+        draw = draw[firstKey];
+      }
+
+      // Recorre todos los objetos y agrega controles dinámicamente
+      Object.keys(draw).forEach(key => {
+        const fieldData = draw[key];
+        const field = fields[fieldData.field];
+        draw_child.push(field);
+
+        // Toma directamente el field del diccionario
+        if (field) {
+
+          const active = field?.default?.active || false;
+          const value = field?.default?.value || null;
+          let defaultValue = value;
+          const edit = field?.default?.edit || false;
+          if (active && edit) {
+            if (value == 'device') {
+              defaultValue = new Date();
+            }
+          }
+          const disabled = field.readonly || false;
+          const validators: any[] = [];
+
+          // Agrega validadores si es requerido
+          if (field.required) {
+            validators.push(Validators.required);
+            //max_length
+            if (field.max_length) {
+              validators.push(Validators.maxLength(field.max_length));
+            }
+            if (field.min_length) {
+              validators.push(Validators.minLength(field.min_length));
+            }
+          }
+          formFields[fieldData.field] = this.fb.control(
+            { value: defaultValue, disabled: disabled },
+            { nonNullable: true, validators: validators }
+          );
+        }
+
+
+
+      });
+
+      this.drawForm()[pos + '_' + 'child_form_fields'] = {};
+      this.drawForm()[pos + '_' + 'child_form_fields']['grid'] = draw_child;
+      //this.unifyDialog(pos, child_form_fields.draw?.dialog, 'secundary', parent_id, parentSelect?.id);
+    }
+
   }
 
   /**
@@ -411,8 +481,9 @@ export class CRUD extends Vars /*implements OnInit*/ {
    * @param main_field Campos del formulario
    * @returns el form
    */
-  generateJSONform(jsonFields: any, formFields: any = {}, relationOptions: any[] = [], field_prefix = '') {
-    const pos = this.pos() ?? 0; // Asegurar que pos no sea null
+  generateJSONform(jsonFields: any, pos = '', formFields: any = {}, relationOptions: any[] = [], field_prefix = '') {
+    //pos = pos ?? this.pos(); // Asegurar que pos no sea null
+    pos = (pos !== null && pos !== undefined && pos !== "") ? pos : this.pos();
     const posIndex = pos as string; // Cast explícito a string
 
     /*if (!this.drawForm()[posIndex]) {
@@ -424,16 +495,33 @@ export class CRUD extends Vars /*implements OnInit*/ {
     const boolLocal = this.fieldsBool[0][posIndex] ? [...this.fieldsBool][0][posIndex] : [];
     const relationshipsLocal = this.relationships[posIndex] ? [...this.relationships[posIndex]] : [];
 
+    // lo utilizo para abrir los campos hijos solo una vez
+    let auxParentSelect = true;
+    const parentSelect = this.selected()[0];
     for (const field in jsonFields) {
       if (jsonFields.hasOwnProperty(field)) {
+
+        //se envia campo individual
+        if (field in ['parent_form_data',]) {
+          continue;
+        }
+
         const fieldObj = jsonFields[field];
         const validators = [];
+
+        // si el padre child_form_fields, se abre el detalle del formulario
+        if (parentSelect?.child_form_fields?.draw && auxParentSelect) {
+          auxParentSelect = false;
+          this.openTasksDetail({ pos: posIndex, formFields: formFields, childFormFields: parentSelect.child_form_fields });
+          //elimianr parent_form_data del formulario 
+          //delete parentSelect.child_form_fields;
+        }
 
         // si el modelo del servidor tiene modelos anidadas, se llama recursivamente,
         // fieldObj.relationship_type !== 'ManyToMany' es para excluir las relaciones
         // de muchos a muchos
         if (fieldObj.children && fieldObj.relationship_type !== 'ManyToMany') {
-          this.generateJSONform(fieldObj.children, formFields, relationOptions, field + '_');
+          this.generateJSONform(fieldObj.children, pos, formFields, relationOptions, field + '_');
         }
 
         // los componentes de solo lectura no se incluyen en el formulario
@@ -557,8 +645,7 @@ export class CRUD extends Vars /*implements OnInit*/ {
     }
 
     this.relationships[posIndex] = relationOptions;
-    //console.log('formmmmmmmmmmmmmmmmmm', formFields);
-
+    console.log('formmmmmmmmmmmmmmmmmm', formFields);
     return this.fb.group(formFields);
   }
 
@@ -867,7 +954,7 @@ export class CRUD extends Vars /*implements OnInit*/ {
 
     const include = this.include; // incluir todas las relaciones para que se muestren en la tabla
     const sort = this.sort; // ordenar por defecto por id
-    const fields = this.fields; // incluir todos los campos para que se muestren en la tabla
+    const fields = this.fields[safePos]; // incluir todos los campos para que se muestren en la tabla
 
     filter = filter || this.filter; // por el momento solo ocupo de filter sea se envie por parametro
     this.limit()[safePos] = this.limit()[safePos] ? this.limit()[safePos] : this.limit()[0]; // si no se envia el limite, se toma el limite por defecto
@@ -1202,49 +1289,193 @@ export class CRUD extends Vars /*implements OnInit*/ {
     this.headerDialog.set(`Alta de ${this.singular[pos] || this.singular[0]}`);
   }
 
+  /**
+   * Unifica y configura las propiedades de un diálogo según su prioridad (principal o secundario).
+   * Esta función centraliza la configuración de diálogos CRUD, estableciendo dimensiones,
+   * textos de etiquetas, pestañas visibles y relaciones padre-hijo.
+   * 
+   * @param pos - Posición o identificador del diálogo en la estructura de datos
+   * @param dialog - Objeto de configuración del diálogo que contiene las propiedades específicas
+   * @param dialog.width - Ancho personalizado del diálogo (aplicable solo para diálogos secundarios)
+   * @param dialog.height - Alto personalizado del diálogo (aplicable solo para diálogos secundarios)
+   * @param dialog.singular - Forma singular del nombre de la entidad (ej: "Usuario")
+   * @param dialog.plural - Forma plural del nombre de la entidad (ej: "Usuarios")
+   * @param dialog.singular_indefinite_article - Artículo indefinido singular (ej: "un usuario")
+   * @param dialog.plural_definite_article - Artículo definido plural (ej: "los usuarios")
+   * @param dialog.tab - Índice de la pestaña que debe mostrarse (base 1)
+   * @param priority - Prioridad del diálogo: 'main' para principal, 'secundary' para secundario
+   * @param parent_id - ID del campo padre para establecer relaciones en formularios anidados
+   * @param id - Valor que se asignará al campo padre en el formulario
+   * 
+   * @description
+   * Funcionalidades principales:
+   * - **Configuración de dimensiones**: Establece width y height para diálogos secundarios
+   * - **Gestión de etiquetas**: Configura textos singular/plural para la interfaz
+   * - **Control de pestañas**: Determina qué pestaña mostrar según la prioridad
+   * - **Relaciones padre-hijo**: Establece valores en formularios anidados
+   * 
+   * @example
+   * ```typescript
+   * // Configurar diálogo principal
+   * this.unifyDialog('users', {
+   *   singular: 'Usuario',
+   *   plural: 'Usuarios',
+   *   tab: 2
+   * }, 'main');
+   * 
+   * // Configurar diálogo secundario con dimensiones personalizadas
+   * this.unifyDialog('roles', {
+   *   width: 'width-800px-custom',
+   *   height: 'min-height-600px-custom',
+   *   singular: 'Rol',
+   *   tab: 1
+   * }, 'secundary', 'user_id', '123');
+   * ```
+   * 
+   * @note
+   * - Las dimensiones personalizadas solo se aplican a diálogos secundarios
+   * - Los índices de pestañas se convierten de base 1 a base 0 internamente
+   * - La relación padre-hijo se establece automáticamente en el formulario temporal
+   */
+  unifyDialog(pos: any, dialog: any, priority: string = 'main', parent_id?: string, id?: string) {
+
+    //se puede poner datos espesificamente de dialog
+    const width = dialog?.width;
+    const height = dialog?.height;
+    const singular = dialog?.singular;
+    const plural = dialog?.plural;
+    const singularIndefiniteArticle = dialog?.singular_indefinite_article;
+    const pluralDefiniteArticle = dialog?.plural_definite_article;
+    const tab = dialog?.tab;
+
+    //los principales tienen su propia  width y height, ESTO CASI ES EXLUCIVO PARA child_form_fields
+    if (width && height && priority == 'secundary') {
+      this.styleClassSecundaryDialog.set(width + ' ' + height);
+    }
+
+    if (singular) {
+      this.singular[pos] = singular;
+    }
+    if (plural) {
+      this.plural[pos] = plural;
+    }
+    if (singularIndefiniteArticle) {
+      this.singularIndefiniteArticle[pos] = singularIndefiniteArticle;
+    }
+    if (pluralDefiniteArticle) {
+      this.pluralDefiniteArticle[pos] = pluralDefiniteArticle;
+    }
+    if (tab > 0) {
+      if (priority == 'main') {
+        this.tabVisible.set(tab - 1);
+      } else if (priority == 'secundary') {
+        this.tabVisibleSecundary.set(tab - 1);
+      }
+    } else {
+      if (priority == 'main') {
+        this.tabVisible.set(0);
+      } else if (priority == 'secundary') {
+        this.tabVisibleSecundary.set(0);
+      }
+    }
+
+    //|||DEBOR PONERLO FUERA DEL IF, PARA QUE AGREGUE EL VALOR AL FORMULARIO EN LOS SECUNDARIOS
+    console.log('parent_iddddddddd, id', parent_id, id);
+
+    if (parent_id && id) {
+      this.formTempo[pos].get(parent_id)?.setValue(id);
+    }
+  }
+
   // variables para las apps secundarias, no se pone como array ya que solo necesito para la principal o la secundaria,
   // no para cada app
   selectedSecundary = signal<any[]>([]);
-  isCreateSecundary: boolean = false;
+  private isCreateSecundary: boolean = false;
   headerSecundary = signal('');
   itemsSecundary = signal<any[]>([]);
   totalRecordsSecundary = signal(0);
   // tiene la función de mantener en memoria los datos de las apps secundarias, para que no se consulten nuevamente
+  styleClassSecundaryDialog = signal('width-650px-custom min-height-550px-custom');
+  tabVisibleSecundary = signal(1);
+  tabVisible = signal(1);
 
-  openNewSecundary(pos: any, node = false) {
+  openNewSecundary(options: { pos: any, node?: boolean, parent_id?: string }) {
     // similar a openNew pero para las apps secundarias (las app que se abren a partir de otras app como los documentos)
 
+
+    const pos: any = options.pos;
+    const parent_id = options?.parent_id;
     //this.selectedSecundary.set(this.selected());
-
     // dado que no voy a llamar a changePos para que la app principal no cambie,
-    // tengo que inicializar los valores correspondientes a la app
-    //this.crudS.type = this.type[pos];
+    // tengo que inicializar los valores correspondientes a la app secundaria
     this.isCreateSecundary = true;
-
-    if (!this.formTempo[pos]) {
-      // si ya se consulto al servidor, no se vuelve a consultar
-      if (this.optionsFields[pos]) {
-        this.formTempo[pos] = this.generateJSONform(this.optionsFields[pos]);
-        this.form.set(this.formTempo);
-        this.showFormDialog(pos);
-      } else {
-        this.showBlocked();
-        // se crear el formulario, se envia la app secundaria para que se consulte el formulario correspondiente, en lugar de this.app
-        this.crudS.options(this.app[pos]).subscribe({
-          next: (resp: any) => {
-            this.optionsFields[pos] = resp.data.actions.POST;
-            this.formTempo[pos] = this.generateJSONform(this.optionsFields[pos]);
-            this.form.set(this.formTempo);
-            this.showFormDialog(pos);
-            this.showBlocked(false);
-          }
-        });
-      }
-    } else {
-      this.form.set(this.formTempo);
-      this.showFormDialog(pos);
+    const parentSelect = this.selected()[0];
+    const child_form_fields = parentSelect?.child_form_fields || {};
+    if (!parentSelect.is_detail_required) {
+      this.messageS.changeMessage(`${parentSelect?.name} no requiere detalle.`, null, {}, 'info');
+      return;
     }
-    this.headerSecundary.set(`Alta de ${this.singular[pos] || this.singular[0]}`);
+
+    if (!this.drawForm()[pos]) {
+      // divide pos __, debido a que this.crudS.drawForm requiere el type de la app, solo puede haber una clave por app,
+      //normalmente las app que llaman a la función openNewSecundary son app secundaria y se le pone diferenciador __ y type, ejemplo,
+      // task--task-detail
+      /*const posArr = String(pos).split('--');
+      const posIndex = posArr.length > 1 ? posArr[1] : posArr[0];*/
+      const drawForm = this.crudS.drawForm(pos);
+      this.drawForm()[pos] = drawForm;
+      //this.initApp(pos, drawForm);
+      this.type[pos] = pos;
+    }
+
+
+    //obliga a regenerar el formulario sobre para todo aquellos regitros hijos que cambian en base al padre como child_form_fields
+    //if (!this.formTempo[pos]) {
+    // si ya se consulto al servidor, no se vuelve a consultar
+    if (this.optionsFields[pos]) {
+      this.formTempo[pos] = this.generateJSONform(this.optionsFields[pos], pos);
+      this.form.set(this.formTempo);
+      this.resetFormDialog({ pos });
+
+      if (child_form_fields?.draw) {
+        //si children tiene sus propios valores de dialog, les da prioridad, sino los que ya se hayan inilizazado desde if (!this.drawForm()[pos]) 
+        // y por ultimo los valores del padre
+        //this.drawForm()[pos + '_' + 'child_form_fields'] = child_form_fields.draw;
+
+        this.unifyDialog(pos, child_form_fields.draw?.dialog, 'secundary', parent_id, parentSelect?.id);
+      }
+      //si no entra a  if (child_form_fields?.draw) this.singular[pos] traeria los valores de if (!this.drawForm()[pos]), sino los del padre
+      this.headerDialogSecundary.set(`Alta de ${this.singular[pos] || parentSelect?.name}`);
+      this.showFormDialog(pos);
+    } else {
+      this.showBlocked();
+      // se crear el formulario, se envia la app secundaria para que se consulte el formulario correspondiente, en lugar de this.app
+      this.crudS.options(this.app[pos]).subscribe({
+        next: (resp: any) => {
+          this.optionsFields[pos] = resp.data.actions.POST;
+          this.formTempo[pos] = this.generateJSONform(this.optionsFields[pos], pos);
+          this.form.set(this.formTempo);
+          this.resetFormDialog({ pos });
+          if (child_form_fields?.draw) {
+            //const draw = child_form_fields.draw || {};
+            //const field = child_form_fields.fields || {};  
+            //aqui voy pero creo voy a llenear his.drawForm() cre que lo puedo hacer con openTasksDetail         
+            //this.drawForm()[pos + '_' + 'child_form_fields'] = child_form_fields.draw;
+            //si children tiene sus propios valores de dialog, les da prioridad, sino los que ya se hayan inilizazado desde if (!this.drawForm()[pos]) 
+            // y por ultimo los valores del padre
+            this.unifyDialog(pos, child_form_fields.draw?.dialog, 'secundary', parent_id, parentSelect?.id);
+          }
+          //si no entra a  if (child_form_fields?.draw) this.singular[pos] traeria los valores de if (!this.drawForm()[pos]), sino los del padre
+          this.headerDialogSecundary.set(`Alta de ${this.singular[pos] || parentSelect?.name}`);
+          this.showFormDialog(pos);
+          this.showBlocked(false);
+        }
+      });
+    }
+    /* } else {
+       this.form.set(this.formTempo);
+       this.showFormDialog(pos);
+     }*/
   }
 
   /**
@@ -1343,10 +1574,10 @@ export class CRUD extends Vars /*implements OnInit*/ {
 
       //selected.scheduled_date = new Date(selected.scheduled_date),
 
-      this.currentForm().reset(selected);
+      this.currentForm(pos).reset(selected);
     } else {
       //const data = this.resetForm[pos] || this.resetForm[0]
-      this.currentForm().reset(/*{
+      this.currentForm(pos).reset(/*{
         ...data
       }*/);
     }
@@ -1403,7 +1634,8 @@ export class CRUD extends Vars /*implements OnInit*/ {
     console.log('form().valid', form);
 
     if (is_file && this.files.length === 0 && this.files64.length === 0 && form.get('files')?.value.length === 0) {
-      form.get('documents')?.setErrors({ required: true });
+      //°°°activar
+      //form.get('documents')?.setErrors({ required: true });
     } else {
       form.get('documents')?.setErrors(null);
     }
@@ -1415,8 +1647,10 @@ export class CRUD extends Vars /*implements OnInit*/ {
       errors['local'] = []; // con local hago diferencia si el error es local o del servidor
       Object.keys(form.controls).forEach((controlName) => {
         const control: any = form.get(controlName);
+
         if (control.errors) {
           errors['local'].push({ errors: control.errors, field: controlName });
+          console.log('control', controlName, control);
           //en caso que el form no sea valido, marco el campo como sucio para que lo ponga en rojo y lanzo el mensaje
           control?.markAsDirty();
           control?.markAsTouched();
@@ -1452,6 +1686,8 @@ export class CRUD extends Vars /*implements OnInit*/ {
     this.crudS.relationships = this.relationships[pos] ? this.relationships[pos].map((obj: any) => ({ ...obj })) : [];
     // asigno el id de la relación al campo correspondiente, por ejemplo, si la relación es con user,
     //el campo se llama user ?????
+    console.log('validateRelationships//////', pos, this.relationships[pos]);
+
     for (let element of this.crudS.relationships) {
       element.id = this.currentForm(pos).value[element.field];
     }
@@ -1464,6 +1700,7 @@ export class CRUD extends Vars /*implements OnInit*/ {
    */
   commonVisibilityDialog(options: any) {
     const { pos, hide = true, reset = true, is_file = false, node = false, selected = null, update_item = true } = options;
+    console.log('commonVisibilityDialog---------------', options);
 
     // cuando hide es true, se cierra el dialogo, cuando es false, se deja abierto para crear otro elemento
     if (hide) {
@@ -1576,6 +1813,7 @@ export class CRUD extends Vars /*implements OnInit*/ {
     }
     this.enableForm();
   }
+
   file(options: saveOptions = {}) {
     const { pos, hide = true, reset = true, is_file = false, node = false, selected = null, update_item = true, data = null } = options;
 
@@ -1602,6 +1840,45 @@ export class CRUD extends Vars /*implements OnInit*/ {
       });
   }
 
+  local(form: FormGroup) {
+    this.generalS.initialize();
+    // Ahora siempre retorna un objeto válido, nunca null
+    const coords = this.generalS.getLocationSnapshot();
+
+    //const coords = await this.generalS.getCurrentLocation();
+    // Garantiza coordenadas frescas y actualizadas
+
+    // Forzar actualización
+    //const location = await this.generalS.forceLocationUpdate();
+
+    // Validar que coords existe y tiene las propiedades necesarias
+    if (coords && typeof coords === 'object') {
+      // Validar y asignar latitude
+      if (coords.hasOwnProperty('latitude') && coords.latitude !== undefined && coords.latitude !== null) {
+        const latitudeControl = form.get('latitude');
+        if (latitudeControl) {
+          latitudeControl.setValue(coords.latitude);
+        }
+      }
+
+      // Validar y asignar longitude
+      if (coords.hasOwnProperty('longitude') && coords.longitude !== undefined && coords.longitude !== null) {
+        const longitudeControl = form.get('longitude');
+        if (longitudeControl) {
+          longitudeControl.setValue(coords.longitude);
+        }
+      }
+
+      // Validar y asignar time_zone
+      if (coords.hasOwnProperty('time_zone') && coords.time_zone !== undefined && coords.time_zone !== null) {
+        const timeZoneControl = form.get('time_zone');
+        if (timeZoneControl) {
+          timeZoneControl.setValue(coords.time_zone);
+        }
+      }
+    }
+  }
+
   /**
    * Guarda o actualiza los datos del formulario
    * @param pos Posición de la app en el array, si no se envia valor se asume que es para la app principal
@@ -1618,14 +1895,14 @@ export class CRUD extends Vars /*implements OnInit*/ {
     const safePos = pos as any; // Type assertion para índices de array
 
     const form = this.currentForm(safePos);
-    this.generalS.initialize();
-    const coords = this.generalS.getLocationSnapshot();
 
-    if (coords) {
-      form.get('latitude')?.setValue(coords.latitude);
-      form.get('longitude')?.setValue(coords.longitude);
-      form.get('time_zone')?.setValue(coords.time_zone);
+    // Validar que el formulario existe antes de proceder
+    if (!form) {
+      console.log('Formulario no existe para la posición:', safePos);
+      return;
     }
+
+    this.local(form);
 
     if (this.formErrors(safePos, is_file)) return;
     this.validateRelationships(safePos);
@@ -1655,6 +1932,7 @@ export class CRUD extends Vars /*implements OnInit*/ {
                         this.messageS.changeMessage('Error al convertir los documentos.');
                     });*/
       } else {
+
         //°°°TEMPORAL
         form.get('maintenance_document_data_documents')?.setValue(this.files64);
         form.get('documents')?.setValue(this.files64);
@@ -1670,6 +1948,8 @@ export class CRUD extends Vars /*implements OnInit*/ {
 
     const safePos = pos as any; // Type assertion para índices de array
 
+    this.local(this.currentForm(safePos));
+
     // si hay un error de validación, detiene la función
     if (this.formErrors(safePos, is_file)) return;
     this.validateRelationships(safePos);
@@ -1682,20 +1962,23 @@ export class CRUD extends Vars /*implements OnInit*/ {
       //this.fields siempre se debe inclui sino no es validado el form
       const formData = this.currentForm(safePos).value;
       //const include = this.include;
-      const include = 'asset,file_type,file_status';
+      const include = this.fields[safePos] ? this.fields[safePos] : '';
       //const filter = this.filter;
       //const files = is_file ? this.files : null;
 
       this.crudS.saveObject({ formData, /*files,*/ include }).subscribe({
         next: (resp: any) => {
           //aqui voy, falta pasar el nuevo elemento creado a documentos, tambien el edit
-          const temp = [...this.itemsSecundary()[safePos]];
-          temp.unshift(this.DJAtoObject({ resp, node }));
 
-          //es para que no se actualice el item de la app principal,
-          this.itemsSecundary()[safePos] = temp;
-          // tambien se actualiza el array de itemsNew para que cuando se cree un nuevo elemento se muestre en la tabla
-          //(this.sharedS as any).data[pos] = temp;
+          //Cuando el secundario no tabla que cargar el item no existe
+          if (this.itemsSecundary()[safePos]) {
+            const temp = [...this.itemsSecundary()[safePos]];
+            temp.unshift(this.DJAtoObject({ resp, node }));
+            //es para que no se actualice el item de la app principal,
+            this.itemsSecundary()[safePos] = temp;
+            // tambien se actualiza el array de itemsNew para que cuando se cree un nuevo elemento se muestre en la tabla
+            //(this.sharedS as any).data[pos] = temp;
+          }
 
           // comportamiento a la visibilidad del dialogo y al reseteo del formulario
           this.commonVisibilityDialog(options);
@@ -2085,6 +2368,8 @@ export class CRUD extends Vars /*implements OnInit*/ {
 */
 
   onFiles64(event: any[]) {
+    console.log('event', event);
+
     this.files64 = event;
   }
 
@@ -2094,6 +2379,12 @@ export class CRUD extends Vars /*implements OnInit*/ {
 
   onSelection(event: any[]) {
     this.selected.set(event);
+
+    const ids_task = this.selected()[0]?.tasks;
+    //if (ids_task) {
+    const id = this.selected()[0]?.status;
+    this.getStatus({ module: this.module[this.pos()], id, ids_task });
+    //}
   }
 
   /**
@@ -2475,6 +2766,9 @@ export class CRUD extends Vars /*implements OnInit*/ {
   setStatus(status: any, pos = '') {
     const safePos: any = pos || this.pos();
 
+    console.log('setStatus*****', status, safePos);
+
+
     const id = this.selected()[0]?.id;
     const type = this.type[safePos];
     const app = this.app[safePos];
@@ -2519,6 +2813,10 @@ export class CRUD extends Vars /*implements OnInit*/ {
 
   getTask(options: getTaskOptions = {}) {
     const { module = '', ids_task, force } = options;
+
+    if (ids_task == null || ids_task.length === 0) {
+      return;
+    }
 
     if ((this.sharedS as any).data['task'] && !force) {
       const task = this.taskModule((this.sharedS as any).data['task'], module, ids_task);
@@ -2658,6 +2956,15 @@ export class CRUD extends Vars /*implements OnInit*/ {
   onChangeDropdown(e: any) {
     const field = e?.field;
     const id = e?.event.value;
+
+
+
+
+
+
+
+
+
   }
 
 

@@ -31,6 +31,15 @@ export class AppMenu {
     },
 
     {
+      items: [
+        {
+          label: 'huella',
+          routerLink: ['biometric-test']
+        }
+      ]
+    },
+
+    {
       label: 'Compras',
       items: [
         {
@@ -51,10 +60,31 @@ export class AppMenu {
           items: [
             { label: 'Equipos y activos', routerLink: ['/assets/asset'] },
             { label: 'Mantenimiento', routerLink: ['/assets/maintenance'] },
-            { label: 'Herramientas y refacciones', routerLink: ['/assets/tool_spare'] },
           ]
         },
       ]
+    },
+    {
+      label: 'Catálogos',
+      items: [
+        {
+          label: 'Catálogos',
+          items: [
+            { label: 'Productos', routerLink: ['/catalogues/product'] },
+            { label: 'Monedas', routerLink: ['/catalogues/currency'] },
+          ]
+        }
+      ]
+    },
+    {
+      label: 'Tareas y flujos',
+      items: [
+        {
+          label: 'Tareas y flujos',
+          items: [
+            { label: 'Tareas y flujos', routerLink: ['/tasks/task'] },
+          ]
+        }]
     },
 
     {
@@ -128,8 +158,51 @@ export class AppMenu {
 
 
 
+    {
+      label: 'E-Commerce',
+      icon: 'pi pi-fw pi-wallet',
+      items: [
+        {
+          label: 'Product Overview',
+          icon: 'pi pi-fw pi-image',
+          routerLink: ['ecommerce/product-overview']
+        },
+        {
+          label: 'Product List',
+          icon: 'pi pi-fw pi-list',
+          routerLink: ['ecommerce/product-list']
+        },
+        {
+          label: 'New Product',
+          icon: 'pi pi-fw pi-plus',
+          routerLink: ['ecommerce/new-product']
+        },
+        {
+          label: 'Shopping Cart',
+          icon: 'pi pi-fw pi-shopping-cart',
+          routerLink: ['ecommerce/shopping-cart']
+        },
+        {
+          label: 'Checkout Form',
+          icon: 'pi pi-fw pi-check-square',
+          routerLink: ['ecommerce/checkout-form']
+        },
+        {
+          label: 'Order History',
+          icon: 'pi pi-fw pi-history',
+          routerLink: ['ecommerce/order-history']
+        },
+        {
+          label: 'Order Summary',
+          icon: 'pi pi-fw pi-file',
+          routerLink: ['ecommerce/order-summary']
+        }
+      ]
+    },
 
-    /*{
+
+    /*
+    {
       label: 'UI Kit',
       icon: 'pi pi-fw pi-star-fill',
       items: [
@@ -341,49 +414,9 @@ export class AppMenu {
           routerLink: ['/pages/contact']
         }
       ]
-    },*/
-    {
-      label: 'E-Commerce',
-      icon: 'pi pi-fw pi-wallet',
-      items: [
-        {
-          label: 'Product Overview',
-          icon: 'pi pi-fw pi-image',
-          routerLink: ['ecommerce/product-overview']
-        },
-        {
-          label: 'Product List',
-          icon: 'pi pi-fw pi-list',
-          routerLink: ['ecommerce/product-list']
-        },
-        {
-          label: 'New Product',
-          icon: 'pi pi-fw pi-plus',
-          routerLink: ['ecommerce/new-product']
-        },
-        {
-          label: 'Shopping Cart',
-          icon: 'pi pi-fw pi-shopping-cart',
-          routerLink: ['ecommerce/shopping-cart']
-        },
-        {
-          label: 'Checkout Form',
-          icon: 'pi pi-fw pi-check-square',
-          routerLink: ['ecommerce/checkout-form']
-        },
-        {
-          label: 'Order History',
-          icon: 'pi pi-fw pi-history',
-          routerLink: ['ecommerce/order-history']
-        },
-        {
-          label: 'Order Summary',
-          icon: 'pi pi-fw pi-file',
-          routerLink: ['ecommerce/order-summary']
-        }
-      ]
     },
-    /*{
+    
+    {
       label: 'User Management',
       icon: 'pi pi-fw pi-user',
       items: [

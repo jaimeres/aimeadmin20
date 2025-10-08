@@ -1,14 +1,28 @@
 import { Component, OnInit, signal } from '@angular/core';
 import { CRUD } from '../../utils/crud.class';
-import { MenuItem } from 'primeng/api';
+import { ConfirmationService, MenuItem } from 'primeng/api';
 import { ProductService } from '../services/product.service';
+import { CommonModule } from '@angular/common';
+import { TableModule } from 'primeng/table';
+import { TagModule } from 'primeng/tag';
+import { SelectModule } from 'primeng/select';
+import { PRIME_MODULES } from '../../shared/primeng.index';
+import { LOCAL_BASE } from '../../shared/components.index';
 
 @Component({
   selector: 'app-product',
-  imports: [],
+  imports: [
+    CommonModule,
+    TagModule,
+    TableModule,
+    SelectModule,
+    ...PRIME_MODULES,
+    ...LOCAL_BASE,
+  ],
   templateUrl: './product.component.html',
   styleUrl: './product.component.scss',
-  standalone: true
+  standalone: true,
+  providers: [ConfirmationService]
 })
 export class ProductComponent extends CRUD implements OnInit {
 
@@ -47,6 +61,35 @@ export class ProductComponent extends CRUD implements OnInit {
   }
 
   ngOnInit(): void {
+
+    //Inicializa los valores por defecto
+    this.typeDefault = 'product';
+    this.app[this.typeDefault] = 'products/product'
+    this.module[this.typeDefault] = 'P';
+
+    this.excludeFieldsForm[this.typeDefault] = [
+      { field: 'classifiers', default: this.fb.array([]), reemplace: true },
+      { field: 'base_product' },
+      { field: 'product_by_custom_user_data_name' },
+      { field: 'web_product_data_slug', default: false, reemplace: true },
+      { field: 'web_product_data_description', default: false, reemplace: true },
+    ];
+
+    this.includeFieldsForm[this.typeDefault] = [
+      { field: 'search_code', default: '' },
+      { field: 'search_name', default: '' },
+      { field: 'base_product_is_accepted', default: false, disabled: true },
+      { field: 'price_product_price', default: null }, //para lista de precios
+      { field: 'price_product_discount_type', default: null }, //para lista de precios
+      { field: 'price_product_discount', default: null }, //para lista de precios
+      { field: 'price_product_currency', default: null }, //para lista de precios
+      { field: 'sales_taxes', default: null }, //para lista de precios
+    ];
+
+    this.additionalFieldsAppCols[this.typeDefault as keyof typeof this.additionalFieldsAppCols] = {
+      'base_product_data': { 'column_header_prefix': '', 'form_prefix': '', 'default_field': 'name' },
+    };
+
     this.initCRUD();
   }
 

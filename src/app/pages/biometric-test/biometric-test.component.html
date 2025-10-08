@@ -1,0 +1,118 @@
+v4
+<div class="biometric-test-container">
+  <div class="header">
+    <h1>🔒 Test de Autenticación Biométrica</h1>
+    <p>Prueba el sistema de autenticación biométrica con atestación de dispositivo</p>
+  </div>
+
+  <!-- Estado de la biometría -->
+  <div class="status-card" [class.available]="biometricAvailable" [class.unavailable]="!biometricAvailable">
+    <h3>Estado de Biometría</h3>
+    <div class="status-indicator">
+      <span class="status-icon">{{ biometricAvailable ? '✅' : '❌' }}</span>
+      <span class="status-text">{{ biometricAvailable ? 'Disponible' : 'No Disponible' }}</span>
+    </div>
+  </div>
+
+  <!-- Configuración de usuario -->
+  <div class="config-card">
+    <h3>Configuración</h3>
+    <div class="input-group">
+      <label for="userId">User ID:</label>
+      <input id="userId" type="text" [(ngModel)]="userId" placeholder="ID del usuario para pruebas"
+        [disabled]="isLoading">
+    </div>
+  </div>
+
+  <!-- Controles de prueba -->
+  <div class="controls-card">
+    <h3>Controles de Prueba</h3>
+    <div class="button-grid">
+      <button class="test-button primary" (click)="checkBiometricAvailability()" [disabled]="isLoading">
+        🔍 Verificar Disponibilidad
+      </button>
+
+      <button class="test-button secondary" (click)="testPlugin()" [disabled]="isLoading">
+        🧪 Test Plugin
+      </button>
+
+      <button class="test-button success" (click)="registerBiometric()" [disabled]="isLoading || !biometricAvailable">
+        📱 Registrar Biométrica
+      </button>
+
+      <button class="test-button warning" (click)="authenticateBiometric()"
+        [disabled]="isLoading || !registrationData.deviceId">
+        🔐 Autenticar
+      </button>
+
+      <button class="test-button danger" (click)="clearResults()" [disabled]="isLoading">
+        🧹 Limpiar
+      </button>
+    </div>
+  </div>
+
+  <!-- Datos del registro -->
+  <div class="data-card" *ngIf="registrationData.deviceId">
+    <h3>📱 Datos de Registro</h3>
+    <div class="data-item">
+      <label>Device ID:</label>
+      <span class="data-value">{{ registrationData.deviceId }}</span>
+    </div>
+    <div class="data-item">
+      <label>Key Alias:</label>
+      <span class="data-value">{{ registrationData.keyAlias }}</span>
+    </div>
+    <div class="data-item">
+      <label>Clave Pública:</label>
+      <span class="data-value truncated">{{ registrationData.publicKey?.substring(0, 50) }}...</span>
+    </div>
+    <div class="data-item">
+      <label>Certificados:</label>
+      <span class="data-value">{{ registrationData.attestationChain?.length }} certificados</span>
+    </div>
+    <button class="detail-button" (click)="showRegistrationDetails()">Ver Detalles</button>
+  </div>
+
+  <!-- Datos de autenticación -->
+  <div class="data-card" *ngIf="authData.signature">
+    <h3>🔐 Datos de Autenticación</h3>
+    <div class="data-item">
+      <label>Device ID:</label>
+      <span class="data-value">{{ authData.deviceId }}</span>
+    </div>
+    <div class="data-item">
+      <label>Key Alias:</label>
+      <span class="data-value">{{ authData.keyAlias }}</span>
+    </div>
+    <div class="data-item">
+      <label>Firma:</label>
+      <span class="data-value truncated">{{ authData.signature.substring(0, 50) }}...</span>
+    </div>
+    <div class="data-item">
+      <label>ID Coincide:</label>
+      <span class="data-value" [class.match]="authData.deviceId === registrationData.deviceId">
+        {{ authData.deviceId === registrationData.deviceId ? '✅ Sí' : '❌ No' }}
+      </span>
+    </div>
+    <button class="detail-button" (click)="showAuthDetails()">Ver Detalles</button>
+  </div>
+
+  <!-- Indicador de carga -->
+  <div class="loading-overlay" *ngIf="isLoading">
+    <div class="spinner"></div>
+    <p>Procesando...</p>
+  </div>
+
+  <!-- Log de resultados -->
+  <div class="log-card">
+    <h3>📋 Log de Resultados</h3>
+    <div class="log-container">
+      <div class="log-entry" *ngFor="let result of testResults; let i = index" [class.latest]="i === 0">
+        {{ result }}
+      </div>
+      <div class="empty-log" *ngIf="testResults.length === 0">
+        No hay resultados aún. Ejecuta alguna prueba.
+      </div>
+    </div>
+  </div>
+</div>

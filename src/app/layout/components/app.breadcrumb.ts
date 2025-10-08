@@ -58,7 +58,11 @@ interface Breadcrumb {
       height: 2rem !important;
       min-width: 2rem !important;
     }
-    
+
+    ::ng-deep.layout-breadcrumb-buttons button .p-button-icon {
+      font-size: 1.8rem !important;
+    }
+
     .app-config-mobile-button {
       height: 2rem !important;
       display: flex;
@@ -91,7 +95,8 @@ interface Breadcrumb {
     </nav>
     <div class="layout-breadcrumb-buttons" *ngIf="!isProductList()">
       <ng-container *ngFor="let item of lastVisited">
-        <button pButton pRipple type="button" [icon]="item.icon" class="p-button-rounded p-button-text p-button-plain" [title]="item.name" (click)="router.navigateByUrl(item.url)"></button>
+        <button pButton pRipple type="button" [icon]="item.icon" class="p-button-rounded p-button-text p-button-plain" 
+        [title]="item.name" (click)="router.navigateByUrl(item.url)"></button>
       </ng-container>
     </div>
   `,

@@ -28,7 +28,7 @@ import { SkeletonModule } from 'primeng/skeleton';
   template: `
     <form [formGroup]="loginForm" class="min-h-screen flex flex-col bg-cover"
       [style]="{ backgroundImage: 'url(/images/pages/login-bg.jpg)' }" novalidate>
-
+    
       <div class="min-h-screen flex flex-col bg-cover" [style]="{ backgroundImage: 'url(/images/pages/login-bg.jpg)' }">
         <div class="self-center mt-auto mb-auto">
           <div
@@ -37,6 +37,7 @@ import { SkeletonModule } from 'primeng/skeleton';
             <div class="text-muted-color mb-12 px-12"></div>
 
             <div class="w-full flex flex-col gap-4 px-4" *ngIf="!blockedDocument">
+            v1
               <p-icon-field>
                 <p-inputicon class="pi pi-envelope" />
                 <input pInputText class="w-full" placeholder="Usuario" formControlName="username" />

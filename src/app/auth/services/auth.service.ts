@@ -1,12 +1,15 @@
 import { Injectable, signal } from '@angular/core';
 import { User } from '../../types/user';
+import { LoggedUser } from '../../types/logged-user';
 import { CookieOptions, CookieService } from 'ngx-cookie-service';
 import { environment } from '../../../environments/environment';
 import { HttpClient } from '@angular/common/http';
-import { catchError, map, Observable, of, switchMap, tap } from 'rxjs';
+import { catchError, map, Observable, of, switchMap, tap, throwError } from 'rxjs';
 import { jwtDecode } from "jwt-decode";
 import { MessageService } from '../../components/services/message.service';
 import { Router } from '@angular/router';
+import { GeneralService } from '../../utils/services/general.service';
+import { BiometricAuthService } from './biometric-auth.service';
 
 @Injectable({
   providedIn: 'root'
@@ -27,7 +30,7 @@ export class AuthService {
     //HttpOnly: true, //la cookie sea accesible a través del protocolo HTTP y NO permite que la cookie sea accedida por un script de JavaScript en el navegador, SOLO atraves del servidor
   };
 
-  constructor(private http: HttpClient, private cookieS: CookieService, private messageS: MessageService, private router: Router) {
+  constructor(private http: HttpClient, private cookieS: CookieService, private messageS: MessageService, private router: Router, private generalS: GeneralService, public biometricAuthS: BiometricAuthService) {
     // Solo se agrega una vez al inicializar el servicio
     window.addEventListener('unload', () => {
       this.refreshCookie();
@@ -108,55 +111,78 @@ export class AuthService {
       return of(false);
     }
 
-    console.log('tokenValidate');
+    //console.log('tokenValidate');
 
-    const data = {
-      'authorizationCheck': true,
-      "data": {
-        "type": "refresh",
-        "attributes": {
-          'refresh': this.refresh,
+    // Crear la función async que maneje device_id
+    const performTokenValidate = async () => {
+      // Obtener device_id solo para móviles
+      const deviceId = await this.generalS.getDeviceId();
+
+      // Construir el objeto de atributos
+      const attributes: any = {
+        'refresh': this.refresh,
+      };
+
+      // Agregar device_id solo si estamos en móvil y se obtuvo correctamente
+      if (deviceId) {
+        attributes.device_id = deviceId;
+      }
+
+      const data = {
+        'authorizationCheck': true,
+        "data": {
+          "type": "refresh",
+          "attributes": attributes
         }
       }
-    }
 
-    return this.http.post(`${this._base_url}/auth/refresh/`, data).pipe(
-      tap((resp: any) => {
-        this.access = resp.data.access;
-        this.refresh = resp.data.refresh;
-        this.loggedin = true;
-      }),
-      switchMap((resp: any) => {
-        // Si no existe config, consultar settings/me
-        if (!this._config || Object.keys(this._config).length === 0) {
-          return this.http.get(`${this._base_url}/settings/settings/me/`).pipe(
-            tap((config: any) => {
-              this.config = config; // Asignar la configuración
-            }),
-            map(() => true), // Retornar true para indicar éxito
-            catchError((configError) => {
-              console.warn('Warning: Could not load configuration after refresh:', configError);
-              // No fallar el refresh si la configuración falla, solo advertir
-              return of(true);
-            })
-          );
-        } else {
-          // Si ya existe config, solo retornar true
-          return of(true);
-        }
-      }),
-      catchError(resp => {
-        this.messageS.changeMessage('Su sesión ha terminado');
-        this.loggedin = false;
-        return of(false)
-        // Si el token de refresh existe lo verifica contra el servidor para válidar si existe la sesión
-        // dado que estoy utilizando catchError tengo que regresar un Observable de tipo bool, estoy utilizando
-        // catchError aquí para poder inicializar this.loggedin  en false para que el sistema sepa que hubo un error 
-        // al recuperar el token y diga que la sesión esta cerrada ||| TENGO QUE TENER CUIDADO PORQUE SI HAY UN ERROR 
-        // AL RECUPERAR EL TOKEN DE ACTUALIZACIÓN DIRÁ QUE LA SESION SE CERRÓ, POR EJEMPLO SI SE VA EL INTERNET UNOS SEGUNDOS
-        // Y NO REGRESA EL TOVKEN LA SESIÓN SE CERRARÁ
-      }),
-    );
+      return this.http.post(`${this._base_url}/auth/refresh/`, data).pipe(
+        tap((resp: any) => {
+          this.access = resp.data.access;
+          this.refresh = resp.data.refresh;
+          this.loggedin = true;
+        }),
+        switchMap((resp: any) => {
+          // Si no existe config, consultar settings/me
+          if (!this._config || Object.keys(this._config).length === 0) {
+            return this.http.get(`${this._base_url}/settings/settings/me/`).pipe(
+              tap((config: any) => {
+                this.config = config; // Asignar la configuración
+              }),
+              map(() => true), // Retornar true para indicar éxito
+              catchError((configError) => {
+                console.warn('Warning: Could not load configuration after refresh:', configError);
+                // No fallar el refresh si la configuración falla, solo advertir
+                return of(true);
+              })
+            );
+          } else {
+            // Si ya existe config, solo retornar true
+            return of(true);
+          }
+        }),
+        catchError(resp => {
+          this.messageS.changeMessage('Su sesión ha terminado');
+          this.loggedin = false;
+          return of(false)
+          // Si el token de refresh existe lo verifica contra el servidor para válidar si existe la sesión
+          // dado que estoy utilizando catchError tengo que regresar un Observable de tipo bool, estoy utilizando
+          // catchError aquí para poder inicializar this.loggedin  en false para que el sistema sepa que hubo un error 
+          // al recuperar el token y diga que la sesión esta cerrada ||| TENGO QUE TENER CUIDADO PORQUE SI HAY UN ERROR 
+          // AL RECUPERAR EL TOKEN DE ACTUALIZACIÓN DIRÁ QUE LA SESION SE CERRÓ, POR EJEMPLO SI SE VA EL INTERNET UNOS SEGUNDOS
+          // Y NO REGRESA EL TOVKEN LA SESIÓN SE CERRARÁ
+        }),
+      );
+    };
+
+    // Convertir la función async en Observable
+    return new Observable<boolean>(observer => {
+      performTokenValidate().then(observable => {
+        observable.subscribe(observer);
+      }).catch(error => {
+        observer.error(error);
+      });
+    });
   }
 
   /**
@@ -164,44 +190,67 @@ export class AuthService {
    * @returns token de acceso
    */
   tokenValidateInterceptor(): Observable<string> {
-    console.log('tokenValidateInterceptor fiu llamado');
+    //console.log('tokenValidateInterceptor fiu llamado');
 
     if (!this.refresh) {
       this.messageS.showLoginDialog();
       return of('');
     }
 
-    const data = {
-      'authorizationCheck': true,
-      "data": {
-        "type": "refresh",
-        "attributes": {
-          'refresh': this.refresh,
+    // Crear la función async que maneje device_id
+    const performTokenValidateInterceptor = async () => {
+      // Obtener device_id solo para móviles
+      const deviceId = await this.generalS.getDeviceId();
+
+      // Construir el objeto de atributos
+      const attributes: any = {
+        'refresh': this.refresh,
+      };
+
+      // Agregar device_id solo si estamos en móvil y se obtuvo correctamente
+      if (deviceId) {
+        attributes.device_id = deviceId;
+      }
+
+      const data = {
+        'authorizationCheck': true,
+        "data": {
+          "type": "refresh",
+          "attributes": attributes
         }
       }
-    }
 
-    return this.http.post(`${this._base_url}/auth/refresh/`, data).pipe(
-      tap((resp: any) => {
-        this.access = resp.data.access;
-        this.refresh = resp.data.refresh;
-        this.loggedin = true;
-      }),
-      map(resp => {
-        return resp.data.access
-      }),
-      catchError(resp => {
-        this.messageS.showLoginDialog();
-        this.loggedin = false;
-        return of('')
-        // Si el token de refresh existe lo verifica contra el servidor para válidar si existe la sesión
-        // dado que estoy utilizando catchError tengo que regresar un Observable de tipo bool, estoy utilizando
-        // catchError aquí para poder inicializar this.loggedin  en false para que el sistema sepa que hubo un error 
-        // al recuperar el token y diga que la sesión esta cerrada ||| TENGO QUE TENER CUIDADO PORQUE SI HAY UN ERROR 
-        // AL RECUPERAR EL TOKEN DE ACTUALIZACIÓN DIRÁ QUE LA SESION SE CERRÓ, POR EJEMPLO SI SE VA EL INTERNET UNOS SEGUNDOS
-        // Y NO REGRESA EL TOVKEN LA SESIÓN SE CERRARÁ
-      }),
-    );
+      return this.http.post(`${this._base_url}/auth/refresh/`, data).pipe(
+        tap((resp: any) => {
+          this.access = resp.data.access;
+          this.refresh = resp.data.refresh;
+          this.loggedin = true;
+        }),
+        map(resp => {
+          return resp.data.access
+        }),
+        catchError(resp => {
+          this.messageS.showLoginDialog();
+          this.loggedin = false;
+          return of('')
+          // Si el token de refresh existe lo verifica contra el servidor para válidar si existe la sesión
+          // dado que estoy utilizando catchError tengo que regresar un Observable de tipo bool, estoy utilizando
+          // catchError aquí para poder inicializar this.loggedin  en false para que el sistema sepa que hubo un error 
+          // al recuperar el token y diga que la sesión esta cerrada ||| TENGO QUE TENER CUIDADO PORQUE SI HAY UN ERROR 
+          // AL RECUPERAR EL TOKEN DE ACTUALIZACIÓN DIRÁ QUE LA SESION SE CERRÓ, POR EJEMPLO SI SE VA EL INTERNET UNOS SEGUNDOS
+          // Y NO REGRESA EL TOVKEN LA SESIÓN SE CERRARÁ
+        }),
+      );
+    };
+
+    // Convertir la función async en Observable
+    return new Observable<string>(observer => {
+      performTokenValidateInterceptor().then(observable => {
+        observable.subscribe(observer);
+      }).catch(error => {
+        observer.error(error);
+      });
+    });
   }
 
   /**
@@ -211,43 +260,64 @@ export class AuthService {
    */
   public login(formData: { username: string; password: string }): Observable<User> {
 
-    // dja
-    const data = { // dja
-      'authorizationCheck': true,
-      "data": {
-        "type": "login",
-        "attributes": {
-          ...formData
+    // Crear la función async que maneje device_id
+    const performLogin = async () => {
+      // Obtener device_id solo para móviles
+      const deviceId = await this.generalS.getDeviceId();
+
+      // Construir el objeto de atributos
+      const attributes: any = { ...formData };
+
+      // Agregar device_id solo si estamos en móvil y se obtuvo correctamente
+      if (deviceId) {
+        attributes.device_id = deviceId;
+      }
+
+      // dja
+      const data = { // dja
+        'authorizationCheck': true,
+        "data": {
+          "type": "login",
+          "attributes": attributes
         }
       }
-    }
 
-    return this.http.post(` ${this._base_url}/auth/login/ `, data).pipe(
-      tap((resp: any) => {
-        this.access = resp.data.access; // dja
-        this.refresh = resp.data.refresh; // dja
-        this.loggedin = true;
-      }),
-      switchMap((resp: any) => {
-        // Hacer llamada a configuración después del login exitoso
-        return this.http.get(`${this._base_url}/settings/settings/me/`).pipe(
-          tap((config: any) => {
-            this.config = config; // Guardar la configuración en el servicio
+      return this.http.post(` ${this._base_url}/auth/login/ `, data).pipe(
+        tap((resp: any) => {
+          this.access = resp.data.access; // dja
+          this.refresh = resp.data.refresh; // dja
+          this.loggedin = true;
+        }),
+        switchMap((resp: any) => {
+          // Hacer llamada a configuración después del login exitoso
+          return this.http.get(`${this._base_url}/settings/settings/me/`).pipe(
+            tap((config: any) => {
+              this.config = config; // Guardar la configuración en el servicio
 
-          }),
-          map(() => resp.data.user), // Retornar el usuario original
-          catchError((configError) => {
-            console.warn('Warning: Could not load configuration after login:', configError);
-            // No fallar el login si la configuración falla, solo advertir
-            return of(resp.data.user);
-          })
-        );
-      }),
-      catchError((loginError) => {
-        // Manejar errores del login original
-        throw loginError;
-      })
-    );
+            }),
+            map(() => resp.data.user), // Retornar el usuario original
+            catchError((configError) => {
+              console.warn('Warning: Could not load configuration after login:', configError);
+              // No fallar el login si la configuración falla, solo advertir
+              return of(resp.data.user);
+            })
+          );
+        }),
+        catchError((loginError) => {
+          // Manejar errores del login original
+          throw loginError;
+        })
+      );
+    };
+
+    // Convertir la función async en Observable
+    return new Observable<User>(observer => {
+      performLogin().then(observable => {
+        observable.subscribe(observer);
+      }).catch(error => {
+        observer.error(error);
+      });
+    });
   }
 
   /**
@@ -280,7 +350,7 @@ export class AuthService {
   /**
    * Retorna los datos del usuario logueado
    */
-  get user(): User {
+  get user(): LoggedUser {
     return JSON.parse(this.cookieS.get('user')) //|| '';
     //return JSON.parse(localStorage.getItem('user'));
   }
@@ -311,7 +381,7 @@ export class AuthService {
    * Retiorna el token de acceso
    */
   get access(): string {
-    return this._tokenAccess//this.cookieS.get('access') || '';
+    return this._tokenAccess
     //return localStorage.getItem('access') || '';
   }
 
@@ -357,14 +427,8 @@ export class AuthService {
 
   set config(value: any) {
     // Recorrer recursivamente la estructura de attributes
-
     this._config = this.getCustomField(value?.data?.attributes);
-    console.log('Config::::::::', this._config);
   }
-
-
-
-
 
   /**
    * Procesa la configuración de draw para una aplicación específica
@@ -451,9 +515,12 @@ export class AuthService {
    * @param cols Objeto que contiene la configuración de columnas
    * @param appKey Clave de la aplicación (clave2)
    * @param customField Objeto donde se almacenará la configuración procesada
+   * @param fields Objeto fields que contiene la configuración completa de los campos
    */
-  private processColumnsConfig(cols: any, appKey: string, customField: any): void {
+  private processColumnsConfig(cols: any, appKey: string, customField: any, fields: any): void {
     if (!cols || typeof cols !== "object") return;
+
+    //console.log('appKey:', appKey, 'cols:', cols, 'customField antes:', customField);
 
     // Inicializar la estructura si no existe
     if (!customField[appKey]) {
@@ -471,23 +538,191 @@ export class AuthService {
     // Procesar todos los hijos de cols
     for (const [claveHijo, hijo] of Object.entries(cols)) {
       const hijoObj = hijo as any;
+      const fieldName = hijoObj['field'];
+      if (!fieldName) continue; // Si no tiene field, saltar
+
+      // Verificar si el objeto tiene información completa o solo el field
+      let columnInfo: any = {};
+
+      /*if (hijoObj['label'] !== undefined || hijoObj['hide'] !== undefined || hijoObj['sortable'] !== undefined) {
+        // Objeto completo: usar información directa
+        columnInfo = {
+          label: hijoObj['label'],
+          order: claveHijo,
+          hide: hijoObj['hide'],
+          sortable: hijoObj['sortable']
+        };
+      } else {*/
+      // Objeto simplificado: buscar información en fields.cols
+
+      const fieldConfig = fields?.[fieldName]?.cols;
+      if (fieldConfig) {
+        columnInfo = {
+          label: fieldConfig['label'] || fieldName,
+          order: fieldConfig['order'] || claveHijo,
+          hide: fieldConfig['hide'] !== undefined ? fieldConfig['hide'] : false,
+          sortable: fieldConfig['sortable'] !== undefined ? fieldConfig['sortable'] : true
+        };
+      } /*else {
+          // Si no se encuentra en fields.cols, usar valores por defecto
+          columnInfo = {
+            label: fieldName,
+            order: claveHijo,
+            hide: false,
+            sortable: true
+          };
+        }*/
+      //}
 
       // Almacenar la etiqueta del campo
-      customField[appKey]['cols'][hijoObj['field']] = hijoObj['label'];
+      customField[appKey]['cols'][fieldName] = columnInfo.label;
 
       // Configuración de columnas (orden, visibilidad, ordenamiento)
-      customField[appKey]['config_cols'][hijoObj['field']] = {
-        'order': claveHijo,
-        'hide': hijoObj['hide'],
-        'sortable': hijoObj['sortable']
+      customField[appKey]['config_cols'][fieldName] = {
+        'order': columnInfo.order,
+        'hide': columnInfo.hide,
+        'sortable': columnInfo.sortable
       };
     }
+  }
+
+
+  /**
+   * Verifica si la autenticación biométrica está disponible y configurada
+   */
+  isBiometricAvailable(): Observable<boolean> {
+    return this.biometricAuthS.checkBiometricAvailability().pipe(
+      map(result => result.available && this.biometricAuthS.isDeviceRegistered())
+    );
+  }
+
+  /**
+   * Configura la autenticación biométrica para el usuario actual
+   */
+  setupBiometricAuth(): Observable<boolean> {
+    const currentUser = this.user;
+    if (!currentUser || !currentUser.username) {
+      return throwError(() => new Error('No hay usuario logueado'));
+    }
+
+    return this.biometricAuthS.checkBiometricAvailability().pipe(
+      switchMap(availability => {
+        if (!availability.available) {
+          return throwError(() => new Error(`Autenticación biométrica no disponible: ${availability.status}`));
+        }
+
+        return this.biometricAuthS.registerDeviceForBiometric(currentUser.username).pipe(
+          tap(() => {
+            this.messageS.changeMessage(
+              'Autenticación biométrica configurada correctamente',
+              null,
+              {},
+              'success'
+            );
+          }),
+          map(() => true)
+        );
+      }),
+      catchError(error => {
+        this.messageS.changeMessage(
+          'Error al configurar autenticación biométrica',
+          error,
+          {},
+          'error'
+        );
+        return of(false);
+      })
+    );
+  }
+
+  /**
+   * Inicia sesión usando autenticación biométrica
+   */
+  loginWithBiometrics(username?: string): Observable<User> {
+    return this.biometricAuthS.loginWithBiometrics(username).pipe(
+      tap((resp: any) => {
+        this.access = resp.access;
+        this.refresh = resp.refresh;
+        this.loggedin = true;
+      }),
+      switchMap((resp: any) => {
+        // Cargar configuración después del login biométrico
+        if (!this._config || Object.keys(this._config).length === 0) {
+          return this.http.get(`${this._base_url}/settings/settings/me/`).pipe(
+            tap((config: any) => {
+              this.config = config;
+            }),
+            map(() => resp.user),
+            catchError((configError) => {
+              console.warn('Warning: Could not load configuration after biometric login:', configError);
+              return of(resp.user);
+            })
+          );
+        } else {
+          return of(resp.user);
+        }
+      }),
+      catchError(error => {
+        this.messageS.changeMessage(
+          'Error en autenticación biométrica',
+          error,
+          {},
+          'error'
+        );
+        return throwError(() => error);
+      })
+    );
+  }
+
+  /**
+   * Desactiva la autenticación biométrica para el usuario actual
+   */
+  disableBiometricAuth(): Observable<boolean> {
+    const currentUser = this.user;
+    if (!currentUser || !currentUser.username) {
+      return of(true); // No hay usuario, no hay nada que desactivar
+    }
+
+    return this.biometricAuthS.unregisterDevice(currentUser.username).pipe(
+      tap(() => {
+        this.messageS.changeMessage(
+          'Autenticación biométrica desactivada',
+          null,
+          {},
+          'success'
+        );
+      }),
+      map(() => true),
+      catchError(error => {
+        this.messageS.changeMessage(
+          'Error al desactivar autenticación biométrica',
+          error,
+          {},
+          'warning'
+        );
+        return of(false);
+      })
+    );
+  }
+
+  /**
+   * Verifica si el dispositivo tiene configurada la autenticación biométrica
+   */
+  isDeviceRegisteredForBiometric(username?: string): boolean {
+    return this.biometricAuthS.isDeviceRegistered(username);
+  }
+
+  /**
+   * Obtiene información del registro biométrico
+   */
+  getBiometricInfo(username?: string) {
+    return this.biometricAuthS.getBiometricInfo(username);
   }
 
   getCustomField(data: any): any {
     if (!data || typeof data !== "object") return {};
 
-    console.log('originallllllllllllll', data);
+    //console.log('originallllllllllllll', data);
 
     // Declaración de customField con estructura que incluye cols, config_cols, draw, general, fields
     const customField: {
@@ -507,7 +742,7 @@ export class AuthService {
       }
 
       // 2º nivel: dinámico (accessory, asset, etc.)
-      for (const [clave2, nivel2] of Object.entries(nivel1)) {
+      for (const [clave2, nivel2] of Object.entries(nivel1 as any)) {
         if (!nivel2 || typeof nivel2 !== "object") {
           continue;
         }
@@ -525,7 +760,7 @@ export class AuthService {
 
         // Procesar cols si existe
         if (cols && typeof cols === "object") {
-          this.processColumnsConfig(cols, clave2, customField);
+          this.processColumnsConfig(cols, clave2, customField, fields);
         }
 
         // Procesar draw si existe

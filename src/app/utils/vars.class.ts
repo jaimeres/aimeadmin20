@@ -89,6 +89,11 @@ export class Vars {
   public headerDialog = signal('');
 
   /**
+   * Encabezado del dialogo para el crud, contiene el encabezado de la app ACTUAL
+   */
+  public headerDialogSecundary = signal('');
+
+  /**
    * Contiene los elementos seleccionados de la tabla de la app ACTUAL
    */
   public selected = signal<any[]>([]);
@@ -141,7 +146,7 @@ export class Vars {
   /**
    * campos para la consulta al servidor
    **/
-  protected fields = '';
+  protected fields: { [key: string]: string } = { 0: '' };
 
   /**
    * ordenamiento para la consulta al servidor
@@ -368,7 +373,7 @@ export class Vars {
    * base_product _data, sirver para crear las columnas de la tabla, que contiene datos de mas de una app y que el Options
    * se envia nombreCampo _data normalmente son campos fk
    */
-  additionalFieldsAppCols: any[] = [];
+  additionalFieldsAppCols: { [key: string]: any } = {};
 
   /**
    * Campos que se deben excluir de la tabla, por ejemplo, id, description, sys_data
@@ -2845,7 +2850,6 @@ export class Vars {
             type: 'input-text',
             autofocus: false
           },
-
           12: {
             class: 'col-span-12',
             class_md: 'md:col-span-12',

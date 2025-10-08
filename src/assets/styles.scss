@@ -110,13 +110,13 @@ p-dialog .p-button-icon-only.p-button-rounded {
   overflow: auto;
 }
 
-.width-1200px-Custom {
+.width-1200px-custom {
   width: 1200px;
-  min-height: 90%;
+  //min-height: 90%;
   overflow: auto;
 }
 
-.width-1000px-Custom {
+.width-1000px-custom {
   width: 1000px;
   min-height: 50%;
   overflow: auto;
@@ -169,6 +169,14 @@ p-dialog .p-button-icon-only.p-button-rounded {
   height: 600px !important;
 }
 
+.height-650px-custom {
+  height: 650px !important;
+}
+
+.height-700px-custom {
+  height: 700px !important;
+}
+
 .p-tabpanels {
   padding: 0px !important;
 }
@@ -184,19 +192,19 @@ p-dialog .p-button-icon-only.p-button-rounded {
 
 /* altura de los input*/
 .height-input-custom {
-  height: 32px;
-  width: 100%;
+  height: 32px !important;
+  width: 100% !important;
 }
 
 .height-icon-custom {
-  height: 32px;
-  width: 100%;
+  height: 32px !important;
+  width: 100% !important;
 }
 
 /* Estilos para dispositivos móviles */
 @media only screen and (max-width: 767px) {
   .table-fit-Custom {
-    height: calc(100vh - 100px);
+    height: calc(100dvh - 100px);
     /* Establece la altura del contenedor principal al 100% del viewport */
   }
 
@@ -208,12 +216,23 @@ p-dialog .p-button-icon-only.p-button-rounded {
     padding-top: 1px;
     display: none !important;
   }
+
+  /* altura de los input*/
+  .height-input-custom {
+    height: 40px !important;
+    width: 100% !important;
+  }
+
+  .height-icon-custom {
+    height: 40px !important;
+    width: 100% !important;
+  }
 }
 
 /* Estilos para tabletas */
 @media only screen and (min-width: 768px) and (max-width: 1023px) {
   .table-fit-Custom {
-    height: calc(100vh - 98px);
+    height: calc(100dvh - 98px);
     /* Establece la altura del contenedor principal al 100% del viewport */
 
   }
@@ -223,12 +242,13 @@ p-dialog .p-button-icon-only.p-button-rounded {
   .hide-md-custom {
     display: none !important;
   }
+
 }
 
 /* Estilos para pantallas de escritorio */
 @media only screen and (min-width: 1024px) {
   .table-fit-Custom {
-    height: calc(100vh - 98px) !important;
+    height: calc(100dvh - 98px) !important;
     /* Establece la altura del contenedor principal al 100% del viewport */
   }
 

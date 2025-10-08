@@ -70,7 +70,50 @@ export class MaintenanceComponent extends CRUD implements OnInit {
     ]
 
 
-    this.initCRUD()
+    this.initCRUD();
+
+    /*this.startMenu.set([
+      {
+        label: 'Cargando...',
+        //command: () => this.setStatus(null)
+      }
+    ]);*/
   }
+
+  /**
+ * se llama cuando el componente hijo avisa que el dialogo fue cerrado
+ */
+  closeDialogRequest() {
+    this.tasks_module = [];
+  }
+
+  public installation = false;
+  getInstallation() {
+    this.installation = true;
+  }
+
+
+  /**
+    * Sobre escribo la funcion para que se ejecute cada vez que se selecciona un registro y poder cargar los botones de estados
+    * @param event Elemento seleccionado
+    */
+  /*override onSelection(event: any) {
+    super.onSelection(event);
+
+    const ids_task = this.selected()[0]?.tasks;
+    console.log('ids_task..................', this.selected()[0]);
+
+    if (ids_task) {
+      const id = this.selected()[0]?.status;
+
+      this.getStatus({ module: 'MA', id, ids_task });
+      const ins = {
+        label: 'Instalar',
+        command: () => this.getInstallation()
+      }
+
+      this.startMenu.update(current => [...current, ins,]);
+    }
+  }*/
 
 }
