@@ -177,7 +177,9 @@ export class CRUDService {
   };
 
   config_cols(module: string) {
-    return this.authS.config[module]['config_cols']
+    console.log(this.authS.config[module]['config_cols']);
+
+    return this.authS.config[module]['config_cols'];
   }
 
   drawForm(module: string) {

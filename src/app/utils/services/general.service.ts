@@ -495,9 +495,9 @@ export class GeneralService {
         relationships: dja.relationships
       };
 
-      data.utc_created_at = this.timeZone(dja.attributes?.utc_created_at);
-      data.utc_modified_at = this.timeZone(dja.attributes?.utc_modified_at);
-      data.utc_inactivated_at = this.timeZone(dja.attributes?.utc_inactivated_at);
+      data.created_at = this.timeZone(dja.attributes?.created_at);
+      data.modified_at = this.timeZone(dja.attributes?.modified_at);
+      data.inactivated_at = this.timeZone(dja.attributes?.inactivated_at);
 
       timeZone.forEach((field) => {
         data[field + '__text'] = this.timeZone(dja.attributes[field]);

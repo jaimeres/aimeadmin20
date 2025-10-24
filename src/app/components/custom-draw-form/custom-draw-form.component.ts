@@ -1,6 +1,6 @@
 import { CommonModule, KeyValue } from '@angular/common';
-import { FormControl, FormGroup, FormsModule, ReactiveFormsModule } from '@angular/forms';
-import { Component, ElementRef, EventEmitter, inject, Input, Output, signal, SimpleChanges, ViewChild } from '@angular/core';
+import { FormControl, FormGroup, FormsModule, ReactiveFormsModule, FormArray, Validators, FormBuilder } from '@angular/forms';
+import { Component, ElementRef, EventEmitter, inject, Input, Output, signal, computed, SimpleChanges, ViewChild } from '@angular/core';
 // ************************ADAPTADO PARA CAPACITOR*********************
 import { Camera, CameraResultType, CameraSource } from '@capacitor/camera';
 import { AutoCompleteModule } from 'primeng/autocomplete';
@@ -13,6 +13,7 @@ import { ImageModule } from 'primeng/image';
 import { InputNumberModule } from 'primeng/inputnumber';
 import { InputTextModule } from 'primeng/inputtext';
 import { MultiSelectModule } from 'primeng/multiselect';
+import { PasswordModule } from 'primeng/password';
 import { SelectModule } from 'primeng/select';
 import { SelectButtonModule } from 'primeng/selectbutton';
 import { SplitButton } from 'primeng/splitbutton';
@@ -25,10 +26,14 @@ import { InputGroupAddonModule } from 'primeng/inputgroupaddon';
 import { AutoFocusModule } from 'primeng/autofocus';
 
 import { SplitButtonModule } from 'primeng/splitbutton';
+import { TableModule } from 'primeng/table';
+import { TagModule } from 'primeng/tag';
+import { TooltipModule } from 'primeng/tooltip';
 
 import { CRUDService } from '../../utils/services/crud.service';
 import { SharedDynamicDataService } from '@/utils/services/shared-dynamic-data.service';
 import { GeneralService } from '@/utils/services/general.service';
+import { CustomButtonCrudComponent } from '../custom-button-crud/custom-button-crud.component';
 
 @Component({
   selector: 'app-custom-draw-form',
@@ -52,10 +57,15 @@ import { GeneralService } from '@/utils/services/general.service';
     InputTextModule,
     ButtonModule,
     ImageModule,
+    PasswordModule,
     FloatLabelModule,
     InputGroupModule,
     InputGroupAddonModule,
     AutoFocusModule,
+    TableModule,
+    TagModule,
+    TooltipModule,
+    CustomButtonCrudComponent,
 
     SplitButtonModule
   ],
@@ -71,6 +81,7 @@ export class CustomDrawFormComponent {
   private crudS: any = inject(CRUDService);
   private sharedS: SharedDynamicDataService = inject(SharedDynamicDataService);
   private generalS: GeneralService = inject(GeneralService); // funciones generales
+  private fb: FormBuilder = inject(FormBuilder);
 
   @Input() formGroup!: FormGroup;
   @Input() drawForm: any;
@@ -97,6 +108,14 @@ export class CustomDrawFormComponent {
   @Output() filesAction = new EventEmitter<[]>();
   @Output() files64Action = new EventEmitter<[]>();
 
+  // Table outputs
+  @Output() onTableRowSelect = new EventEmitter<any>();
+  @Output() onTableRowUnselect = new EventEmitter<any>();
+  @Output() onTableAddRow = new EventEmitter<any>();
+  @Output() onTableEditRow = new EventEmitter<any>();
+  @Output() onTableDeleteRow = new EventEmitter<any>();
+  @Output() onTableCellEdit = new EventEmitter<any>();
+
   formGroupSignal = signal<FormGroup | null>(null);
   drawFormSignal = signal<any>(null);
   appSignal = signal<string>('');
@@ -107,14 +126,69 @@ export class CustomDrawFormComponent {
 
   dropdownOptionsSignal = signal<any>([]);
 
+  // Signal para forzar recálculo del computed signal de firmas
+  private signatureUpdateTrigger = signal<number>(0);
+
+  /**
+   * Computed signal que contiene los datos de todas las firmas
+   * Se recalcula automáticamente solo cuando cambia formGroupSignal O signatureUpdateTrigger
+   * Estructura: { [field: string]: { all: any[], history: any[], hasData: boolean, hasHistory: boolean } }
+   */
+  signatureDataSignal = computed(() => {
+    // Incluir el trigger para forzar recalculación
+    this.signatureUpdateTrigger();
+
+    const formGroup = this.formGroupSignal();
+    if (!formGroup) return {};
+
+    const signatureData: Record<string, {
+      all: any[];
+      history: any[];
+      hasData: boolean;
+      hasHistory: boolean;
+    }> = {};
+
+    // Iterar sobre todos los controles del formulario
+    Object.keys(formGroup.controls).forEach(fieldName => {
+      const control = formGroup.get(fieldName);
+
+      // Solo procesar FormArrays (campos de firma)
+      if (control instanceof FormArray) {
+        const allData = control.value || [];
+        const historyData = allData.length > 1 ? allData.slice(0, -1) : [];
+
+        signatureData[fieldName] = {
+          all: allData,
+          history: historyData,
+          hasData: allData.length > 0,
+          hasHistory: historyData.length > 0
+        };
+
+        // 🔍 DEBUG: Ver qué datos se están procesando
+        console.log('📊 signatureDataSignal procesando:', {
+          fieldName,
+          allDataLength: allData.length,
+          historyLength: historyData.length,
+          hasHistory: historyData.length > 0,
+          allData,
+          historyData
+        });
+      }
+    });
+
+    console.log('✅ signatureDataSignal resultado completo:', signatureData);
+    return signatureData;
+  });
+
   //funcion para verificar si los datos ya existen en sharedS.data o sharedS.drawDropdown
   dataDropdownExists(element: any, force = false): boolean {
     // si tiene opciones no se consulta al servidor    
     //aqui voy estoy revisando porque option no se inicializa con los dartos del choice y como se parseMarkerlos dropdawn en sabe al modulo
     //no lleva force ya que no consulta al servidor
-    if (element.options) {
+    if (element.options && Array.isArray(element.options) && element.options.length > 0) {
       return element.options;
     }
+
 
     //si ya existe datos para ese dropdown no se vuelve a consultar
     if (this.sharedS.data[element.field] && !force) {
@@ -209,15 +283,89 @@ export class CustomDrawFormComponent {
     }
   }
 
+  initializeTableFields(drawForm: any) {
+    if (drawForm.hasOwnProperty('grid')) {
+      for (const key in drawForm.grid) {
+        if (drawForm.grid.hasOwnProperty(key)) {
+          const element = drawForm.grid[key];
+
+          if (element?.type === 'table') {
+            const control = this.getFormControl(element.field);
+            if (control && (!control.value || control.value.length === 0)) {
+              // Initialize with default value from config or empty array
+              const defaultValue = element.default?.value || [];
+              const initialData = defaultValue.length > 0 ? defaultValue : this.initializeTableData(element);
+              control.setValue(initialData);
+            }
+          } else if (element?.card || element?.fieldset) {
+            const nestedElements = element.card || element.fieldset;
+            for (const key2 in nestedElements) {
+              if (nestedElements.hasOwnProperty(key2)) {
+                const element2 = nestedElements[key2];
+                if (element2?.type === 'table') {
+                  const control = this.getFormControl(element2.field);
+                  if (control && (!control.value || control.value.length === 0)) {
+                    const defaultValue = element2.default?.value || [];
+                    const initialData = defaultValue.length > 0 ? defaultValue : this.initializeTableData(element2);
+                    control.setValue(initialData);
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+
+  /**
+   * Inicializa los campos de firma
+   */
+  initializeSignatureFields(drawForm: any) {
+    if (drawForm.hasOwnProperty('grid')) {
+      for (const key in drawForm.grid) {
+        if (drawForm.grid.hasOwnProperty(key)) {
+          const element = drawForm.grid[key];
+
+          if (element?.type === 'signature') {
+            this.initSignatureData(element.field, element);
+          } else if (element?.card || element?.fieldset) {
+            const nestedElements = element.card || element.fieldset;
+            for (const key2 in nestedElements) {
+              if (nestedElements.hasOwnProperty(key2)) {
+                const element2 = nestedElements[key2];
+                if (element2?.type === 'signature') {
+                  this.initSignatureData(element2.field, element2);
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+
   ngOnChanges(changes: SimpleChanges) {
 
     if (changes['formGroup']) {
-      this.formGroupSignal.set(changes['formGroup'].currentValue);
+      const previousValue = changes['formGroup'].previousValue;
+      const currentValue = changes['formGroup'].currentValue;
+
+      this.formGroupSignal.set(currentValue);
+
+      // Si el formGroup cambió (reset o nuevo objeto), limpiar todos los canvas de firma
+      if (previousValue !== currentValue && currentValue) {
+        setTimeout(() => {
+          this.clearAllSignatureCanvases();
+        }, 300);
+      }
     }
     if (changes['drawForm']) {
       this.drawFormSignal.set(changes['drawForm'].currentValue);
 
       this.dropdownOptions(changes['drawForm'].currentValue);
+      this.initializeTableFields(changes['drawForm'].currentValue);
+      this.initializeSignatureFields(changes['drawForm'].currentValue);
 
     }
     if (changes['app']) {
@@ -296,6 +444,41 @@ export class CustomDrawFormComponent {
     const currentValue = this.formGroupSignal()?.get(field)?.value;
     const formValues = this.formGroupSignal()?.value;
 
+    // Asignar las opciones del dropdown al objeto
+    /*if (this.dropdownOptionsSignal()[field]) {
+      object.choices = this.dropdownOptionsSignal()[field];
+      object.options = this.dropdownOptionsSignal()[field];
+    }*/
+
+    const eventValue = event.value; // ID/valor seleccionado del dropdown
+
+    // Asignar las opciones del dropdown al objeto
+    /*if (this.dropdownOptionsSignal()[field]) {
+      object.choices = this.dropdownOptionsSignal()[field];
+      object.options = this.dropdownOptionsSignal()[field];
+    }*/
+
+    //asigna el valor del campo object_parent_form_data_X al objeto completo
+    if (field.startsWith('object_parent_form_data')) {
+      const newField = field.replace('object_', '');
+      const foundObject = this.dropdownOptionsSignal()[field]?.
+        find((item: any) => item.id === currentValue || item.value === currentValue);
+
+      // Si existe cols_values y es un array válido, filtrar el objeto, sino usar el objeto completo
+      let currentValueObject = foundObject;
+      if (foundObject && object?.cols_values && Array.isArray(object.cols_values) && object.cols_values.length > 0) {
+        const filteredObject: any = {};
+        object.cols_values.forEach((key: string) => {
+          if (foundObject.hasOwnProperty(key)) {
+            filteredObject[key] = foundObject[key];
+          }
+        });
+        currentValueObject = filteredObject;
+      }
+
+      this.formGroupSignal()?.get(newField)?.setValue(currentValueObject);
+    }
+
     // Crear el objeto con la información completa
     const changeInfo = {
       event,
@@ -313,13 +496,12 @@ export class CustomDrawFormComponent {
     const childrenActive = children?.active || false;
     const fields = children?.fields || {};
 
+
     if (childrenActive) {
       for (const key in fields) {
         let setCurrentValue = '';
 
         if (fields.hasOwnProperty(key)) {
-
-
           const dropdownOptions = this.dataDropdownExists(object);
           let currentDropdownOption: any = [];
           if (dropdownOptions) {
@@ -329,6 +511,7 @@ export class CustomDrawFormComponent {
           const final = fields[key]?.final; //active
           const manual = fields[key]?.manual;
           const remote = fields[key]?.remote;
+
           if (final) {
 
             const filterGroup = final?.filter_group;
@@ -366,6 +549,7 @@ export class CustomDrawFormComponent {
             const fieldName = remote?.field_name;
 
             if (fieldName) {
+              //°°°pendiente de revisar si afecta las cargar cuando esta filtrado
             }
           }
         }
@@ -379,8 +563,36 @@ export class CustomDrawFormComponent {
    * @param field Campo que se esta modificando
    */
   onSelectAutoComplete(event: any, field: any, o: any = null) {
+    // Buscar el objeto de configuración del campo en drawForm
+    /*let fieldObject = null;
+    const currentDrawForm = this.drawForm();
+
+    if (currentDrawForm && Array.isArray(currentDrawForm)) {
+      fieldObject = currentDrawForm.find((item: any) => item.field === field);
+    }
+
+    // Asignar las opciones del dropdown al objeto si existen
+    if (fieldObject && this.dropdownOptionsSignal()[field]) {
+      fieldObject.choices = this.dropdownOptionsSignal()[field];
+      fieldObject.options = this.dropdownOptionsSignal()[field];
+    }
+
+    // Crear un evento similar al de onChangeDropdown
+    const changeInfo = {
+      event,
+      field,
+      object: fieldObject,
+      formValues: this.formGroupSignal()?.value,
+      currentValue: event,  // En autocomplete, el event ya contiene el objeto seleccionado
+      changedField: field,
+      changedValue: event
+    };
+
+    this.onSelectAutoCompleteAction.emit(changeInfo);*/
+
     this.onSelectAutoCompleteAction.emit({ event, field })
   }
+  //PEPEPEPEP
 
   getType(value: any) {
     return value?.type //|| 'input-text';
@@ -634,5 +846,1208 @@ export class CustomDrawFormComponent {
     return null;
   }
 
+  // Table methods
+  initializeTableData(tableConfig: any): any[] {
+    const initialRows = tableConfig.table_config?.initial_rows || 0;
+    const data: any[] = [];
+
+    console.log('Inicializando tabla con filas:', initialRows);
+
+
+    for (let i = 0; i < initialRows; i++) {
+      const row: any = {};
+      tableConfig.columns.forEach((col: any) => {
+        row[col.field] = '';
+      });
+      data.push(row);
+    }
+
+    return data;
+  }
+
+  getTableData(field: string): any[] {
+    const control = this.getFormControl(field);
+    const currentValue = control?.value;
+
+    if (Array.isArray(currentValue)) {
+      return currentValue;
+    }
+
+    return [];
+  }
+
+  updateTableFormControl(field: string, data: any[]): void {
+    const control = this.getFormControl(field);
+    if (control) {
+      control.setValue([...data]);
+      control.markAsDirty();
+    }
+  }
+
+  onRowSelect(event: any, field: string): void {
+    this.onTableRowSelect.emit({ event, field, data: this.getTableData(field) });
+  }
+
+  onRowUnselect(event: any, field: string): void {
+    this.onTableRowUnselect.emit({ event, field, data: this.getTableData(field) });
+  }
+
+  addTableRow(field: string, tableConfig: any): void {
+    const formGroup = this.formGroupSignal();
+    if (!formGroup) return;
+
+    const formArray = formGroup.get(field) as FormArray;
+    if (!formArray) return;
+
+    // Crear un nuevo FormGroup para la fila
+    const newRowGroup: any = {};
+
+    tableConfig.columns.forEach((col: any) => {
+      const validators: any[] = [];
+
+      if (col.required) {
+        validators.push(Validators.required);
+      }
+      if (col.validation?.max_length) {
+        validators.push(Validators.maxLength(col.validation.max_length));
+      }
+      if (col.validation?.min_length) {
+        validators.push(Validators.minLength(col.validation.min_length));
+      }
+
+      let defaultValue: any = '';
+      if (col.type === 'input-number') {
+        defaultValue = null;
+      } else if (col.type === 'date') {
+        defaultValue = null;
+      } else if (col.type === 'multi-select') {
+        defaultValue = [];
+      } else if (col.type === 'checkbox') {
+        defaultValue = false;
+      }
+
+      newRowGroup[col.field] = new FormControl(defaultValue, validators);
+    });
+
+    formArray.push(this.fb.group(newRowGroup));
+
+    this.onTableAddRow.emit({
+      field,
+      newRow: newRowGroup,
+      data: formArray.value
+    });
+  }
+
+  editTableRow(rowData: any, field: string): void {
+    this.onTableEditRow.emit({ rowData, field, data: this.getTableData(field) });
+  }
+
+  deleteTableRow(rowIndex: number, field: string): void {
+    const formGroup = this.formGroupSignal();
+    if (!formGroup) return;
+
+    const formArray = formGroup.get(field) as FormArray;
+    if (!formArray) return;
+
+    const rowToDelete = formArray.at(rowIndex)?.value;
+
+    // Eliminar del FormArray
+    formArray.removeAt(rowIndex);
+    
+    // Forzar actualización de validación del FormArray
+    formArray.markAsTouched();
+    formArray.updateValueAndValidity();
+
+    this.onTableDeleteRow.emit({
+      rowData: rowToDelete,
+      rowIndex,
+      field,
+      data: formArray.value
+    });
+  }
+
+  onCellEdit(event: any, field: string, rowIndex: number, colField: string): void {
+    const currentData = this.getTableData(field);
+    if (currentData[rowIndex]) {
+      currentData[rowIndex][colField] = event.target.value;
+      this.updateTableFormControl(field, currentData);
+      this.onTableCellEdit.emit({
+        event,
+        field,
+        rowIndex,
+        colField,
+        value: event.target.value,
+        data: currentData
+      });
+    }
+  }
+
+  getColumnType(column: any): string {
+    return column.type || 'input-text';
+  }
+
+  isColumnEditable(column: any): boolean {
+    return column.editable !== undefined ? column.editable : true;
+  }
+
+  isColumnRequired(column: any): boolean {
+    return column.required !== undefined ? column.required : false;
+  }
+
+  getColumnWidth(column: any): string {
+    return column.width || 'auto';
+  }
+
+  getTagSeverity(column: any): string {
+    return column.tag?.severity || 'info';
+  }
+
+  formatTagValue(value: any, column: any): string {
+    if (!column.tag?.active) return value;
+
+    const tagType = column.tag?.type || 'none';
+
+    switch (tagType) {
+      case 'uppercase':
+        return String(value).toUpperCase();
+      case 'lowercase':
+        return String(value).toLowerCase();
+      case 'capitalize':
+        return String(value).charAt(0).toUpperCase() + String(value).slice(1).toLowerCase();
+      case 'capitalize-words':
+        return String(value).replace(/\w\S*/g, (txt) =>
+          txt.charAt(0).toUpperCase() + txt.substr(1).toLowerCase());
+      default:
+        return value;
+    }
+  }
+
+  validateCell(value: any, column: any, showErrors: boolean = false): boolean {
+    // Siempre validar campos obligatorios
+    if (this.isColumnRequired(column) && (!value || value.toString().trim() === '')) {
+      return showErrors ? false : true; // Solo mostrar error si showErrors es true
+    }
+
+    if (column.validation) {
+      const validation = column.validation;
+      const strValue = value?.toString() || '';
+
+      if (validation.min_length && strValue.length < validation.min_length) {
+        return showErrors ? false : true;
+      }
+
+      if (validation.max_length && strValue.length > validation.max_length) {
+        return showErrors ? false : true;
+      }
+    }
+
+    return true;
+  }
+
+  getCellClass(value: any, column: any, tableField: string, rowIndex: number): string {
+    // Mostrar error si:
+    // 1. La fila está en edición completa
+    // 2. La celda específica está en edición
+    // 3. Se solicitó validación de tabla
+    const isRowEditing = this.isRowEditing(tableField, rowIndex);
+    const isCellEditing = this.isCellEditing(tableField, rowIndex, column.field);
+    const tableValidationRequested = this.tablesToValidate[tableField] || false;
+    
+    const showErrors = isRowEditing || isCellEditing || tableValidationRequested;
+    
+    const isValid = this.validateCell(value, column, showErrors);
+    return isValid ? '' : 'p-invalid';
+  }
+
+  isAnyRowEditing(tableField: string): boolean {
+    // Verificar si alguna fila está en edición (completa o celda)
+    const rowEditingKeys = Object.keys(this.editingRows).filter(key => 
+      key.startsWith(tableField + '_') && this.editingRows[key]
+    );
+    const cellEditingKeys = Object.keys(this.editingCells).filter(key => 
+      key.startsWith(tableField + '_') && this.editingCells[key]
+    );
+    return rowEditingKeys.length > 0 || cellEditingKeys.length > 0;
+  }
+
+  isRowOrCellEditing(tableField: string, rowIndex: number): boolean {
+    // Verificar si la fila está en edición completa o alguna de sus celdas
+    if (this.isRowEditing(tableField, rowIndex)) return true;
+    
+    // Buscar si alguna celda de esta fila está en edición
+    const cellPrefix = `${tableField}_${rowIndex}_`;
+    return Object.keys(this.editingCells).some(key => 
+      key.startsWith(cellPrefix) && this.editingCells[key]
+    );
+  }  // Métodos para edición de celdas
+  editingRows: { [key: string]: boolean } = {};
+  editingCells: { [key: string]: boolean } = {};
+  tablesToValidate: { [key: string]: boolean } = {};
+  originalRowData: { [key: string]: any } = {};
+
+  startRowEdit(tableField: string, rowIndex: number): void {
+    const rowKey = `${tableField}_${rowIndex}`;
+    this.editingRows[rowKey] = true;
+
+    // Guardar datos originales para poder cancelar
+    const currentData = this.getTableData(tableField);
+    this.originalRowData[rowKey] = { ...currentData[rowIndex] };
+  }
+
+  startCellEdit(tableField: string, rowIndex: number, colField: string): void {
+    const cellKey = `${tableField}_${rowIndex}_${colField}`;
+    this.editingCells[cellKey] = true;
+
+    // Guardar dato original de la celda
+    const currentData = this.getTableData(tableField);
+    this.originalRowData[cellKey] = currentData[rowIndex]?.[colField];
+  }
+
+  finishRowEdit(tableField: string, rowIndex: number): void {
+    const rowKey = `${tableField}_${rowIndex}`;
+
+    // Validar todas las celdas de la fila antes de guardar
+    const currentData = this.getTableData(tableField);
+    const formGroup = this.formGroupSignal();
+    if (!formGroup) return;
+
+    const formArray = formGroup.get(tableField) as FormArray;
+    if (!formArray) return;
+
+    const rowFormGroup = formArray.at(rowIndex) as FormGroup;
+    if (!rowFormGroup) return;
+
+    // Primero sincronizar todos los valores del rowData con el FormGroup
+    const rowData = currentData[rowIndex];
+    Object.keys(rowData).forEach(key => {
+      const control = rowFormGroup.get(key);
+      if (control) {
+        control.setValue(rowData[key]);
+      }
+    });
+
+    // Marcar todos los controles como touched para mostrar errores
+    Object.keys(rowFormGroup.controls).forEach(key => {
+      const control = rowFormGroup.get(key);
+      control?.markAsTouched();
+      control?.updateValueAndValidity();
+    });
+
+    // Verificar si es válido
+    if (rowFormGroup.valid) {
+      this.editingRows[rowKey] = false;
+      delete this.originalRowData[rowKey];
+      
+      // Limpiar también cualquier edición de celda activa de esta fila
+      const cellPrefix = `${tableField}_${rowIndex}_`;
+      Object.keys(this.editingCells).forEach(cellKey => {
+        if (cellKey.startsWith(cellPrefix)) {
+          this.editingCells[cellKey] = false;
+          delete this.originalRowData[cellKey];
+        }
+      });
+
+      this.onTableCellEdit.emit({
+        field: tableField,
+        rowIndex,
+        data: currentData
+      });
+    }
+  }
+
+  finishCellEdit(tableField: string, rowIndex: number, colField: string): void {
+    const cellKey = `${tableField}_${rowIndex}_${colField}`;
+    
+    // Obtener el FormGroup de la fila para validar
+    const formGroup = this.formGroupSignal();
+    if (!formGroup) return;
+
+    const formArray = formGroup.get(tableField) as FormArray;
+    if (!formArray) return;
+
+    const rowFormGroup = formArray.at(rowIndex) as FormGroup;
+    if (!rowFormGroup) return;
+
+    const cellControl = rowFormGroup.get(colField);
+    if (cellControl) {
+      // Primero obtener el valor actual de rowData (que ya fue actualizado por ngModel)
+      const currentData = this.getTableData(tableField);
+      const currentValue = currentData[rowIndex]?.[colField];
+      
+      // Actualizar el FormControl con el valor actual
+      cellControl.setValue(currentValue);
+      
+      // Marcar el control como touched para mostrar errores
+      cellControl.markAsTouched();
+      
+      // Validar el control
+      cellControl.updateValueAndValidity();
+      
+      // Solo guardar si es válido
+      if (cellControl.valid) {
+        this.editingCells[cellKey] = false;
+        delete this.originalRowData[cellKey];
+
+        this.onTableCellEdit.emit({
+          field: tableField,
+          rowIndex,
+          colField,
+          data: currentData
+        });
+      }
+      // Si no es válido, no cerramos el modo edición para que el usuario corrija
+    }
+  }
+
+  cancelRowEdit(tableField: string, rowIndex: number): void {
+    const rowKey = `${tableField}_${rowIndex}`;
+
+    // Restaurar datos originales
+    if (this.originalRowData[rowKey]) {
+      const currentData = this.getTableData(tableField);
+      currentData[rowIndex] = { ...this.originalRowData[rowKey] };
+      this.updateTableFormControl(tableField, currentData);
+      delete this.originalRowData[rowKey];
+    }
+
+    this.editingRows[rowKey] = false;
+    
+    // Limpiar también cualquier edición de celda activa de esta fila
+    const cellPrefix = `${tableField}_${rowIndex}_`;
+    Object.keys(this.editingCells).forEach(cellKey => {
+      if (cellKey.startsWith(cellPrefix)) {
+        this.editingCells[cellKey] = false;
+        delete this.originalRowData[cellKey];
+      }
+    });
+  }
+
+  cancelCellEdit(tableField: string, rowIndex: number, colField: string): void {
+    const cellKey = `${tableField}_${rowIndex}_${colField}`;
+
+    // Restaurar dato original
+    if (this.originalRowData[cellKey] !== undefined) {
+      const currentData = this.getTableData(tableField);
+      currentData[rowIndex][colField] = this.originalRowData[cellKey];
+      this.updateTableFormControl(tableField, currentData);
+      delete this.originalRowData[cellKey];
+    }
+
+    this.editingCells[cellKey] = false;
+  }
+
+  isRowEditing(tableField: string, rowIndex: number): boolean {
+    const rowKey = `${tableField}_${rowIndex}`;
+    return this.editingRows[rowKey] || false;
+  }
+
+  isCellEditing(tableField: string, rowIndex: number, colField: string): boolean {
+    const cellKey = `${tableField}_${rowIndex}_${colField}`;
+    return this.editingCells[cellKey] || false;
+  }
+
+  onCellKeydown(event: KeyboardEvent, tableField: string, rowIndex: number, colField: string): void {
+    if (event.key === 'Enter') {
+      event.preventDefault();
+      this.finishCellEdit(tableField, rowIndex, colField);
+    } else if (event.key === 'Escape') {
+      event.preventDefault();
+      this.cancelCellEdit(tableField, rowIndex, colField);
+    }
+  }
+
+  validateTable(tableField: string): void {
+    this.tablesToValidate[tableField] = true;
+  }
+
+  trackByFn(index: number, item: any): any {
+    return item.field || index;
+  }
+
+  getColumnFields(columns: any[]): string[] {
+    return columns?.map(col => col.field) || [];
+  }
+
+  /**
+   * Obtiene archivos que no sean firmas para mostrar en la sección de archivos
+   */
+  getNonSignatureFiles(): any[] {
+    return this.files64.filter((f: any) => f.type !== 'signature');
+  }
+
+  /**
+   * Obtiene los datos del área principal de firma (índice 0) desde FormControl
+   */
+  /**
+   * Obtiene los datos de la firma principal (último FormGroup activo) desde FormArray
+   * Optimizado para evitar recálculos innecesarios
+   */
+  getMainSignatureData(field: string): any {
+    const formGroup = this.formGroupSignal();
+    if (!formGroup) return null;
+
+    const formArray = formGroup.get(field) as FormArray;
+    if (!formArray || formArray.length === 0) return null;
+
+    // El último FormGroup es la firma activa principal
+    return formArray.at(formArray.length - 1)?.value || null;
+  }
+
+  /**
+   * Obtiene el historial de firmas usando el computed signal (O(1))
+   * Ya no recalcula, solo lee del cache del computed signal
+   */
+  getHistorySignatures(field: string): any[] {
+    return this.signatureDataSignal()[field]?.history || [];
+  }
+
+  /**
+   * Obtiene todos los datos de firma usando el computed signal (O(1))
+   * Ya no recalcula, solo lee del cache del computed signal
+   */
+  getSignatureData(field: string): any[] {
+    return this.signatureDataSignal()[field]?.all || [];
+  }
+
+  /**
+   * Verifica si hay datos de firma usando el computed signal (O(1))
+   */
+  hasSignatureData(field: string): boolean {
+    return this.signatureDataSignal()[field]?.hasData || false;
+  }
+
+  /**
+   * Verifica si hay historial de firmas usando el computed signal (O(1))
+   */
+  hasHistorySignatures(field: string): boolean {
+    return this.signatureDataSignal()[field]?.hasHistory || false;
+  }
+
+  /**
+   * Fuerza la actualización del computed signal de firmas
+   * Debe llamarse después de cualquier operación que modifique el FormArray
+   */
+  private triggerSignatureUpdate(): void {
+    this.signatureUpdateTrigger.update(v => v + 1);
+  }
+
+  /**
+   * Elimina una firma del historial (FormArray)
+   */
+  deleteHistorySignature(field: string, historyIndex: number): void {
+    console.log('🗑️ Eliminando firma del historial:', { field, historyIndex });
+    const formArray = this.formGroupSignal()?.get(field) as FormArray;
+    if (!formArray) return;
+
+    // El historyIndex es relativo al historial (0, 1, 2...), 
+    // pero en el FormArray está en los índices (0, 1, 2... length-2)
+    // El último FormGroup (length-1) es la firma activa, NO se puede eliminar
+
+    if (historyIndex >= 0 && historyIndex < formArray.length - 1) {
+      formArray.removeAt(historyIndex);
+      formArray.markAsDirty();
+      this.triggerSignatureUpdate(); // 🔄 Forzar recálculo
+      console.log(`✅ Firma eliminada del índice ${historyIndex}. Total firmas: ${formArray.length}`);
+    } else {
+      console.warn(`⚠️ Índice ${historyIndex} inválido. No se puede eliminar la firma activa.`);
+    }
+  }
+
+  // ===== SIGNATURE COMPONENT METHODS =====
+
+  // Referencias para canvas de firma
+  signatureCanvasRefs: { [key: string]: ElementRef } = {};
+
+  /**
+   * Inicializa los datos de firma desde el formulario (FormArray)
+   */
+  initSignatureData(field: string, config: any): void {
+    const formArray = this.formGroupSignal()?.get(field) as FormArray;
+
+    // El FormArray ya viene inicializado desde crud.class.ts con al menos 1 FormGroup
+    // Solo inicializamos los canvas después del renderizado
+
+    setTimeout(() => {
+      this.initializeSignatureCanvases(field, config);
+    }, 500);
+  }
+
+  /**
+   * Inicializa todos los canvas de firma para un campo específico
+   */
+  private initializeSignatureCanvases(field: string, config: any): void {
+    const formArray = this.formGroupSignal()?.get(field) as FormArray;
+    if (!formArray || formArray.length === 0) return;
+
+    // Inicializar canvas para cada FormGroup en el FormArray
+    for (let index = 0; index < formArray.length; index++) {
+      const signaturePadField = config.fields?.find((f: any) => f.type === 'signature-pad');
+      if (signaturePadField) {
+        // Intentar inicializar canvas para cada contexto (card, free, fieldset)
+        const canvasIds = [
+          `signature-canvas-${field}-${index}`,
+          `signature-canvas-free-${field}-${index}`,
+          `signature-canvas-fieldset-${field}-${index}`
+        ];
+
+        canvasIds.forEach(canvasId => {
+          this.initSignatureCanvas(canvasId, signaturePadField);
+        });
+      }
+    }
+  }
+
+  /**
+   * Añade nueva firma al formulario
+   */
+  addSignature(field: string, config: any): void {
+    console.log('➕ [v3.1.0] Agregando nueva firma:', { field });
+
+    const newSignature: any = {};
+    config.fields.forEach((fieldConfig: any) => {
+      if (fieldConfig.type === 'date' && fieldConfig.default?.value === 'device') {
+        newSignature[fieldConfig.field] = new Date().toISOString().split('T')[0];
+      } else {
+        newSignature[fieldConfig.field] = fieldConfig.default?.value || '';
+      }
+    });
+
+    // Obtener datos actuales del FormControl
+    const formControl = this.formGroupSignal()?.get(field);
+    const currentFieldData = [...(formControl?.value || [])];
+
+    // Si ya existe una firma, moverla hacia abajo y poner la nueva arriba
+    if (currentFieldData.length > 0 && currentFieldData[0][field]) {
+      // Insertar nueva firma al inicio
+      currentFieldData.unshift(newSignature);
+      // Limpiar el canvas principal (índice 0 después de la inserción será la nueva)
+      setTimeout(() => {
+        this.clearSignature(`signature-canvas-free-${field}-0`, field, 0);
+      }, 100);
+    } else {
+      currentFieldData.push(newSignature);
+    }
+
+    // Actualizar FormControl
+    formControl?.setValue(currentFieldData);
+
+    // Inicializar canvas para la nueva firma después de renderizar
+    setTimeout(() => {
+      const newIndex = currentFieldData.length - 1;
+      const signaturePadField = config.fields?.find((f: any) => f.type === 'signature-pad');
+      if (signaturePadField) {
+        const canvasIds = [
+          `signature-canvas-${field}-${newIndex}`,
+          `signature-canvas-free-${field}-${newIndex}`,
+          `signature-canvas-fieldset-${field}-${newIndex}`
+        ];
+
+        canvasIds.forEach(canvasId => {
+          this.initSignatureCanvas(canvasId, signaturePadField);
+        });
+      }
+    }, 100);
+  }
+
+  /**
+   * Nueva lógica: Mueve firma actual a historial y limpia área principal
+   * Valida campos obligatorios usando FormArray antes de proceder
+   */
+  addNewSignature(field: string, config: any): void {
+    console.log('🚀 [v3.1.0] Nueva Firma - validando campos obligatorios con FormArray');
+
+    // 1. OBTENER EL FORMARRAY
+    const formArray = this.formGroupSignal()?.get(field) as FormArray;
+    if (!formArray || !formArray.controls) {
+      console.warn('⚠️ FormArray no encontrado para', field);
+      return;
+    }
+
+    const lastIndex = formArray.length - 1;
+    const lastFormGroup = formArray.at(lastIndex);
+
+    if (!lastFormGroup) {
+      console.warn('⚠️ No existe FormGroup en el último índice');
+      return;
+    }
+
+    // 2. VALIDAR solo los campos que están en la configuración en el ÚLTIMO FormGroup
+    let hasErrors = false;
+    config.fields?.forEach((fieldConfig: any) => {
+      const control = lastFormGroup.get(fieldConfig.field);
+      if (control) {
+        control.markAsTouched();
+        control.markAsDirty();
+        if (control.invalid) {
+          hasErrors = true;
+          console.log(`❌ Campo inválido: ${fieldConfig.field}`, control.errors);
+        }
+      }
+    });
+
+    // Verificar si hay errores en los campos configurados
+    if (hasErrors) {
+      console.warn('❌ Formulario inválido - hay campos obligatorios faltantes');
+
+      // Marcar el FormGroup y FormArray completos como touched para activar validación visual
+      lastFormGroup.markAsTouched();
+      formArray.markAsTouched();
+
+      // Forzar actualización visual
+      lastFormGroup.updateValueAndValidity({ emitEvent: true });
+      formArray.updateValueAndValidity({ emitEvent: true });
+
+      return; // Detener ejecución si hay errores de validación
+    }
+
+    console.log('✅ Validación exitosa - agregando nueva firma al FormArray');
+
+    // 3. CREAR NUEVO FORMGROUP CLONANDO LA ESTRUCTURA DEL PRIMER ELEMENTO
+    // Obtener el primer FormGroup del array (índice 0) que tiene la configuración correcta
+    const firstFormGroup = formArray.at(0) as FormGroup;
+
+    // Crear nuevo FormGroup clonando la estructura y validaciones del primero
+    const newFormGroup = new FormGroup({
+      name: new FormControl('', {
+        nonNullable: true,
+        validators: firstFormGroup.get('name')?.validator || [Validators.required, Validators.maxLength(100)]
+      }),
+      date: new FormControl(firstFormGroup.get('date')?.value || new Date(), {
+        nonNullable: true,
+        validators: firstFormGroup.get('date')?.validator || [Validators.required]
+      }),
+      signature: new FormControl<string | null>(null, {
+        validators: firstFormGroup.get('signature')?.validator || [Validators.required]
+      }),
+      login: new FormControl('', {
+        nonNullable: true,
+        validators: firstFormGroup.get('login')?.validator || []
+      }),
+      pin_global: new FormControl('', {
+        nonNullable: true,
+        validators: firstFormGroup.get('pin_global')?.validator || []
+      }),
+      selfie: new FormControl<File | string | null>(null, {
+        validators: firstFormGroup.get('selfie')?.validator || []
+      }),
+      pin_user: new FormControl('', {
+        nonNullable: true,
+        validators: firstFormGroup.get('pin_user')?.validator || []
+      }),
+    });
+
+    // 4. AGREGAR EL NUEVO FORMGROUP AL FORMARRAY
+    formArray.push(newFormGroup);
+    const newIndex = formArray.length - 1;
+
+    // 🔄 Forzar recálculo del computed signal
+    this.triggerSignatureUpdate();
+
+    console.log(`📊 Nueva firma agregada en índice ${newIndex}. Total firmas: ${formArray.length}`);
+
+    // 5. LIMPIAR CANVAS DEL NUEVO ÍNDICE EN TODOS LOS CONTEXTOS
+    setTimeout(() => {
+      this.clearSignature(`signature-canvas-main-${field}`, field, newIndex);
+      this.clearSignature(`signature-canvas-card-${field}`, field, newIndex);
+      this.clearSignature(`signature-canvas-fieldset-${field}`, field, newIndex);
+      console.log(`✅ Nueva firma lista para captura en índice ${newIndex}`);
+    }, 100);
+  }
+
+  /**
+   * Cancela la firma actual (elimina el último FormGroup del FormArray)
+   * Solo funciona si hay al menos 2 firmas (para mantener al menos una)
+   */
+  cancelCurrentSignature(field: string): void {
+    console.log(`🚫 Cancelando firma actual para campo: ${field}`);
+
+    // 1. OBTENER FORMARRAY
+    const formArray = this.formGroupSignal()?.get(field) as FormArray;
+    if (!formArray) {
+      console.error(`❌ No se encontró el FormArray para ${field}`);
+      return;
+    }
+
+    // 2. VERIFICAR QUE HAYA AL MENOS 2 FIRMAS
+    if (formArray.length < 2) {
+      console.warn(`⚠️ No se puede cancelar. Se requiere al menos 2 firmas. Actual: ${formArray.length}`);
+      return;
+    }
+
+    // 3. ELIMINAR EL ÚLTIMO FORMGROUP (firma actual)
+    const removedIndex = formArray.length - 1;
+    formArray.removeAt(removedIndex);
+
+    // 🔄 Forzar recálculo del computed signal
+    this.triggerSignatureUpdate();
+
+    console.log(`✅ Firma en índice ${removedIndex} eliminada. Total firmas: ${formArray.length}`);
+
+    // 4. OBTENER LA FIRMA DEL NUEVO ÚLTIMO ÍNDICE (la firma anterior)
+    const newLastIndex = formArray.length - 1;
+    const previousFormGroup = formArray.at(newLastIndex) as FormGroup;
+    const previousSignature = previousFormGroup?.get('signature')?.value;
+
+    // 5. CARGAR LA FIRMA ANTERIOR EN LOS CANVAS DE TODOS LOS CONTEXTOS
+    setTimeout(() => {
+      this.loadSignatureToCanvas(`signature-canvas-main-${field}`, previousSignature);
+      this.loadSignatureToCanvas(`signature-canvas-card-${field}`, previousSignature);
+      this.loadSignatureToCanvas(`signature-canvas-fieldset-${field}`, previousSignature);
+      console.log(`✅ Canvas reinicializado con firma anterior en índice ${newLastIndex}`);
+    }, 100);
+  }
+
+  /**
+   * Carga una firma guardada (base64) en un canvas específico
+   */
+  private loadSignatureToCanvas(canvasId: string, signatureBase64: string | null): void {
+    if (!signatureBase64) {
+      console.log(`⚠️ No hay firma guardada para cargar en ${canvasId}`);
+      return;
+    }
+
+    const canvas = document.getElementById(canvasId) as HTMLCanvasElement;
+    if (!canvas) {
+      console.warn(`⚠️ Canvas ${canvasId} no encontrado`);
+      return;
+    }
+
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    // Limpiar el canvas primero
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    // Cargar la imagen de la firma
+    const img = new Image();
+    img.onload = () => {
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+      console.log(`✅ Firma cargada en ${canvasId}`);
+    };
+    img.onerror = () => {
+      console.error(`❌ Error al cargar firma en ${canvasId}`);
+    };
+    img.src = signatureBase64;
+  }
+
+  /**
+   * Verifica si se puede cancelar la firma actual
+   * Retorna true solo si hay 2 o más firmas en el FormArray
+   * Optimizado para evitar recálculos innecesarios
+   */
+  canCancelSignature(field: string): boolean {
+    const formGroup = this.formGroupSignal();
+    if (!formGroup) return false;
+
+    const formArray = formGroup.get(field) as FormArray;
+    return formArray ? formArray.length >= 2 : false;
+  }
+
+  /**
+   * Verifica si un campo específico tiene errores de validación usando FormArray
+   * Valida el ÚLTIMO FormGroup (donde se está trabajando actualmente)
+   * Optimizado para evitar recálculos innecesarios
+   */
+  hasFieldValidationError(signatureField: string, fieldName: string): boolean {
+    const formGroup = this.formGroupSignal();
+    if (!formGroup) return false;
+
+    const formArray = formGroup.get(signatureField) as FormArray;
+    if (!formArray || !formArray.controls || formArray.length === 0) return false;
+
+    // Obtener el ÚLTIMO FormGroup (el que se está editando actualmente)
+    const currentFormGroup = formArray.at(formArray.length - 1);
+    if (!currentFormGroup) return false;
+
+    const control = currentFormGroup.get(fieldName);
+    if (!control) return false;
+
+    return (control.invalid && (control.dirty || control.touched)) || false;
+  }
+
+  /**
+   * Obtiene el último índice del FormArray (firma activa)
+   * Optimizado para evitar recálculos innecesarios
+   */
+  getLastFormArrayIndex(field: string): number {
+    const formGroup = this.formGroupSignal();
+    if (!formGroup) return 0;
+
+    const formArray = formGroup.get(field) as FormArray;
+    if (!formArray || formArray.length === 0) return 0;
+    return formArray.length - 1;
+  }
+
+
+  /**
+   * Determina si se puede mostrar el botón "Nueva Firma"
+   * Siempre se muestra - la validación ocurre al momento del click
+   */
+  canCreateNewSignature(field: string, config: any): boolean {
+    // Siempre mostrar el botón "Nueva Firma" cuando add_signature esté habilitado
+    // La validación se hará en el método addNewSignature
+    return true;
+  }
+
+  /**
+   * Verifica si hay campos obligatorios faltantes (solo para UI feedback)
+   * Excluye signature-pad de la validación
+   */
+  hasRequiredFieldsMissing(field: string, config: any): boolean {
+    const mainSignatureData = this.getMainSignatureData(field);
+    if (!mainSignatureData) return false;
+
+    // Solo validar campos requeridos que NO sean signature-pad
+    const requiredFields = config.fields.filter((fieldConfig: any) =>
+      fieldConfig.required && fieldConfig.type !== 'signature-pad'
+    );
+    if (requiredFields.length === 0) return false;
+
+    return !requiredFields.every((fieldConfig: any) => {
+      const fieldValue = mainSignatureData[fieldConfig.field];
+      return fieldValue && (typeof fieldValue !== 'string' || fieldValue.trim() !== '');
+    });
+  }
+
+  /**
+   * Elimina una firma específica
+   */
+  deleteSignature(field: string, index: number): void {
+    const formControl = this.formGroupSignal()?.get(field);
+    const currentFieldData = [...(formControl?.value || [])];
+    currentFieldData.splice(index, 1);
+
+    // Actualizar FormControl
+    formControl?.setValue(currentFieldData);
+  }
+
+  /**
+   * Marca todos los controles como touched, incluyendo FormArrays de firma
+   * Este método debe ser llamado desde el componente padre antes de validar el formulario
+   */
+  markAllSignatureFieldsAsTouched(): void {
+    const formGroup = this.formGroupSignal();
+    if (!formGroup) return;
+
+    console.log('🔍 Marcando todos los campos de firma como touched...');
+
+    // Recorrer todos los controles del formulario
+    Object.keys(formGroup.controls).forEach(key => {
+      const control = formGroup.get(key);
+
+      // Si es un FormArray (como los campos de firma)
+      if (control instanceof FormArray) {
+        control.markAsTouched();
+
+        // Marcar cada FormGroup dentro del FormArray
+        control.controls.forEach((formGroup: any) => {
+          formGroup.markAsTouched();
+
+          // Marcar cada control dentro del FormGroup
+          Object.keys(formGroup.controls || {}).forEach((fieldKey: string) => {
+            const fieldControl = formGroup.get(fieldKey);
+            if (fieldControl) {
+              fieldControl.markAsTouched();
+              fieldControl.markAsDirty();
+            }
+          });
+        });
+
+        console.log(`✅ FormArray ${key} marcado como touched`);
+      }
+    });
+
+    console.log('✅ Todos los campos de firma marcados como touched');
+  }
+
+  /**
+   * Limpia el canvas de firma
+   */
+  clearSignature(canvasId: string, field: string, index: number): void {
+    const canvas = document.getElementById(canvasId) as HTMLCanvasElement;
+    if (canvas) {
+      const ctx = canvas.getContext('2d');
+      if (ctx) {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+        // Actualizar datos eliminando la firma - el control siempre se llama 'signature'
+        const formControl = this.formGroupSignal()?.get(field);
+        const currentData = [...(formControl?.value || [])];
+        if (currentData[index]) {
+          currentData[index]['signature'] = '';
+          formControl?.setValue(currentData);
+
+          // ✅ Actualizar validación después de limpiar
+          // Marcar como touched para activar validación visual
+          const formArray = formControl as FormArray;
+          if (formArray && formArray.at(index)) {
+            const signatureControl = formArray.at(index)?.get('signature');
+            if (signatureControl) {
+              signatureControl.markAsTouched();
+              formArray.markAsTouched();
+            }
+          }
+        }
+      }
+    }
+  }
+
+  /**
+   * Limpia todos los canvas de firma en el formulario
+   * Se usa cuando el formulario se resetea después de un submit
+   */
+  clearAllSignatureCanvases(): void {
+    console.log('🧹 Limpiando todos los canvas de firma después del reset');
+
+    // Obtener todos los canvas de firma del documento
+    const allCanvases = document.querySelectorAll('canvas[id*="signature-canvas"]');
+
+    allCanvases.forEach((canvas: any) => {
+      const ctx = canvas.getContext('2d');
+      if (ctx) {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        console.log(`✅ Canvas limpiado: ${canvas.id}`);
+      }
+    });
+
+    console.log(`🧹 Total de canvas limpiados: ${allCanvases.length}`);
+  }
+
+  /**
+   * Guarda la firma del canvas como base64
+   */
+  saveSignature(canvasId: string, field: string, index: number): void {
+    console.log('🔍 [v3.1.0] saveSignature ejecutándose:', { canvasId, field, index });
+    const canvas = document.getElementById(canvasId) as HTMLCanvasElement;
+    if (canvas) {
+      const isEmpty = this.isCanvasEmpty(canvas);
+      console.log('🔍 [v3.1.0] Canvas vacío?:', isEmpty);
+      if (isEmpty) {
+        console.warn('⚠️ [v3.1.0] La firma está vacía - no se guardará');
+        return;
+      }
+
+      const signatureBase64 = canvas.toDataURL('image/png');
+
+      // Actualizar datos con la firma - el control dentro del FormGroup siempre se llama 'signature'
+      const formControl = this.formGroupSignal()?.get(field);
+      const currentData = [...(formControl?.value || [])];
+      if (currentData[index]) {
+        currentData[index]['signature'] = signatureBase64;
+        formControl?.setValue(currentData);
+
+        // Marcar el control como touched y dirty para reflejar el cambio
+        const formArray = this.formGroupSignal()?.get(field) as any;
+        if (formArray && formArray.controls) {
+          const formGroup = formArray.controls[index];
+          if (formGroup) {
+            const signatureControl = formGroup.get('signature');
+            if (signatureControl) {
+              signatureControl.markAsTouched();
+              signatureControl.markAsDirty();
+            }
+          }
+        }
+      }
+
+
+
+      // Añadir a files64 para compatibilidad
+      this.files64.push({
+        type: 'signature',
+        file_name: `firma_${field}_${index}_${Date.now()}.png`,
+        file: signatureBase64,
+        field: field,
+        index: index
+      });
+      this.files64Action.emit(this.files64);
+    }
+  }
+
+  /**
+   * Autoguardado automático al terminar de dibujar
+   */
+  autoSaveSignature(canvasId: string, field: string, index: number): void {
+    console.log('🚀 [v3.1.0] Autoguardado iniciado:', { canvasId, field, index });
+    // Pequeño delay para asegurar que el trazo se complete
+    setTimeout(() => {
+      this.saveSignature(canvasId, field, index);
+      console.log('✅ [v3.1.0] Autoguardado completado');
+    }, 200);
+  }
+
+  /**
+   * Verifica si el canvas está vacío
+   */
+  private isCanvasEmpty(canvas: HTMLCanvasElement): boolean {
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return true;
+
+    const pixelBuffer = new Uint32Array(
+      ctx.getImageData(0, 0, canvas.width, canvas.height).data.buffer
+    );
+
+    return !pixelBuffer.some(color => color !== 0);
+  }
+
+
+
+  /**
+   * Actualiza un campo específico de una firma usando FormControl
+   */
+  updateSignatureField(field: string, index: number, fieldName: string, value: any): void {
+    console.log('📝 [DEBUG] updateSignatureField:', { field, index, fieldName, value });
+
+    const formControl = this.formGroupSignal()?.get(field);
+    const currentData = [...(formControl?.value || [])];
+
+    console.log('📊 [DEBUG] currentData antes:', currentData);
+
+    // Si el array está vacío, inicializar con un objeto vacío en el índice 0
+    if (currentData.length === 0 && index === 0) {
+      currentData.push({});
+    }
+
+    if (currentData[index]) {
+      currentData[index][fieldName] = value;
+      formControl?.setValue(currentData);
+      formControl?.markAsDirty();
+
+      console.log('📊 [DEBUG] currentData después:', currentData);
+
+      // Marcar el control específico como touched para activar validación
+      const formArray = this.formGroupSignal()?.get(field) as any;
+      if (formArray && formArray.controls) {
+        const formGroup = formArray.controls[index];
+        if (formGroup) {
+          const fieldControl = formGroup.get(fieldName);
+          if (fieldControl) {
+            fieldControl.markAsTouched();
+            fieldControl.markAsDirty();
+          }
+        }
+      }
+    } else {
+      console.warn('⚠️ [DEBUG] No existe currentData[' + index + ']');
+    }
+  }
+
+  /**
+   * Inicializa el canvas de firma con eventos de dibujo
+   */
+  initSignatureCanvas(canvasId: string, config: any, signatureField?: string): void {
+    setTimeout(() => {
+      const canvas = document.getElementById(canvasId) as HTMLCanvasElement;
+      if (!canvas) return;
+
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return;
+
+      // Configurar canvas
+      canvas.width = config?.width || config.signature_width || 300;
+      canvas.height = config?.height || config.signature_height || 150;
+
+      // Estilo del canvas
+      canvas.style.border = config?.border_style || `${config.border_width || 1}px solid ${config.border_color || '#cccccc'}`;
+      canvas.style.borderRadius = config?.border_radius || '4px';
+      canvas.style.backgroundColor = config?.background_color || config.background_color || '#ffffff';
+
+      // Configurar contexto de dibujo
+      ctx.strokeStyle = config?.pen_color || config.pen_color || '#000000';
+      ctx.lineWidth = 2;
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+
+      let isDrawing = false;
+      let lastX = 0;
+      let lastY = 0;
+      let hasMarkedAsTouched = false; // Flag para marcar solo una vez
+
+      const startDrawing = (e: MouseEvent | TouchEvent) => {
+        isDrawing = true;
+
+        // Marcar el control como touched cuando el usuario empieza a dibujar
+        if (!hasMarkedAsTouched && signatureField) {
+          const formArray = this.formGroupSignal()?.get(signatureField) as FormArray;
+          if (formArray && formArray.length > 0) {
+            const lastIndex = formArray.length - 1;
+            const currentFormGroup = formArray.at(lastIndex);
+            const signatureControl = currentFormGroup?.get('signature');
+
+            if (signatureControl) {
+              signatureControl.markAsTouched();
+              currentFormGroup?.markAsTouched();
+              formArray.markAsTouched();
+              hasMarkedAsTouched = true;
+              console.log('✅ Control de firma marcado como touched al iniciar dibujo');
+            }
+          }
+        }
+
+        const rect = canvas.getBoundingClientRect();
+        const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX;
+        const clientY = 'touches' in e ? e.touches[0].clientY : e.clientY;
+        [lastX, lastY] = [clientX - rect.left, clientY - rect.top];
+      };
+
+      const draw = (e: MouseEvent | TouchEvent) => {
+        if (!isDrawing) return;
+        const rect = canvas.getBoundingClientRect();
+        const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX;
+        const clientY = 'touches' in e ? e.touches[0].clientY : e.clientY;
+        const currentX = clientX - rect.left;
+        const currentY = clientY - rect.top;
+
+        ctx.beginPath();
+        ctx.moveTo(lastX, lastY);
+        ctx.lineTo(currentX, currentY);
+        ctx.stroke();
+
+        [lastX, lastY] = [currentX, currentY];
+      };
+
+      const stopDrawing = () => {
+        isDrawing = false;
+      };
+
+      // Eventos de mouse
+      canvas.addEventListener('mousedown', startDrawing);
+      canvas.addEventListener('mousemove', draw);
+      canvas.addEventListener('mouseup', stopDrawing);
+      canvas.addEventListener('mouseout', stopDrawing);
+
+      // Eventos de touch para dispositivos móviles
+      canvas.addEventListener('touchstart', (e) => {
+        e.preventDefault();
+        startDrawing(e);
+      });
+      canvas.addEventListener('touchmove', (e) => {
+        e.preventDefault();
+        draw(e);
+      });
+      canvas.addEventListener('touchend', (e) => {
+        e.preventDefault();
+        stopDrawing();
+      });
+    }, 100);
+  }
+
+  /**
+   * Captura una foto desde la cámara
+   */
+  onCapturePhoto(field: string, fieldName: string): void {
+    console.log('📷 [DEBUG] onCapturePhoto:', { field, fieldName });
+    // TODO: Implementar lógica para capturar foto desde cámara
+    // Por ahora solo mostramos un mensaje en consola
+    console.log('⚠️ Funcionalidad de captura de foto pendiente de implementación');
+  }
+
+  onUploadPhoto(field: string, fieldName: string): void {
+    // Manejar la carga de foto desde archivo
+  }
+
+  onUploadSignature(field: string, fieldName: string): void {
+    // Manejar la carga de firma desde archivo
+  }
 
 }

@@ -47,11 +47,11 @@ export class Vars {
             { field: 'is_voidable__text', }
         ];
         this.commonGeneralCrud = [
-            { field: 'utc_created_at', },
+            { field: 'created_at', },
             { field: 'created_by__name', },
-            { field: 'utc_modified_at', },
+            { field: 'modified_at', },
             { field: 'modified_by__name', },
-            { field: 'utc_inactivated_at', },
+            { field: 'inactivated_at', },
             { field: 'inactivated_by__name', },
         ];
         this.commonId = [
@@ -225,11 +225,11 @@ export class Vars {
   /**
      * Los campos que se que inicialmente no se mostraran en la tabla, se inicializan en las clases heredadas, pero
       °°°deberian venir del servidor por ejemplo: ['id', 'description', 'sys_data']
-      'id', 'description', 'short_name', 'name2', 'sys__text', 'utc_created_at', 'utc_modified_at', 'utc_inactivated_at',
+      'id', 'description', 'short_name', 'name2', 'sys__text', 'created_at', 'modified_at', 'inactivated_at',
       'created_by__name', 'modified_by__name', 'inactivated_by__name'
     */
   public itemsRemove: string[][] = [
-    ['id', 'description', 'short_name', 'name2', 'sys__text', 'utc_created_at', 'utc_modified_at', 'utc_inactivated_at', 'created_by__name', 'modified_by__name', 'inactivated_by__name', 'time_zone', 'external_code_number', 'external_code_text']
+    ['id', 'description', 'short_name', 'name2', 'sys__text', 'created_at', 'modified_at', 'inactivated_at', 'created_by__name', 'modified_by__name', 'inactivated_by__name', 'time_zone', 'external_code_number', 'external_code_text']
   ]; //la posicion 0 es el valor por default
   //la posicion 0 es el valor por default
 
@@ -347,7 +347,7 @@ export class Vars {
   protected commonName: any = null;
 
   /**
-   * utc_created_at, created_by__name, utc_modified_at, modified_by__name, utc_inactivated_at, inactivated_by__name
+   * created_at, created_by__name, modified_at, modified_by__name, inactivated_at, inactivated_by__name
    */
   //°°° DEPRECADO
   protected commonGeneralCrud: any = null;

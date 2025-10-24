@@ -27,7 +27,7 @@ export class CustomAuditComponent {
   public items = signal<any[]>([]);
 
   public selectedSignal = signal<any[]>([]);
-  // cfSignal era un array y el template accede a propiedades (created_by, utc_inactivated_at, etc.)
+  // cfSignal era un array y el template accede a propiedades (created_by, inactivated_at, etc.)
   // Al ser array el checker marcaba error: propiedad no existe en tipo any[]. Se cambia a objeto.
   public cfSignal = signal<any>({});
   ngOnChanges(changes: SimpleChanges) {

@@ -14,3 +14,233 @@ Solo para inputnumber de este componente
   box-sizing: border-box;
   overflow-x: hidden;
 }
+
+/*
+Estilos para tabla compacta
+*/
+:host ::ng-deep .compact-table {
+  .p-datatable-tbody>tr>td {
+    padding: 0.4rem 0.75rem !important;
+    line-height: 1.2 !important;
+  }
+
+  .p-datatable-thead>tr>th {
+    padding: 0.5rem 0.75rem !important;
+    line-height: 1.2 !important;
+  }
+
+  // Reducir espaciado en inputs dentro de las celdas
+  .p-inputtext,
+  .p-inputnumber-input {
+    padding: 0.3rem 0.5rem !important;
+    font-size: 0.875rem !important;
+    line-height: 1.2 !important;
+  }
+
+  // Mejorar espaciado de p-tag
+  .p-tag {
+    padding: 0.2rem 0.4rem !important;
+    font-size: 0.75rem !important;
+  }
+}
+
+/*
+Estilos para alineación de títulos y botones
+*/
+.table-title-toolbar {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: flex-start !important;
+  gap: 1rem !important;
+  margin-bottom: 0.05rem !important;
+  flex-wrap: nowrap !important;
+
+  h5 {
+    margin: 0 !important;
+    padding: 0 !important;
+    flex-shrink: 0 !important;
+    font-size: 1rem !important;
+    font-weight: 600 !important;
+    color: var(--text-color) !important;
+  }
+
+  .p-button {
+    flex-shrink: 0 !important;
+  }
+}
+
+/*
+Estilos para componente de firma digital
+*/
+.signature-item {
+  background: var(--surface-ground) !important;
+  border: 1px solid var(--surface-border) !important;
+  border-radius: 8px !important;
+  transition: all 0.2s ease !important;
+
+  &:hover {
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1) !important;
+  }
+}
+
+.signature-canvas-container {
+  .signature-canvas-wrapper {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    padding: 0.5rem;
+    background: var(--surface-0);
+    border-radius: 6px;
+    border: 1px solid var(--surface-border);
+  }
+
+  .signature-canvas {
+    display: block;
+    background: #ffffff;
+    cursor: crosshair;
+    touch-action: none;
+    user-select: none;
+    -webkit-user-select: none;
+    -moz-user-select: none;
+    -ms-user-select: none;
+
+    &:hover {
+      box-shadow: 0 0 0 2px var(--primary-color-text);
+    }
+
+    &:focus {
+      outline: 2px solid var(--primary-color);
+      outline-offset: 2px;
+    }
+  }
+}
+
+.signature-buttons {
+  display: flex;
+  gap: 0.5rem;
+  justify-content: flex-start;
+  align-items: center;
+  flex-wrap: wrap;
+
+  .p-button {
+    min-width: auto;
+  }
+}
+
+.signature-preview {
+  border: 1px solid var(--surface-border);
+  border-radius: 4px;
+  padding: 0.5rem;
+  background: var(--surface-0);
+
+  img {
+    border-radius: 4px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  }
+}
+
+// Estilos específicos para imágenes de firma
+.signature-preview-img {
+  max-width: 100%;
+  height: auto;
+  max-height: 100px;
+  width: auto;
+  display: block;
+  object-fit: contain;
+}
+
+.signature-history-img {
+  max-width: 100%;
+  height: auto;
+  max-height: 80px;
+  width: 100%; // Se ajusta al ancho del contenedor padre
+  display: block;
+  object-fit: contain;
+}
+
+// Responsive adjustments
+@media (max-width: 768px) {
+  .signature-canvas-container {
+    .signature-canvas-wrapper {
+      overflow: hidden;
+      max-width: 100%;
+    }
+
+    .signature-canvas {
+      max-width: 100%;
+      width: 100% !important;
+      height: auto;
+      min-height: 120px;
+    }
+  }
+
+  .signature-buttons {
+    justify-content: center;
+  }
+}
+
+// Prevent canvas overflow on all screen sizes
+.signature-canvas-container {
+  .signature-canvas-wrapper {
+    overflow: hidden;
+    max-width: 100%;
+    box-sizing: border-box;
+  }
+
+  .signature-canvas {
+    max-width: 100%;
+    box-sizing: border-box;
+  }
+}
+
+// Estilos para validación de campos obligatorios
+.p-invalid {
+  border-color: #e24c4c !important;
+  box-shadow: 0 0 0 0.2rem rgba(226, 76, 76, 0.25) !important;
+}
+
+// Estilos para validación nativa de Angular (ng-invalid + ng-touched)
+:host ::ng-deep {
+
+  input.ng-invalid.ng-touched,
+  p-inputtext.ng-invalid.ng-touched input,
+  p-datepicker.ng-invalid.ng-touched input,
+  p-calendar.ng-invalid.ng-touched input {
+    border-color: #e24c4c !important;
+    box-shadow: 0 0 0 0.2rem rgba(226, 76, 76, 0.25) !important;
+  }
+
+  // Para p-datepicker específicamente
+  p-datepicker.ng-invalid.ng-touched .p-inputtext {
+    border-color: #e24c4c !important;
+    box-shadow: 0 0 0 0.2rem rgba(226, 76, 76, 0.25) !important;
+  }
+}
+
+.p-datepicker.p-invalid .p-inputtext {
+  border-color: #e24c4c !important;
+  box-shadow: 0 0 0 0.2rem rgba(226, 76, 76, 0.25) !important;
+}
+
+.text-red-500 {
+  color: #ef4444 !important;
+}
+
+small.text-red-500 {
+  font-size: 0.75rem;
+  margin-top: 0.25rem;
+  display: block;
+  animation: fadeIn 0.3s ease-in-out;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-5px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}

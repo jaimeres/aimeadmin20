@@ -561,7 +561,8 @@ export class AuthService {
           label: fieldConfig['label'] || fieldName,
           order: fieldConfig['order'] || claveHijo,
           hide: fieldConfig['hide'] !== undefined ? fieldConfig['hide'] : false,
-          sortable: fieldConfig['sortable'] !== undefined ? fieldConfig['sortable'] : true
+          sortable: fieldConfig['sortable'] !== undefined ? fieldConfig['sortable'] : true,
+          locked: fieldConfig['locked'] !== undefined ? fieldConfig['locked'] : false,
         };
       } /*else {
           // Si no se encuentra en fields.cols, usar valores por defecto
@@ -581,7 +582,9 @@ export class AuthService {
       customField[appKey]['config_cols'][fieldName] = {
         'order': columnInfo.order,
         'hide': columnInfo.hide,
-        'sortable': columnInfo.sortable
+        'sortable': columnInfo.sortable,
+        //'label': columnInfo.label,
+        'locked': columnInfo.locked
       };
     }
   }

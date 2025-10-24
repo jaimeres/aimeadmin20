@@ -278,7 +278,7 @@ export class RequestComponent extends CRUD implements OnInit {
 
 
   constructor(crudS: PurchaseService, private renderer: Renderer2) {
-    super(crudS,);
+    super(crudS, 'request-detail');
   }
 
   ngOnChanges(changes: SimpleChanges) {
@@ -308,18 +308,15 @@ export class RequestComponent extends CRUD implements OnInit {
 
     //Inicializa los valores por defecto para completar las funciones crud del servicio
     this.typeDefault = 'request-detail';
-    this.type[this.typeDefault] = this.typeDefault;
     this.app[this.typeDefault] = 'purchases/request-detail';
-    this.singular[this.typeDefault] = 'solicitud';
-    this.plural[this.typeDefault] = 'solicitudes';
-    this.singularIndefiniteArticle[this.typeDefault] = 'una solicitud';
-    this.pluralDefiniteArticle[this.typeDefault] = 'las solicitudes';
+    this.module[this.typeDefault] = 'CO';
 
-    this.relationships[this.typeDefault] = [
+
+    /*this.relationships[this.typeDefault] = [
       { id: 'subsidiary', field: 'request_data_subsidiary', type: 'subsidiary' },
-    ]
+    ]*/
 
-    this.includeFieldsForm[this.typeDefault] = [
+    /*this.includeFieldsForm[this.typeDefault] = [
       { field: 'request_data_code', },
       { field: 'request_data_description', },
       { field: 'request_data_folio', },
@@ -345,7 +342,7 @@ export class RequestComponent extends CRUD implements OnInit {
       { field: 'Subcomponente', },
       { field: 'Sintoma de falla', },
       { field: 'Tipo de gasto', },
-    ];
+    ];*/
 
     this.startMenu.set([{
       label: 'Existencias (F5)',
@@ -381,8 +378,9 @@ export class RequestComponent extends CRUD implements OnInit {
     },
     ]);
 
-    const option_label = this.searchFieldDrawForm('search_name', 'request-detail');
-    this.search_name.set(option_label.option_label);
+    //////////////////////////////////////////////////////////////////////
+    /*const option_label = this.searchFieldDrawForm('search_name', 'request-detail');
+    this.search_name.set(option_label.option_label);*/
 
 
     this.initCRUD();

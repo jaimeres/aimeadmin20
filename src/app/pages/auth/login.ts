@@ -46,7 +46,7 @@ import { SkeletonModule } from 'primeng/skeleton';
               <p-icon-field>
                 <p-inputicon class="pi pi-key" />
                 <!--<input pInputText type="password" formControlName="password" class="w-full" placeholder="Contraseña" />-->
-                <p-password formControlName="password" placeholder="contraseña" [toggleMask]="true" />
+                <p-password formControlName="password" placeholder="contraseña" [toggleMask]="true" [feedback]="false" />
               </p-icon-field>
               <button pButton pRipple (click)="login()" class="w-full mt-4 px-4" label="Iniciar sesión"></button>
             </div>

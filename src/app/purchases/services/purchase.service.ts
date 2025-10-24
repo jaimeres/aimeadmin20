@@ -8,7 +8,10 @@ export class PurchaseService extends CRUDService {
 
   constructor() {
     super();
-    this.customField.update(current => {
+    this.customField.set({
+      'request-detail': this.authS.config['request-detail']['cols'],
+    });
+    /*this.customField.update(current => {
       return {
         'request-detail': {
           ...current,
@@ -90,6 +93,6 @@ export class PurchaseService extends CRUDService {
 
 
 
-    );
+    );*/
   }
 }
