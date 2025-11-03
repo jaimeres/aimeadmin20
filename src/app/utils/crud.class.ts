@@ -220,7 +220,7 @@ export class CRUD extends Vars /*implements OnInit*/ {
   }
 
 
-  openTasksDetail(options: { pos: any, formFields: any, childFormFields: any }) {
+  openTasksDetail(options: { pos: any, formFields: any, childFormFields: any, parentField: any }) {
 
     const pos = options.pos;
     const formFields = options.formFields;
@@ -232,296 +232,320 @@ export class CRUD extends Vars /*implements OnInit*/ {
     if (draw) {
 
       // Verifica si el primer elemento es 'grid' o 'nested'
-      const firstKey = Object.keys(draw)[0];
+      //const firstKey = Object.keys(draw)[0];
 
-      if (firstKey === 'grid' || firstKey === 'nested') {
-        draw = draw[firstKey];
-      }
+      //console.log('------------0', firstKey, firstKey, draw);
 
-      // Recorre todos los objetos y agrega controles dinámicamente
-      Object.keys(draw).forEach(key => {
-        const fieldData = draw[key];
-        const field = fields[fieldData.field];
+      Object.keys(draw).forEach(keyBase => {
+        if (keyBase == 'dialog' || keyBase === '') return;
 
-        // Toma directamente el field del diccionario
-        if (field) {
 
-          const active = field?.default?.active || false;
-          const value = field?.default?.value || null;
-          let defaultValue = value;
-          const edit = field?.default?.edit || false;
-          if (active && edit) {
-            if (value == 'device') {
-              defaultValue = new Date();
-            }
-          }
 
-          const disabled = field.readonly || false;
-          const validators: any[] = [];
-          // Agrega validadores si es requerido
-          if (field.required) {
-            validators.push(Validators.required);
-          }
+        /*if (firstKey === 'grid' || firstKey === 'nested') {
+          draw = draw[firstKey];
+          }*/
 
-          if (field.max_length) {
-            validators.push(Validators.maxLength(field.max_length));
-          }
+        const drawLayOut = draw[keyBase];
+        console.log('////////22', keyBase, drawLayOut, draw);
+        // Recorre todos los objetos y agrega controles dinámicamente
+        Object.keys(drawLayOut).forEach(key => {
+          const fieldData = drawLayOut[key];
+          const field = fields[fieldData.field];
+          console.log('????????', field.field, key, fieldData.field);
 
-          if (field.min_length) {
-            validators.push(Validators.minLength(field.min_length));
-          }
 
-          // Crear campo oculto para objetos completos en campos de tipo select
-          if (field.type === 'dropdown' || field.type === 'auto-complete' || field.type === 'tree-select') {
-            const hiddenFieldName = 'object_' + fieldData.field;
+          // Toma directamente el field del diccionario
+          if (field) {
 
-            // Crear validadores para el campo oculto
-            /* 
-              const hiddenValidators: any[] = [];
-
-              // Agrega validadores si es requerido
-              if (field.required) {
-                hiddenValidators.push(Validators.required);
+            const active = field?.default?.active || false;
+            const value = field?.default?.value || null;
+            let defaultValue = value;
+            const edit = field?.default?.edit || false;
+            if (active && edit) {
+              if (value == 'device') {
+                defaultValue = new Date();
               }
-
-              if (field.max_length) {
-                hiddenValidators.push(Validators.maxLength(field.max_length));
-              }
-
-              if (field.min_length) {
-                hiddenValidators.push(Validators.minLength(field.min_length));
-              }
-            */
-
-            formFields[hiddenFieldName] = this.fb.control(
-              { value: defaultValue, disabled: disabled },
-              { nonNullable: false, validators: validators }
-            );
-            // se le agrega object_ al elemento que se va a dibujar para poder dejar el nombre del campo libre y agregarle el onjeto con id y name
-            // Solo agregar object_ si no lo tiene ya
-            if (!field.field.startsWith('object_parent_form_data')) {
-              field.field = 'object_' + field.field;
             }
 
-            //si field trae children recorre el objecto (no es array para que no se recorre con forEach)
-            if (field.children && field.children.active && field.children.fields) {
-              //tambien le agrega a los campos que estan dentro del children, es decir, aquellos que van a recibir los valores
-              //en cascada
-              for (const [fieldKey, fieldValue] of Object.entries(field.children.fields)) {
-                const typedFieldValue = fieldValue as any; // Cast explícito para acceder a las propiedades
+            const disabled = field.readonly || false;
+            const validators: any[] = [];
+            // Agrega validadores si es requerido
+            if (field.required) {
+              validators.push(Validators.required);
+            }
 
-                // Recorrer cada nodo de typedFieldValue (manual, remote, etc.)
-                for (const [nodeKey, nodeValue] of Object.entries(typedFieldValue)) {
-                  const typedNodeValue = nodeValue as any;
+            if (field.max_length) {
+              validators.push(Validators.maxLength(field.max_length));
+            }
 
-                  //sono cesesita cambiar el campo de los siguientes tipos porque son los unicos que requieren cambio
-                  //para poder ser suplicados y se pueda enviar el objeto en lugar de solo el id como lo hace el form
-                  if (typedNodeValue.type === 'dropdown' || typedNodeValue.type === 'auto-complete' || typedNodeValue.type === 'tree-select') {
-                    // Solo agregar object_ si no lo tiene ya
-                    const newFieldKey = fieldKey.startsWith('object_parent_form_data') ? fieldKey : 'object_' + fieldKey;
-                    const newFields: any = {};
-                    newFields[newFieldKey] = typedFieldValue;
-                    field.children.fields = newFields;
+            if (field.min_length) {
+              validators.push(Validators.minLength(field.min_length));
+            }
+
+            // Crear campo oculto para objetos completos en campos de tipo select
+            if (field.type === 'dropdown' || field.type === 'auto-complete' || field.type === 'tree-select') {
+              const hiddenFieldName = 'object_' + fieldData.field;
+
+              // Crear validadores para el campo oculto
+              /*  
+                const hiddenValidators: any[] = [];
+  
+                // Agrega validadores si es requerido
+                if (field.required) {
+                  hiddenValidators.push(Validators.required);
+                }
+  
+                if (field.max_length) {
+                  hiddenValidators.push(Validators.maxLength(field.max_length));
+                }
+  
+                if (field.min_length) {
+                  hiddenValidators.push(Validators.minLength(field.min_length));
+                }
+              */
+
+              formFields[hiddenFieldName] = this.fb.control(
+                { value: defaultValue, disabled: disabled },
+                { nonNullable: false, validators: validators }
+              );
+              // se le agrega object_ al elemento que se va a dibujar para poder dejar el nombre del campo libre y agregarle el onjeto con id y name
+              // Solo agregar object_ si no lo tiene ya
+              if (!field.field.startsWith('object_' + options.parentField)) {
+                field.field = 'object_' + field.field;
+
+              }
+
+
+
+              //si field trae children recorre el objecto (no es array para que no se recorre con forEach)
+              if (field.children && field.children.active && field.children.fields) {
+                //tambien le agrega a los campos que estan dentro del children, es decir, aquellos que van a recibir los valores
+                //en cascada
+                for (const [fieldKey, fieldValue] of Object.entries(field.children.fields)) {
+                  const typedFieldValue = fieldValue as any; // Cast explícito para acceder a las propiedades
+
+                  // Recorrer cada nodo de typedFieldValue (manual, remote, etc.)
+                  for (const [nodeKey, nodeValue] of Object.entries(typedFieldValue)) {
+                    const typedNodeValue = nodeValue as any;
+
+                    //sono cesesita cambiar el campo de los siguientes tipos porque son los unicos que requieren cambio
+                    //para poder ser suplicados y se pueda enviar el objeto en lugar de solo el id como lo hace el form
+                    if (typedNodeValue.type === 'dropdown' || typedNodeValue.type === 'auto-complete' || typedNodeValue.type === 'tree-select') {
+                      // Solo agregar object_ si no lo tiene ya
+                      const newFieldKey = fieldKey.startsWith('object_parent_form_data') ? fieldKey : 'object_' + fieldKey;
+                      const newFields: any = {};
+                      newFields[newFieldKey] = typedFieldValue;
+                      field.children.fields = newFields;
+                    }
                   }
                 }
               }
             }
-          }
-          //los validadores para los campos ocultos no aplican porque los detiene su equivalente de dropdown, auto-complete y tree-select
-          //en teoria no debria causra problema esto ya que cuando se asigna el valor visible tambien al campo oculto
+            //los validadores para los campos ocultos no aplican porque los detiene su equivalente de dropdown, auto-complete y tree-select
+            //en teoria no debria causra problema esto ya que cuando se asigna el valor visible tambien al campo oculto
 
-          //si field.type es signature agregarlo en this.fb.array<FirmaGroup>
-          if (field.type === 'signature') {
+            //si field.type es signature agregarlo en this.fb.array<FirmaGroup>
+            if (field.type === 'signature') {
 
-            const subFields = field.fields || [];
+              const subFields = field.fields || [];
 
-            // Crear objeto dinámico para el FormGroup basado en subFields
-            const signatureFormGroup: any = {};
+              // Crear objeto dinámico para el FormGroup basado en subFields
+              const signatureFormGroup: any = {};
 
-            // Procesar cada campo en subFields
-            subFields.forEach((subField: any) => {
-              const fieldName = subField.field;
-              const fieldType = subField.type;
-              const required = subField.required || false;
-              const maxLength = subField.max_length;
+              // Procesar cada campo en subFields
+              subFields.forEach((subField: any) => {
+                const fieldName = subField.field;
+                const fieldType = subField.type;
+                const required = subField.required || false;
+                const maxLength = subField.max_length;
 
-              // Crear validadores según configuración
-              const validators: any[] = [];
-              if (required) {
-                validators.push(Validators.required);
-              }
-              if (maxLength) {
-                validators.push(Validators.maxLength(maxLength));
-              }
-
-              // Valor por defecto
-              let defaultValue: any = '';
-
-              // Procesar valor por defecto si existe
-              if (subField.default) {
-                const active = subField.default.active || false;
-                const value = subField.default.value || null;
-                const edit = subField.default.edit || false;
-
-                if (active && edit) {
-                  if (value === 'device') {
-                    defaultValue = new Date();
-                  } else {
-                    defaultValue = value;
-                  }
-                }
-              }
-
-              // Agregar campos según el tipo
-              if (fieldType === 'login') {
-                // Para tipo login, agregar los campos user y password
-                const userField = subField.user?.field || 'username';
-                const passwordField = subField.password?.field || 'password';
-
-                console.log('-------', fieldName, userField, passwordField);
-
-
-                const userValidators: any[] = [];
-                const passwordValidators: any[] = [];
-
+                // Crear validadores según configuración
+                const validators: any[] = [];
                 if (required) {
-                  userValidators.push(Validators.required);
-                  passwordValidators.push(Validators.required);
+                  validators.push(Validators.required);
                 }
-
                 if (maxLength) {
-                  userValidators.push(Validators.maxLength(maxLength));
-                  passwordValidators.push(Validators.maxLength(maxLength));
+                  validators.push(Validators.maxLength(maxLength));
                 }
 
-                signatureFormGroup[userField] = this.fb.nonNullable.control('', userValidators);
-                signatureFormGroup[passwordField] = this.fb.nonNullable.control('', passwordValidators);
+                // Valor por defecto
+                let defaultValue: any = '';
 
-              } else if (fieldType === 'input-text') {
-                signatureFormGroup[fieldName] = this.fb.nonNullable.control(defaultValue, validators);
+                // Procesar valor por defecto si existe
+                if (subField.default) {
+                  const active = subField.default.active || false;
+                  const value = subField.default.value || null;
+                  const edit = subField.default.edit || false;
 
-              } else if (fieldType === 'date') {
-                signatureFormGroup[fieldName] = this.fb.nonNullable.control(defaultValue || new Date(), validators);
-
-              } else if (fieldType === 'signature-pad') {
-                signatureFormGroup[fieldName] = this.fb.control<string | null>(null, validators);
-
-              } else if (fieldType === 'selfie') {
-                signatureFormGroup[fieldName] = this.fb.control<File | string | null>(null, validators);
-
-              } else if (fieldType === 'pin_global' || fieldType === 'pin_user') {
-                signatureFormGroup[fieldName] = this.fb.nonNullable.control('', validators);
-
-              } else {
-                // Tipo genérico
-                signatureFormGroup[fieldName] = this.fb.control(defaultValue, validators);
-              }
-            });
-
-            // Crear el FormArray con el FormGroup dinámico
-            formFields[fieldData.field] = this.fb.array<FormGroup>([
-              this.fb.group(signatureFormGroup)
-            ]);
-
-            console.log('FormGroup de firma creado:', signatureFormGroup);
-
-          } else if (field.type === 'table') {
-            // Procesar tipo table - crear FormArray con FormGroups para cada fila
-            const columns = field.columns || [];
-            const initialRows = field.initial_rows || 0;
-            const isRequired = field.required || false;
-
-            console.log('Procesando tabla:', fieldData.field, 'con', initialRows, 'filas iniciales', 'required:', isRequired);
-
-            // Validador personalizado para FormArray: requiere al menos una fila
-            const minLengthArrayValidator = (min: number): ValidatorFn => {
-              return (control: AbstractControl): ValidationErrors | null => {
-                if (control instanceof FormArray) {
-                  return control.length < min ? { 'minlength': { requiredLength: min, actualLength: control.length } } : null;
-                }
-                return null;
-              };
-            };
-
-            // Crear función para generar un FormGroup vacío para una fila
-            const createRowFormGroup = () => {
-              const rowGroup: any = {};
-
-              columns.forEach((column: any) => {
-                const columnField = column.field;
-                const columnType = column.type;
-                const required = column.required || false;
-                const editable = column.editable !== false;
-
-                // Crear validadores según configuración de columna
-                const columnValidators: any[] = [];
-                if (required && editable) {
-                  columnValidators.push(Validators.required);
-                }
-                if (column.validation?.max_length) {
-                  columnValidators.push(Validators.maxLength(column.validation.max_length));
-                }
-                if (column.validation?.min_length) {
-                  columnValidators.push(Validators.minLength(column.validation.min_length));
+                  if (active && edit) {
+                    if (value === 'device') {
+                      defaultValue = new Date();
+                    } else {
+                      defaultValue = value;
+                    }
+                  }
                 }
 
-                // Valor por defecto según tipo de columna
-                let defaultColumnValue: any = '';
+                // Agregar campos según el tipo
+                if (fieldType === 'login') {
+                  // Para tipo login, agregar los campos user y password
+                  const userField = subField.user?.field || 'username';
+                  const passwordField = subField.password?.field || 'password';
 
-                if (columnType === 'input-number') {
-                  defaultColumnValue = null;
-                } else if (columnType === 'date') {
-                  defaultColumnValue = null;
-                } else if (columnType === 'dropdown' || columnType === 'multi-select') {
-                  defaultColumnValue = columnType === 'multi-select' ? [] : '';
-                } else if (columnType === 'checkbox') {
-                  defaultColumnValue = false;
-                }
+                  console.log('-------', fieldName, userField, passwordField);
 
-                // Crear control para la columna
-                if (columnType === 'checkbox') {
-                  rowGroup[columnField] = this.fb.control(defaultColumnValue, columnValidators);
+
+                  const userValidators: any[] = [];
+                  const passwordValidators: any[] = [];
+
+                  if (required) {
+                    userValidators.push(Validators.required);
+                    passwordValidators.push(Validators.required);
+                  }
+
+                  if (maxLength) {
+                    userValidators.push(Validators.maxLength(maxLength));
+                    passwordValidators.push(Validators.maxLength(maxLength));
+                  }
+
+                  signatureFormGroup[userField] = this.fb.nonNullable.control('', userValidators);
+                  signatureFormGroup[passwordField] = this.fb.nonNullable.control('', passwordValidators);
+
+                } else if (fieldType === 'input-text') {
+                  signatureFormGroup[fieldName] = this.fb.nonNullable.control(defaultValue, validators);
+
+                } else if (fieldType === 'date') {
+                  signatureFormGroup[fieldName] = this.fb.nonNullable.control(defaultValue || new Date(), validators);
+
+                } else if (fieldType === 'signature-pad') {
+                  signatureFormGroup[fieldName] = this.fb.control<string | null>(null, validators);
+
+                } else if (fieldType === 'selfie') {
+                  signatureFormGroup[fieldName] = this.fb.control<File | string | null>(null, validators);
+
+                } else if (fieldType === 'pin_global' || fieldType === 'pin_user') {
+                  signatureFormGroup[fieldName] = this.fb.nonNullable.control('', validators);
+
                 } else {
-                  rowGroup[columnField] = this.fb.control(defaultColumnValue, columnValidators);
+                  // Tipo genérico
+                  signatureFormGroup[fieldName] = this.fb.control(defaultValue, validators);
                 }
               });
 
-              return this.fb.group(rowGroup);
-            };
+              // Crear el FormArray con el FormGroup dinámico
+              formFields[fieldData.field] = this.fb.array<FormGroup>([
+                this.fb.group(signatureFormGroup)
+              ]);
 
-            // Crear array con filas iniciales
-            const initialRowsArray: FormGroup[] = [];
-            for (let i = 0; i < initialRows; i++) {
-              initialRowsArray.push(createRowFormGroup());
+              console.log('FormGroup de firma creado:', signatureFormGroup);
+
+            } else if (field.type === 'table') {
+              // Procesar tipo table - crear FormArray con FormGroups para cada fila
+              const columns = field.columns || [];
+              const initialRows = field.initial_rows || 0;
+              const isRequired = field.required || false;
+
+              console.log('Procesando tabla:', fieldData.field, 'con', initialRows, 'filas iniciales', 'required:', isRequired);
+
+              // Validador personalizado para FormArray: requiere al menos una fila
+              const minLengthArrayValidator = (min: number): ValidatorFn => {
+                return (control: AbstractControl): ValidationErrors | null => {
+                  if (control instanceof FormArray) {
+                    return control.length < min ? { 'minlength': { requiredLength: min, actualLength: control.length } } : null;
+                  }
+                  return null;
+                };
+              };
+
+              // Crear función para generar un FormGroup vacío para una fila
+              const createRowFormGroup = () => {
+                const rowGroup: any = {};
+
+                columns.forEach((column: any) => {
+                  const columnField = column.field;
+                  const columnType = column.type;
+                  const required = column.required || false;
+                  const editable = column.editable !== false;
+
+                  // Crear validadores según configuración de columna
+                  const columnValidators: any[] = [];
+                  if (required && editable) {
+                    columnValidators.push(Validators.required);
+                  }
+                  if (column.validation?.max_length) {
+                    columnValidators.push(Validators.maxLength(column.validation.max_length));
+                  }
+                  if (column.validation?.min_length) {
+                    columnValidators.push(Validators.minLength(column.validation.min_length));
+                  }
+
+                  // Valor por defecto según tipo de columna
+                  let defaultColumnValue: any = '';
+
+                  if (columnType === 'input-number') {
+                    defaultColumnValue = null;
+                  } else if (columnType === 'date') {
+                    defaultColumnValue = null;
+                  } else if (columnType === 'dropdown' || columnType === 'multi-select') {
+                    defaultColumnValue = columnType === 'multi-select' ? [] : '';
+                  } else if (columnType === 'checkbox') {
+                    defaultColumnValue = false;
+                  }
+
+                  // Crear control para la columna
+                  if (columnType === 'checkbox') {
+                    rowGroup[columnField] = this.fb.control(defaultColumnValue, columnValidators);
+                  } else {
+                    rowGroup[columnField] = this.fb.control(defaultColumnValue, columnValidators);
+                  }
+                });
+
+                return this.fb.group(rowGroup);
+              };
+
+              // Crear array con filas iniciales
+              const initialRowsArray: FormGroup[] = [];
+              for (let i = 0; i < initialRows; i++) {
+                initialRowsArray.push(createRowFormGroup());
+              }
+
+              // Crear validadores del FormArray (si la tabla es requerida, debe tener al menos una fila)
+              const arrayValidators: ValidatorFn[] = [];
+              if (isRequired) {
+                arrayValidators.push(minLengthArrayValidator(1)); // Al menos una fila
+              }
+
+              // Crear el FormArray con validadores
+              formFields[fieldData.field] = this.fb.array<FormGroup>(initialRowsArray, arrayValidators);
+
+              console.log('FormArray de tabla creado:', fieldData.field, 'con validadores:', arrayValidators.length > 0 ? 'SI' : 'NO');
+
+            } else {
+
+              formFields[fieldData.field] = this.fb.control(
+                { value: defaultValue, disabled: disabled },
+                { nonNullable: true, validators: validators }
+              );
+              formFields[fieldData.field].updateValueAndValidity();
             }
-
-            // Crear validadores del FormArray (si la tabla es requerida, debe tener al menos una fila)
-            const arrayValidators: ValidatorFn[] = [];
-            if (isRequired) {
-              arrayValidators.push(minLengthArrayValidator(1)); // Al menos una fila
-            }
-
-            // Crear el FormArray con validadores
-            formFields[fieldData.field] = this.fb.array<FormGroup>(initialRowsArray, arrayValidators);
-
-            console.log('FormArray de tabla creado:', fieldData.field, 'con validadores:', arrayValidators.length > 0 ? 'SI' : 'NO');
-
-          } else {
-
-            formFields[fieldData.field] = this.fb.control(
-              { value: defaultValue, disabled: disabled },
-              { nonNullable: true, validators: validators }
-            );
-            formFields[fieldData.field].updateValueAndValidity();
           }
+          draw_child.push(field);
+        });
+
+
+        if (options.parentField == 'parent_form_data_') {
+
+          this.drawForm()[pos + '_' + 'child_form_fields'] = {};
+          this.drawForm()[pos + '_' + 'child_form_fields'][keyBase] = draw_child;
         }
-        draw_child.push(field);
-      });
-      this.drawForm()[pos + '_' + 'child_form_fields'] = {};
-      this.drawForm()[pos + '_' + 'child_form_fields']['grid'] = draw_child;
+
+      })
+
     }
 
   }
+
+
 
   /**
  * Reemplaza los valores en un formulario dinámico (`drawForm`) basándose en los campos de origen y destino.
@@ -748,7 +772,7 @@ export class CRUD extends Vars /*implements OnInit*/ {
         // si el padre child_form_fields, se abre el detalle del formulario
         if (parentSelect?.child_form_fields?.draw && auxParentSelect) {
           auxParentSelect = false;
-          this.openTasksDetail({ pos: posIndex, formFields: formFields, childFormFields: parentSelect.child_form_fields });
+          this.openTasksDetail({ pos: posIndex, formFields: formFields, childFormFields: parentSelect.child_form_fields, parentField: 'parent_form_data_' });
           //elimianr parent_form_data del formulario 
           //delete parentSelect.child_form_fields;
         }
@@ -845,40 +869,59 @@ export class CRUD extends Vars /*implements OnInit*/ {
       }
     }
 
+    //recorre this.drawForm().field donde encontraras claves como general, form y otros 
+    console.log('++++++11', this.drawForm()[posIndex]);
+
+    const draw = this.drawForm()[posIndex];
+    Object.keys(draw).forEach(keyBase => {
+
+      console.log('****0', keyBase, draw[keyBase]);
+
+      this.openTasksDetail({ pos: posIndex, formFields: formFields, childFormFields: draw[keyBase], parentField: 'request_data_' });
+
+      // aqui voy estoy sacado el valor de fields_prefixes para que openTasksDetail separa a quien relacionar
+      // los campos adicionales con el form
+
+    });
+
+
+    //this.openTasksDetail({ pos: posIndex, formFields: formFields, childFormFields: parentSelect.child_form_fields, parentField: 'parent_form_data_' });
+
+
     // Si todavia relationshipsLocal tiene valores porque no vengan de la consulta OPTIONS, se asignan a relationOptions,
     // ya que son valores locales adicionales a los que vienen del servidor
-    if (relationshipsLocal.length > 0) {
-      // Si hay valores en relationshipsLocal, se asignan a relationOptions
-      relationshipsLocal.forEach((val_local) => {
-        relationOptions.push(val_local);
-      });
-    }
-
-    if (this.includeFieldsForm[posIndex]) {
-      const includeField = this.includeFieldsForm[posIndex];
-
-      includeField.forEach((item) => {
-        const validators = [];
-        //const  disabled = item.disabled ? true : false;
-        // se agrega los validadores si en el servidor es requerido
-        if (item.required) {
-          validators.push(Validators.required);
-        }
-
-        // se agrega los validadores de max_length del servidor
-        if (item.max_length) {
-          validators.push(Validators.maxLength(item.max_length));
-        }
-
-        //tambien los campos iniciales pueden ser deshabilitados
-        if (item.disabled) {
-          this.initialDisabledForm[item.field] = true;
-        }
-
-        //no tiene caso disabled ya que al restablecer el formulario se deshabilita porque llama a enableForm
-        formFields[field_prefix + item.field] = this.fb.control({ value: item.default, disabled: true }, { nonNullable: true, validators: validators });
-      });
-    }
+    /* if (relationshipsLocal.length > 0) {
+       // Si hay valores en relationshipsLocal, se asignan a relationOptions
+       relationshipsLocal.forEach((val_local) => {
+         relationOptions.push(val_local);
+       });
+     }
+ 
+     if (this.includeFieldsForm[posIndex]) {
+       const includeField = this.includeFieldsForm[posIndex];
+ 
+       includeField.forEach((item) => {
+         const validators = [];
+         //const  disabled = item.disabled ? true : false;
+         // se agrega los validadores si en el servidor es requerido
+         if (item.required) {
+           validators.push(Validators.required);
+         }
+ 
+         // se agrega los validadores de max_length del servidor
+         if (item.max_length) {
+           validators.push(Validators.maxLength(item.max_length));
+         }
+ 
+         //tambien los campos iniciales pueden ser deshabilitados
+         if (item.disabled) {
+           this.initialDisabledForm[item.field] = true;
+         }
+ 
+         //no tiene caso disabled ya que al restablecer el formulario se deshabilita porque llama a enableForm
+         formFields[field_prefix + item.field] = this.fb.control({ value: item.default, disabled: true }, { nonNullable: true, validators: validators });
+       });
+     }*/
 
     this.relationships[posIndex] = relationOptions;
     console.log('formmmmmmmmmmmmmmmmmm', formFields);
@@ -1692,8 +1735,7 @@ export class CRUD extends Vars /*implements OnInit*/ {
           this.resetFormDialog({ pos });
           if (child_form_fields?.draw) {
             //const draw = child_form_fields.draw || {};
-            //const field = child_form_fields.fields || {};  
-            //aqui voy pero creo voy a llenear his.drawForm() cre que lo puedo hacer con openTasksDetail         
+            //const field = child_form_fields.fields || {};    
             //this.drawForm()[pos + '_' + 'child_form_fields'] = child_form_fields.draw;
             //si children tiene sus propios valores de dialog, les da prioridad, sino los que ya se hayan inilizazado desde if (!this.drawForm()[pos]) 
             // y por ultimo los valores del padre

@@ -1,6 +1,3 @@
-<!-- Versión del componente -->
-<div class="text-xs text-gray-500 mb-2 text-right">Signature Component v3.1.0</div>
-
 <div *ngIf="drawFormSignal()['grid']" class="grid grid-cols-12 gap-2 "> <!-- pt-3 -->
   <div *ngFor="let entry of drawFormSignal()['grid'] | keyvalue : keyComparator;"
     [ngClass]="[ entry.value.hide ? 'hidden' : '', entry.value.class || 'col-span-6', entry.value.class_md || 'md:col-span-3']">
@@ -862,22 +859,19 @@
                 <div class="flex gap-1 justify-content-center">
 
                   <!-- Botón editar fila - solo si no está editando nada -->
-                  <p-button *ngIf="!isRowOrCellEditing(entry.value.field, rowIndex)" 
-                    icon="pi pi-pencil" size="small"
+                  <p-button *ngIf="!isRowOrCellEditing(entry.value.field, rowIndex)" icon="pi pi-pencil" size="small"
                     severity="secondary" [text]="true" (onClick)="startRowEdit(entry.value.field, rowIndex)"
                     pTooltip="Editar fila" [style]="{'height': '28px', 'width': '28px'}">
                   </p-button>
 
                   <!-- Botón guardar - si está editando -->
-                  <p-button *ngIf="isRowOrCellEditing(entry.value.field, rowIndex)" 
-                    icon="pi pi-check" size="small"
+                  <p-button *ngIf="isRowOrCellEditing(entry.value.field, rowIndex)" icon="pi pi-check" size="small"
                     severity="success" [text]="true" (onClick)="finishRowEdit(entry.value.field, rowIndex)"
                     pTooltip="Guardar cambios" [style]="{'height': '28px', 'width': '28px'}">
                   </p-button>
 
                   <!-- Botón cancelar - si está editando -->
-                  <p-button *ngIf="isRowOrCellEditing(entry.value.field, rowIndex)" 
-                    icon="pi pi-times" size="small"
+                  <p-button *ngIf="isRowOrCellEditing(entry.value.field, rowIndex)" icon="pi pi-times" size="small"
                     severity="danger" [text]="true" (onClick)="cancelRowEdit(entry.value.field, rowIndex)"
                     pTooltip="Cancelar edición" [style]="{'height': '28px', 'width': '28px'}">
                   </p-button>
@@ -891,7 +885,7 @@
 
                 </div>
               </td>
-              <td *ngFor="let col of entry.value.columns" 
+              <td *ngFor="let col of entry.value.columns"
                 (dblclick)="!isRowEditing(entry.value.field, rowIndex) && !isCellEditing(entry.value.field, rowIndex, col.field) && isColumnEditable(col) && startCellEdit(entry.value.field, rowIndex, col.field)"
                 [class.cursor-pointer]="!isRowEditing(entry.value.field, rowIndex) && !isCellEditing(entry.value.field, rowIndex, col.field) && isColumnEditable(col)">
                 <div [ngSwitch]="getColumnType(col)">
@@ -1481,17 +1475,20 @@
                         style="position: sticky; left: 35px; z-index: 1; background: var(--surface-0); padding: 0.2rem 0.2rem !important;"
                         class="border-right-1 border-300">
                         <div class="flex gap-1 justify-content-center">
-                          <p-button *ngIf="!isRowOrCellEditing(card.value.field, rowIndex)" icon="pi pi-pencil" size="small"
-                            severity="secondary" [text]="true" (onClick)="startRowEdit(card.value.field, rowIndex)"
-                            pTooltip="Editar fila" [style]="{'height': '28px', 'width': '28px'}">
+                          <p-button *ngIf="!isRowOrCellEditing(card.value.field, rowIndex)" icon="pi pi-pencil"
+                            size="small" severity="secondary" [text]="true"
+                            (onClick)="startRowEdit(card.value.field, rowIndex)" pTooltip="Editar fila"
+                            [style]="{'height': '28px', 'width': '28px'}">
                           </p-button>
-                          <p-button *ngIf="isRowOrCellEditing(card.value.field, rowIndex)" icon="pi pi-check" size="small"
-                            severity="success" [text]="true" (onClick)="finishRowEdit(card.value.field, rowIndex)"
-                            pTooltip="Guardar cambios" [style]="{'height': '28px', 'width': '28px'}">
+                          <p-button *ngIf="isRowOrCellEditing(card.value.field, rowIndex)" icon="pi pi-check"
+                            size="small" severity="success" [text]="true"
+                            (onClick)="finishRowEdit(card.value.field, rowIndex)" pTooltip="Guardar cambios"
+                            [style]="{'height': '28px', 'width': '28px'}">
                           </p-button>
-                          <p-button *ngIf="isRowOrCellEditing(card.value.field, rowIndex)" icon="pi pi-times" size="small"
-                            severity="danger" [text]="true" (onClick)="cancelRowEdit(card.value.field, rowIndex)"
-                            pTooltip="Cancelar edición" [style]="{'height': '28px', 'width': '28px'}">
+                          <p-button *ngIf="isRowOrCellEditing(card.value.field, rowIndex)" icon="pi pi-times"
+                            size="small" severity="danger" [text]="true"
+                            (onClick)="cancelRowEdit(card.value.field, rowIndex)" pTooltip="Cancelar edición"
+                            [style]="{'height': '28px', 'width': '28px'}">
                           </p-button>
                           <p-button *ngIf="card.value?.delete_row && !isRowOrCellEditing(card.value.field, rowIndex)"
                             icon="pi pi-trash" size="small" severity="danger" [text]="true"

@@ -953,7 +953,7 @@ export class CustomDrawFormComponent {
 
     // Eliminar del FormArray
     formArray.removeAt(rowIndex);
-    
+
     // Forzar actualización de validación del FormArray
     formArray.markAsTouched();
     formArray.updateValueAndValidity();
@@ -1052,19 +1052,19 @@ export class CustomDrawFormComponent {
     const isRowEditing = this.isRowEditing(tableField, rowIndex);
     const isCellEditing = this.isCellEditing(tableField, rowIndex, column.field);
     const tableValidationRequested = this.tablesToValidate[tableField] || false;
-    
+
     const showErrors = isRowEditing || isCellEditing || tableValidationRequested;
-    
+
     const isValid = this.validateCell(value, column, showErrors);
     return isValid ? '' : 'p-invalid';
   }
 
   isAnyRowEditing(tableField: string): boolean {
     // Verificar si alguna fila está en edición (completa o celda)
-    const rowEditingKeys = Object.keys(this.editingRows).filter(key => 
+    const rowEditingKeys = Object.keys(this.editingRows).filter(key =>
       key.startsWith(tableField + '_') && this.editingRows[key]
     );
-    const cellEditingKeys = Object.keys(this.editingCells).filter(key => 
+    const cellEditingKeys = Object.keys(this.editingCells).filter(key =>
       key.startsWith(tableField + '_') && this.editingCells[key]
     );
     return rowEditingKeys.length > 0 || cellEditingKeys.length > 0;
@@ -1073,10 +1073,10 @@ export class CustomDrawFormComponent {
   isRowOrCellEditing(tableField: string, rowIndex: number): boolean {
     // Verificar si la fila está en edición completa o alguna de sus celdas
     if (this.isRowEditing(tableField, rowIndex)) return true;
-    
+
     // Buscar si alguna celda de esta fila está en edición
     const cellPrefix = `${tableField}_${rowIndex}_`;
-    return Object.keys(this.editingCells).some(key => 
+    return Object.keys(this.editingCells).some(key =>
       key.startsWith(cellPrefix) && this.editingCells[key]
     );
   }  // Métodos para edición de celdas
@@ -1137,7 +1137,7 @@ export class CustomDrawFormComponent {
     if (rowFormGroup.valid) {
       this.editingRows[rowKey] = false;
       delete this.originalRowData[rowKey];
-      
+
       // Limpiar también cualquier edición de celda activa de esta fila
       const cellPrefix = `${tableField}_${rowIndex}_`;
       Object.keys(this.editingCells).forEach(cellKey => {
@@ -1157,7 +1157,7 @@ export class CustomDrawFormComponent {
 
   finishCellEdit(tableField: string, rowIndex: number, colField: string): void {
     const cellKey = `${tableField}_${rowIndex}_${colField}`;
-    
+
     // Obtener el FormGroup de la fila para validar
     const formGroup = this.formGroupSignal();
     if (!formGroup) return;
@@ -1173,16 +1173,16 @@ export class CustomDrawFormComponent {
       // Primero obtener el valor actual de rowData (que ya fue actualizado por ngModel)
       const currentData = this.getTableData(tableField);
       const currentValue = currentData[rowIndex]?.[colField];
-      
+
       // Actualizar el FormControl con el valor actual
       cellControl.setValue(currentValue);
-      
+
       // Marcar el control como touched para mostrar errores
       cellControl.markAsTouched();
-      
+
       // Validar el control
       cellControl.updateValueAndValidity();
-      
+
       // Solo guardar si es válido
       if (cellControl.valid) {
         this.editingCells[cellKey] = false;
@@ -1211,7 +1211,7 @@ export class CustomDrawFormComponent {
     }
 
     this.editingRows[rowKey] = false;
-    
+
     // Limpiar también cualquier edición de celda activa de esta fila
     const cellPrefix = `${tableField}_${rowIndex}_`;
     Object.keys(this.editingCells).forEach(cellKey => {
