@@ -72,6 +72,7 @@ export class AppMenu {
           items: [
             { label: 'Productos', routerLink: ['/catalogues/product'] },
             { label: 'Monedas', routerLink: ['/catalogues/currency'] },
+            { label: 'Clasificadores', routerLink: ['/catalogues/classifier'] },
           ]
         }
       ]
@@ -86,121 +87,121 @@ export class AppMenu {
           ]
         }]
     },
-
-    {
-      label: 'Apps',
-      icon: 'pi pi-th-large',
-      items: [
+    /*
         {
-          label: 'Blog',
-          icon: 'pi pi-fw pi-comment',
+          label: 'Apps',
+          icon: 'pi pi-th-large',
           items: [
             {
-              label: 'List',
-              icon: 'pi pi-fw pi-image',
-              routerLink: ['/apps/blog/list']
-            },
-            {
-              label: 'Detail',
-              icon: 'pi pi-fw pi-list',
-              routerLink: ['/apps/blog/detail']
-            },
-            {
-              label: 'Edit',
-              icon: 'pi pi-fw pi-pencil',
-              routerLink: ['/apps/blog/edit']
-            }
-          ]
-        },
-        {
-          label: 'Chat',
-          icon: 'pi pi-fw pi-comments',
-          routerLink: ['/apps/chat']
-        },
-        {
-          label: 'Files',
-          icon: 'pi pi-fw pi-folder',
-          routerLink: ['/apps/files']
-        },
-        {
-          label: 'Kanban',
-          icon: 'pi pi-fw pi-sliders-v',
-          routerLink: ['/apps/kanban']
-        },
-        {
-          label: 'Mail',
-          icon: 'pi pi-fw pi-envelope',
-          items: [
-            {
-              label: 'Inbox',
-              icon: 'pi pi-fw pi-inbox',
-              routerLink: ['/apps/mail/inbox']
-            },
-            {
-              label: 'Compose',
-              icon: 'pi pi-fw pi-pencil',
-              routerLink: ['/apps/mail/compose']
-            },
-            {
-              label: 'Detail',
+              label: 'Blog',
               icon: 'pi pi-fw pi-comment',
-              routerLink: ['/apps/mail/detail/1000']
+              items: [
+                {
+                  label: 'List',
+                  icon: 'pi pi-fw pi-image',
+                  routerLink: ['/apps/blog/list']
+                },
+                {
+                  label: 'Detail',
+                  icon: 'pi pi-fw pi-list',
+                  routerLink: ['/apps/blog/detail']
+                },
+                {
+                  label: 'Edit',
+                  icon: 'pi pi-fw pi-pencil',
+                  routerLink: ['/apps/blog/edit']
+                }
+              ]
+            },
+            {
+              label: 'Chat',
+              icon: 'pi pi-fw pi-comments',
+              routerLink: ['/apps/chat']
+            },
+            {
+              label: 'Files',
+              icon: 'pi pi-fw pi-folder',
+              routerLink: ['/apps/files']
+            },
+            {
+              label: 'Kanban',
+              icon: 'pi pi-fw pi-sliders-v',
+              routerLink: ['/apps/kanban']
+            },
+            {
+              label: 'Mail',
+              icon: 'pi pi-fw pi-envelope',
+              items: [
+                {
+                  label: 'Inbox',
+                  icon: 'pi pi-fw pi-inbox',
+                  routerLink: ['/apps/mail/inbox']
+                },
+                {
+                  label: 'Compose',
+                  icon: 'pi pi-fw pi-pencil',
+                  routerLink: ['/apps/mail/compose']
+                },
+                {
+                  label: 'Detail',
+                  icon: 'pi pi-fw pi-comment',
+                  routerLink: ['/apps/mail/detail/1000']
+                }
+              ]
+            },
+            {
+              label: 'Task List',
+              icon: 'pi pi-fw pi-check-square',
+              routerLink: ['/apps/tasklist']
             }
           ]
         },
+    
+    
+    
         {
-          label: 'Task List',
-          icon: 'pi pi-fw pi-check-square',
-          routerLink: ['/apps/tasklist']
-        }
-      ]
-    },
-
-
-
-    {
-      label: 'E-Commerce',
-      icon: 'pi pi-fw pi-wallet',
-      items: [
-        {
-          label: 'Product Overview',
-          icon: 'pi pi-fw pi-image',
-          routerLink: ['ecommerce/product-overview']
+          label: 'E-Commerce',
+          icon: 'pi pi-fw pi-wallet',
+          items: [
+            {
+              label: 'Product Overview',
+              icon: 'pi pi-fw pi-image',
+              routerLink: ['ecommerce/product-overview']
+            },
+            {
+              label: 'Product List',
+              icon: 'pi pi-fw pi-list',
+              routerLink: ['ecommerce/product-list']
+            },
+            {
+              label: 'New Product',
+              icon: 'pi pi-fw pi-plus',
+              routerLink: ['ecommerce/new-product']
+            },
+            {
+              label: 'Shopping Cart',
+              icon: 'pi pi-fw pi-shopping-cart',
+              routerLink: ['ecommerce/shopping-cart']
+            },
+            {
+              label: 'Checkout Form',
+              icon: 'pi pi-fw pi-check-square',
+              routerLink: ['ecommerce/checkout-form']
+            },
+            {
+              label: 'Order History',
+              icon: 'pi pi-fw pi-history',
+              routerLink: ['ecommerce/order-history']
+            },
+            {
+              label: 'Order Summary',
+              icon: 'pi pi-fw pi-file',
+              routerLink: ['ecommerce/order-summary']
+            }
+          ]
         },
-        {
-          label: 'Product List',
-          icon: 'pi pi-fw pi-list',
-          routerLink: ['ecommerce/product-list']
-        },
-        {
-          label: 'New Product',
-          icon: 'pi pi-fw pi-plus',
-          routerLink: ['ecommerce/new-product']
-        },
-        {
-          label: 'Shopping Cart',
-          icon: 'pi pi-fw pi-shopping-cart',
-          routerLink: ['ecommerce/shopping-cart']
-        },
-        {
-          label: 'Checkout Form',
-          icon: 'pi pi-fw pi-check-square',
-          routerLink: ['ecommerce/checkout-form']
-        },
-        {
-          label: 'Order History',
-          icon: 'pi pi-fw pi-history',
-          routerLink: ['ecommerce/order-history']
-        },
-        {
-          label: 'Order Summary',
-          icon: 'pi pi-fw pi-file',
-          routerLink: ['ecommerce/order-summary']
-        }
-      ]
-    },
-
-
+    
+    */
     /*
     {
       label: 'UI Kit',

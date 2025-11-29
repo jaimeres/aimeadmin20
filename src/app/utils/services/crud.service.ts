@@ -177,6 +177,7 @@ export class CRUDService {
   };
 
   config_cols(module: string) {
+    console.log(module,);
     console.log(this.authS.config[module]['config_cols']);
 
     return this.authS.config[module]['config_cols'];

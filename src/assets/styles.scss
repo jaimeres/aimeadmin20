@@ -371,6 +371,43 @@ sm: 576px
 
 
 
+//viene del drow en la parte de los cambas, lo pongo aqui porque en el build en css excede el tamaño maximo permitido
+
+// Prevent canvas overflow on all screen sizes
+.signature-canvas-container {
+  .signature-canvas-wrapper {
+    overflow: hidden;
+    max-width: 100%;
+    box-sizing: border-box;
+  }
+
+  .signature-canvas {
+    max-width: 100%;
+    box-sizing: border-box;
+  }
+}
+
+// Responsive adjustments
+@media (max-width: 768px) {
+  .signature-canvas-container {
+    .signature-canvas-wrapper {
+      overflow: hidden;
+      max-width: 100%;
+    }
+
+    .signature-canvas {
+      max-width: 100%;
+      width: 100% !important;
+      height: auto;
+      min-height: 120px;
+    }
+  }
+
+  .signature-buttons {
+    justify-content: center;
+  }
+}
+
 /*icono en el header del p-dialog .p-dialog-icon {
   margin-left: 1rem !important;
   margin-right: 1rem !important;

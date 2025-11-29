@@ -8,6 +8,10 @@ export const CATALOGUES_ROUTES: Routes = [
   {
     path: 'currency',
     loadComponent: () => import('./currency/currency.component').then(m => m.CurrencyComponent)
+  },
+  {
+    path: 'classifier',
+    loadComponent: () => import('./classifier/classifier.component').then(m => m.ClassifierComponent)
   }
   // Agrega más rutas para otros componentes standalone de catalogues si es necesario
 ];

@@ -11,7 +11,8 @@
   <li *ngIf="authS.loggedin" class="layout-topbar-user app-config-mobile-button">
     <button class="rounded-full overflow-hidden w-10 h-10 flex items-center justify-center"
       (click)="userMenuVisible = !userMenuVisible" (blur)="hideMenuOnBlur()" tabindex="0">
-      <img src="/images/avatar/amyelsner.png" alt="avatar" class="w-full h-full object-cover" />
+      <img *ngIf="authS.user?.image" [src]="authS.user.image" alt="avatar" class="w-full h-full object-cover" />
+      <i *ngIf="!authS.user?.image" class="pi pi-user" style="font-size: 1.5rem;"></i>
     </button>
     <ul class="absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg py-2 z-50" *ngIf="userMenuVisible">
       <li>
@@ -128,7 +129,8 @@
       <li *ngIf="authS.loggedin" class="layout-topbar-user">
         <a pStyleClass="@next" enterFromClass="hidden" enterActiveClass="animate-scalein" leaveToClass="hidden"
           leaveActiveClass="animate-fadeout" [hideOnOutsideClick]="true">
-          <img src="/images/avatar/amyelsner.png" alt="avatar" class="w-8 h-8" />
+          <img *ngIf="authS.user?.image" [src]="authS.user.image" alt="avatar" class="w-8 h-8" />
+          <i *ngIf="!authS.user?.image" class="pi pi-user" style="font-size: 1.5rem;"></i>
         </a>
         <div class="hidden">
           <ul class="list-none p-0 m-0">

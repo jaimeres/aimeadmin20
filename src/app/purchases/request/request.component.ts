@@ -277,7 +277,7 @@ export class RequestComponent extends CRUD implements OnInit {
   });
 
 
-  constructor(crudS: PurchaseService, private renderer: Renderer2) {
+  constructor(crudS: PurchaseService,) {
     super(crudS, 'request-detail');
   }
 
@@ -732,7 +732,7 @@ export class RequestComponent extends CRUD implements OnInit {
     }
   }
 
-  override onKeydownEnterText($event: any) {
+  override onKeydownEnter($event: any) {
     console.log('onKeydownEnterText', $event);
 
     const value = $event.event.target.value.trim();
@@ -790,7 +790,7 @@ export class RequestComponent extends CRUD implements OnInit {
     { field: 'discard_proof', header: 'Desecho' },
   ];
 
-  override onKeydownEnterNumber($event: any) {
+  /*override onKeydownEnterNumber($event: any) {
     const value = $event.event.target.value.trim();
     console.log(value);
 
@@ -810,12 +810,6 @@ export class RequestComponent extends CRUD implements OnInit {
         const temp = [...this.products()];
         const r = this.DJAtoObject({ resp });
         r['editing'] = true;
-
-        /*if(form?.get('search_name')?.value) {
-          r['name'] = form?.get('search_name')?.value[this.search_name()];
-        }else{
-          r['name'] = form?.get('name')?.value || '';
-        }*/
 
         temp.unshift(r);
         this.products.set(temp);
@@ -841,7 +835,7 @@ export class RequestComponent extends CRUD implements OnInit {
       }
     });
 
-  }
+  }*/
 
   cancelRequestDetail() {
     console.log('cancelRequestDetail');
@@ -901,10 +895,7 @@ export class RequestComponent extends CRUD implements OnInit {
   }
 
   initCanvas() {
-    console.log('initCanvas');
     if (!this.canvasRef) return;
-    console.log('funciona cambas');
-
 
     const canvas = this.canvasRef.nativeElement;
     this.ctx = canvas.getContext('2d')!;
@@ -915,3 +906,210 @@ export class RequestComponent extends CRUD implements OnInit {
   }
 
 }
+
+
+
+/**
+ schema_base = {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    # 1) Solo se permiten claves fijas declaradas en 'properties'
+    #    o claves dinámicas con prefijos permitidos (patternProperties).
+    "additionalProperties": False,
+
+    # 2) ==== AQUI AGREGA TUS CAMPOS FIJOS (uno por uno) ====
+    #    Ejemplo al agregar: "id": {"$ref": "#/$defs/field_node"}
+    #    Si un fijo necesita reglas propias, puedes hacer:
+    #    "name": {"allOf": [{"$ref": "#/$defs/field_node"}, {"$ref": "#/$defs/fixed_fields/name"}]}
+    "properties": {
+        # -- agrega aquí tus campos fijos --
+        # "id": {"$ref": "#/$defs/field_node"},
+        # "name": {"allOf": [{"$ref": "#/$defs/field_node"}, {"$ref": "#/$defs/fixed_fields/name"}]},
+    },
+
+    # 3) ==== TODOS los campos fijos son obligatorios ====
+    "required": [
+        # -- enumera aquí las claves fijas que agregues arriba --
+        # "id", "name"
+    ],
+
+    # 4) ==== CLAVES DINÁMICAS PERMITIDAS POR PREFIJO ====
+    #    Cada clave que comience con estos prefijos puede ser:
+    #      - un OBJETO CAMPO (field_node), o
+    #      - un DICCIONARIO DE CAMPOS (field_dict) con sub-claves (cada una un field_node).
+    "patternProperties": {
+        r"^(form_fields_data_|child_form_fields_data_|parent_form_data)": {
+            "anyOf": [
+                {"$ref": "#/$defs/field_node"},
+                {"$ref": "#/$defs/field_dict"}
+            ]
+        }
+
+        # ==== PARA AÑADIR MÁS PREFIJOS, DUPLICA EL BLOQUE DE ARRIBA ====
+        # r"^(otro_prefijo_)": {
+        #     "anyOf": [
+        #         {"$ref": "#/$defs/field_node"},
+        #         {"$ref": "#/$defs/field_dict"}
+        #     ]
+        # },
+    },
+
+    "$defs": {
+        # 5) ==== CONTENEDOR DE CAMPOS DINÁMICOS ====
+        #     Objeto cuyas propiedades (cualquier nombre) son campos (field_node).
+        "field_dict": {
+            "type": "object",
+            # El contenedor permite cualquiera de sus claves, pero
+            # cada valor debe validar como 'field_node'.
+            "additionalProperties": {"$ref": "#/$defs/field_node"}
+        },
+
+        # 6) ==== CASCARÓN DE UN CAMPO ====
+        #     NO imponemos reglas finas: solo 'type' y el switch por tipo.
+        #     Dentro del CAMPO: no se permiten propiedades no declaradas,
+        #     por lo que las irás declarando en los defs por tipo o por campo fijo.
+        "field_node": {
+            "type": "object",
+            "additionalProperties": False,
+
+            # Propiedades mínimas comunes (solo 'type' para activar el switch).
+            "properties": {
+                "type": {
+                    "type": "string",
+                    "enum": [
+                        "input-text",
+                        "select-button",
+                        "dropdown",
+                        "tree-select",
+                        "input-number",
+                        "auto-complete",
+                        "toggle-button",
+                        "json",
+                        "textarea",
+                        "signature",
+                        "table",
+                        "date",
+                        "time",
+                        "multi-select"
+                    ]
+                }
+            },
+            "required": ["type"],
+
+            # Switch por tipo: aquí no definimos nada aún,
+            # solo delegamos a los esquemas que TÚ llenarás por tipo.
+            "allOf": [
+                {"$ref": "#/$defs/type_switch"}
+            ]
+        },
+
+        # 7) ==== SWITCH POR TIPO (rellena los 'then' con tus defs por tipo) ====
+        "type_switch": {
+            "oneOf": [
+                {
+                    "if": {"properties": {"type": {"const": "input-text"}}, "required": ["type"]},
+                    "then": {"$ref": "#/$defs/types/input-text"}
+                },
+                {
+                    "if": {"properties": {"type": {"const": "select-button"}}, "required": ["type"]},
+                    "then": {"$ref": "#/$defs/types/select-button"}
+                },
+                {
+                    "if": {"properties": {"type": {"const": "dropdown"}}, "required": ["type"]},
+                    "then": {"$ref": "#/$defs/types/dropdown"}
+                },
+                {
+                    "if": {"properties": {"type": {"const": "tree-select"}}, "required": ["type"]},
+                    "then": {"$ref": "#/$defs/types/tree-select"}
+                },
+                {
+                    "if": {"properties": {"type": {"const": "input-number"}}, "required": ["type"]},
+                    "then": {"$ref": "#/$defs/types/input-number"}
+                },
+                {
+                    "if": {"properties": {"type": {"const": "auto-complete"}}, "required": ["type"]},
+                    "then": {"$ref": "#/$defs/types/auto-complete"}
+                },
+                {
+                    "if": {"properties": {"type": {"const": "toggle-button"}}, "required": ["type"]},
+                    "then": {"$ref": "#/$defs/types/toggle-button"}
+                },
+                {
+                    "if": {"properties": {"type": {"const": "json"}}, "required": ["type"]},
+                    "then": {"$ref": "#/$defs/types/json"}
+                },
+                {
+                    "if": {"properties": {"type": {"const": "textarea"}}, "required": ["type"]},
+                    "then": {"$ref": "#/$defs/types/textarea"}
+                },
+                {
+                    "if": {"properties": {"type": {"const": "signature"}}, "required": ["type"]},
+                    "then": {"$ref": "#/$defs/types/signature"}
+                },
+                {
+                    "if": {"properties": {"type": {"const": "table"}}, "required": ["type"]},
+                    "then": {"$ref": "#/$defs/types/table"}
+                },
+                {
+                    "if": {"properties": {"type": {"const": "date"}}, "required": ["type"]},
+                    "then": {"$ref": "#/$defs/types/date"}
+                },
+                {
+                    "if": {"properties": {"type": {"const": "time"}}, "required": ["type"]},
+                    "then": {"$ref": "#/$defs/types/time"}
+                },
+                {
+                    "if": {"properties": {"type": {"const": "multi-select"}}, "required": ["type"]},
+                    "then": {"$ref": "#/$defs/types/multi-select"}
+                }
+            ]
+        },
+
+        # 8) ==== DEFINICIONES POR TIPO (VACÍAS PARA QUE LAS LLENES) ====
+        #     En cada uno, define:
+        #       - "properties": {...}  (las propiedades válidas de ese tipo)
+        #       - "required":  [...]   (las obligatorias)
+        #       - "additionalProperties": false  (para bloquear extras del campo)
+        "types": {
+            "input-text": {
+                "type": "object",
+                "additionalProperties": False,
+                "properties": {
+                    # <-- aquí props del campo tipo input-text
+                },
+                "required": [
+                    # <-- aquí requeridos del campo tipo input-text
+                ]
+            },
+            "select-button": {"type": "object", "additionalProperties": False, "properties": {}, "required": []},
+            "dropdown": {"type": "object", "additionalProperties": False, "properties": {}, "required": []},
+            "tree-select": {"type": "object", "additionalProperties": False, "properties": {}, "required": []},
+            "input-number": {"type": "object", "additionalProperties": False, "properties": {}, "required": []},
+            "auto-complete": {"type": "object", "additionalProperties": False, "properties": {}, "required": []},
+            "toggle-button": {"type": "object", "additionalProperties": False, "properties": {}, "required": []},
+            "json": {"type": "object", "additionalProperties": False, "properties": {}, "required": []},
+            "textarea": {"type": "object", "additionalProperties": False, "properties": {}, "required": []},
+            "signature": {"type": "object", "additionalProperties": False, "properties": {}, "required": []},
+            "table": {"type": "object", "additionalProperties": False, "properties": {}, "required": []},
+            "date": {"type": "object", "additionalProperties": False, "properties": {}, "required": []},
+            "time": {"type": "object", "additionalProperties": False, "properties": {}, "required": []},
+            "multi-select": {"type": "object", "additionalProperties": False, "properties": {}, "required": []}
+        },
+
+        # 9) ==== (OPCIONAL) VALIDACIONES ESPECÍFICAS POR CAMPO FIJO ====
+        #     Si un campo fijo necesita reglas distintas a las de su 'type', defínelas aquí
+        #     y en 'properties' usa allOf para combinarlas con 'field_node'.
+        "fixed_fields": {
+            # "name": {
+            #     "type": "object",
+            #     "additionalProperties": False,
+            #     "properties": {
+            #         # reglas extra solo para el campo fijo 'name'
+            #     },
+            #     "required": []
+            # }
+        }
+    }
+}
+
+ */

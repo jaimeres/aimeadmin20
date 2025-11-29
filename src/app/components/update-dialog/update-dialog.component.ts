@@ -266,7 +266,7 @@ export class UpdateDialogComponent implements OnInit {
     return 'var(--green-500)';
   }
 
-  getMessageSeverity(): string {
+  getMessageSeverity(): "error" | "secondary" | "info" | "success" | "warn" | "contrast" | null | undefined {
     if (!this.updateResult) return 'info';
 
     if (this.updateResult.isMaintenance || this.updateResult.isBlocked) {

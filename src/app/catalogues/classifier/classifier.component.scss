@@ -1,0 +1,46 @@
+// Encabezados: sin salto de línea
+/*::ng-deep .p-treetable .p-treetable-thead>tr>th {
+  white-space: nowrap;
+}
+
+// Celdas del cuerpo: sin salto de línea
+::ng-deep .p-treetable .p-treetable-tbody>tr>td {
+  white-space: nowrap;
+}
+
+// Forzar scroll horizontal en el contenedor
+::ng-deep .table-fit-Custom {
+  overflow-x: auto !important;
+  overflow-y: auto !important;
+}
+
+// Asegurar que la tabla tenga el ancho necesario
+::ng-deep .table-fit-Custom .p-treetable-table {
+  width: max-content !important;
+}*/
+
+::ng-deep .p-treetable .p-treetable-thead>tr>th {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  //width: max-content !important;
+}
+
+::ng-deep .p-treetable .p-treetable-tbody>tr>td {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+
+}
+
+// permite como maximo 350px de ancho en las celdas de la tabla
+//::ng-deep .p-datatable .p-datatable-tbody>tr>td {
+::ng-deep .p-treetable .p-treetable-tbody>tr>td {
+  max-width: 350px !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  //Opcional: añadir puntos suspensivos si el texto es demasiado largo
+  white-space: nowrap !important;
+  //Opcional: evitar que el texto se divida 
+  //width: max-content !important;
+}

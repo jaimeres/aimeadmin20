@@ -14,7 +14,7 @@
   "private": true,
   "dependencies": {
     "@angular/animations": "^20",
-    "@angular/cdk": "^20",
+    "@angular/cdk": "^20.2.12",
     "@angular/common": "^20",
     "@angular/compiler": "^20",
     "@angular/core": "^20",
@@ -42,7 +42,7 @@
     "ngx-cookie-service": "^20.0.1",
     "ngx-lottie": "^20.0.0",
     "primeicons": "^7.0.0",
-    "primeng": "^20.0.1",
+    "primeng": "20.3.0",
     "quill": "^2.0.3",
     "rxjs": "~7.8.2",
     "tailwindcss-primeui": "^0.6.1",

@@ -1,4 +1,3 @@
-{{this.generalS.getLocationSnapshot() | json}}
 <div style="position: absolute; z-index: 2;">
   <app-custom-button-crud (deleteAction)="delete()" (editAction)="edit()"
     (refreshAction)="getAll({ force: true, pos: pos() })" (newAction)="openNew({pos:pos()})"
@@ -49,21 +48,17 @@
       <p-tabpanels>
 
         <p-tabpanel value="0">
-
           <app-custom-draw-form *ngIf="form()[$any(typeDefault)] && drawForm()[typeDefault]"
             [drawForm]="drawForm()[typeDefault]['general']" [formGroup]="form()[$any(typeDefault)]"
             (onSelectAutoCompleteAction)="onSelectAutoComplete($event)"
             (onChangeDropdownAction)="onChangeDropdown($event)" (onNewIconDropdownAction)="onNewIconDropdown($event)"
             (onReloadIconDropdownAction)="onReloadIconDropdown($event)" (onChangeToggleAction)="onChangeToggle($event)"
-            (onKeydownEnterTextAction)="onKeydownEnterText($event)"
-            (onClosableIconDropdownAction)="onClosableIconDropdown($event)"
-            (onKeydownEnterNumberAction)="onKeydownEnterNumber($event)" (files64Action)="onFiles64($event)"
+            (onKeydownEnterAction)="onKeydownEnter($event)"
+            (onClosableIconDropdownAction)="onClosableIconDropdown($event)" (files64Action)="onFiles64($event)"
             (filesAction)="onFiles($event)" />
-
         </p-tabpanel>
 
         <p-tabpanel header="Clasificadores" value="1">
-
           <div formArrayName="classifiers" class="pt-3">
             <div class="p-fluid grid separator-form-small pl-2"
               *ngFor="let level of classifierLevelsGen()[$any(pos())];  let i = index">
@@ -79,11 +74,9 @@
               </div>
             </div>
           </div>
-
         </p-tabpanel>
 
         <!-- <p-tabpanel header="Responsable" value="1"> </p-tabpanel> -->
-
         <p-tabpanel value="3">
           <app-custom-audit [cf]="customField()[typeDefault]" [selected]="selected()" />
         </p-tabpanel>

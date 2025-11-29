@@ -4,8 +4,8 @@ import { Router } from '@angular/router';
 import { MenuItem, TreeNode } from 'primeng/api';
 import { CRUDService } from './services/crud.service';
 import {
-  classifierOptions, getAllOptions, getAllSecundaryOptions, getDJAtoObject, getStatusOptions, getTaskOptions,
-  levelsOptions, resetFormOptions, saveOptions
+  getAllOptions, getAllSecundaryOptions, getDJAtoObject, getStatusOptions, getTaskOptions,
+  resetFormOptions, saveOptions
 } from './types/crud.types';
 import { Vars } from './vars.class';
 
@@ -227,31 +227,19 @@ export class CRUD extends Vars /*implements OnInit*/ {
     let draw = options.childFormFields?.draw;
     const fields = options.childFormFields?.fields;
 
+
     const draw_child: any = []
 
     if (draw) {
 
-      // Verifica si el primer elemento es 'grid' o 'nested'
-      //const firstKey = Object.keys(draw)[0];
-
-      //console.log('------------0', firstKey, firstKey, draw);
-
       Object.keys(draw).forEach(keyBase => {
         if (keyBase == 'dialog' || keyBase === '') return;
 
-
-
-        /*if (firstKey === 'grid' || firstKey === 'nested') {
-          draw = draw[firstKey];
-          }*/
-
         const drawLayOut = draw[keyBase];
-        console.log('////////22', keyBase, drawLayOut, draw);
         // Recorre todos los objetos y agrega controles dinámicamente
         Object.keys(drawLayOut).forEach(key => {
           const fieldData = drawLayOut[key];
           const field = fields[fieldData.field];
-          console.log('????????', field.field, key, fieldData.field);
 
 
           // Toma directamente el field del diccionario
@@ -260,14 +248,24 @@ export class CRUD extends Vars /*implements OnInit*/ {
             const active = field?.default?.active || false;
             const value = field?.default?.value || null;
             let defaultValue = value;
-            const edit = field?.default?.edit || false;
+            const edit = field?.default?.edit !== false; // si edit no está definido, se asume true
             if (active && edit) {
               if (value == 'device') {
                 defaultValue = new Date();
               }
             }
 
-            const disabled = field.readonly || false;
+            // Si edit es false o readonly es true, el campo debe ser disabled
+            const disabled = field.readonly || !edit;
+
+            // Guardar el estado readonly en la variable para saber que campos debe deshabilitar al guardar
+            if (disabled) {
+              if (!this.initialDisabledForm[pos]) {
+                this.initialDisabledForm[pos] = {};
+              }
+              this.initialDisabledForm[pos][fieldData.field] = true;
+            }
+
             const validators: any[] = [];
             // Agrega validadores si es requerido
             if (field.required) {
@@ -308,37 +306,43 @@ export class CRUD extends Vars /*implements OnInit*/ {
                 { value: defaultValue, disabled: disabled },
                 { nonNullable: false, validators: validators }
               );
+
+              //quita expliictamente required cuando es drowpdown, auto-complete o tree-select PARA QUE LOS CAMPOS QUE NO
+              // CONTIENE object_ no se quejen si son obligatorios, pero despues de haberlo establecido al que inicio con object_
+              validators.splice(validators.indexOf(Validators.required), 1);
+
               // se le agrega object_ al elemento que se va a dibujar para poder dejar el nombre del campo libre y agregarle el onjeto con id y name
               // Solo agregar object_ si no lo tiene ya
               if (!field.field.startsWith('object_' + options.parentField)) {
                 field.field = 'object_' + field.field;
-
               }
 
 
 
               //si field trae children recorre el objecto (no es array para que no se recorre con forEach)
-              if (field.children && field.children.active && field.children.fields) {
+              if (field.children && field.children.fields) {
                 //tambien le agrega a los campos que estan dentro del children, es decir, aquellos que van a recibir los valores
                 //en cascada
-                for (const [fieldKey, fieldValue] of Object.entries(field.children.fields)) {
-                  const typedFieldValue = fieldValue as any; // Cast explícito para acceder a las propiedades
 
-                  // Recorrer cada nodo de typedFieldValue (manual, remote, etc.)
-                  for (const [nodeKey, nodeValue] of Object.entries(typedFieldValue)) {
-                    const typedNodeValue = nodeValue as any;
+                // Iterar primero por tipos: static, dynamic, derived
+                ['static', 'dynamic', 'derived'].forEach(typeKey => {
+                  if (field.children.fields[typeKey]) {
+                    for (const [fieldKey, fieldValue] of Object.entries(field.children.fields[typeKey])) {
+                      const typedFieldValue = fieldValue as any;
 
-                    //sono cesesita cambiar el campo de los siguientes tipos porque son los unicos que requieren cambio
-                    //para poder ser suplicados y se pueda enviar el objeto en lugar de solo el id como lo hace el form
-                    if (typedNodeValue.type === 'dropdown' || typedNodeValue.type === 'auto-complete' || typedNodeValue.type === 'tree-select') {
-                      // Solo agregar object_ si no lo tiene ya
-                      const newFieldKey = fieldKey.startsWith('object_parent_form_data') ? fieldKey : 'object_' + fieldKey;
-                      const newFields: any = {};
-                      newFields[newFieldKey] = typedFieldValue;
-                      field.children.fields = newFields;
+                      //solo necesita cambiar el campo de los siguientes tipos porque son los unicos que requieren cambio
+                      //para poder ser duplicados y se pueda enviar el objeto en lugar de solo el id como lo hace el form
+                      if (typedFieldValue.type === 'dropdown' || typedFieldValue.type === 'auto-complete' || typedFieldValue.type === 'tree-select') {
+                        // Solo agregar object_ si no lo tiene ya
+                        const newFieldKey = fieldKey.startsWith('object_' + options.parentField) ? fieldKey : 'object_' + fieldKey;
+
+                        // Actualizar dentro del grupo de tipo
+                        field.children.fields[typeKey][newFieldKey] = typedFieldValue;
+                        delete field.children.fields[typeKey][fieldKey];
+                      }
                     }
                   }
-                }
+                });
               }
             }
             //los validadores para los campos ocultos no aplican porque los detiene su equivalente de dropdown, auto-complete y tree-select
@@ -375,16 +379,22 @@ export class CRUD extends Vars /*implements OnInit*/ {
                 if (subField.default) {
                   const active = subField.default.active || false;
                   const value = subField.default.value || null;
-                  const edit = subField.default.edit || false;
+                  const subEdit = subField.default.edit !== false; // si edit no está definido, se asume true
 
-                  if (active && edit) {
+                  if (active && subEdit) {
                     if (value === 'device') {
                       defaultValue = new Date();
+                    } else if (value === 'current') {
+                      // Si el valor es 'current', inicializarlo con null
+                      defaultValue = null;
                     } else {
                       defaultValue = value;
                     }
                   }
                 }
+
+                // Determinar si el campo debe ser de solo lectura
+                const isReadonly = subField.default?.edit === false || subField.readonly || disabled;
 
                 // Agregar campos según el tipo
                 if (fieldType === 'login') {
@@ -408,27 +418,31 @@ export class CRUD extends Vars /*implements OnInit*/ {
                     passwordValidators.push(Validators.maxLength(maxLength));
                   }
 
-                  signatureFormGroup[userField] = this.fb.nonNullable.control('', userValidators);
-                  signatureFormGroup[passwordField] = this.fb.nonNullable.control('', passwordValidators);
+                  signatureFormGroup[userField] = this.fb.nonNullable.control({ value: '', disabled: isReadonly }, userValidators);
+                  signatureFormGroup[passwordField] = this.fb.nonNullable.control({ value: '', disabled: isReadonly }, passwordValidators);
 
                 } else if (fieldType === 'input-text') {
-                  signatureFormGroup[fieldName] = this.fb.nonNullable.control(defaultValue, validators);
+                  signatureFormGroup[fieldName] = this.fb.nonNullable.control({ value: defaultValue, disabled: isReadonly }, validators);
 
                 } else if (fieldType === 'date') {
-                  signatureFormGroup[fieldName] = this.fb.nonNullable.control(defaultValue || new Date(), validators);
+                  // Si defaultValue es 'current', inicializarlo con null
+                  if (defaultValue === 'current') {
+                    defaultValue = null;
+                  }
+                  signatureFormGroup[fieldName] = this.fb.nonNullable.control({ value: defaultValue || null, disabled: isReadonly }, validators);
 
                 } else if (fieldType === 'signature-pad') {
-                  signatureFormGroup[fieldName] = this.fb.control<string | null>(null, validators);
+                  signatureFormGroup[fieldName] = this.fb.control<string | null>({ value: null, disabled: isReadonly }, validators);
 
                 } else if (fieldType === 'selfie') {
-                  signatureFormGroup[fieldName] = this.fb.control<File | string | null>(null, validators);
+                  signatureFormGroup[fieldName] = this.fb.control<File | string | null>({ value: null, disabled: isReadonly }, validators);
 
                 } else if (fieldType === 'pin_global' || fieldType === 'pin_user') {
-                  signatureFormGroup[fieldName] = this.fb.nonNullable.control('', validators);
+                  signatureFormGroup[fieldName] = this.fb.nonNullable.control({ value: '', disabled: isReadonly }, validators);
 
                 } else {
                   // Tipo genérico
-                  signatureFormGroup[fieldName] = this.fb.control(defaultValue, validators);
+                  signatureFormGroup[fieldName] = this.fb.control({ value: defaultValue, disabled: isReadonly }, validators);
                 }
               });
 
@@ -520,6 +534,22 @@ export class CRUD extends Vars /*implements OnInit*/ {
 
               console.log('FormArray de tabla creado:', fieldData.field, 'con validadores:', arrayValidators.length > 0 ? 'SI' : 'NO');
 
+            } else if (field.type === 'date') {
+              // Procesar tipo date fuera de signature
+              let dateDefaultValue = defaultValue;
+
+              // Si defaultValue es 'current', inicializarlo con null
+              if (dateDefaultValue === 'current') {
+                dateDefaultValue = null;
+              }
+
+
+              formFields[fieldData.field] = this.fb.control(
+                { value: dateDefaultValue, disabled: disabled },
+                { nonNullable: true, validators: validators }
+              );
+              formFields[fieldData.field].updateValueAndValidity();
+
             } else {
 
               formFields[fieldData.field] = this.fb.control(
@@ -544,6 +574,271 @@ export class CRUD extends Vars /*implements OnInit*/ {
     }
 
   }
+
+  /**
+   * Agrega campos al formulario filtrando por prefijo de campo
+   * @param formFields - Referencia al objeto de campos del formulario
+   * @param dynamicFields - Objeto con la estructura de campos dinámicos (contiene nodos con grid/nested)
+   * @param fieldPrefix - Cadena raíz para filtrar los campos (ej: 'request_data_')
+   */
+  addFieldsByPrefix(formFields: any, dynamicFields: any, fieldPrefix: string, pos: string) {
+    if (!dynamicFields || typeof dynamicFields !== 'object') {
+      return;
+    }
+
+    // Iterar sobre todos los nodos del objeto dinámico, excluyendo dialog y fields_prefixes
+    Object.keys(dynamicFields).forEach(nodeKey => {
+      if (nodeKey === 'dialog' || nodeKey === 'fields_prefixes') {
+        return; // Saltar estos nodos
+      }
+
+      const node = dynamicFields[nodeKey];
+      if (!node || typeof node !== 'object') return;
+
+      // Buscar grid o nested dentro del nodo
+      let fieldsLayout: any = null;
+
+      if (node.grid && typeof node.grid === 'object') {
+        fieldsLayout = node.grid;
+      } else if (node.nested && typeof node.nested === 'object') {
+        fieldsLayout = node.nested;
+      }
+
+      if (!fieldsLayout) return;
+
+      // Iterar sobre los campos dentro de grid/nested (estructura 0:{field:'', ...}, 1:{field:'', ...})
+      Object.keys(fieldsLayout).forEach(key => {
+        const fieldData = fieldsLayout[key];
+        const fieldName = fieldData?.field;
+
+
+        if (!fieldName) return;
+
+        // Verificar si el campo inicia con el prefijo especificado
+        if (!fieldName.startsWith(fieldPrefix)) {
+          return; // Saltar campos que no tienen el prefijo
+        }
+
+        // Obtener valores por defecto
+        const active = fieldData?.default?.active || false;
+        const value = fieldData?.default?.value || null;
+        let defaultValue = value;
+        const edit = fieldData?.default?.edit !== false; // si edit no está definido, se asume true
+
+        if (active && edit && value === 'device') {
+          defaultValue = new Date();
+        }
+
+        // Si edit es false o readonly es true, el campo debe ser disabled
+        const disabled = fieldData.readonly || !edit;
+
+
+        // Guardar el estado readonly en el fieldData para que el template pueda usarlo
+        if (disabled) {
+          if (!this.initialDisabledForm[pos]) {
+            this.initialDisabledForm[pos] = {};
+          }
+          this.initialDisabledForm[pos][fieldName] = true;
+        }
+
+        const validators: any[] = [];
+
+        // Agregar validadores
+        if (fieldData.required) {
+          validators.push(Validators.required);
+        }
+        if (fieldData.max_length) {
+          validators.push(Validators.maxLength(fieldData.max_length));
+        }
+        if (fieldData.min_length) {
+          validators.push(Validators.minLength(fieldData.min_length));
+        }
+
+        // Procesar según el tipo de campo
+        if (fieldData.type === 'dropdown' || fieldData.type === 'auto-complete' || fieldData.type === 'tree-select') {
+          // Crear campo oculto para objetos completos
+          const hiddenFieldName = 'object_' + fieldName;
+          formFields[hiddenFieldName] = this.fb.control(
+            { value: defaultValue, disabled: disabled },
+            { nonNullable: false, validators: validators }
+          );
+
+          //quita expliictamente required cuando es drowpdown, auto-complete o tree-select PARA QUE LOS CAMPOS QUE NO
+          // CONTIENE object_ no se quejen si son obligatorios, pero despues de haberlo establecido al que inicio con object_
+          validators.splice(validators.indexOf(Validators.required), 1);
+
+          // Agregar prefijo object_ al field si no lo tiene
+          if (!fieldData.field.startsWith('object_')) {
+            fieldData.field = 'object_' + fieldData.field;
+          }
+
+          // Si field trae children, recorrer el objeto para procesar campos en cascada
+          if (fieldData.children && fieldData.children.fields) {
+            // Procesar campos children que recibirán valores en cascada
+
+            // Iterar primero por tipos: static, dynamic, derived
+            ['static', 'dynamic', 'derived'].forEach(typeKey => {
+              if (fieldData.children.fields[typeKey]) {
+                for (const [childFieldKey, childFieldValue] of Object.entries(fieldData.children.fields[typeKey])) {
+                  const typedChildFieldValue = childFieldValue as any;
+
+                  // Solo necesita cambiar el campo de los siguientes tipos porque son los únicos que requieren cambio
+                  // para poder ser duplicados y se pueda enviar el objeto en lugar de solo el id
+                  if (typedChildFieldValue.type === 'dropdown' || typedChildFieldValue.type === 'auto-complete' || typedChildFieldValue.type === 'tree-select') {
+                    // Solo agregar object_ si no lo tiene ya
+                    const newChildFieldKey = childFieldKey.startsWith('object_' + fieldPrefix) ? childFieldKey : 'object_' + childFieldKey;
+
+                    fieldData.children.fields[typeKey][newChildFieldKey] = typedChildFieldValue;
+                    delete fieldData.children.fields[typeKey][childFieldKey];
+                  }
+                }
+              }
+            });
+          }
+
+        } //no lleva else para que carga el el else del if y agregue el campo normal, sin object_
+        // ya que los combos el campo normal del form que será para guardar un objeto en lugar del id
+        // y un campo que inicie con object para que guarde la referencia al campo del formulario y se pueda poner el rojo
+        //y cause los evenetos necesarios para visualizar el usuario
+
+        if (fieldData.type === 'signature') {
+          // Procesar campos de firma
+          const subFields = fieldData.fields || [];
+          const signatureFormGroup: any = {};
+
+          subFields.forEach((subField: any) => {
+            const subFieldName = subField.field;
+            const fieldType = subField.type;
+            const required = subField.required || false;
+            const maxLength = subField.max_length;
+            const subValidators: any[] = [];
+            if (required) subValidators.push(Validators.required);
+            if (maxLength) subValidators.push(Validators.maxLength(maxLength));
+
+            let subDefaultValue: any = '';
+            if (subField.default?.active && subField.default?.edit) {
+              subDefaultValue = subField.default.value === 'device' ? new Date() : subField.default.value;
+            }
+
+            // Determinar si el campo debe ser de solo lectura
+            const isReadonly = subField.default?.edit === false;
+
+
+            if (fieldType === 'login') {
+              const userField = subField.user?.field || 'username';
+              const passwordField = subField.password?.field || 'password';
+              const loginValidators: any[] = required ? [Validators.required] : [];
+              if (maxLength) loginValidators.push(Validators.maxLength(maxLength));
+
+              signatureFormGroup[userField] = this.fb.nonNullable.control({ value: '', disabled: isReadonly }, loginValidators);
+              signatureFormGroup[passwordField] = this.fb.nonNullable.control({ value: '', disabled: isReadonly }, loginValidators);
+            } else if (fieldType === 'input-text') {
+              signatureFormGroup[subFieldName] = this.fb.nonNullable.control({ value: subDefaultValue, disabled: isReadonly }, subValidators);
+            } else if (fieldType === 'date') {
+              //si subDefaultValue==current entonces inicializalo con null, hacerlo de solo lectura y quitar el validador de requerido
+              console.log('entro a fecha222222222222222222222');
+
+              if (subDefaultValue === 'current') {
+                console.log("dejo en null la fecha 333333333333333");
+
+                subDefaultValue = null;
+                //subValidators.splice(subValidators.indexOf(Validators.required), 1);
+              }
+
+              signatureFormGroup[subFieldName] = this.fb.nonNullable.control({ value: subDefaultValue, disabled: isReadonly }, subValidators);
+            } else if (fieldType === 'signature-pad') {
+              signatureFormGroup[subFieldName] = this.fb.control<string | null>({ value: null, disabled: isReadonly }, subValidators);
+            } else if (fieldType === 'selfie') {
+              signatureFormGroup[subFieldName] = this.fb.control<File | string | null>({ value: null, disabled: isReadonly }, subValidators);
+            } else if (fieldType === 'pin_global' || fieldType === 'pin_user') {
+              signatureFormGroup[subFieldName] = this.fb.nonNullable.control({ value: '', disabled: isReadonly }, subValidators);
+            } else {
+              signatureFormGroup[subFieldName] = this.fb.control({ value: subDefaultValue, disabled: isReadonly }, subValidators);
+            }
+          });
+
+          formFields[fieldName] = this.fb.array<FormGroup>([this.fb.group(signatureFormGroup)]);
+
+        } else if (fieldData.type === 'table') {
+          // Procesar tipo table
+          const columns = fieldData.columns || [];
+          const initialRows = fieldData.initial_rows || 0;
+          const isRequired = fieldData.required || false;
+
+          // Validador personalizado para FormArray
+          const minLengthArrayValidator = (min: number): ValidatorFn => {
+            return (control: AbstractControl): ValidationErrors | null => {
+              if (control instanceof FormArray) {
+                return control.length < min ? { 'minlength': { requiredLength: min, actualLength: control.length } } : null;
+              }
+              return null;
+            };
+          };
+
+          const createRowFormGroup = () => {
+            const rowGroup: any = {};
+            columns.forEach((column: any) => {
+              const columnValidators: any[] = [];
+              if (column.required && column.editable !== false) {
+                columnValidators.push(Validators.required);
+              }
+              if (column.validation?.max_length) {
+                columnValidators.push(Validators.maxLength(column.validation.max_length));
+              }
+              if (column.validation?.min_length) {
+                columnValidators.push(Validators.minLength(column.validation.min_length));
+              }
+
+              let defaultColumnValue: any = '';
+              if (column.type === 'input-number') defaultColumnValue = null;
+              else if (column.type === 'date') defaultColumnValue = null;
+              else if (column.type === 'dropdown' || column.type === 'multi-select') {
+                defaultColumnValue = column.type === 'multi-select' ? [] : '';
+              } else if (column.type === 'checkbox') defaultColumnValue = false;
+
+              rowGroup[column.field] = this.fb.control(defaultColumnValue, columnValidators);
+            });
+            return this.fb.group(rowGroup);
+          };
+
+          const initialRowsArray: FormGroup[] = [];
+          for (let i = 0; i < initialRows; i++) {
+            initialRowsArray.push(createRowFormGroup());
+          }
+
+          const arrayValidators: ValidatorFn[] = [];
+          if (isRequired) arrayValidators.push(minLengthArrayValidator(1));
+
+          formFields[fieldName] = this.fb.array<FormGroup>(initialRowsArray, arrayValidators);
+
+        } else if (fieldData.type === 'date') {
+          // Procesar tipo date
+          let dateDefaultValue = defaultValue;
+
+          // Si defaultValue es 'current', inicializarlo con null
+          if (dateDefaultValue === 'current') {
+            dateDefaultValue = null;
+          }
+
+          formFields[fieldName] = this.fb.control(
+            { value: dateDefaultValue, disabled: disabled },
+            { nonNullable: true, validators: validators }
+          );
+          formFields[fieldName].updateValueAndValidity();
+
+        } else {
+          // AQUI VUELVEN A CAER LOS dropdown, auto-complete y tree-select y agrega las validaciones al form del campo principa
+          formFields[fieldName] = this.fb.control(
+            { value: defaultValue, disabled: disabled },
+            { nonNullable: true, validators: validators }
+          );
+          formFields[fieldName].updateValueAndValidity();
+        }
+      });
+    });
+  }
+
+
 
 
 
@@ -762,7 +1057,7 @@ export class CRUD extends Vars /*implements OnInit*/ {
       if (jsonFields.hasOwnProperty(field)) {
 
         //se envia campo individual
-        if (field in ['parent_form_data',]) {
+        if (field in ['parent_form_data', 'form_data']) {
           continue;
         }
 
@@ -787,7 +1082,10 @@ export class CRUD extends Vars /*implements OnInit*/ {
         // los componentes de solo lectura no se incluyen en el formulario
         if (fieldObj.read_only) {
           //para el caso de los campos solo lectura deben ser deshabilitados
-          this.initialDisabledForm[field] = true;
+          if (!this.initialDisabledForm[posIndex]) {
+            this.initialDisabledForm[posIndex] = {};
+          }
+          this.initialDisabledForm[posIndex][field] = true;
           //°°°PROBANDO
           //continue;
         }
@@ -817,6 +1115,8 @@ export class CRUD extends Vars /*implements OnInit*/ {
 
         // se agrega los validadores si en el servidor es requerido
         if (fieldObj.required) {
+
+
           validators.push(Validators.required);
         }
 
@@ -870,23 +1170,31 @@ export class CRUD extends Vars /*implements OnInit*/ {
     }
 
     //recorre this.drawForm().field donde encontraras claves como general, form y otros 
-    console.log('++++++11', this.drawForm()[posIndex]);
+    //console.log('++++++11', this.drawForm()[posIndex]);
 
     const draw = this.drawForm()[posIndex];
-    Object.keys(draw).forEach(keyBase => {
 
-      console.log('****0', keyBase, draw[keyBase]);
+    const fields_prefixes = draw?.fields_prefixes || [];
 
-      this.openTasksDetail({ pos: posIndex, formFields: formFields, childFormFields: draw[keyBase], parentField: 'request_data_' });
+    //recorrer el array Array [ "request_data_", "form_fields_data_" ]
+    for (const field_prefix of fields_prefixes) {
+      console.log(field_prefix);
 
-      // aqui voy estoy sacado el valor de fields_prefixes para que openTasksDetail separa a quien relacionar
-      // los campos adicionales con el form
+      this.addFieldsByPrefix(formFields, draw, field_prefix, posIndex);
+    }
 
-    });
+    //this.addFieldsByPrefix(formFields, draw, 'request_data_', posIndex);
 
+    //Object.keys(draw).forEach(keyBase => {
 
-    //this.openTasksDetail({ pos: posIndex, formFields: formFields, childFormFields: parentSelect.child_form_fields, parentField: 'parent_form_data_' });
+    //console.log('****0', keyBase, draw[keyBase]);
 
+    //this.openTasksDetail({ pos: posIndex, formFields: formFields, childFormFields: draw, parentField: 'request_data_' });
+
+    // aqui voy estoy sacado el valor de fields_prefixes para que openTasksDetail separa a quien relacionar
+    // los campos adicionales con el form
+
+    //});
 
     // Si todavia relationshipsLocal tiene valores porque no vengan de la consulta OPTIONS, se asignan a relationOptions,
     // ya que son valores locales adicionales a los que vienen del servidor
@@ -1103,7 +1411,13 @@ export class CRUD extends Vars /*implements OnInit*/ {
     //Claramente no es necesario pero como hay un disableForm también lo pongo
     this.currentForm().enable();
 
-    for (const [key, isDisabled] of Object.entries(this.initialDisabledForm)) {
+    const currentPos = this.pos();
+    if (!this.initialDisabledForm[currentPos]) {
+      this.initialDisabledForm[currentPos] = {};
+    }
+
+    for (const [key, isDisabled] of Object.entries(this.initialDisabledForm[currentPos])) {
+
       if (isDisabled) {
         this.currentForm().get(key)?.disable();
       }
@@ -1223,9 +1537,11 @@ export class CRUD extends Vars /*implements OnInit*/ {
 
     this.changePos(safePos); // actualice la posición y los valores correspondientes a la app
     this.showBlocked(); // muestra el bloqueo de la pantalla
-    if ((this.sharedS as any).data[safePos]) {
-      if ((this.sharedS as any).data[safePos].length > 0 && !force) {
-        this.items.set((this.sharedS as any).data[safePos]);
+    //|||LO COMENTO PORQUE ESTOA LIMENTA A LOS dropdown Y PUEDE SER QUE NO TRAIGA TODOS LOS CAMPOS NECESARIOS
+    //ADEMAS TAMBIEN AFECHA CUANDO SE AGREGA NUEVAS COLUMNAS EN LA CONFIGURACION
+    if (this.itemsCache[safePos]) {
+      if (this.itemsCache[safePos].length > 0 && !force) {
+        this.items.set(this.itemsCache[safePos]);
         this.showBlocked(false);
         return;
       }
@@ -1242,11 +1558,21 @@ export class CRUD extends Vars /*implements OnInit*/ {
     this.crudS.getObject({ include, filter, sort, fields, limit: this.limit()[safePos], offset: this.offset[safePos] }).subscribe({
       next: (resp: any) => {
         const additionalFieldsAppCols = this.additionalFieldsAppCols[safePos] || [];
-        this.items.set(this.DJAtoObject({ resp, node, additionalFieldsAppCols })); // convierte el formato DJA a un objeto
-        (this.sharedS as any).data[safePos] = this.items(); // almacena los datos para que esten disponibles en todas las apps y no se consulten nuevamente
+        const convertedItems = this.DJAtoObject({ resp, node, additionalFieldsAppCols }); // convierte el formato DJA a un objeto
+
+        this.items.set(convertedItems);
+        this.itemsCache[safePos] = [...convertedItems]; // guarda una copia en cache de los elementos
+
+        // Guardar copia SOLO si NO es una búsqueda con filtros
+        // filter contiene filtros del servidor (ej: "filter[search]=texto")
+        const isSearchQuery = filter && filter.includes('filter[search]');
+        if (!isSearchQuery) {
+          this.originalPageItems = [...convertedItems];
+        }
+
         //this.selected.set([]); // limpia los elementos seleccionados
 
-        //si items esta favios hay que desfragmentar para que se actualice el binding y enviar en message.
+        //si items esta vacío hay que desfragmentar para que se actualice el binding y enviar en message.
         if (this.items().length == 0) {
           this.messageS.changeMessage(`No se han encontrado ${this.pluralDefiniteArticle[safePos] || this.pluralDefiniteArticle[0]}.`, null, {}, 'info');
         }
@@ -1383,80 +1709,102 @@ export class CRUD extends Vars /*implements OnInit*/ {
     return data;
   }
 
-  //check que el usuario puede cambiar, empieza como undefined para que no se ejecute en el onLazyLoad al cargar el componente,
-  // por eso esta en init para que cada componente lo inicialice
+  // Control de búsqueda remota - controlado por el usuario mediante icono
+  // undefined: no inicializado (evita ejecución en carga inicial)
+  // false: búsqueda LOCAL (solo en página visible actual)
+  // true: búsqueda REMOTA (consulta al servidor en toda la BD)
   searchRemote: any = undefined;
+
   // Variable para almacenar el valor del filtro global anterior
   previousGlobalFilterValue: string | null = null;
-  //controla el retraso de la busqueda, para local debe ser 200, remote 800
+
+  // Variable para almacenar los datos originales de la página antes de filtrar localmente
+  originalPageItems: any[] = [];
+
+  // Controla el retraso de la búsqueda: local=200ms, remote=800ms
   filterDelayTable = signal(200);
+
   /**
-   * Se llama cuando debe cargarse por evento de paginación, ordenamiento o filtro
-   * @param event datos del cambio puede ser paginación, ordenamiento o filtro
+   * Maneja la búsqueda y paginación de la tabla.
+   * - Los datos SIEMPRE vienen paginados del servidor (items() = solo página actual)
+   * - searchRemote=false: busca solo en los ~10-20 items visibles
+   * - searchRemote=true: envía búsqueda al servidor para buscar en toda la BD
+   * 
+   * @param event - datos del evento (paginación, ordenamiento, filtro)
+   * @param pos - posición de la app
+   * @param filter - filtro adicional
    */
   onLazyLoad({ event, pos = null, filter = '' }: { event: any; pos?: any; filter?: string }) {
-    //console.log('inicio onLazyLoadddddddddddddddddddddddddddddddddddddddddddddddddddddddd', pos, this.pos());
+    // Actualizar searchRemote si viene en el evento (desde custom-table)
+    if (event.searchRemote !== undefined) {
+      this.searchRemote = event.searchRemote;
+    }
 
+    // Evitar ejecución en la carga inicial del componente
     if (this.searchRemote === undefined) {
       this.searchRemote = false;
       return;
     }
 
     pos = pos || this.pos();
-    if (pos === null) return; // Salir si pos es null
-    let isLocal = false;
-    //aqui vopy esoy bucandio porque pos() es nul en este momento
+    if (pos === null) return;
 
-    // Detectar si se limpió el filtro global
-    const currentGlobalFilterValue = event.globalFilter ? event.globalFilter : null;
+    const currentGlobalFilterValue = event.globalFilter || null;
+    const hasFilters = currentGlobalFilterValue && currentGlobalFilterValue.trim().length > 0;
 
-    let filterQueries = '';
-    // si el objeto de filtros no esta vacio y esta activado el remoto, se crea un string con los filtros para enviar al servidor
-    if (Object.keys(event.filters).length > 0 && this.searchRemote) {
-      //°°° PARA LAS BUSQUEDAS DEBERIA PONER UN ENTER PARA EVITAR QUE SE ESTE MOSTRADO EL ERROR DE 5 CARACTERES Y TAMBIEN EVITAR SOBRECARGAR EL SERVIDOR
-      //°°° TAMBIEN DEBERIA PONER UN SWITCH PARA QUE DIGA SI LA BUSQUEDA EL GLOBAL O LOCAL (INFORMACION QUE SE VISUALIZA EN LA PAGINACIÓN)
-      const filters = event.filters;
-      filterQueries = Object.keys(filters)
-        .map((key) => {
-          const filter_search = filters[key];
-          // search es el nombre del campo en el servidor
-          return `filter[search]=${filter_search.value}`;
-        })
-        .join('&');
+    console.log('🔍 onLazyLoad - searchRemote:', this.searchRemote, '| hasFilters:', hasFilters, '| filterValue:', currentGlobalFilterValue);
 
-      // se valida que sea menor a 20 caracteres porque son 14 de filter[search] y 5 de la busqueda
-      if (filterQueries.trim().length < 20) {
-        this.messageS.changeMessage('La busqueda debe tener al menos 5 caracteres.');
+    // ============== LIMPIAR FILTROS (cuando se borra el texto de búsqueda) ==============
+    if (this.previousGlobalFilterValue && !hasFilters) {
+      if (this.searchRemote) {
+        // Búsqueda remota: recargar desde el servidor
+        this.limit()[pos] = event.rows;
+        this.offset[pos] = event.first;
+        this.getAll({ pos: pos, filter: '', force: true });
+        console.log('🔄 Limpiando filtros REMOTOS - Recargando desde servidor');
+      } else {
+        // Búsqueda local: restaurar datos originales de la página
+        this.items.set([...this.originalPageItems]);
+        console.log('🔄 Limpiando filtros LOCALES - Restaurando datos originales');
+      }
+
+      this.previousGlobalFilterValue = currentGlobalFilterValue;
+      return;
+    }
+
+    // ============== BÚSQUEDA REMOTA (SERVIDOR) ==============
+    if (hasFilters && this.searchRemote) {
+      // Validar mínimo 5 caracteres
+      if (currentGlobalFilterValue.trim().length < 5) {
+        this.messageS.changeMessage('La búsqueda debe tener al menos 5 caracteres.');
+        this.previousGlobalFilterValue = currentGlobalFilterValue;
         return;
       }
-      filter = filter.length > 0 ? filter + '&' + filterQueries : filterQueries;
-      // busqueda en la información que se visualiza en la paginación
-    } else if (Object.keys(event.filters).length > 0 && !this.searchRemote) {
-      const item = this.applyFilters(event.filters, this.items());
-      this.items.set(item);
 
-      this.totalRecords()[pos] = item.length;
-      isLocal = true;
+      // Con Enter ya no necesitamos validar duplicados - el usuario controla cuándo buscar
+      const filterQuery = `filter[search]=${currentGlobalFilterValue}`;
+      filter = filter.length > 0 ? filter + '&' + filterQuery : filterQuery;
+      this.limit()[pos] = event.rows;
+      this.offset[pos] = event.first;
 
-      // si el filtro se limpio y no es remoto, cargo los datos locales de la tabla
-    } else if (this.previousGlobalFilterValue && !currentGlobalFilterValue && !this.searchRemote) {
-      // si la busqueda es local, se carga la información local, si no, se carga la información del servidor
-      this.items.set((this.sharedS as any).data[pos]);
+      console.log('🌐 Búsqueda remota en servidor:', currentGlobalFilterValue);
+      this.getAll({ pos: pos, filter: filter, force: true });
+      this.previousGlobalFilterValue = currentGlobalFilterValue;
+      return;
+    }
 
-      this.totalRecords()[pos] = this.items().length;
-      isLocal = true;
+    // ============== BÚSQUEDA LOCAL (SOLO DATOS VISIBLES) ==============
+    if (hasFilters && !this.searchRemote) {
+      // Buscar solo en los items ORIGINALES de la página actual (no los ya filtrados)
+      const filteredItems = this.applyFilters(event.filters, this.originalPageItems);
+      this.items.set(filteredItems);
+
+      console.log('📊 Búsqueda local en página visible - Items encontrados:', filteredItems.length);
+      this.previousGlobalFilterValue = currentGlobalFilterValue;
+      return;
     }
 
     this.previousGlobalFilterValue = currentGlobalFilterValue;
-
-    // el retur se hace al final para que previousGlobalFilterValue se pueda inicializar
-    if (isLocal) return;
-
-    this.limit()[pos] = event.rows;
-    this.offset[pos] = event.first;
-
-    this.getAll({ pos: pos, filter: filter, force: true });
-    //console.log('fin onLazyLoad');
   }
 
   /**
@@ -1531,13 +1879,13 @@ export class CRUD extends Vars /*implements OnInit*/ {
     // si no se han cargado los elementos, llama getAll() para cargarlos, si ya se cargaron los elementos,
     //muestro los que estan en momeria de la app correspondiente
 
-    if (!(this.sharedS as any).data[pos]) {
+    if (!this.itemsCache[pos]) {
       const force = true;
       this.getAll({ pos, node, force, filter });
     } else {
       // Aplica filtros si existe un query string tipo "filter[is_alternate]=false"
       if (filter) {
-        let filteredData = [...(this.sharedS as any).data[pos]];
+        let filteredData = [...this.itemsCache[pos]];
         const filters = filter.split('&');
         filters.forEach((part) => {
           const match = part.match(/filter\[(.+?)\]=(.*)/);
@@ -1549,7 +1897,7 @@ export class CRUD extends Vars /*implements OnInit*/ {
         });
         this.items.set(filteredData);
       } else {
-        this.items.set((this.sharedS as any).data[pos]);
+        this.items.set(this.itemsCache[pos]);
       }
     }
 
@@ -1895,7 +2243,7 @@ export class CRUD extends Vars /*implements OnInit*/ {
 
     temp[indice] = r; //this.DJAtoObject({ resp });
     this.items.set(temp);
-    (this.sharedS as any).data[pos] = temp;
+    this.itemsCache[pos] = temp;
     this.selected.set([]);
   }
 
@@ -1910,7 +2258,8 @@ export class CRUD extends Vars /*implements OnInit*/ {
     if (pos === null || !form) return false;
 
     // Valida files si aplica (ajusta 'files'/'documents' según tu control real)
-    const filesCtrl = form.get('files');
+    //|||lo comento porque parece que ya no es necesario ya que lo require ya se cconfigurar en el server
+    /*const filesCtrl = form.get('files');
     if (is_file) {
       const noFiles =
         (this.files?.length ?? 0) === 0 &&
@@ -1919,7 +2268,7 @@ export class CRUD extends Vars /*implements OnInit*/ {
 
       if (noFiles) filesCtrl?.setErrors({ required: true });
       else filesCtrl?.setErrors(null);
-    }
+    }*/
 
     if (form.valid) return false;
 
@@ -2014,7 +2363,6 @@ export class CRUD extends Vars /*implements OnInit*/ {
     this.crudS.relationships = this.relationships[pos] ? this.relationships[pos].map((obj: any) => ({ ...obj })) : [];
     // asigno el id de la relación al campo correspondiente, por ejemplo, si la relación es con user,
     //el campo se llama user ?????
-    console.log('validateRelationships//////', pos, this.relationships[pos]);
 
     for (let element of this.crudS.relationships) {
       element.id = this.currentForm(pos).value[element.field];
@@ -2028,7 +2376,6 @@ export class CRUD extends Vars /*implements OnInit*/ {
    */
   commonVisibilityDialog(options: any) {
     const { pos, hide = true, reset = true, is_file = false, node = false, selected = null, update_item = true } = options;
-    console.log('commonVisibilityDialog---------------', options);
 
     // cuando hide es true, se cierra el dialogo, cuando es false, se deja abierto para crear otro elemento
     if (hide) {
@@ -2054,7 +2401,6 @@ export class CRUD extends Vars /*implements OnInit*/ {
   }
 
   submitForm(options: saveOptions = {}) {
-    //pepepepepep
 
     const { pos, hide = true, reset = true, is_file = false, node = false, selected = null, update_item = true, data = null } = options;
 
@@ -2080,7 +2426,7 @@ export class CRUD extends Vars /*implements OnInit*/ {
           }
 
           // tambien se actualiza el array de itemsNew para que cuando se cree un nuevo elemento se muestre en la tabla
-          (this.sharedS as any).data[safePos] = temp;
+          this.itemsCache[safePos] = temp;
 
           // comportamiento a la visibilidad del dialogo y al reseteo del formulario
           this.commonVisibilityDialog(options);
@@ -2239,6 +2585,7 @@ export class CRUD extends Vars /*implements OnInit*/ {
     if (is_file) {
       if (this.files.length > 0) {
         this.file(options);
+
         /*const base64FilesPromises = [];
 
                 // Convertir todos los archivos en promesas
@@ -2261,7 +2608,9 @@ export class CRUD extends Vars /*implements OnInit*/ {
                     });*/
       } else {
 
-        //°°°TEMPORAL
+        console.log('save else', form.get('documents'), this.files64);
+
+
         form.get('maintenance_document_data_documents')?.setValue(this.files64);
         form.get('documents')?.setValue(this.files64);
         this.submitForm({ pos, hide, reset, is_file, node, selected, update_item, data });
@@ -2373,7 +2722,7 @@ export class CRUD extends Vars /*implements OnInit*/ {
               const temp = [...this.items()];
               temp.splice(indice, 1);
               this.items.set(temp);
-              (this.sharedS as any).data[pos] = this.items();
+              this.itemsCache[pos] = this.items();
             }
           },
           error: (e: any) => {
@@ -3035,10 +3384,10 @@ export class CRUD extends Vars /*implements OnInit*/ {
   dependentStatus(data: any, module: string, id: string) {
     const status = [];
 
-    // (this.sharedS as any).data['status'] tra [{"app":"AZ"},{"app":"MA"}], filter por module
     for (let i = 0; i < data.length; i++) {
       if (data[i].module === module) {
         //buscar en el array dependsOn si existe id
+        //dejo shared porque status siempre se consulta con todos los campos y se comparte  en todos los lugares
         const exists = (this.sharedS as any).data['status'][i].depends_on.find((ele: any) => ele === id);
         if (exists) {
           const sta = (this.sharedS as any).data['status'][i];
@@ -3068,12 +3417,14 @@ export class CRUD extends Vars /*implements OnInit*/ {
   getStatus(options: getStatusOptions = {}) {
     const { module = '', id = '', ids_task, force } = options;
 
+    // dejo shared porque status siempre se consulta con todos los campos y se comparte  en todos los lugares
     if ((this.sharedS as any).data['status'] && !force) {
       this.dependentStatus((this.sharedS as any).data['status'], module, id);
       this.getTask({ module, ids_task });
       return;
     }
 
+    // dejo shared porque status siempre se consulta con todos los campos y se comparte  en todos los lugares
     this.crudS.getObject({ app: 'status/status' }).subscribe({
       next: (resp: any) => {
         (this.sharedS as any).data['status'] = this.DJAtoObject({ resp });
@@ -3125,6 +3476,7 @@ export class CRUD extends Vars /*implements OnInit*/ {
         const id = data[i]?.id;
         const exists = ids_task ? ids_task.find((ele) => ele === id) : [];
 
+        //dejo shared porque task siempre se consulta con todos los campos y se comparte  en todos los lugares
         if (exists) {
           const action_app = (this.sharedS as any).data['task'][i].action_app;
           const tas = (this.sharedS as any).data['task'][i];
@@ -3146,21 +3498,21 @@ export class CRUD extends Vars /*implements OnInit*/ {
       return;
     }
 
+    // dejo shared porque task siempre se consulta con todos los campos y se comparte  en todos los lugares
     if ((this.sharedS as any).data['task'] && !force) {
       const task = this.taskModule((this.sharedS as any).data['task'], module, ids_task);
       //añade a startMenu el valor que tare + el separador + el valor que trae task, utilizando update
       this.startMenu.update((current) => [...current, { separator: true }, ...task]);
       //this.startMenu.set([...this.startMenu(), { separator: true }, ...task]);
-      //this.dependentStatus((this.sharedS as any).data['task'], module, id);
       return;
     }
 
     this.crudS.getObject({ app: 'tasks/task' }).subscribe({
       next: (resp: any) => {
         let task = this.DJAtoObject({ resp });
+        // dejo shared porque task siempre se consulta con todos los campos y se comparte  en todos los lugares
         (this.sharedS as any).data['task'] = task;
         task = this.taskModule(task, module, ids_task);
-        //this.dependentStatus((this.sharedS as any).data['task'], module, id);
         this.startMenu.update((current) => [...current, { separator: true }, ...task]);
       },
       error: (err: any) => {
@@ -3319,7 +3671,7 @@ export class CRUD extends Vars /*implements OnInit*/ {
     }*/
   }
 
-  onKeydownEnterNumber(e: any) {
+  onKeydownEnter(e: any) {
 
   }
 
@@ -3327,7 +3679,6 @@ export class CRUD extends Vars /*implements OnInit*/ {
 
   }
 
-  onKeydownEnterText(e: any) { }
 
   onChangeToggle(e: any) { }
 

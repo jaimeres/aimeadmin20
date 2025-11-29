@@ -1,1 +1,207 @@
-<p>classifier works!</p>
+<!-- <p-confirmDialog></p-confirmDialog> -->
+
+
+<div *ngIf="pos()!='classifier-level'" style="position: absolute; z-index: 2;">
+  <app-custom-button-crud (deleteAction)="delete()" (editAction)="edit()" (refreshAction)="getClassifierLevel()"
+    (newAction)="openNew({pos:pos()})" [moreOptions]="moreOptions()" [getMenu]="getMenu()" [selected]="selected()"
+    [startMenu]="startMenu()" (startAction)="setStatus('I')" [openNewMenu]="openNewMenu()" />
+</div>
+
+
+<div *ngIf="pos()!='classifier-level'" class="table-fit-Custom">
+  <app-custom-table class="table-fit-Custom" [value]="items()" [columns]="selectedColumns()" [selected]="selected()"
+    (selectionAction)="onSelection($event)" (rowDoubleClick)="onRowDoubleClick($event)"
+    [exportDialogVisible]="exportDialogVisible()" [field]="fieldExport()"
+    (exportDialogVisibleAction)="onExportDialogVisible($event)" (exportServerAction)="onExportServer($event)"
+    (lazyLoadAction)="onLazyLoad({event:$event})" [rows]="limit()[pos()]" [totalRecords]="totalRecords()[pos()]"
+    [filterDelayTable]="filterDelayTable()" />
+</div>
+
+<app-custom-local-settings [visible]="localSettingsDialogVisible()" [field]="fieldConfig()" [formGroup]="configForm"
+  (saveAction)="saveConfig()" (visibleAction)="onLocalSettingsDialogVisible($event)" />
+
+<app-custom-import [visible]="importDialogVisible()" (visibleAction)="onImportDialogVisible($event)"
+  (saveAction)="onImportSave($event)" />
+
+<app-custom-actions-selection [visible]="actionsSelectionDialogVisible" (visibleChange)="onVisibleChange($event)" />
+
+<p-dialog [(visible)]="formDialogVisible[$any(typeDefault)]" (onHide)="onHide($any(typeDefault))"
+  (onShow)="onShow($any(typeDefault))" [styleClass]="styleClassDialog()" modal="true">
+
+  <ng-template #header>
+    <div class="p-dialog-title">
+      <span class="p-dialog-title-text">{{headerDialog()}}</span>
+      <button type="button" class="p-dialog-titlebar-icon p-link" (click)="configDialog()">
+        <i class="pi pi-spin pi-cog p-dialog-icon"></i>
+      </button>
+    </div>
+  </ng-template>
+  <form [formGroup]="form()[$any('request-detail')]" *ngIf="form()[$any('request-detail')]">
+
+    <p-tabs [scrollable]="true" value="0">
+
+      <p-tablist>
+        <p-tab value="0">General</p-tab>
+        <p-tab value="1">Responsable</p-tab>
+        <p-tab value="2">Auditoría</p-tab>
+        <p-tab value="3">Documentos</p-tab>
+      </p-tablist>
+
+      <p-tabpanels>
+
+        <p-tabpanel header="General" value="0">
+
+
+
+          <!-- <app-custom-draw-form *ngIf="form()[$any(typeDefault)] && drawForm()[typeDefault]"
+            [drawForm]="drawForm()[typeDefault]['general']" [formGroup]="form()[$any(typeDefault)]"
+            (onSelectAutoCompleteAction)="onSelectAutoComplete($event)"
+            (onChangeDropdownAction)="onChangeDropdown($event)" (onNewIconDropdownAction)="onNewIconDropdown($event)"
+            (onReloadIconDropdownAction)="onReloadIconDropdown($event)" (onChangeToggleAction)="onChangeToggle($event)"
+            (onKeydownEnterAction)="onKeydownEnter($event)"
+            (onClosableIconDropdownAction)="onClosableIconDropdown($event)" /> -->
+
+
+
+          <!-- <div class="grid-custom pt-3">
+
+            <app-custom-input-text class="col-5 md:col-5 p-fluid" [for]="'code'" [labelText]="customField().code"
+              [formGroup]="form()" autofocus></app-custom-input-text>
+
+            <app-custom-input-text class="col-7 md:col-7 p-fluid" [for]="'name'" [labelText]="customField().name"
+              [formGroup]="form()" autofocus></app-custom-input-text>
+
+            <app-custom-dropdown class="col-6 md:col-6 p-fluid" [for]="'cost_center'" [options]="costCenter()"
+              [labelText]="customField().cost_center" [formGroup]="form()" [scrollHeight]="'135px'">
+            </app-custom-dropdown>
+
+            <app-custom-toggle-button class=" col-6 md:col-3 p-fluid" [for]="'is_active'" [service]="customField()"
+              [formGroup]="form()" />
+
+            <app-custom-toggle-button class=" col-6 md:col-3 p-fluid" [for]="'is_required'" [service]="customField()"
+              [formGroup]="form()" />
+
+            <app-custom-dropdown class="col-6 md:col-4 p-fluid" [for]="'classifier_type'" [options]="classifierType()"
+              [labelText]="customField().classifier_type" [scrollHeight]="'150px'" [formGroup]="form()">
+            </app-custom-dropdown>
+
+            <app-custom-textarea class="col-12 p-fluid" [for]="'description'" [labelText]="customField().description"
+              [formGroup]="form()"></app-custom-textarea>
+
+          </div> -->
+
+
+        </p-tabpanel>
+
+        <p-tabpanel header="Reponsable" value="1">
+
+          -------------
+
+        </p-tabpanel>
+
+        <p-tabpanel header="Auditoría" value="2">
+
+          <app-custom-audit [cf]="customField()['request']" [selected]="selected()" />
+
+        </p-tabpanel>
+
+        <p-tabpanel header="Documentos" value="3">
+          <!-- <app-custom-app-documents [selected]="selected()['request']" [type]="'request'" [app]="'purchases/request'"
+                [filter]="'request'" (newAction)="openNewSecundary('asset-document-asset')" /> -->
+
+        </p-tabpanel>
+
+      </p-tabpanels>
+    </p-tabs>
+
+  </form>
+
+  <ng-template #footer>
+    <div class="p-dialog-footer">
+      <app-custom-button-footer (saveAction)="save()" (saveNotHideAction)="save({hide:false})"
+        (resetFormAction)="resetFormDialog()" />
+    </div>
+  </ng-template>
+
+</p-dialog>
+
+<div *ngIf="pos()=='classifier-level'" style="position: absolute; z-index: 2; ">
+  <app-custom-button-crud (deleteAction)="delete()" (editAction)="edit()"
+    (refreshAction)="getAll({ force: true, pos: pos() })" (newAction)="openNew({pos:pos()})"
+    [moreOptions]="moreOptions()" [getMenu]="getMenu()" [selected]="selected()" [startMenu]="startMenu()"
+    (startAction)="setStatus('I')" [openNewMenu]="openNewMenu()" />
+</div>
+
+<div *ngIf="pos()=='classifier-level' &&  items()[0]" class="table-fit-Custom">
+
+  <p-treetable #tt [scrollable]="true" [tableStyle]="{ 'min-width': '90rem'}" [value]="treeItems()"
+    selectionMode="checkbox" [selection]="selected()" styleClass="p-treetable-sm"
+    (onNodeSelect)="$event.node && onNodeSelect({node: $event.node})"
+    (onNodeUnselect)="$event.node && onNodeUnselect({node: $event.node})" scrollHeight="flex" [resizableColumns]="true"
+    (onNodeExpand)="getClassifiers($event.node)">
+
+    <ng-template pTemplate="caption">
+      <div class="flex justify-end items-center">
+        <p-iconfield>
+          <p-inputicon class="pi pi-search" />
+          <!-- no se pone  -->
+          <input type="text" pInputText placeholder="Buscar..."
+            (input)="tt.filterGlobal($any($event.target).value, 'contains')" />
+        </p-iconfield>
+      </div>
+    </ng-template>
+
+    <ng-template pTemplate="colgroup">
+      <colgroup>
+        <col style="width: 25px;" />
+        <col style="width: 30px;" />
+        <col style="width: 120px;" />
+        <col *ngFor="let col of selectedColumns()" />
+      </colgroup>
+    </ng-template>
+
+    <ng-template pTemplate="header">
+      <tr>
+        <th style="width: 25px;"></th>
+        <th style="width: 30px;"><p-treeTableHeaderCheckbox></p-treeTableHeaderCheckbox></th>
+        <th style="width: 120px;" pFrozenColumn alignFrozen="left">Acciones</th>
+        <th ttResizableColumn *ngFor="let col of selectedColumns()">{{col.header}}</th>
+      </tr>
+    </ng-template>
+
+    <ng-template pTemplate="body" let-rowNode let-rowData="rowData">
+      <tr [ttRow]="rowNode">
+        <td style="width: 25px;"><p-treeTableToggler [rowNode]="rowNode"></p-treeTableToggler></td>
+        <td style="width: 30px;">
+          <p-treeTableCheckbox [value]="rowNode" *ngIf="rowData?.level > 0"></p-treeTableCheckbox>
+        </td>
+
+        <td style="width: 120px;" pFrozenColumn alignFrozen="left">
+          <p-button *ngIf="!(rowData?.level > 0)" icon="pi pi-trash" styleClass="p-button-danger"
+            (click)="deleteClassifier(rowData)" class="mr-1" pTooltip="Eliminar" tooltipPosition="bottom"></p-button>
+          <p-button *ngIf="!(rowData?.level > 0)" icon="pi pi-pencil" styleClass="p-button-warning"
+            (click)="editClassifier(rowData, rowNode)" class="mr-1" pTooltip="Editar"
+            tooltipPosition="bottom"></p-button>
+          <p-button *ngIf="rowData?.level > 0" icon="pi pi-plus" styleClass="p-button-succes"
+            (click)="openNewClassifier(rowData, rowNode)" pTooltip="Nuevo" tooltipPosition="bottom"></p-button>
+        </td>
+
+        <td *ngFor="let col of selectedColumns()">{{rowData[col.field]}}</td>
+
+
+
+      </tr>
+    </ng-template>
+
+
+
+    <!-- <ng-template #emptymessage>
+      <tr>
+        <td [attr.colspan]="selectedColumns()?.length">No data found.</td>
+      </tr>
+    </ng-template> -->
+  </p-treetable>
+
+
+
+</div>

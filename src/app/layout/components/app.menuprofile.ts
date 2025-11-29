@@ -6,16 +6,17 @@ import { ButtonModule } from 'primeng/button';
 import { CommonModule } from '@angular/common';
 import { RouterModule } from '@angular/router';
 import { Subscription } from 'rxjs';
+import { AuthService } from '../../auth/services/auth.service';
 
 @Component({
   selector: '[app-menu-profile]',
   standalone: true,
   imports: [CommonModule, TooltipModule, ButtonModule, RouterModule],
-  template: `<button (click)="toggleMenu()" pTooltip="Profile" [tooltipDisabled]="isTooltipDisabled()">
-      <img src="/images/avatar/amyelsner.png" alt="avatar" style="width: 32px; height: 32px;" />
+  template: `<button *ngIf="authS.loggedin" (click)="toggleMenu()" pTooltip="Profile" [tooltipDisabled]="isTooltipDisabled()">
+      <img *ngIf="authS.user?.image" [src]="authS.user.image" alt="avatar" style="width: 32px; height: 32px;" />
+      <i *ngIf="!authS.user?.image" class="pi pi-user" style="font-size: 1.5rem;"></i>
       <span class="text-start">
-        <strong>Amy Elsner</strong>
-        <small>Webmaster</small>
+        <strong>{{authS.user.username}}</strong>
       </span>
       <i class="layout-menu-profile-toggler pi pi-fw" [ngClass]="{ 'pi-angle-down': menuProfilePosition() === 'start' || isHorizontal(), 'pi-angle-up': menuProfilePosition() === 'end' && !isHorizontal() }"></i>
     </button>
@@ -64,6 +65,7 @@ export class AppMenuProfile implements OnDestroy {
   renderer = inject(Renderer2);
 
   el = inject(ElementRef);
+  authS = inject(AuthService);
 
   isHorizontal = computed(() => this.layoutService.isHorizontal() && this.layoutService.isDesktop());
 

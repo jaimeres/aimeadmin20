@@ -14,8 +14,6 @@ import { MultiSelectModule } from 'primeng/multiselect';
 import { ContextMenuModule } from 'primeng/contextmenu';
 import { TooltipModule } from 'primeng/tooltip';
 
-
-
 @Component({
   selector: 'app-custom-table',
   imports: [CommonModule, ReactiveFormsModule, ButtonModule, MultiSelectModule, ToggleButtonModule, SelectModule, DialogModule, TableModule,
@@ -71,6 +69,9 @@ export class CustomTableComponent implements OnChanges {
   columnsSignal = signal<any[]>([]);
   selectedSignal = signal<any[]>([]);
 
+  // Control de búsqueda remota/local
+  searchRemoteEnabled = signal<boolean>(false);
+  showSearchWarning = signal<boolean>(false);
 
   is_local_checked = true;
 
@@ -175,13 +176,70 @@ export class CustomTableComponent implements OnChanges {
     this.exportDialogVisibleAction.emit(false);
   }
 
+  /**
+   * Toggle entre búsqueda local (página visible) y remota (servidor completo)
+   */
+  toggleSearchRemote() {
+    this.searchRemoteEnabled.update(val => !val);
 
+    // Mostrar/ocultar advertencia
+    this.showSearchWarning.set(!this.searchRemoteEnabled());
 
-
-
-  j(e: any) {
-    this.lazyLoadAction.emit(e);
+    console.log('🌐 Búsqueda remota:', this.searchRemoteEnabled() ? 'HABILITADA (servidor)' : 'DESHABILITADA (solo página visible)');
   }
+
+  /**
+   * Intercepta el evento onLazyLoad de PrimeNG, agrega searchRemote y lo emite
+   */
+  onLazyLoadInternal(event: any) {
+    // Agregar searchRemote directamente al objeto event
+    event.searchRemote = this.searchRemoteEnabled();
+
+    // Emitir el evento modificado
+    this.lazyLoadAction.emit(event);
+  }
+
+  /**
+   * Maneja el input de búsqueda
+   * - Modo LOCAL: filtra en tiempo real mientras escribes
+   * - Modo REMOTO: solo muestra lo que escribes, búsqueda se ejecuta con Enter
+   *   EXCEPCIÓN: si se vacía la caja, restaura automáticamente datos originales
+   */
+  onSearchInput(event: any, dt: any) {
+    const value = event.target.value;
+
+    if (!this.searchRemoteEnabled()) {
+      // Búsqueda LOCAL: filtrar en tiempo real
+      dt.filterGlobal(value, 'contains');
+    } else {
+      // Modo REMOTO: detectar si se vació la caja para restaurar automáticamente
+      if (value.trim() === '') {
+        dt.filterGlobal('', 'contains');
+        console.log('🧹 Campo vaciado en modo remoto - Restaurando datos originales');
+      }
+    }
+  }
+
+  /**
+   * Ejecuta búsqueda remota al presionar Enter
+   */
+  onSearchEnter(event: any, dt: any) {
+    const value = event.target.value;
+
+    if (this.searchRemoteEnabled()) {
+      // Búsqueda REMOTA: ejecutar al presionar Enter
+      dt.filterGlobal(value, 'contains');
+      console.log('🔍 Enter presionado - Ejecutando búsqueda remota:', value);
+    }
+  }
+
+
+
+
+  /*
+    j(e: any) {
+      this.lazyLoadAction.emit(e);
+    }*/
 
   // Métodos para el paginador responsive
   getFirstRecord(): number {

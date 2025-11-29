@@ -106,6 +106,12 @@ export class Vars {
   public items = signal<any[]>([]);
 
   /**
+   * Caché de los elementos de la tabla de la app ACTUAL
+   */
+  protected itemsCache: { [key: string]: any[] } = {};
+
+
+  /**
    * Muestra u oculta el dialogo para la exportación
    */
   protected exportDialogVisible = signal<boolean>(false);
@@ -499,9 +505,9 @@ export class Vars {
   public statusGlobal = signal<any[]>([]);
 
   /**
-   * Almacena los estados iniciales de deshabilitación
+   * Almacena los estados iniciales de deshabilitación por posición y campo
    */
-  public initialDisabledForm: { [key: string]: boolean } = {}; //
+  public initialDisabledForm: { [pos: string]: { [fieldName: string]: boolean } } = {};
 
   // no tiene caso la opcion espacio en blanco ya que el usuario puede mover el tamaño
   public drawForm = signal<any>({});

@@ -6,6 +6,7 @@ import { Camera, CameraResultType, CameraSource } from '@capacitor/camera';
 import { AutoCompleteModule } from 'primeng/autocomplete';
 import { ButtonModule } from 'primeng/button';
 import { CardModule } from 'primeng/card';
+import { ChipModule } from 'primeng/chip';
 import { DatePickerModule } from 'primeng/datepicker';
 import { DialogModule } from 'primeng/dialog';
 import { FieldsetModule } from 'primeng/fieldset';
@@ -52,6 +53,7 @@ import { CustomButtonCrudComponent } from '../custom-button-crud/custom-button-c
     SelectButtonModule,
     SplitButton,
     CardModule,
+    ChipModule,
     FieldsetModule,
     DialogModule,
     InputTextModule,
@@ -100,11 +102,16 @@ export class CustomDrawFormComponent {
   @Output() onClosableIconDropdownAction = new EventEmitter<any>();
   @Output() onChangeToggleAction = new EventEmitter<any>();
 
-  @Output() onKeydownEnterTextAction = new EventEmitter<any>();
+  /*@Output() onKeydownEnterTextAction = new EventEmitter<any>();
   @Output() onKeydownTabTextAction = new EventEmitter<any>();
 
   @Output() onKeydownTabNumberAction = new EventEmitter<any>();
-  @Output() onKeydownEnterNumberAction = new EventEmitter<any>();
+  @Output() onKeydownEnterNumberAction = new EventEmitter<any>();*/
+
+
+  @Output() onKeydownEnterAction = new EventEmitter<any>();
+  @Output() onKeydownTabAction = new EventEmitter<any>();
+
   @Output() filesAction = new EventEmitter<[]>();
   @Output() files64Action = new EventEmitter<[]>();
 
@@ -125,6 +132,9 @@ export class CustomDrawFormComponent {
   showIconSignal = signal<boolean>(true);
 
   dropdownOptionsSignal = signal<any>([]);
+
+  // Signal para guardar los separators calculados de emails-chips
+  emailSeparatorsSignal = signal<{ [key: string]: string | RegExp }>({ default: /[,;]/ });
 
   // Signal para forzar recálculo del computed signal de firmas
   private signatureUpdateTrigger = signal<number>(0);
@@ -241,6 +251,7 @@ export class CustomDrawFormComponent {
 
         // Si existe al menos un module no nulo, filtramos solo los que sean 'MA'
         if (hasNonNullModule) {
+          //°°° se debe definir el tema de los modulos, porque no todos necesitas filtar por module
           dataDropdown = dataDropdown.filter((item: any) => item.module === 'MA');
         }
 
@@ -345,6 +356,86 @@ export class CustomDrawFormComponent {
     }
   }
 
+  /**
+   * Inicializa los campos de tipo emails-chips
+   * Calcula y cachea los separators en un signal
+   */
+  initializeEmailChipsFields(drawForm: any) {
+    const separators: { [key: string]: string | RegExp } = {};
+
+    if (drawForm.hasOwnProperty('grid')) {
+      for (const key in drawForm.grid) {
+        if (drawForm.grid.hasOwnProperty(key)) {
+          const element = drawForm.grid[key];
+
+          if (element?.type === 'emails-chips') {
+            separators[element.field] = this.calculateSeparator(element.separator);
+          } else if (element?.card || element?.fieldset) {
+            const nestedElements = element.card || element.fieldset;
+            for (const key2 in nestedElements) {
+              if (nestedElements.hasOwnProperty(key2)) {
+                const element2 = nestedElements[key2];
+                if (element2?.type === 'emails-chips') {
+                  separators[element2.field] = this.calculateSeparator(element2.separator);
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+
+    this.emailSeparatorsSignal.set(separators);
+  }
+
+  /**
+   * Calcula el separator para un campo emails-chips
+   * Retorna string (un carácter) o RegExp (múltiples caracteres)
+   */
+  private calculateSeparator(separatorConfig: any): string | RegExp {
+    if (!separatorConfig) {
+      // Por defecto: coma o punto y coma (RegExp)
+      return /[,;]/;
+    }
+
+    const separatorChars: string[] = [];
+
+    // Los separadores que NO son blur ni tab se agregan al array
+    // blur y tab se manejan con propiedades [addOnBlur] y [addOnTab]
+    if (separatorConfig.comma !== false) separatorChars.push(',');
+    if (separatorConfig.semicolon !== false) separatorChars.push(';');
+    if (separatorConfig.space === true) separatorChars.push(' ');
+    if (separatorConfig.pipe === true) separatorChars.push('\\|'); // Escapar pipe para RegExp
+
+    // Otros separadores personalizados que no son blur ni tab
+    Object.keys(separatorConfig).forEach(key => {
+      if (key !== 'blur' && key !== 'tab' &&
+        key !== 'comma' && key !== 'semicolon' &&
+        key !== 'space' && key !== 'pipe' &&
+        separatorConfig[key] === true && key.length === 1) {
+        // Escapar caracteres especiales de RegExp
+        const escaped = key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        separatorChars.push(escaped);
+      }
+    });
+
+    // Si no hay separadores, usar coma y punto y coma por defecto
+    if (separatorChars.length === 0) {
+      return /[,;]/;
+    }
+
+    // Si solo hay un separador, devolver string de un carácter
+    if (separatorChars.length === 1 && separatorChars[0].length === 1) {
+      return separatorChars[0];
+    }
+
+    // Si hay múltiples separadores, devolver RegExp
+    const pattern = `[${separatorChars.join('')}]`;
+    return new RegExp(pattern);
+  }
+
+
+
   ngOnChanges(changes: SimpleChanges) {
 
     if (changes['formGroup']) {
@@ -366,6 +457,7 @@ export class CustomDrawFormComponent {
       this.dropdownOptions(changes['drawForm'].currentValue);
       this.initializeTableFields(changes['drawForm'].currentValue);
       this.initializeSignatureFields(changes['drawForm'].currentValue);
+      this.initializeEmailChipsFields(changes['drawForm'].currentValue);
 
     }
     if (changes['app']) {
@@ -393,10 +485,9 @@ export class CustomDrawFormComponent {
   public suggestions = signal<any[]>([]);
 
   completeMethod(event: any, entry: any) {
-
     const filter = "filter[search]=" + event.query;
     const include = entry.include;
-    const additionalFieldsIncluded = entry.additionalFieldsIncluded;
+    const additionalFieldsIncluded = entry.fields_included_relationships;
     const app = this.crudS.appType[entry.data_type]?.app;
     const type = this.crudS.appType[entry.data_type]?.type;
 
@@ -459,12 +550,14 @@ export class CustomDrawFormComponent {
     }*/
 
     //asigna el valor del campo object_parent_form_data_X al objeto completo
-    if (field.startsWith('object_parent_form_data')) {
+    if (field.startsWith('object_')) {
       const newField = field.replace('object_', '');
       const foundObject = this.dropdownOptionsSignal()[field]?.
         find((item: any) => item.id === currentValue || item.value === currentValue);
 
       // Si existe cols_values y es un array válido, filtrar el objeto, sino usar el objeto completo
+      // el los campos manuales indica la información que se guardará en el json
+
       let currentValueObject = foundObject;
       if (foundObject && object?.cols_values && Array.isArray(object.cols_values) && object.cols_values.length > 0) {
         const filteredObject: any = {};
@@ -474,6 +567,18 @@ export class CustomDrawFormComponent {
           }
         });
         currentValueObject = filteredObject;
+      }
+
+
+      //CHECAR EL TEMA DEL MODULO PARA QUE FILTRE SEGUN NECESIDAD
+      // error el e servidor
+
+      //siempre se envia id y hay type, porque se asume que es una relacion y puede ser que se ocupe si no es 
+      // no incia con parent_form_data_, form_data_ 
+      if (foundObject?.type_type && currentValueObject && !field.startsWith('form_data_') && !field.startsWith('parent_form_data_')) {
+        currentValueObject['type'] = foundObject.type_type;
+        currentValueObject['id'] = foundObject.id;
+
       }
 
       this.formGroupSignal()?.get(newField)?.setValue(currentValueObject);
@@ -493,104 +598,1000 @@ export class CustomDrawFormComponent {
     this.onChangeDropdownAction.emit(changeInfo);
     const config = object || {};
     const children = config.children || {};
-    const childrenActive = children?.active || false;
     const fields = children?.fields || {};
 
+    if (fields && Object.keys(fields).length > 0) {
+      // Obtener opciones del dropdown padre actual
+      const dropdownOptions = this.dataDropdownExists(object);
+      let currentDropdownOption: any = null;
+      if (dropdownOptions) {
+        currentDropdownOption = this.searchByValueObject(currentValue, dropdownOptions, 'id', false)[0];
+      }
 
-    if (childrenActive) {
-      for (const key in fields) {
-        let setCurrentValue = '';
+      // Procesar cada tipo de campo: static, dynamic, derived
+      ['static', 'dynamic', 'derived'].forEach(fieldType => {
+        if (fields[fieldType]) {
+          for (const key in fields[fieldType]) {
+            if (fields[fieldType].hasOwnProperty(key)) {
+              const fieldConfig = fields[fieldType][key];
 
-        if (fields.hasOwnProperty(key)) {
-          const dropdownOptions = this.dataDropdownExists(object);
-          let currentDropdownOption: any = [];
-          if (dropdownOptions) {
-            currentDropdownOption = this.searchByValueObject(currentValue, dropdownOptions, 'id', false)[0];
-          }
+              // 1. EVALUAR CONDICIONES DE ACTIVACIÓN
+              const activateConfig = fieldConfig?.activate;
+              let isActive = true; // Por defecto activo
 
-          const final = fields[key]?.final; //active
-          const manual = fields[key]?.manual;
-          const remote = fields[key]?.remote;
+              if (activateConfig?.active) {
+                const conditions = activateConfig.conditions || [];
+                const logic = activateConfig.logic || 'AND';
+                const action = activateConfig.action || 'inactive'; // inactive/active
 
-          if (final) {
+                console.log('🔓 Evaluando activación para campo:', {
+                  field: key,
+                  fieldType,
+                  conditions,
+                  logic,
+                  action
+                });
 
-            const filterGroup = final?.filter_group;
-            const dataType = final?.data_type;
-            const fieldName = final?.field_name;
-            const resultPosition = final?.result_position;
-            const defaultField = final?.default_field;
+                // Evaluar cada condición
+                const conditionResults = conditions.map((condition: any) => {
+                  // VALIDAR: field es OBLIGATORIO
+                  if (!condition.field) {
+                    console.error('❌ ERROR: condition.field es obligatorio', { condition, fieldConfig: key });
+                    return false;
+                  }
 
-            if (fieldName) {
-              //°°°SI NO EXISTE VA UN IF CON ONSULTA POE ADTE TYPE, SI TRAE field_name A ESE SINO AL MISMO DEL COMBO
-              if (currentDropdownOption[fieldName]) {
-                this.formGroupSignal()?.get(key)?.setValue(currentDropdownOption[fieldName]);
+                  const conditionField = condition.field;
+
+                  // Determinar si conditionField es el campo padre
+                  // Comparar sin el prefijo "object_" porque el form almacena con "object_" pero las condiciones usan el nombre sin prefijo
+                  const isParentField = conditionField === field || conditionField === field.replace('object_', '');
+
+                  let conditionValue;
+                  if (isParentField) {
+                    // Si es el campo padre, usar el objeto completo del dropdown
+                    conditionValue = currentDropdownOption;
+                  } else {
+                    // Si es otro campo, buscar en el formulario
+                    const formValue = this.formGroupSignal()?.get(conditionField)?.value;
+                    // Si el formValue es solo un ID, intentar obtener el objeto completo de las opciones
+                    if (formValue && typeof formValue === 'string') {
+                      const fieldOptions = this.dropdownOptionsSignal()[conditionField];
+                      conditionValue = fieldOptions?.find((opt: any) => opt.id === formValue) || formValue;
+                    } else {
+                      conditionValue = formValue;
+                    }
+                  }
+
+                  // Si no viene filter_group, usar 'id' por defecto
+                  const filterGroup = condition.filter_group || 'id';
+                  const operator = condition.operator || 'equals';
+                  const values = condition.values || [];
+
+                  if (!conditionValue) {
+                    console.log('❌ Condición sin valor:', { conditionField, isParentField });
+                    return false;
+                  }
+
+                  // Obtener el valor a comparar según filter_group
+                  const compareValue = filterGroup ? conditionValue[filterGroup] : conditionValue;
+
+                  console.log('🔍 Evaluando condición de activación:', {
+                    conditionField,
+                    isParentField,
+                    conditionValue,
+                    compareValue,
+                    operator,
+                    values,
+                    filterGroup
+                  });
+
+                  // Evaluar según operador
+                  let result = false;
+                  switch (operator) {
+                    case 'equals':
+                      // EQUALS: Cada elemento del array values debe ser exactamente igual al compareValue
+                      // Verifica si compareValue está en el array values
+                      result = values.some((val: any) => val === compareValue);
+                      break;
+
+                    case 'not_equals':
+                      // NOT_EQUALS: compareValue NO debe estar en values
+                      result = !values.some((val: any) => val === compareValue);
+                      break;
+
+                    case 'in':
+                      // IN: compareValue debe contener alguno de los valores en values (substring)
+                      result = values.some((val: any) =>
+                        String(compareValue).includes(String(val))
+                      );
+                      break;
+
+                    case 'not_in':
+                      // NOT_IN: compareValue NO debe contener ninguno de los valores en values
+                      result = !values.some((val: any) =>
+                        String(compareValue).includes(String(val))
+                      );
+                      break;
+
+                    case 'greater_than':
+                      // GREATER_THAN: compareValue debe ser mayor que alguno de los valores en values
+                      result = values.some((val: any) => compareValue > val);
+                      break;
+
+                    case 'less_than':
+                      // LESS_THAN: compareValue debe ser menor que alguno de los valores en values
+                      result = values.some((val: any) => compareValue < val);
+                      break;
+
+                    case 'range':
+                      // RANGE: compareValue debe estar entre values[0] (inicio) y values[1] (fin)
+                      // Formato: values = [inicio, fin] - EXACTAMENTE 2 valores
+                      // Soporta: fechas, números, strings
+                      if (values.length === 2) {
+                        const inicio = values[0];
+                        const fin = values[1];
+
+                        // Detectar tipo de dato y comparar
+                        // Si son fechas (string ISO), convertir a Date
+                        if (typeof compareValue === 'string' &&
+                          /^\d{4}-\d{2}-\d{2}/.test(compareValue)) {
+                          const dateCompare = new Date(compareValue);
+                          const dateInicio = new Date(inicio);
+                          const dateFin = new Date(fin);
+                          result = dateCompare >= dateInicio && dateCompare <= dateFin;
+                        }
+                        // Si son números
+                        else if (typeof compareValue === 'number') {
+                          result = compareValue >= inicio && compareValue <= fin;
+                        }
+                        // String o cualquier otro tipo
+                        else {
+                          result = compareValue >= inicio && compareValue <= fin;
+                        }
+                      } else {
+                        console.error(`❌ ERROR: Operador 'range' requiere EXACTAMENTE 2 valores [inicio, fin]. Recibidos: ${values.length}`, values);
+                        result = false;
+                      }
+                      break;
+
+                    default:
+                      console.warn('⚠️ Operador desconocido:', operator);
+                      result = false;
+                  }
+
+                  console.log(`${result ? '✅' : '❌'} Resultado de condición:`, result);
+                  return result;
+                });
+
+                // Aplicar lógica AND/OR
+                if (logic === 'AND') {
+                  isActive = conditionResults.every((result: boolean) => result);
+                } else { // OR
+                  isActive = conditionResults.some((result: boolean) => result);
+                }
+
+                // Aplicar acción: inactive invierte el resultado, active lo mantiene
+                if (action === 'inactive') {
+                  isActive = !isActive; // Si action es 'inactive', invertir (desactivar cuando se cumpla)
+                }
+                // Si action === 'active', mantener isActive como está (activar cuando se cumpla)
+
+                console.log(`${isActive ? '✅' : '❌'} Campo ${key} ${isActive ? 'ACTIVO' : 'INACTIVO'}`);
               }
-              //}
-            }
-          } else if (manual) {
 
-            //datos del hijo de combo que se está seleccionado
-            const filterGroup = manual?.filter_group;
-            const defaultField = manual?.default_field;
-            const resultPosition = manual?.result_position;
-            const options = manual?.options;
-            this.dropdownOptionsSignal()[key] = []
+              // Habilitar/deshabilitar campo según resultado
+              const formControl = this.formGroupSignal()?.get(key);
+              if (formControl) {
+                if (isActive) {
+                  formControl.enable();
+                } else {
+                  formControl.disable();
+                  formControl.setValue(null); // Limpiar valor cuando se desactiva
+                }
+              }
 
-            setCurrentValue = options;
-            if (filterGroup) {
-              setCurrentValue = options.filter((item: any) => item[filterGroup] === currentDropdownOption[filterGroup]);
-            }
+              // Si key inicia con object_, verificar si existe campo sin prefijo y sincronizar estado
+              if (key.startsWith('object_')) {
+                const relatedField = key.replace('object_', '');
+                const relatedControl = this.formGroupSignal()?.get(relatedField);
+                if (relatedControl) {
+                  if (isActive) {
+                    relatedControl.enable();
+                  } else {
+                    relatedControl.disable();
+                    relatedControl.setValue(null);
+                  }
+                  console.log(`🔗 Campo relacionado '${relatedField}' ${isActive ? 'ACTIVADO' : 'DESACTIVADO'}`);
+                }
+              }
 
-            //para los select no funciona el this.formGroupSignal()?.get(key)?.setValue
-            //°°°pendiente de revisar si afecta las cargar cuando esta filtrado
-            this.dropdownOptionsSignal()[key] = setCurrentValue;
+              // 3. EVALUAR CONDICIONES DE REQUIRED/NOT_REQUIRED
+              const requestedConfig = fieldConfig?.requested;
 
-          } else if (remote) {
-            const fieldName = remote?.field_name;
+              if (requestedConfig?.active) {
+                const conditions = requestedConfig.conditions || [];
+                const logic = requestedConfig.logic || 'AND';
+                const action = requestedConfig.action; // required/not_required
 
-            if (fieldName) {
-              //°°°pendiente de revisar si afecta las cargar cuando esta filtrado
+                // VALIDAR: action es OBLIGATORIO
+                if (!action) {
+                  console.error('❌ ERROR: requested.action es obligatorio. Debe ser "required" o "not_required"', {
+                    fieldConfig: key,
+                    requestedConfig
+                  });
+                  // No aplicar ninguna validación si no hay action explícito
+                } else {
+                  console.log('📋 Evaluando required para campo:', {
+                    field: key,
+                    fieldType,
+                    conditions,
+                    logic,
+                    action
+                  });
+
+                  // Evaluar cada condición (misma lógica que activate)
+                  const conditionResults = conditions.map((condition: any) => {
+                    if (!condition.field) {
+                      console.error('❌ ERROR: condition.field es obligatorio en requested', { condition, fieldConfig: key });
+                      return false;
+                    }
+
+                    const conditionField = condition.field;
+                    const isParentField = conditionField === field || conditionField === field.replace('object_', '');
+
+                    let conditionValue;
+                    if (isParentField) {
+                      conditionValue = currentDropdownOption;
+                    } else {
+                      const formValue = this.formGroupSignal()?.get(conditionField)?.value;
+                      if (formValue && typeof formValue === 'string') {
+                        const fieldOptions = this.dropdownOptionsSignal()[conditionField];
+                        conditionValue = fieldOptions?.find((opt: any) => opt.id === formValue) || formValue;
+                      } else {
+                        conditionValue = formValue;
+                      }
+                    }
+
+                    const filterGroup = condition.filter_group || 'id';
+                    const operator = condition.operator || 'equals';
+                    const values = condition.values || [];
+
+                    if (!conditionValue) {
+                      console.log('❌ Condición sin valor (requested):', { conditionField, isParentField });
+                      return false;
+                    }
+
+                    const compareValue = filterGroup ? conditionValue[filterGroup] : conditionValue;
+
+                    // Evaluar según operador (mismos operadores que activate)
+                    let result = false;
+                    switch (operator) {
+                      case 'equals':
+                        result = values.some((val: any) => val === compareValue);
+                        break;
+                      case 'not_equals':
+                        result = !values.some((val: any) => val === compareValue);
+                        break;
+                      case 'in':
+                        result = values.some((val: any) => String(compareValue).includes(String(val)));
+                        break;
+                      case 'not_in':
+                        result = !values.some((val: any) => String(compareValue).includes(String(val)));
+                        break;
+                      case 'greater_than':
+                        result = values.some((val: any) => compareValue > val);
+                        break;
+                      case 'less_than':
+                        result = values.some((val: any) => compareValue < val);
+                        break;
+                      case 'range':
+                        if (values.length === 2) {
+                          const inicio = values[0];
+                          const fin = values[1];
+                          if (typeof compareValue === 'string' && /^\d{4}-\d{2}-\d{2}/.test(compareValue)) {
+                            const dateCompare = new Date(compareValue);
+                            const dateInicio = new Date(inicio);
+                            const dateFin = new Date(fin);
+                            result = dateCompare >= dateInicio && dateCompare <= dateFin;
+                          } else if (typeof compareValue === 'number') {
+                            result = compareValue >= inicio && compareValue <= fin;
+                          } else {
+                            result = compareValue >= inicio && compareValue <= fin;
+                          }
+                        } else {
+                          console.error(`❌ ERROR: Operador 'range' requiere EXACTAMENTE 2 valores [inicio, fin]. Recibidos: ${values.length}`, values);
+                          result = false;
+                        }
+                        break;
+                      default:
+                        console.warn('⚠️ Operador desconocido en requested:', operator);
+                        result = false;
+                    }
+
+                    return result;
+                  });
+
+                  // Aplicar lógica AND/OR
+                  let conditionsMet = false;
+                  if (logic === 'AND') {
+                    conditionsMet = conditionResults.every((result: boolean) => result);
+                  } else { // OR
+                    conditionsMet = conditionResults.some((result: boolean) => result);
+                  }
+
+                  // Determinar si es requerido según action
+                  let isRequired = false;
+                  if (action === 'required') {
+                    // Si action es 'required': campo REQUERIDO cuando condiciones se cumplan
+                    isRequired = conditionsMet;
+                  } else if (action === 'not_required') {
+                    // Si action es 'not_required': campo NO REQUERIDO cuando condiciones se cumplan
+                    // Es decir, REQUERIDO cuando NO se cumplan
+                    isRequired = !conditionsMet;
+                  }
+
+                  console.log(`${isRequired ? '📌' : '⭕'} Campo ${key} ${isRequired ? 'REQUERIDO' : 'NO REQUERIDO'}`);
+
+                  // Aplicar validador required/optional al FormControl
+                  if (formControl) {
+                    if (isRequired) {
+                      formControl.setValidators([Validators.required]);
+                    } else {
+                      formControl.clearValidators();
+                    }
+                    formControl.updateValueAndValidity();
+                  }
+
+                  // Sincronizar required/optional con campo relacionado (si tiene prefijo object_)
+                  if (key.startsWith('object_')) {
+                    const relatedField = key.replace('object_', '');
+                    const relatedControl = this.formGroupSignal()?.get(relatedField);
+                    if (relatedControl) {
+                      if (isRequired) {
+                        relatedControl.setValidators([Validators.required]);
+                      } else {
+                        relatedControl.clearValidators();
+                      }
+                      relatedControl.updateValueAndValidity();
+                      console.log(`🔗 Campo relacionado '${relatedField}' ${isRequired ? 'REQUERIDO' : 'NO REQUERIDO'}`);
+                    }
+                  }
+                }
+              }
+
+              //#########fin de required/not_required
+
+              // 2. PROCESAR SEGÚN TIPO DE CAMPO
+              if (fieldType === 'derived') {
+                // DERIVED: Asignar valor del campo específico del objeto seleccionado
+                const fieldName = fieldConfig?.field_name;
+                if (fieldName && currentDropdownOption && isActive) {
+                  if (currentDropdownOption[fieldName]) {
+                    this.formGroupSignal()?.get(key)?.setValue(currentDropdownOption[fieldName]);
+                  }
+                }
+
+              } else if (fieldType === 'static') {
+                // STATIC: Filtrar opciones hardcodeadas
+                // Opciones ahora están a la altura de filter (fuera)
+                const options = fieldConfig?.options || [];
+                const filterConfig = fieldConfig?.filter;
+
+                if (filterConfig?.active && isActive) {
+                  const conditions = filterConfig.conditions || [];
+                  const logic = filterConfig.logic || 'AND';
+                  const resultPosition = filterConfig.result_position || 'all';
+
+                  // Filtrar opciones según condiciones
+                  let filteredOptions = options.filter((option: any) => {
+                    // Si no hay condiciones, no filtrar nada
+                    if (conditions.length === 0) return true;
+
+                    const conditionResults = conditions.map((condition: any) => {
+                      // VALIDAR: field es OBLIGATORIO
+                      if (!condition.field) {
+                        console.error('❌ ERROR: condition.field es obligatorio en filter', { condition, fieldConfig: key });
+                        return false;
+                      }
+
+                      const conditionField = condition.field;
+
+                      // Determinar si conditionField es el campo padre
+                      const isParentField = conditionField === field || conditionField === field.replace('object_', '');
+
+                      let conditionValue;
+                      if (isParentField) {
+                        // Si es el campo padre, usar el objeto completo del dropdown
+                        conditionValue = currentDropdownOption;
+                      } else {
+                        // Si es otro campo, buscar en el formulario
+                        const formValue = this.formGroupSignal()?.get(conditionField)?.value;
+                        // Si el formValue es solo un ID, intentar obtener el objeto completo de las opciones
+                        if (formValue && typeof formValue === 'string') {
+                          const fieldOptions = this.dropdownOptionsSignal()[conditionField];
+                          conditionValue = fieldOptions?.find((opt: any) => opt.id === formValue) || formValue;
+                        } else {
+                          conditionValue = formValue;
+                        }
+                      }
+
+                      // Si no viene filter_group, usar 'id' por defecto
+                      const filterGroup = condition.filter_group || 'id';
+                      const operator = condition.operator || 'equals';
+                      const values = condition.values || [];
+
+                      if (!conditionValue) return false;
+
+                      // Obtener el valor a comparar de la opción (hijo) y del padre
+                      const optionValue = filterGroup ? option[filterGroup] : option.id;
+                      const compareValue = filterGroup ? conditionValue[filterGroup] : conditionValue;
+
+                      console.log('🔍 Evaluando filtro:', {
+                        option: option.name,
+                        optionValue,
+                        compareValue,
+                        operator,
+                        filterGroup,
+                        values,
+                        isParentField,
+                        conditionValue
+                      });
+
+                      switch (operator) {
+                        case 'equals':
+                          // EQUALS: optionValue debe ser exactamente igual a compareValue
+                          // O si hay values, optionValue debe estar en values
+                          if (values.length > 0) {
+                            return values.some((val: any) => val === optionValue);
+                          }
+                          return optionValue === compareValue;
+
+                        case 'not_equals':
+                          // NOT_EQUALS: optionValue NO debe ser igual a compareValue
+                          if (values.length > 0) {
+                            return !values.some((val: any) => val === optionValue);
+                          }
+                          return optionValue !== compareValue;
+
+                        case 'in':
+                          // IN: optionValue debe contener alguno de los valores en values (substring)
+                          if (values.length > 0) {
+                            return values.some((val: any) =>
+                              String(optionValue).includes(String(val))
+                            );
+                          }
+                          return String(optionValue).includes(String(compareValue));
+
+                        case 'not_in':
+                          // NOT_IN: optionValue NO debe contener ninguno de los valores en values
+                          if (values.length > 0) {
+                            return !values.some((val: any) =>
+                              String(optionValue).includes(String(val))
+                            );
+                          }
+                          return !String(optionValue).includes(String(compareValue));
+
+                        case 'greater_than':
+                          if (values.length > 0) {
+                            return values.some((val: any) => optionValue > val);
+                          }
+                          return optionValue > compareValue;
+
+                        case 'less_than':
+                          if (values.length > 0) {
+                            return values.some((val: any) => optionValue < val);
+                          }
+                          return optionValue < compareValue;
+
+                        case 'range':
+                          // RANGE: optionValue debe estar entre values[0] (inicio) y values[1] (fin)
+                          // O si no hay values, entre compareValue[0] y compareValue[1]
+                          // Formato: EXACTAMENTE 2 valores [inicio, fin]
+                          if (values.length === 2) {
+                            const inicio = values[0];
+                            const fin = values[1];
+
+                            // Detectar tipo de dato y comparar
+                            if (typeof optionValue === 'string' &&
+                              /^\d{4}-\d{2}-\d{2}/.test(optionValue)) {
+                              // Fechas ISO
+                              const dateOption = new Date(optionValue);
+                              const dateInicio = new Date(inicio);
+                              const dateFin = new Date(fin);
+                              return dateOption >= dateInicio && dateOption <= dateFin;
+                            } else if (typeof optionValue === 'number') {
+                              // Números
+                              return optionValue >= inicio && optionValue <= fin;
+                            } else {
+                              // String o cualquier otro tipo
+                              return optionValue >= inicio && optionValue <= fin;
+                            }
+                          } else if (Array.isArray(compareValue) && compareValue.length === 2) {
+                            // Si compareValue es un array [inicio, fin] - EXACTAMENTE 2
+                            const inicio = compareValue[0];
+                            const fin = compareValue[1];
+
+                            if (typeof optionValue === 'string' &&
+                              /^\d{4}-\d{2}-\d{2}/.test(optionValue)) {
+                              const dateOption = new Date(optionValue);
+                              const dateInicio = new Date(inicio);
+                              const dateFin = new Date(fin);
+                              return dateOption >= dateInicio && dateOption <= dateFin;
+                            } else if (typeof optionValue === 'number') {
+                              return optionValue >= inicio && optionValue <= fin;
+                            } else {
+                              return optionValue >= inicio && optionValue <= fin;
+                            }
+                          } else {
+                            const received = values.length > 0 ? values.length : (Array.isArray(compareValue) ? compareValue.length : 0);
+                            console.error(`❌ ERROR: Operador 'range' requiere EXACTAMENTE 2 valores [inicio, fin]. Recibidos: ${received}`, values.length > 0 ? values : compareValue);
+                            return false;
+                          }
+
+                        default:
+                          console.warn('⚠️ Operador desconocido en filter:', operator);
+                          return false;
+                      }
+                    });
+
+                    // Aplicar lógica AND/OR
+                    if (logic === 'AND') {
+                      return conditionResults.every((result: boolean) => result);
+                    } else {
+                      return conditionResults.some((result: boolean) => result);
+                    }
+                  });
+
+                  // Aplicar result_position
+                  if (resultPosition === 'first' && filteredOptions.length > 0) {
+                    filteredOptions = [filteredOptions[0]];
+                  } else if (resultPosition === 'last' && filteredOptions.length > 0) {
+                    filteredOptions = [filteredOptions[filteredOptions.length - 1]];
+                  }
+
+                  console.log('✅ Opciones filtradas para campo ' + key + ':', {
+                    totalOriginal: options.length,
+                    filtradas: filteredOptions.length,
+                    opciones: filteredOptions.map((o: any) => o.name || o.id)
+                  });
+
+                  // Asignar opciones filtradas
+                  this.dropdownOptionsSignal()[key] = filteredOptions;
+                } else {
+                  console.log('⚠️ Campo ' + key + ' sin filtro activo o inactivo');
+                  // Si no hay filtro activo, limpiar opciones
+                  this.dropdownOptionsSignal()[key] = [];
+                }
+
+              } else if (fieldType === 'dynamic') {
+                // DYNAMIC: Cargar datos del servidor
+                const dataType = fieldConfig?.data_type;
+                const filterConfig = fieldConfig?.filter;
+
+                if (dataType && isActive) {
+                  // TODO: Implementar carga dinámica desde servidor
+                  console.log('🔄 Dynamic field to load from server:', {
+                    field: key,
+                    dataType,
+                    filterConfig,
+                    currentValue: currentDropdownOption
+                  });
+                }
+              }
             }
           }
         }
-      }
+      });
     }
   }
 
   /**
    * Emite un evento cuando se selecciona un elemento en el autocomplete
+   * Aplica las mismas validaciones que onChangeDropdown
    * @param event evento del autocomplete
-   * @param field Campo que se esta modificando
+   * @param config configuración del campo
    */
-  onSelectAutoComplete(event: any, field: any, o: any = null) {
-    // Buscar el objeto de configuración del campo en drawForm
-    /*let fieldObject = null;
-    const currentDrawForm = this.drawForm();
+  onSelectAutoComplete(event: any, config: any) {
+    const field = config.field;
+    const currentValue = this.formGroupSignal()?.get(field)?.value;
+    const formValues = this.formGroupSignal()?.value;
 
-    if (currentDrawForm && Array.isArray(currentDrawForm)) {
-      fieldObject = currentDrawForm.find((item: any) => item.field === field);
-    }
-
-    // Asignar las opciones del dropdown al objeto si existen
-    if (fieldObject && this.dropdownOptionsSignal()[field]) {
-      fieldObject.choices = this.dropdownOptionsSignal()[field];
-      fieldObject.options = this.dropdownOptionsSignal()[field];
-    }
-
-    // Crear un evento similar al de onChangeDropdown
+    // Crear el objeto con la información completa
     const changeInfo = {
       event,
       field,
-      object: fieldObject,
-      formValues: this.formGroupSignal()?.value,
-      currentValue: event,  // En autocomplete, el event ya contiene el objeto seleccionado
+      object: config,
+      formValues,
+      currentValue,
       changedField: field,
-      changedValue: event
+      changedValue: currentValue
     };
 
-    this.onSelectAutoCompleteAction.emit(changeInfo);*/
+    console.log('¿¿¿¿¿¿¿¿', changeInfo);
 
-    this.onSelectAutoCompleteAction.emit({ event, field })
+
+    this.onSelectAutoCompleteAction.emit(changeInfo);
+
+    // Aplicar las mismas validaciones que onChangeDropdown
+    const children = config.children || {};
+    const fields = children?.fields || {};
+
+    if (fields && Object.keys(fields).length > 0) {
+      // Obtener opciones del autocomplete padre actual
+      const dropdownOptions = this.dataDropdownExists(config);
+      let currentDropdownOption: any = null;
+      if (dropdownOptions) {
+        currentDropdownOption = this.searchByValueObject(currentValue, dropdownOptions, 'id', false)[0];
+      }
+
+      // Procesar cada tipo de campo: static, dynamic, derived (misma lógica que onChangeDropdown)
+      ['static', 'dynamic', 'derived'].forEach(fieldType => {
+        if (fields[fieldType]) {
+          for (const key in fields[fieldType]) {
+            if (fields[fieldType].hasOwnProperty(key)) {
+              const fieldConfig = fields[fieldType][key];
+
+              // 1. EVALUAR CONDICIONES DE ACTIVACIÓN
+              const activateConfig = fieldConfig?.activate;
+              let isActive = true;
+
+              if (activateConfig?.active) {
+                const conditions = activateConfig.conditions || [];
+                const logic = activateConfig.logic || 'AND';
+                const action = activateConfig.action || 'inactive';
+
+                const conditionResults = conditions.map((condition: any) => {
+                  if (!condition.field) {
+                    console.error('❌ ERROR: condition.field es obligatorio', { condition, fieldConfig: key });
+                    return false;
+                  }
+
+                  const conditionField = condition.field;
+                  const isParentField = conditionField === field || conditionField === field.replace('object_', '');
+
+                  let conditionValue;
+                  if (isParentField) {
+                    conditionValue = currentDropdownOption;
+                  } else {
+                    const formValue = this.formGroupSignal()?.get(conditionField)?.value;
+                    if (formValue && typeof formValue === 'string') {
+                      const fieldOptions = this.dropdownOptionsSignal()[conditionField];
+                      conditionValue = fieldOptions?.find((opt: any) => opt.id === formValue) || formValue;
+                    } else {
+                      conditionValue = formValue;
+                    }
+                  }
+
+                  const filterGroup = condition.filter_group || 'id';
+                  const operator = condition.operator || 'equals';
+                  const values = condition.values || [];
+
+                  if (!conditionValue) return false;
+
+                  const compareValue = filterGroup ? conditionValue[filterGroup] : conditionValue;
+
+                  let result = false;
+                  switch (operator) {
+                    case 'equals':
+                      result = values.some((val: any) => val === compareValue);
+                      break;
+                    case 'not_equals':
+                      result = !values.some((val: any) => val === compareValue);
+                      break;
+                    case 'in':
+                      result = values.some((val: any) => String(compareValue).includes(String(val)));
+                      break;
+                    case 'not_in':
+                      result = !values.some((val: any) => String(compareValue).includes(String(val)));
+                      break;
+                    case 'greater_than':
+                      result = values.some((val: any) => compareValue > val);
+                      break;
+                    case 'less_than':
+                      result = values.some((val: any) => compareValue < val);
+                      break;
+                    case 'range':
+                      if (values.length === 2) {
+                        const inicio = values[0];
+                        const fin = values[1];
+                        if (typeof compareValue === 'string' && /^\d{4}-\d{2}-\d{2}/.test(compareValue)) {
+                          const dateCompare = new Date(compareValue);
+                          const dateInicio = new Date(inicio);
+                          const dateFin = new Date(fin);
+                          result = dateCompare >= dateInicio && dateCompare <= dateFin;
+                        } else if (typeof compareValue === 'number') {
+                          result = compareValue >= inicio && compareValue <= fin;
+                        } else {
+                          result = compareValue >= inicio && compareValue <= fin;
+                        }
+                      }
+                      break;
+                  }
+
+                  return result;
+                });
+
+                if (logic === 'AND') {
+                  isActive = conditionResults.every((result: boolean) => result);
+                } else {
+                  isActive = conditionResults.some((result: boolean) => result);
+                }
+
+                if (action === 'inactive') {
+                  isActive = !isActive;
+                }
+              }
+
+              // Habilitar/deshabilitar campo
+              const formControl = this.formGroupSignal()?.get(key);
+              if (formControl) {
+                if (isActive) {
+                  formControl.enable();
+                } else {
+                  formControl.disable();
+                  formControl.setValue(null);
+                }
+              }
+
+              // Sincronizar campo relacionado
+              if (key.startsWith('object_')) {
+                const relatedField = key.replace('object_', '');
+                const relatedControl = this.formGroupSignal()?.get(relatedField);
+                if (relatedControl) {
+                  if (isActive) {
+                    relatedControl.enable();
+                  } else {
+                    relatedControl.disable();
+                    relatedControl.setValue(null);
+                  }
+                }
+              }
+
+              // 2. EVALUAR CONDICIONES DE REQUIRED/NOT_REQUIRED
+              const requestedConfig = fieldConfig?.requested;
+
+              if (requestedConfig?.active) {
+                const conditions = requestedConfig.conditions || [];
+                const logic = requestedConfig.logic || 'AND';
+                const action = requestedConfig.action;
+
+                if (action) {
+                  const conditionResults = conditions.map((condition: any) => {
+                    if (!condition.field) return false;
+
+                    const conditionField = condition.field;
+                    const isParentField = conditionField === field || conditionField === field.replace('object_', '');
+
+                    let conditionValue;
+                    if (isParentField) {
+                      conditionValue = currentDropdownOption;
+                    } else {
+                      const formValue = this.formGroupSignal()?.get(conditionField)?.value;
+                      if (formValue && typeof formValue === 'string') {
+                        const fieldOptions = this.dropdownOptionsSignal()[conditionField];
+                        conditionValue = fieldOptions?.find((opt: any) => opt.id === formValue) || formValue;
+                      } else {
+                        conditionValue = formValue;
+                      }
+                    }
+
+                    const filterGroup = condition.filter_group || 'id';
+                    const operator = condition.operator || 'equals';
+                    const values = condition.values || [];
+
+                    if (!conditionValue) return false;
+
+                    const compareValue = filterGroup ? conditionValue[filterGroup] : conditionValue;
+
+                    let result = false;
+                    switch (operator) {
+                      case 'equals':
+                        result = values.some((val: any) => val === compareValue);
+                        break;
+                      case 'not_equals':
+                        result = !values.some((val: any) => val === compareValue);
+                        break;
+                      case 'in':
+                        result = values.some((val: any) => String(compareValue).includes(String(val)));
+                        break;
+                      case 'not_in':
+                        result = !values.some((val: any) => String(compareValue).includes(String(val)));
+                        break;
+                      case 'greater_than':
+                        result = values.some((val: any) => compareValue > val);
+                        break;
+                      case 'less_than':
+                        result = values.some((val: any) => compareValue < val);
+                        break;
+                      case 'range':
+                        if (values.length === 2) {
+                          const inicio = values[0];
+                          const fin = values[1];
+                          if (typeof compareValue === 'string' && /^\d{4}-\d{2}-\d{2}/.test(compareValue)) {
+                            const dateCompare = new Date(compareValue);
+                            const dateInicio = new Date(inicio);
+                            const dateFin = new Date(fin);
+                            result = dateCompare >= dateInicio && dateCompare <= dateFin;
+                          } else if (typeof compareValue === 'number') {
+                            result = compareValue >= inicio && compareValue <= fin;
+                          } else {
+                            result = compareValue >= inicio && compareValue <= fin;
+                          }
+                        }
+                        break;
+                    }
+
+                    return result;
+                  });
+
+                  let conditionsMet = false;
+                  if (logic === 'AND') {
+                    conditionsMet = conditionResults.every((result: boolean) => result);
+                  } else {
+                    conditionsMet = conditionResults.some((result: boolean) => result);
+                  }
+
+                  let isRequired = false;
+                  if (action === 'required') {
+                    isRequired = conditionsMet;
+                  } else if (action === 'not_required') {
+                    isRequired = !conditionsMet;
+                  }
+
+                  if (formControl) {
+                    if (isRequired) {
+                      formControl.setValidators([Validators.required]);
+                    } else {
+                      formControl.clearValidators();
+                    }
+                    formControl.updateValueAndValidity();
+                  }
+
+                  if (key.startsWith('object_')) {
+                    const relatedField = key.replace('object_', '');
+                    const relatedControl = this.formGroupSignal()?.get(relatedField);
+                    if (relatedControl) {
+                      if (isRequired) {
+                        relatedControl.setValidators([Validators.required]);
+                      } else {
+                        relatedControl.clearValidators();
+                      }
+                      relatedControl.updateValueAndValidity();
+                    }
+                  }
+                }
+              }
+
+              // 3. PROCESAR SEGÚN TIPO DE CAMPO
+              if (fieldType === 'derived') {
+                const fieldName = fieldConfig?.field_name;
+                if (fieldName && currentDropdownOption && isActive) {
+                  if (currentDropdownOption[fieldName]) {
+                    this.formGroupSignal()?.get(key)?.setValue(currentDropdownOption[fieldName]);
+                  }
+                }
+              } else if (fieldType === 'static') {
+                const options = fieldConfig?.options || [];
+                const filterConfig = fieldConfig?.filter;
+
+                if (filterConfig?.active && isActive) {
+                  const conditions = filterConfig.conditions || [];
+                  const logic = filterConfig.logic || 'AND';
+                  const resultPosition = filterConfig.result_position || 'all';
+
+                  let filteredOptions = options.filter((option: any) => {
+                    if (conditions.length === 0) return true;
+
+                    const conditionResults = conditions.map((condition: any) => {
+                      if (!condition.field) return false;
+
+                      const conditionField = condition.field;
+                      const isParentField = conditionField === field || conditionField === field.replace('object_', '');
+
+                      let conditionValue;
+                      if (isParentField) {
+                        conditionValue = currentDropdownOption;
+                      } else {
+                        const formValue = this.formGroupSignal()?.get(conditionField)?.value;
+                        if (formValue && typeof formValue === 'string') {
+                          const fieldOptions = this.dropdownOptionsSignal()[conditionField];
+                          conditionValue = fieldOptions?.find((opt: any) => opt.id === formValue) || formValue;
+                        } else {
+                          conditionValue = formValue;
+                        }
+                      }
+
+                      const filterGroup = condition.filter_group || 'id';
+                      const operator = condition.operator || 'equals';
+                      const values = condition.values || [];
+
+                      if (!conditionValue) return false;
+
+                      const optionValue = filterGroup ? option[filterGroup] : option.id;
+                      const compareValue = filterGroup ? conditionValue[filterGroup] : conditionValue;
+
+                      switch (operator) {
+                        case 'equals':
+                          return values.length > 0 ? values.some((val: any) => val === optionValue) : optionValue === compareValue;
+                        case 'not_equals':
+                          return values.length > 0 ? !values.some((val: any) => val === optionValue) : optionValue !== compareValue;
+                        case 'in':
+                          return values.length > 0 ? values.some((val: any) => String(optionValue).includes(String(val))) : String(optionValue).includes(String(compareValue));
+                        case 'not_in':
+                          return values.length > 0 ? !values.some((val: any) => String(optionValue).includes(String(val))) : !String(optionValue).includes(String(compareValue));
+                        case 'greater_than':
+                          return values.length > 0 ? values.some((val: any) => optionValue > val) : optionValue > compareValue;
+                        case 'less_than':
+                          return values.length > 0 ? values.some((val: any) => optionValue < val) : optionValue < compareValue;
+                        case 'range':
+                          if (values.length === 2) {
+                            const inicio = values[0];
+                            const fin = values[1];
+                            if (typeof optionValue === 'string' && /^\d{4}-\d{2}-\d{2}/.test(optionValue)) {
+                              const dateOption = new Date(optionValue);
+                              const dateInicio = new Date(inicio);
+                              const dateFin = new Date(fin);
+                              return dateOption >= dateInicio && dateOption <= dateFin;
+                            } else if (typeof optionValue === 'number') {
+                              return optionValue >= inicio && optionValue <= fin;
+                            } else {
+                              return optionValue >= inicio && optionValue <= fin;
+                            }
+                          } else if (Array.isArray(compareValue) && compareValue.length === 2) {
+                            const inicio = compareValue[0];
+                            const fin = compareValue[1];
+                            if (typeof optionValue === 'string' && /^\d{4}-\d{2}-\d{2}/.test(optionValue)) {
+                              const dateOption = new Date(optionValue);
+                              const dateInicio = new Date(inicio);
+                              const dateFin = new Date(fin);
+                              return dateOption >= dateInicio && dateOption <= dateFin;
+                            } else if (typeof optionValue === 'number') {
+                              return optionValue >= inicio && optionValue <= fin;
+                            } else {
+                              return optionValue >= inicio && optionValue <= fin;
+                            }
+                          }
+                          return false;
+                        default:
+                          return false;
+                      }
+                    });
+
+                    if (logic === 'AND') {
+                      return conditionResults.every((result: boolean) => result);
+                    } else {
+                      return conditionResults.some((result: boolean) => result);
+                    }
+                  });
+
+                  if (resultPosition === 'first' && filteredOptions.length > 0) {
+                    filteredOptions = [filteredOptions[0]];
+                  } else if (resultPosition === 'last' && filteredOptions.length > 0) {
+                    filteredOptions = [filteredOptions[filteredOptions.length - 1]];
+                  }
+
+                  this.dropdownOptionsSignal()[key] = filteredOptions;
+                } else {
+                  this.dropdownOptionsSignal()[key] = [];
+                }
+              } else if (fieldType === 'dynamic') {
+                const dataType = fieldConfig?.data_type;
+                const filterConfig = fieldConfig?.filter;
+
+                if (dataType && isActive) {
+                  console.log('🔄 Dynamic field to load from server:', {
+                    field: key,
+                    dataType,
+                    filterConfig,
+                    currentValue: currentDropdownOption
+                  });
+                }
+              }
+            }
+          }
+        }
+      });
+    }
   }
   //PEPEPEPEP
 
@@ -623,8 +1624,8 @@ export class CustomDrawFormComponent {
   }
 
   //viene directo en el TS porque no hrml marca error si pongo las llaves {}
-  onKeydownTabText(event: any, field: any) {
-    this.onKeydownTabTextAction.emit({ event, field });
+  /*onKeydownTabText(event: any, field: any) {
+    this.onKeydownTabTextAction.emit({ event, field });onSelectAutoComplete
   }
 
   onKeydownEnterText(event: any, field: any) {
@@ -637,7 +1638,17 @@ export class CustomDrawFormComponent {
 
   onKeydownEnterNumber(event: any, field: any) {
     this.onKeydownEnterNumberAction.emit({ event, field });
+  }*/
+
+
+  onKeydownTab(event: any, config: any) {
+    this.onKeydownTabAction.emit({ event, field: config.field, config });
   }
+
+  onKeydownEnter(event: any, config: any) {
+    this.onKeydownEnterAction.emit({ event, field: config.field, config });
+  }
+
 
 
   public closeFieldset = signal<boolean>(false);
@@ -848,12 +1859,10 @@ export class CustomDrawFormComponent {
 
   // Table methods
   initializeTableData(tableConfig: any): any[] {
-    const initialRows = tableConfig.table_config?.initial_rows || 0;
+    const initialRows = tableConfig.initial_rows || 0;
     const data: any[] = [];
 
-    console.log('Inicializando tabla con filas:', initialRows);
-
-
+    console.log('Inicializando tabla con filas::::::::::', initialRows);
     for (let i = 0; i < initialRows; i++) {
       const row: any = {};
       tableConfig.columns.forEach((col: any) => {
@@ -998,7 +2007,7 @@ export class CustomDrawFormComponent {
     return column.width || 'auto';
   }
 
-  getTagSeverity(column: any): string {
+  getTagSeverity(column: any): "success" | "info" | "warn" | "danger" | "secondary" | "contrast" | null | undefined {
     return column.tag?.severity || 'info';
   }
 
@@ -2050,4 +3059,204 @@ export class CustomDrawFormComponent {
     // Manejar la carga de firma desde archivo
   }
 
+  /**
+   * Construye el string de separadores para la propiedad [separator] de PrimeNG AutoComplete
+   * @param separatorConfig Configuración de separadores del campo
+   * @returns String con separadores concatenados (ej: ",;" o ", " o ";")
+   */
+  /**
+   * Valida un correo electrónico según las reglas configuradas
+   * @param email Correo a validar
+   * @param config Configuración de validación del campo
+   * @returns true si es válido, false si no
+   */
+  private validateEmail(email: string, config: any): boolean {
+    if (!email || typeof email !== 'string') return false;
+
+    // Validación básica de formato email (RFC 5322 simplificado)
+    const emailRegex = /^[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$/;
+
+    if (!emailRegex.test(email)) {
+      console.warn('❌ Email inválido (formato):', email);
+      return false;
+    }
+
+    // Validar longitud máxima
+    const maxLength = config?.validation?.max_length_per_email || 254;
+    if (email.length > maxLength) {
+      console.warn('❌ Email excede longitud máxima:', email);
+      return false;
+    }
+
+    // Validar dominio whitelist
+    if (config?.validation?.domain_whitelist?.length > 0) {
+      const domain = email.split('@')[1];
+      if (!config.validation.domain_whitelist.includes(domain)) {
+        console.warn('❌ Email no está en whitelist de dominios:', email);
+        return false;
+      }
+    }
+
+    // Validar dominio blacklist
+    if (config?.validation?.domain_blacklist?.length > 0) {
+      const domain = email.split('@')[1];
+      if (config.validation.domain_blacklist.includes(domain)) {
+        console.warn('❌ Email está en blacklist de dominios:', email);
+        return false;
+      }
+    }
+
+    return true;
+  }
+
+  /**
+   * Valida y procesa los emails cuando cambia el valor del FormControl
+   * Se ejecuta automáticamente con los separadores configurados
+   */
+  validateEmailsField(fieldConfig: any): void {
+    const control = this.formGroupSignal()?.get(fieldConfig.field);
+    if (!control) return;
+
+    const currentEmails: string[] = control.value || [];
+    const validEmails: string[] = [];
+
+    for (const email of currentEmails) {
+      // Validar formato de email
+      if (!this.validateEmailFormat(email, fieldConfig)) {
+        console.warn('❌ Email inválido:', email);
+        continue;
+      }
+
+      // Validar duplicados
+      if (fieldConfig.validation?.allow_duplicates === false) {
+        if (validEmails.includes(email)) {
+          console.warn('❌ Email duplicado no permitido:', email);
+          continue;
+        }
+      }
+
+      // Validar longitud máxima por email
+      const maxLength = fieldConfig.validation?.max_length_per_email || 254;
+      if (email.length > maxLength) {
+        console.warn('❌ Email excede longitud máxima:', email);
+        continue;
+      }
+
+      // Validar dominio whitelist
+      if (fieldConfig.validation?.domain_whitelist?.length > 0) {
+        const domain = email.split('@')[1];
+        if (!fieldConfig.validation.domain_whitelist.includes(domain)) {
+          console.warn('❌ Dominio no permitido:', domain);
+          continue;
+        }
+      }
+
+      // Validar dominio blacklist
+      if (fieldConfig.validation?.domain_blacklist?.length > 0) {
+        const domain = email.split('@')[1];
+        if (fieldConfig.validation.domain_blacklist.includes(domain)) {
+          console.warn('❌ Dominio bloqueado:', domain);
+          continue;
+        }
+      }
+
+      validEmails.push(email);
+    }
+
+    // Validar máximo de emails
+    const maxEmails = fieldConfig.validation?.max_emails || 100;
+    if (validEmails.length > maxEmails) {
+      console.warn('❌ Se excedió el máximo de correos permitidos:', maxEmails);
+      validEmails.splice(maxEmails);
+    }
+
+    // Actualizar el control solo si cambió
+    if (JSON.stringify(currentEmails) !== JSON.stringify(validEmails)) {
+      control.setValue(validEmails, { emitEvent: false });
+    }
+  }
+
+  /**
+   * Valida formato de email según RFC 5322
+   */
+  validateEmailFormat(email: string, fieldConfig: any): boolean {
+    if (!email || typeof email !== 'string') return false;
+
+    // RFC 5322 regex simplificado
+    const emailRegex = /^[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$/;
+
+    return emailRegex.test(email);
+  }
+
+  /**
+   * Obtiene sugerencias de emails para el autocompletado
+   */
+  getEmailSuggestions(query: string, fieldConfig: any): string[] {
+    const suggestions = fieldConfig.suggestions;
+
+    if (!suggestions?.enabled) return [];
+
+    const minChars = suggestions.min_chars || 3;
+    if (query.length < minChars) return [];
+
+    let results: string[] = [];
+
+    switch (suggestions.data_source) {
+      case 'local':
+        results = (suggestions.local_list || [])
+          .filter((email: string) => email.toLowerCase().includes(query.toLowerCase()));
+        break;
+
+      case 'api':
+        // Aquí se haría la llamada a la API
+        // Por ahora devolvemos vacío
+        break;
+
+      case 'users':
+        // Aquí se obtendrían emails de usuarios del sistema
+        // Por ahora devolvemos vacío
+        break;
+
+      default:
+        return [];
+    }
+
+    const maxSuggestions = suggestions.max_suggestions || 10;
+    return results.slice(0, maxSuggestions);
+  }
+
+  /**
+   * Método para manejar el evento completeMethod del autocomplete
+   * Se ejecuta cuando el usuario escribe en el campo
+   */
+  completeEmailMethod(event: any, fieldConfig: any): void {
+    const query = event.query || '';
+    const suggestionsList = this.getEmailSuggestions(query, fieldConfig);
+    this.suggestions.set(suggestionsList);
+  }
+
+  /**
+   * Configura la validación automática para un campo de emails-chips
+   * Se debe llamar cuando el componente autocomplete se inicializa
+   */
+  setupEmailValidation(fieldConfig: any): void {
+    const control = this.formGroupSignal()?.get(fieldConfig.field);
+    if (!control) return;
+
+    // Suscribirse a los cambios del FormControl
+    control.valueChanges.subscribe((value: string[]) => {
+      // Validar inmediatamente cuando se agrega un nuevo email
+      this.validateEmailsField(fieldConfig);
+    });
+  }
+
 }
+
+
+
+/**
+ * falta configurar el campos de selfie he indicar que allow_image_upload del dispositivo es dieferente a allow_image_upload del json principal
+ * 
+ * 
+ * 
+ */

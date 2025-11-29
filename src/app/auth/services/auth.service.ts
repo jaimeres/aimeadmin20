@@ -147,6 +147,8 @@ export class AuthService {
           if (!this._config || Object.keys(this._config).length === 0) {
             return this.http.get(`${this._base_url}/settings/settings/me/`).pipe(
               tap((config: any) => {
+                console.log('refresh', config);
+
                 this.config = config; // Asignar la configuración
               }),
               map(() => true), // Retornar true para indicar éxito
@@ -184,6 +186,7 @@ export class AuthService {
       });
     });
   }
+
 
   /**
    * Valida el token de feresh y regresa el token de acceso valido por 5min
@@ -287,11 +290,14 @@ export class AuthService {
           this.access = resp.data.access; // dja
           this.refresh = resp.data.refresh; // dja
           this.loggedin = true;
+          this.user = resp.data.user;
         }),
         switchMap((resp: any) => {
           // Hacer llamada a configuración después del login exitoso
           return this.http.get(`${this._base_url}/settings/settings/me/`).pipe(
             tap((config: any) => {
+              console.log('login', config);
+
               this.config = config; // Guardar la configuración en el servicio
 
             }),
@@ -351,12 +357,26 @@ export class AuthService {
    * Retorna los datos del usuario logueado
    */
   get user(): LoggedUser {
-    return JSON.parse(this.cookieS.get('user')) //|| '';
+
+    const user = this.cookieS.get('user');
+    if (!user) {
+      return {} as LoggedUser;
+    }
+
+    return JSON.parse(user);
     //return JSON.parse(localStorage.getItem('user'));
   }
 
   /**
-   * establece si el usuario esta logueado
+   * Establece los datos del usuario logueado en la cookie
+   */
+  set user(user: LoggedUser) {
+    this.cookieS.set('user', JSON.stringify(user), this._cookieOptions);
+  }
+
+
+  /**
+   * Establece si el usuario esta logueado
    */
   private set loggedin(loggedin: boolean) {
     this._loggedin = loggedin;
@@ -436,8 +456,9 @@ export class AuthService {
    * @param fields Objeto que contiene los campos con su configuración detallada
    * @param appKey Clave de la aplicación (clave2)
    * @param customField Objeto donde se almacenará la configuración procesada
+   * @param fieldsPrefixes Objeto fields_prefixes si existe
    */
-  private processDrawConfig(draw: any, fields: any, appKey: string, customField: any): void {
+  private processDrawConfig(draw: any, fields: any, appKey: string, customField: any, fieldsPrefixes?: any): void {
     if (!draw || typeof draw !== "object") return;
 
     // Inicializar la estructura si no existe
@@ -448,6 +469,11 @@ export class AuthService {
     // Inicializar draw si no existe
     if (!customField[appKey]['draw']) {
       customField[appKey]['draw'] = {};
+    }
+
+    // Agregar fields_prefixes si existe
+    if (fieldsPrefixes && typeof fieldsPrefixes === "object") {
+      customField[appKey]['draw']['fields_prefixes'] = fieldsPrefixes;
     }
 
     // Procesar cada hijo de draw
@@ -527,7 +553,6 @@ export class AuthService {
       customField[appKey] = {};
     }
 
-    // Inicializar cols y config_cols si no existen
     if (!customField[appKey]['cols']) {
       customField[appKey]['cols'] = {};
     }
@@ -653,6 +678,8 @@ export class AuthService {
         if (!this._config || Object.keys(this._config).length === 0) {
           return this.http.get(`${this._base_url}/settings/settings/me/`).pipe(
             tap((config: any) => {
+              console.log('biometric', config);
+
               this.config = config;
             }),
             map(() => resp.user),
@@ -755,11 +782,12 @@ export class AuthService {
           customField[clave2] = {};
         }
 
-        // 3er nivel: verificar si existen las claves fijas 'cols', 'draw', 'general', 'fields'
+        // 3er nivel: verificar si existen las claves fijas 'cols', 'draw', 'general', 'fields', 'fields_prefixes'
         const cols = (nivel2 as any)["cols"];
         const draw = (nivel2 as any)["draw"];
         const general = (nivel2 as any)["general"];
         const fields = (nivel2 as any)["fields"];
+        const fieldsPrefixes = (nivel2 as any)["fields_prefixes"];
 
         // Procesar cols si existe
         if (cols && typeof cols === "object") {
@@ -768,13 +796,13 @@ export class AuthService {
 
         // Procesar draw si existe
         if (draw && typeof draw === "object") {
-          this.processDrawConfig(draw, fields, clave2, customField);
+          this.processDrawConfig(draw, fields, clave2, customField, fieldsPrefixes);
         }
 
         // Agregar general directamente si existe
-        if (general && typeof general === "object") {
+        /*if (general && typeof general === "object") {
           customField[clave2]['general'] = general;
-        }
+        }*/
 
         // Agregar fields directamente si existe
         if (fields && typeof fields === "object") {

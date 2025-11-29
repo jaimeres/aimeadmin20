@@ -60,9 +60,8 @@
                 (onChangeDropdownAction)="onChangeDropdown($event)"
                 (onNewIconDropdownAction)="onNewIconDropdown($event)"
                 (onReloadIconDropdownAction)="onReloadIconDropdown($event)"
-                (onChangeToggleAction)="onChangeToggle($event)" (onKeydownEnterTextAction)="onKeydownEnterText($event)"
-                (onClosableIconDropdownAction)="onClosableIconDropdown($event)"
-                (onKeydownEnterNumberAction)="onKeydownEnterNumber($event)" />
+                (onChangeToggleAction)="onChangeToggle($event)" (onKeydownEnterAction)="onKeydownEnter($event)"
+                (onClosableIconDropdownAction)="onClosableIconDropdown($event)" />
             </ng-template>
 
 
@@ -109,7 +108,7 @@
                 <td>
 
                   <p-tag [value]="product.discard_proof ? 'Se entrega desecho' : 'No entrega desecho'"
-                    [severity]="'LOWSTOCK'"></p-tag>
+                    [severity]="product.discard_proof ? 'success' : 'danger'"></p-tag>
 
                 </td>
 
