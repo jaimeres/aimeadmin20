@@ -173,6 +173,12 @@ export class CRUDService {
       "type": "movement-type",
       "name": "Tipos de Movimiento",
       "icon": "pi pi-arrows-alt"
+    },
+    "classifier-level": {
+      "app": "classifiers/classifier-level",
+      "type": "classifier-level",
+      "name": "Niveles de Clasificador",
+      "icon": "pi pi-sitemap"
     }
   };
 
@@ -306,6 +312,9 @@ export class CRUDService {
     include: include = '', filter: filter = '', sort: sort = '', fields: fields = '',
     limit: limit = 0, app: app = '', type: type = '', url: url = '', offset = 0
   }) {
+
+    console.log('-------++........', sort);
+
     const query = this.query(include, filter, sort, fields, limit, type, offset);
     url = url ? url : `${this.baseUrl(app)}${query}`;
     return this.http.get(url);

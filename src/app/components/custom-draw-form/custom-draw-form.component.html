@@ -1,7 +1,8 @@
+{{drawFormSignal()['grid'] | json}}
+
 <div *ngIf="drawFormSignal()['grid']" class="grid grid-cols-12 gap-2 "> <!-- pt-3 -->
   <div *ngFor="let entry of drawFormSignal()['grid'] | keyvalue : keyComparator;"
     [ngClass]="[ entry.value.hide ? 'hidden' : '', entry.value.class || 'col-span-6', entry.value.class_md || 'md:col-span-3']">
-
 
     <!--CARD-->
     <h6 *ngIf="entry.value.title && entry.value?.card" style="margin-top: -0.55rem; margin-bottom: -5px;">
@@ -27,6 +28,36 @@
             </div>
 
             <div class="p-inputgroup" *ngSwitchCase="'dropdown'">
+              <p-floatlabel variant="on">
+                <!-- [readonly]="card.value.readonly" -->
+                <p-select [options]="dropdownOptionsSignal()[card.value.field]"
+                  [optionValue]="card.value.option_value || 'id'" [optionLabel]="card.value.option_label || 'name'"
+                  placeholder="." [editable]="card.value.editable"
+                  [formControl]="$any(formGroupSignal()?.get(card.value.field))"
+                  [scrollHeight]="card.value.scrollHeight || '200px'" (onShow)="onShowDropdownAction.emit($event)"
+                  [showClear]="card.value.showClear !== undefined ? card.value.showClear : true"
+                  [filter]="card.value.filter !== undefined ? card.value.filter : false"
+                  [filterBy]="card.value.filter_by !== undefined ? card.value.filter_by : false"
+                  (onChange)="onChangeDropdown($event, card.value)" [appendTo]="'body'"
+                  styleClass="height-input-custom" />
+
+                <button *ngIf="card.value.new_icon !== undefined ? card.value.new_icon : false" type="button" pButton
+                  icon="pi pi-plus" class="height-icon-custom"
+                  (click)="onNewIconDropdownAction.emit(card.value.field)"></button>
+                <button *ngIf="card.value.reload_icon !== undefined ? card.value.reload_icon : false" type="button"
+                  pButton icon="pi pi-replay" class="height-icon-custom"
+                  (click)="onReloadIconDropdownAction.emit(card.value.field)"></button>
+                <button *ngIf="card.value.closable_icon !== undefined ? card.value.closable_icon : false" type="button"
+                  pButton icon="pi pi-times" class="height-icon-custom"
+                  (click)="onClosableIconDropdownAction.emit(card.value.field)"></button>
+                <label [for]="card.value.field">
+                  {{ card.value?.label}}
+                </label>
+              </p-floatlabel>
+            </div>
+
+
+            <div class="p-inputgroup" *ngSwitchCase="'dropdown-choice'">
               <p-floatlabel variant="on">
                 <!-- [readonly]="card.value.readonly" -->
                 <p-select [options]="dropdownOptionsSignal()[card.value.field]"
@@ -401,6 +432,16 @@
 
               </p-table>
               <!-- </div> -->
+            </div>
+
+            <!-- BUTTON COMPONENT IN CARD -->
+            <div *ngSwitchCase="'button'">
+              <p-button [label]="card.value?.label" [icon]="card.value?.icon"
+                [iconPos]="card.value?.icon_position || 'left'" [severity]="card.value?.severity || 'primary'"
+                [rounded]="card.value?.rounded || false" [disabled]="card.value?.disabled || false"
+                [pAutoFocus]="card.value?.autofocus || false" (onClick)="onButtonClick(card.value)"
+                styleClass="w-full height-input-custom">
+              </p-button>
             </div>
 
             <!-- SIGNATURE COMPONENT IN CARD -->
@@ -861,6 +902,37 @@
         </p-inputgroup>
       </div>
 
+
+      <div *ngSwitchCase="'dropdown-choice'">
+        <p-inputgroup>
+          <p-floatlabel variant="on">
+            <!--  [readonly]="entry.value.readonly" -->
+            <p-select [options]="dropdownOptionsSignal()[entry.value.field]"
+              [optionValue]="entry.value.option_value || 'id'" [optionLabel]="entry.value.option_label || 'name'"
+              [editable]="entry.value.editable" [formControl]="$any(formGroupSignal()?.get(entry.value.field))"
+              [scrollHeight]="entry.value.scrollHeight || '200px'" (onShow)="onShowDropdownAction.emit($event)"
+              [showClear]="entry.value.showClear !== undefined ? entry.value.showClear : true"
+              [filter]="entry.value.filter !== undefined ? entry.value.filter : false"
+              [filterBy]="entry.value.filter_by !== undefined ? entry.value.filter_by : false"
+              (onChange)="onChangeDropdown($event, entry.value )" [appendTo]="'body'"
+              styleClass="height-input-custom" />
+
+            <button *ngIf="entry.value.new_icon !== undefined ? entry.value.new_icon : false" type="button" pButton
+              icon="pi pi-plus" class="height-icon-custom"
+              (click)="onNewIconDropdownAction.emit(entry.value.field)"></button>
+            <button *ngIf="entry.value.reload_icon !== undefined ? entry.value.reload_icon : false" type="button"
+              pButton icon="pi pi-replay" class="height-icon-custom" (click)="dataDropdown(entry.value, true)"></button>
+            <button *ngIf="entry.value.closable_icon !== undefined ? entry.value.closable_icon : false" type="button"
+              pButton icon="pi pi-times" class="height-icon-custom"
+              (click)="onClosableIconDropdownAction.emit(entry.value.field)"></button>
+            <label [for]="entry.value.field">
+              {{entry.value?.label}}
+            </label>
+          </p-floatlabel>
+        </p-inputgroup>
+      </div>
+
+
       <div *ngSwitchCase="'multi-select'">
         <p-inputgroup>
           <p-floatlabel variant="on">
@@ -907,6 +979,17 @@
         label="{{ entry.value?.label }}" />
 
       <!-- label="{{ entry.value?.label && entry.value?.label.trim() !== '' ? entry.value?.label : customFieldSignal()[entry.value.field] }}" -->
+
+      <!-- BUTTON COMPONENT FREE -->
+
+      <div *ngSwitchCase="'button'">
+        <p-button [label]="entry.value?.label" [icon]="entry.value?.icon"
+          [iconPos]="entry.value?.icon_position || 'left'" [severity]="entry.value?.severity || 'primary'"
+          [rounded]="entry.value?.rounded || false" [disabled]="entry.value?.disabled || false"
+          [pAutoFocus]="entry.value?.autofocus || false" (onClick)="onButtonClick(entry.value)"
+          styleClass="w-full height-input-custom">
+        </p-button>
+      </div>
 
       <!-- TABLE COMPONENT -->
       <div *ngSwitchCase="'table'" class="w-full">
@@ -1379,6 +1462,47 @@
               </p-inputgroup>
 
 
+              <p-inputgroup *ngSwitchCase="'dropdown-choice'">
+                <!-- no uso -inputgroup-addon porque se deforma los iconos -->
+                <!-- uso padding-bottom: 4px !important; porque quedan muy pegados los select-->
+                <!-- height-input-custom" porque la altura del select es del doble que el resto de los elementos, 
+                 no veo css desponsable por eso uso la clase -->
+                <p-floatlabel variant="on">
+                  <!-- [readonly]="card.value.readonly" -->
+                  <p-select [options]="dropdownOptionsSignal()[card.value.field]"
+                    [optionValue]="card.value.option_value || 'id'" [optionLabel]="card.value.option_label || 'name'"
+                    placeholder="." [editable]="card.value.editable"
+                    [formControl]="$any(formGroupSignal()?.get(card.value.field))"
+                    [scrollHeight]="card.value.scrollHeight || '200px'" (onShow)="onShowDropdownAction.emit($event)"
+                    [showClear]="card.value.showClear !== undefined ? card.value.showClear : true"
+                    [filter]="card.value.filter !== undefined ? card.value.filter : false"
+                    [filterBy]="card.value.filter_by !== undefined ? card.value.filter_by : false"
+                    (onChange)="onChangeDropdown($event, card.value)" [appendTo]="'body'"
+                    styleClass="height-input-custom" />
+
+                  <button *ngIf="card.value.new_icon !== undefined ? card.value.new_icon : false" type="button" pButton
+                    icon="pi pi-plus" class="height-icon-custom"
+                    (click)="onNewIconDropdownAction.emit(card.value.field)"></button>
+
+                  <button *ngIf="card.value.reload_icon !== undefined ? card.value.reload_icon : false" type="button"
+                    pButton icon="pi pi-replay" class="height-icon-custom"
+                    (click)="onReloadIconDropdownAction.emit(card.value.field)" style="margin-left: -5px;"
+                    variant="text"></button>
+
+                  <button *ngIf="card.value.closable_icon !== undefined ? card.value.closable_icon : false"
+                    type="button" pButton icon="pi pi-times" class="height-icon-custom"
+                    (click)="onClosableIconDropdownAction.emit(card.value.field)"></button>
+
+                  <label [for]="card.value.field">
+                    {{ card.value?.label }}
+                    <!-- {{ card.value?.label && card.value?.label.trim() !== '' ? card.value?.label :
+                    customFieldSignal()[card.value.field] }} -->
+                  </label>
+
+                </p-floatlabel>
+              </p-inputgroup>
+
+
               <div *ngSwitchCase="'multi-select'">
                 <p-floatlabel variant="on">
                   <p-multiSelect [formControl]="$any(formGroupSignal()?.get(card.value.field))"
@@ -1729,6 +1853,16 @@
 
                 </p-table>
                 <!-- </div> -->
+              </div>
+
+              <!-- BUTTON COMPONENT IN FIELDSET -->
+              <div *ngSwitchCase="'button'">
+                <p-button [label]="card.value?.label" [icon]="card.value?.icon"
+                  [iconPos]="card.value?.icon_position || 'left'" [severity]="card.value?.severity || 'primary'"
+                  [rounded]="card.value?.rounded || false" [disabled]="card.value?.disabled || false"
+                  [pAutoFocus]="card.value?.autofocus || false" (onClick)="onButtonClick(card.value)"
+                  styleClass="w-full height-input-custom">
+                </p-button>
               </div>
 
               <!-- SIGNATURE COMPONENT IN FIELDSET -->

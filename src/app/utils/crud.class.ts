@@ -1057,9 +1057,10 @@ export class CRUD extends Vars /*implements OnInit*/ {
       if (jsonFields.hasOwnProperty(field)) {
 
         //se envia campo individual
-        if (field in ['parent_form_data', 'form_data']) {
+        if (field in ['parent_form_data', 'form_data', 'form_fields', 'child_form_fields']) {
           continue;
         }
+
 
         const fieldObj = jsonFields[field];
         const validators = [];
@@ -1090,10 +1091,14 @@ export class CRUD extends Vars /*implements OnInit*/ {
           //continue;
         }
 
+        //console.log('-+-+-+-+-', fieldObj.relationship_type, field);
         // carga las relaciones antes de los excludeFieldsForm ya que esto no afecta al formulario, afecta al standar json api
         if (fieldObj.relationship_type == 'ManyToMany' || fieldObj.relationship_type == 'ManyToOne' || fieldObj.relationship_type == 'OneToOne') {
           //si tiene valores relationship personbalizados, se prioriza el vslor local
           const val_local: any = this.searchByValueObject(field, relationshipsLocal)[0];
+
+
+
           if (val_local) {
             relationOptions.push(val_local);
           } else {
@@ -1176,10 +1181,13 @@ export class CRUD extends Vars /*implements OnInit*/ {
 
     const fields_prefixes = draw?.fields_prefixes || [];
 
+    //sumar form_fields_data_ a fields_prefixes si no existe 
+    if (!fields_prefixes.includes('form_fields_data_')) {
+      fields_prefixes.push('form_fields_data_');
+    }
+
     //recorrer el array Array [ "request_data_", "form_fields_data_" ]
     for (const field_prefix of fields_prefixes) {
-      console.log(field_prefix);
-
       this.addFieldsByPrefix(formFields, draw, field_prefix, posIndex);
     }
 
@@ -1230,7 +1238,6 @@ export class CRUD extends Vars /*implements OnInit*/ {
          formFields[field_prefix + item.field] = this.fb.control({ value: item.default, disabled: true }, { nonNullable: true, validators: validators });
        });
      }*/
-
     this.relationships[posIndex] = relationOptions;
     console.log('formmmmmmmmmmmmmmmmmm', formFields);
     return this.fb.group(formFields);
@@ -1491,21 +1498,21 @@ export class CRUD extends Vars /*implements OnInit*/ {
    */
   getAll(options: getAllOptions = {}) {
     // para que las apps principales no tengan que poner la tipo en cada llamada
-    let { pos, node = false, filter = '', force = false } = options;
-    //console.log('inicio getAll----------------------------', filter, options);
+    let { pos, node = false, filter = '', force = false, sort = '' } = options;
+    console.log('inicio getAll----------------------------', filter, options);
 
     const safePos = pos as any; // Type assertion para índices de array
     this.pos.set(safePos);
 
     if (this.columns[safePos]) {
-      this.getAll2({ pos: safePos, node, filter, force });
+      this.getAll2({ pos: safePos, node, filter, force, sort });
     } else {
       // si ya se consulto al servidor, no se vuelve a consultar
       if (this.optionsFields[safePos]) {
         //console.log('getAll if');
 
         this.columns[safePos] = this.generateJSONColumns(this.optionsFields[safePos]);
-        this.getAll2({ pos: safePos, node, filter, force });
+        this.getAll2({ pos: safePos, node, filter, force, sort });
 
       } else {
         const app = this.app[safePos];
@@ -1517,7 +1524,7 @@ export class CRUD extends Vars /*implements OnInit*/ {
             this.optionsFields[safePos] = resp.data.actions.POST;
             this.columns[safePos] = this.generateJSONColumns(this.optionsFields[safePos]);
             this.showBlocked(false);
-            this.getAll2({ pos: safePos, node, filter, force });
+            this.getAll2({ pos: safePos, node, filter, force, sort });
           }
         });
       }
@@ -1526,7 +1533,7 @@ export class CRUD extends Vars /*implements OnInit*/ {
   }
 
   getAll2(options: getAllOptions = {}) {
-    let { pos, node = false, filter = null, force = false } = options;
+    let { pos, node = false, filter = null, force = false, sort = '' } = options;
     //console.log('inicio getAll2', filter, this.pos());
     const safePos = pos as any; // Type assertion para índices de array
 
@@ -1548,7 +1555,7 @@ export class CRUD extends Vars /*implements OnInit*/ {
     }
 
     const include = this.include; // incluir todas las relaciones para que se muestren en la tabla
-    const sort = this.sort; // ordenar por defecto por id
+    sort = sort || this.sort; // ordenar por defecto por id
     const fields = this.fields[safePos]; // incluir todos los campos para que se muestren en la tabla
 
     filter = filter || this.filter; // por el momento solo ocupo de filter sea se envie por parametro
@@ -1831,6 +1838,9 @@ export class CRUD extends Vars /*implements OnInit*/ {
         this.showBlocked(false);
         const additionalFieldsAppCols = this.additionalFieldsAppCols[pos] || [];
         const data = this.DJAtoObject({ resp, additionalFieldsAppCols });
+
+        console.log('000*****', data);
+
 
         //obtener los campos classifers del formulario form()
         this.classifierLevelsDropdown(data);
@@ -2364,7 +2374,12 @@ export class CRUD extends Vars /*implements OnInit*/ {
     // asigno el id de la relación al campo correspondiente, por ejemplo, si la relación es con user,
     //el campo se llama user ?????
 
+    console.log('*-*-*-*-* 1', pos, this.crudS.relationships, this.relationships[pos]);
+
+
     for (let element of this.crudS.relationships) {
+      console.log('*-*-*-*-* 2', element);
+
       element.id = this.currentForm(pos).value[element.field];
     }
   }

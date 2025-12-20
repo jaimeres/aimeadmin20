@@ -95,8 +95,10 @@ export class ClassifierComponent extends CRUD implements OnInit {
   treeItems = signal<any[]>([]);
 
   getClassifierLevel() {
+
     this.sort = 'classifier_type,level';
-    super.getAll({ pos: 'classifier-level', node: true, force: true });
+    //AUN NO RECUEROD SI TENGO SORT COMO GLOBAL POR ALGUNA RAZON EN PARTICULAR
+    super.getAll({ pos: 'classifier-level', /*node: true,*/ force: true, /*sort: 'classifier_type,level'*/ });
   }
 
 

@@ -1,3 +1,5 @@
+<p-confirmdialog />
+
 <div style="position: absolute; z-index: 2;">
   <app-custom-button-crud (deleteAction)="delete()" (editAction)="edit()"
     (refreshAction)="getAll({ force: true, pos: pos() })" (newAction)="openNew({pos:pos()})"
@@ -143,9 +145,10 @@
 
   <ng-template #footer>
     <div class="p-dialog-footer">
-      <app-custom-button-footer (saveAction)="save()" (saveNotHideAction)="save({hide:false})"
-        (resetFormAction)="resetFormDialog()" (cancelAction)="cancelRequestDetail()" />
+      <app-custom-button-footer (saveAction)="save({ pos: typeDefault})" (cancelAction)="cancelRequestDetail()"
+        (saveNotHideAction)="save({hide:false, pos: typeDefault})" (resetFormAction)="resetFormDialog()" />
     </div>
+    <!--  -->
   </ng-template>
 
 </p-dialog>

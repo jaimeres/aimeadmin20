@@ -115,6 +115,9 @@ export class CustomDrawFormComponent {
   @Output() filesAction = new EventEmitter<[]>();
   @Output() files64Action = new EventEmitter<[]>();
 
+  // Button output
+  @Output() onButtonClickAction = new EventEmitter<any>();
+
   // Table outputs
   @Output() onTableRowSelect = new EventEmitter<any>();
   @Output() onTableRowUnselect = new EventEmitter<any>();
@@ -273,7 +276,8 @@ export class CustomDrawFormComponent {
               ademas ya esta diseñado para cambiar optionValue y optionLabel por id y name, seria contraproducente
               agregar otro elemento
 
-          }else*/ if (element?.type == 'dropdown' || element?.type == 'tree-select' || element?.type == 'multi-select') {
+          }else*/
+          if (element?.type == 'dropdown' || element?.type == 'tree-select' || element?.type == 'multi-select' || element?.type == 'dropdown-choice') {
             this.dataDropdown(element);
 
           } else if (element?.card || element?.fieldset) {
@@ -282,7 +286,7 @@ export class CustomDrawFormComponent {
             for (const key2 in nestedElements) {
               if (nestedElements.hasOwnProperty(key2)) {
                 const element2 = nestedElements[key2];
-                if (element2.type == 'dropdown' || element2.type == 'tree-select' || element2.type == 'multi-select') {
+                if (element2.type == 'dropdown' || element2.type == 'tree-select' || element2.type == 'multi-select' || element2.type == 'dropdown-choice') {
 
                   this.dataDropdown(element2);
                 }
@@ -556,16 +560,43 @@ export class CustomDrawFormComponent {
         find((item: any) => item.id === currentValue || item.value === currentValue);
 
       // Si existe cols_values y es un array válido, filtrar el objeto, sino usar el objeto completo
-      // el los campos manuales indica la información que se guardará en el json
+      // cols_values ahora es un array de objetos: [{field: 'id', required: true, default: null}, ...]
 
       let currentValueObject = foundObject;
+
       if (foundObject && object?.cols_values && Array.isArray(object.cols_values) && object.cols_values.length > 0) {
-        const filteredObject: any = {};
-        object.cols_values.forEach((key: string) => {
-          if (foundObject.hasOwnProperty(key)) {
-            filteredObject[key] = foundObject[key];
+        let filteredObject: any = null;
+
+        object.cols_values.forEach((colConfig: any) => {
+          // Extraer el nombre del campo de la configuración
+          const fieldName = colConfig.field;
+
+          if (!fieldName) {
+            console.warn('⚠️ cols_values: campo sin "field" especificado', colConfig);
+            return;
+          }
+
+          if (!filteredObject) {
+            filteredObject = {};
+          }
+
+          // Asignar valor desde foundObject, o usar default si no existe
+          if (foundObject.hasOwnProperty(fieldName)) {
+            filteredObject[fieldName] = foundObject[fieldName];
+          } else if (colConfig.hasOwnProperty('default')) {
+            // Si el campo no existe en foundObject pero tiene default, usar el default
+            filteredObject[fieldName] = colConfig.default;
+          }
+
+          // Log de campos requeridos faltantes para debugging
+          if (colConfig.required && !foundObject.hasOwnProperty(fieldName) && !colConfig.hasOwnProperty('default')) {
+            console.warn(`⚠️ Campo requerido "${fieldName}" no encontrado en objeto y sin valor default`, {
+              foundObject,
+              colConfig
+            });
           }
         });
+
         currentValueObject = filteredObject;
       }
 
@@ -575,10 +606,10 @@ export class CustomDrawFormComponent {
 
       //siempre se envia id y hay type, porque se asume que es una relacion y puede ser que se ocupe si no es 
       // no incia con parent_form_data_, form_data_ 
+
       if (foundObject?.type_type && currentValueObject && !field.startsWith('form_data_') && !field.startsWith('parent_form_data_')) {
         currentValueObject['type'] = foundObject.type_type;
         currentValueObject['id'] = foundObject.id;
-
       }
 
       this.formGroupSignal()?.get(newField)?.setValue(currentValueObject);
@@ -1026,7 +1057,7 @@ export class CustomDrawFormComponent {
                       const optionValue = filterGroup ? option[filterGroup] : option.id;
                       const compareValue = filterGroup ? conditionValue[filterGroup] : conditionValue;
 
-                      console.log('🔍 Evaluando filtro:', {
+                      /*console.log('🔍 Evaluando filtro:', {
                         option: option.name,
                         optionValue,
                         compareValue,
@@ -1035,7 +1066,7 @@ export class CustomDrawFormComponent {
                         values,
                         isParentField,
                         conditionValue
-                      });
+                      });*/
 
                       switch (operator) {
                         case 'equals':
@@ -1647,6 +1678,80 @@ export class CustomDrawFormComponent {
 
   onKeydownEnter(event: any, config: any) {
     this.onKeydownEnterAction.emit({ event, field: config.field, config });
+  }
+
+  /**
+   * Maneja el click en botones personalizados del formulario
+   * Emite un evento con la acción y datos configurados en el botón
+   * Resetea campos del formulario si se especifica fields_reset_form
+   * @param buttonConfig Configuración del botón que incluye action, send_additional_data, sent_data, fields_reset_form
+   */
+  onButtonClick(buttonConfig: any) {
+    const formValues = this.formGroupSignal()?.value;
+
+    // Crear el objeto con la información completa
+    const buttonInfo = {
+      action: buttonConfig.action || '',
+      label: buttonConfig.label || '',
+      config: buttonConfig,
+      formValues: formValues,
+      send_additional_data: buttonConfig.send_additional_data || {},
+      sent_data: buttonConfig.sent_data || ''
+    };
+
+    console.log('🔘 Botón clickeado:', buttonInfo);
+
+    // Resetear campos del formulario si se especifica fields_reset_form
+    if (buttonConfig.fields_reset_form && Array.isArray(buttonConfig.fields_reset_form)) {
+      const formGroup = this.formGroupSignal();
+      
+      if (formGroup) {
+        console.log('🔄 Reseteando campos del formulario:', buttonConfig.fields_reset_form);
+        
+        buttonConfig.fields_reset_form.forEach((fieldConfig: any) => {
+          const fieldName = Object.keys(fieldConfig)[0];
+          const fieldSettings = fieldConfig[fieldName];
+          
+          if (fieldName && formGroup.get(fieldName)) {
+            const control = formGroup.get(fieldName);
+            
+            if (control) {
+              // Establecer el valor
+              control.setValue(fieldSettings.value !== undefined ? fieldSettings.value : '');
+              
+              // Configurar required
+              if (fieldSettings.required !== undefined) {
+                if (fieldSettings.required) {
+                  control.setValidators([Validators.required]);
+                } else {
+                  control.clearValidators();
+                }
+                control.updateValueAndValidity();
+              }
+              
+              // Configurar disabled
+              if (fieldSettings.disabled !== undefined) {
+                if (fieldSettings.disabled) {
+                  control.disable();
+                } else {
+                  control.enable();
+                }
+              }
+              
+              console.log(`✅ Campo "${fieldName}" reseteado:`, {
+                value: fieldSettings.value,
+                required: fieldSettings.required,
+                disabled: fieldSettings.disabled
+              });
+            }
+          } else {
+            console.warn(`⚠️ Campo "${fieldName}" no encontrado en el formulario`);
+          }
+        });
+      }
+    }
+
+    this.onButtonClickAction.emit(buttonInfo);
   }
 
 

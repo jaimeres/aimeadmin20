@@ -1,4 +1,4 @@
-<!-- <p-confirmDialog></p-confirmDialog> -->
+<p-confirmDialog></p-confirmDialog>
 
 
 <div *ngIf="pos()!='classifier-level'" style="position: absolute; z-index: 2;">
@@ -36,7 +36,8 @@
       </button>
     </div>
   </ng-template>
-  <form [formGroup]="form()[$any('request-detail')]" *ngIf="form()[$any('request-detail')]">
+
+  <form [formGroup]="form()[$any('classifier-level')]" *ngIf="form()[$any('classifier-level')]">
 
     <p-tabs [scrollable]="true" value="0">
 
@@ -51,15 +52,14 @@
 
         <p-tabpanel header="General" value="0">
 
-
-
-          <!-- <app-custom-draw-form *ngIf="form()[$any(typeDefault)] && drawForm()[typeDefault]"
+          <app-custom-draw-form *ngIf="form()[$any(typeDefault)] && drawForm()[typeDefault]"
             [drawForm]="drawForm()[typeDefault]['general']" [formGroup]="form()[$any(typeDefault)]"
             (onSelectAutoCompleteAction)="onSelectAutoComplete($event)"
             (onChangeDropdownAction)="onChangeDropdown($event)" (onNewIconDropdownAction)="onNewIconDropdown($event)"
             (onReloadIconDropdownAction)="onReloadIconDropdown($event)" (onChangeToggleAction)="onChangeToggle($event)"
             (onKeydownEnterAction)="onKeydownEnter($event)"
-            (onClosableIconDropdownAction)="onClosableIconDropdown($event)" /> -->
+            (onClosableIconDropdownAction)="onClosableIconDropdown($event)" />
+
 
 
 
@@ -95,13 +95,11 @@
 
         <p-tabpanel header="Reponsable" value="1">
 
-          -------------
-
         </p-tabpanel>
 
         <p-tabpanel header="Auditoría" value="2">
 
-          <app-custom-audit [cf]="customField()['request']" [selected]="selected()" />
+          <app-custom-audit [cf]="customField()['classifier-level']" [selected]="selected()" />
 
         </p-tabpanel>
 
@@ -118,18 +116,17 @@
 
   <ng-template #footer>
     <div class="p-dialog-footer">
-      <app-custom-button-footer (saveAction)="save()" (saveNotHideAction)="save({hide:false})"
-        (resetFormAction)="resetFormDialog()" />
+      <app-custom-button-footer (saveAction)="save({pos: typeDefault, is_file: true})"
+        (saveNotHideAction)="save({hide:false, pos: typeDefault, })" (resetFormAction)="resetFormDialog()" />
     </div>
   </ng-template>
 
 </p-dialog>
 
 <div *ngIf="pos()=='classifier-level'" style="position: absolute; z-index: 2; ">
-  <app-custom-button-crud (deleteAction)="delete()" (editAction)="edit()"
-    (refreshAction)="getAll({ force: true, pos: pos() })" (newAction)="openNew({pos:pos()})"
-    [moreOptions]="moreOptions()" [getMenu]="getMenu()" [selected]="selected()" [startMenu]="startMenu()"
-    (startAction)="setStatus('I')" [openNewMenu]="openNewMenu()" />
+  <app-custom-button-crud (deleteAction)="delete()" (editAction)="edit()" (refreshAction)="getClassifierLevel()"
+    (newAction)="openNew({pos:pos()})" [moreOptions]="moreOptions()" [getMenu]="getMenu()" [selected]="selected()"
+    [startMenu]="startMenu()" (startAction)="setStatus('I')" [openNewMenu]="openNewMenu()" />
 </div>
 
 <div *ngIf="pos()=='classifier-level' &&  items()[0]" class="table-fit-Custom">
