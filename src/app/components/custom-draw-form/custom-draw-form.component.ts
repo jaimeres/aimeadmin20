@@ -1704,21 +1704,21 @@ export class CustomDrawFormComponent {
     // Resetear campos del formulario si se especifica fields_reset_form
     if (buttonConfig.fields_reset_form && Array.isArray(buttonConfig.fields_reset_form)) {
       const formGroup = this.formGroupSignal();
-      
+
       if (formGroup) {
         console.log('🔄 Reseteando campos del formulario:', buttonConfig.fields_reset_form);
-        
+
         buttonConfig.fields_reset_form.forEach((fieldConfig: any) => {
           const fieldName = Object.keys(fieldConfig)[0];
           const fieldSettings = fieldConfig[fieldName];
-          
+
           if (fieldName && formGroup.get(fieldName)) {
             const control = formGroup.get(fieldName);
-            
+
             if (control) {
               // Establecer el valor
               control.setValue(fieldSettings.value !== undefined ? fieldSettings.value : '');
-              
+
               // Configurar required
               if (fieldSettings.required !== undefined) {
                 if (fieldSettings.required) {
@@ -1728,7 +1728,7 @@ export class CustomDrawFormComponent {
                 }
                 control.updateValueAndValidity();
               }
-              
+
               // Configurar disabled
               if (fieldSettings.disabled !== undefined) {
                 if (fieldSettings.disabled) {
@@ -1737,7 +1737,7 @@ export class CustomDrawFormComponent {
                   control.enable();
                 }
               }
-              
+
               console.log(`✅ Campo "${fieldName}" reseteado:`, {
                 value: fieldSettings.value,
                 required: fieldSettings.required,
