@@ -1,10 +1,12 @@
 <!-- Botón/flotante de la mascota -->
-<div class="assistant-fab" (click)="toggle()" title="Asistente">
-  <ng-lottie [options]="options"></ng-lottie>
+<div class="assistant-fab" [ngStyle]="getFabStyle()" (click)="!isDragging && toggle()" (mousedown)="onDragStart($event)"
+  (touchstart)="onDragStart($event)" title="Asistente - Arrastra para mover">
+  <ng-lottie *ngIf="!isStaticImage" [options]="options"></ng-lottie>
+  <img *ngIf="isStaticImage" [src]="imagePath" alt="Asistente" class="assistant-image" />
 </div>
 
 <!-- Ventana de chat -->
-<div class="assistant-panel" [class.open]="open">
+<div class="assistant-panel" [class.open]="open" [ngStyle]="getPanelStyle()">
   <div class="assistant-header">
     <div class="assistant-title">Asistencia Jukai</div>
     <button class="assistant-close" (click)="toggle()" aria-label="Cerrar">×</button>

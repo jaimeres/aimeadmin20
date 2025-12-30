@@ -1,0 +1,25 @@
+<p-confirmdialog />
+
+<div style="position: absolute; z-index: 2;">
+  <app-custom-button-crud (deleteAction)="delete()" (editAction)="edit()"
+    (refreshAction)="getAll({ force: true, pos: pos() })" (newAction)="openNew({pos:pos()})"
+    [moreOptions]="moreOptions()" [getMenu]="getMenu()" [selected]="selected()" [startMenu]="startMenu()"
+    (startAction)="setStatus('I')" [openNewMenu]="openNewMenu()" />
+</div>
+
+<div class="table-fit-Custom">
+  <app-custom-table class="table-fit-Custom" [value]="items()" [columns]="selectedColumns()" [selected]="selected()"
+    (selectionAction)="onSelection($event)" (rowDoubleClick)="onRowDoubleClick($event)"
+    [exportDialogVisible]="exportDialogVisible()" [field]="fieldExport()"
+    (exportDialogVisibleAction)="onExportDialogVisible($event)" (exportServerAction)="onExportServer($event)"
+    (lazyLoadAction)="onLazyLoad({event:$event})" [rows]="limit()[pos()]" [totalRecords]="totalRecords()[pos()]"
+    [filterDelayTable]="filterDelayTable()" />
+</div>
+
+<app-custom-local-settings [visible]="localSettingsDialogVisible()" [field]="fieldConfig()" [formGroup]="configForm"
+  (saveAction)="saveConfig()" (visibleAction)="onLocalSettingsDialogVisible($event)" />
+
+<app-custom-import [visible]="importDialogVisible()" (visibleAction)="onImportDialogVisible($event)"
+  (saveAction)="onImportSave($event)" />
+
+<app-custom-actions-selection [visible]="actionsSelectionDialogVisible" (visibleChange)="onVisibleChange($event)" />

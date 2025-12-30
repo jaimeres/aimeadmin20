@@ -112,6 +112,10 @@ export class CRUD extends Vars /*implements OnInit*/ {
 
     this.include = include.slice(0, -1);
 
+    if (this.fields[this.pos()] == undefined) {
+      this.fields[this.pos()] = '';
+    }
+
     //.update(cont => include.slice(0, -1) ); //porngo update en lugar de set porque es una
     //actualización, pero supongo que da lo mismo
     this.fields[this.pos()] += include + fields.slice(0, -1);
@@ -1241,6 +1245,11 @@ export class CRUD extends Vars /*implements OnInit*/ {
     this.relationships[posIndex] = relationOptions;
     console.log('formmmmmmmmmmmmmmmmmm', formFields);
     return this.fb.group(formFields);
+  }
+
+  config_general(pos: any = null) {
+    pos = pos || this.pos();
+    return this.crudS.config_general(pos);
   }
 
   generateJSONColumns(jsonFields: any, pos: any = null, cols: any = [], field_prefix = '', header_prefix = '', field_relationship = '') {
@@ -2417,7 +2426,7 @@ export class CRUD extends Vars /*implements OnInit*/ {
 
   submitForm(options: saveOptions = {}) {
 
-    const { pos, hide = true, reset = true, is_file = false, node = false, selected = null, update_item = true, data = null } = options;
+    let { pos, hide = true, reset = true, is_file = false, node = false, selected = null, update_item = true, data = null, custom_user = null } = options;
 
     const safePos = pos as any; // Type assertion para índices de array
 
@@ -2435,9 +2444,15 @@ export class CRUD extends Vars /*implements OnInit*/ {
           const additionalFieldsAppCols = this.additionalFieldsAppCols[safePos] || [];
           temp.unshift(this.DJAtoObject({ resp, node, additionalFieldsAppCols }));
 
-          //es para que no se actualice el item de la app principal,
-          if (update_item) {
+          //si se envia explicitamente true se asigna el predeterminado items, si se renvia una referencia se establece a esa referencia
+          if (update_item === true) {
             this.items.set(temp);
+          } else if (update_item) {
+            update_item = temp
+          }
+
+          if (custom_user) {
+            this.customUser(custom_user);
           }
 
           // tambien se actualiza el array de itemsNew para que cuando se cree un nuevo elemento se muestre en la tabla
@@ -2579,7 +2594,7 @@ export class CRUD extends Vars /*implements OnInit*/ {
    * @param update_item true para actualizar el item de la app principal, false para no hacerlo
    */
   save(options: saveOptions = {}) {
-    const { pos, hide = true, reset = true, is_file = false, node = false, selected = null, update_item = true, data = null } = options;
+    const { pos, hide = true, reset = true, is_file = false, node = false, selected = null, update_item = true, data = null, custom_user = null } = options;
 
     const safePos = pos as any; // Type assertion para índices de array
 
@@ -2620,18 +2635,18 @@ export class CRUD extends Vars /*implements OnInit*/ {
                     .catch((error) => {
                         console.error('Error al convertir archivos a base64', error);
                         this.messageS.changeMessage('Error al convertir los documentos.');
-                    });*/
+                    });
+        */
+
       } else {
 
         console.log('save else', form.get('documents'), this.files64);
-
-
         form.get('maintenance_document_data_documents')?.setValue(this.files64);
         form.get('documents')?.setValue(this.files64);
-        this.submitForm({ pos, hide, reset, is_file, node, selected, update_item, data });
+        this.submitForm({ pos, hide, reset, is_file, node, selected, update_item, data, custom_user });
       }
     } else {
-      this.submitForm({ pos, hide, reset, is_file, node, selected, update_item, data });
+      this.submitForm({ pos, hide, reset, is_file, node, selected, update_item, data, custom_user });
     }
   }
 
@@ -3440,14 +3455,17 @@ export class CRUD extends Vars /*implements OnInit*/ {
     }
 
     // dejo shared porque status siempre se consulta con todos los campos y se comparte  en todos los lugares
+    this.showBlocked();
     this.crudS.getObject({ app: 'status/status' }).subscribe({
       next: (resp: any) => {
         (this.sharedS as any).data['status'] = this.DJAtoObject({ resp });
         this.dependentStatus((this.sharedS as any).data['status'], module, id);
         this.getTask({ module, ids_task });
+        this.showBlocked(false);
       },
       error: (err: any) => {
         this.messageS.changeMessage(`Hay un error al cargar los estados.`, err, this.customField());
+        this.showBlocked(false);
       }
     });
   }
@@ -3459,8 +3477,7 @@ export class CRUD extends Vars /*implements OnInit*/ {
    */
   setStatus(status: any, pos = '') {
     const safePos: any = pos || this.pos();
-
-    console.log('setStatus*****', status, safePos);
+    this.showBlocked();
 
 
     const id = this.selected()[0]?.id;
@@ -3470,15 +3487,17 @@ export class CRUD extends Vars /*implements OnInit*/ {
     this.crudS.edit({ id, app, type, relationships, include: this.include }).subscribe({
       next: (resp: any) => {
         this.updateRecord(resp, id, pos);
+        this.showBlocked(false);
       },
       error: (err: any) => {
         this.messageS.changeMessage(`Hay un error al modificar el estatús.`, err, this.customField());
+        this.showBlocked(false);
       }
     });
   }
 
-  tasks_module = [];
-  runTask(options = []) {
+  tasks_module: any = {};
+  runTask(options: any = {}) {
     this.tasks_module = options;
   }
 
@@ -3487,7 +3506,12 @@ export class CRUD extends Vars /*implements OnInit*/ {
 
     for (let i = 0; i < data.length; i++) {
       //if (data[i].action_app[module]) {
-      if (data[i].module == module) {
+
+      // Verificar si modules es un array y contiene el module buscado
+      const modules = data[i].modules;
+      const moduleMatch = Array.isArray(modules) ? modules.includes(module) : modules === module;
+
+      if (moduleMatch) {
         const id = data[i]?.id;
         const exists = ids_task ? ids_task.find((ele) => ele === id) : [];
 
@@ -3525,6 +3549,7 @@ export class CRUD extends Vars /*implements OnInit*/ {
     this.crudS.getObject({ app: 'tasks/task' }).subscribe({
       next: (resp: any) => {
         let task = this.DJAtoObject({ resp });
+
         // dejo shared porque task siempre se consulta con todos los campos y se comparte  en todos los lugares
         (this.sharedS as any).data['task'] = task;
         task = this.taskModule(task, module, ids_task);
@@ -3725,6 +3750,183 @@ export class CRUD extends Vars /*implements OnInit*/ {
     this.actionsSelectionDialogVisible = event;
   }
 
+  customUser(buttonInfo: any) {
+    const { action, config, formValues } = buttonInfo;
+    const formGroup = this.currentForm();
+
+    // ============================================
+    // RESETEAR CAMPOS ESPECÍFICOS DEL FORMULARIO
+    // ============================================
+    if (config.fields_reset_form && typeof config.fields_reset_form === 'object') {
+      if (formGroup) {
+        console.log('🔄 [CRUD] Reseteando campos específicos del formulario:', config.fields_reset_form);
+
+
+        // Iterar sobre las propiedades del objeto fields_reset_form
+        Object.keys(config.fields_reset_form).forEach((fieldName: string) => {
+          const fieldSettings = config.fields_reset_form[fieldName];
+
+          if (fieldName && formGroup.get(fieldName)) {
+            const control = formGroup.get(fieldName);
+            // Verificar si el campo es un objeto para realizar el mismo proceso
+            const object_control = formGroup.get('object_' + fieldName);
+
+            if (control) {
+              // Establecer el valor
+              control.setValue(fieldSettings.value !== undefined ? fieldSettings.value : '');
+              object_control?.setValue(fieldSettings.object_value !== undefined ? fieldSettings.object_value : null);
+              //aqui voy debo estabñecer los mosmo procesode para los campos que inician en objec_
+
+              // Configurar required
+              if (fieldSettings.required !== undefined) {
+                if (fieldSettings.required) {
+                  control.setValidators([Validators.required]);
+                  object_control?.setValidators([Validators.required]);
+                } else {
+                  control.clearValidators();
+                  object_control?.clearValidators();
+                }
+                control.updateValueAndValidity();
+                object_control?.updateValueAndValidity();
+              }
+
+              // Configurar disabled
+              if (fieldSettings.disabled !== undefined) {
+                if (fieldSettings.disabled) {
+                  control.disable();
+                  object_control?.disable();
+                } else {
+                  control.enable();
+                  object_control?.enable();
+                }
+              }
+
+              console.log(`✅ [CRUD] Campo "${fieldName}" reseteado:`, {
+                value: fieldSettings.value,
+                required: fieldSettings.required,
+                disabled: fieldSettings.disabled
+              });
+            }
+          } else {
+            console.warn(`⚠️ [CRUD] Campo "${fieldName}" no encontrado en el formulario`);
+          }
+        });
+      }
+    }
+
+    // ============================================
+    // DESHABILITAR CAMPOS ESPECÍFICOS
+    // ============================================
+    if (config.fields_disable && Array.isArray(config.fields_disable)) {
+      if (formGroup) {
+        console.log('🔒 [CRUD] Deshabilitando campos específicos:', config.fields_disable);
+
+
+        config.fields_disable.forEach((fieldName: string) => {
+          if (fieldName && formGroup.get(fieldName)) {
+            const control = formGroup.get(fieldName);
+            const object_control = formGroup.get('object_' + fieldName);
+
+            if (control) {
+              control.disable();
+              object_control?.disable();
+              console.log(`✅ [CRUD] Campo "${fieldName}" deshabilitado`);
+            }
+          } else {
+            console.warn(`⚠️ [CRUD] Campo "${fieldName}" no encontrado en el formulario`);
+          }
+        });
+      }
+    }
+  }
+
+  /**
+   * Esta función es similar a SAVE, pero permite que el usuario realice ciertas acciones adicionales
+   * y la ejecute el button del custom-draw-form que el usuario puede personalizar. por eso se separa
+   * de SAVE, se pone aqui para aprovechas funciones similares de SAVE
+   * @param buttonInfo Información del botón clickeado que incluye action, config, formValues, etc.
+   */
+  handleButtonClick(buttonInfo: any): void {
+    const { action, config, formValues } = buttonInfo;
+    const formGroup = this.currentForm();
+    const currentPos: any = this.pos();
+
+    console.log('🔘 [CRUD] Botón clickeado:', buttonInfo);
+
+    // ============================================
+    // LÓGICA CRUD SEGÚN LA ACCIÓN
+    // ============================================
+
+    // AGREGAR/CREAR - Guardar nuevo registro
+    if (action === 'save') {
+      this.save({ pos: currentPos, hide: false, reset: false, is_file: true, update_item: false, custom_user: buttonInfo });
+
+      // TODO: Agregar lógica para crear nuevo registro
+      // Ejemplo: llamar al servicio CRUD para guardar
+      // this.crudS.create(this.app, formValues).subscribe(...)
+    }
+
+    // EDITAR/ACTUALIZAR - Modificar registro existente
+    if (action === 'edit') {
+      console.log('✏️ [CRUD] Acción: EDITAR/ACTUALIZAR');
+
+      // Validar formulario antes de editar
+      if (formGroup?.invalid) {
+        console.warn('⚠️ [CRUD] Formulario inválido, no se puede editar');
+        // TODO: Mostrar mensaje de error al usuario
+        return;
+      }
+
+      // TODO: Agregar lógica para actualizar registro existente
+      // Ejemplo: llamar al servicio CRUD para actualizar
+      // const id = formValues.id || config.send_additional_data?.id;
+      // this.crudS.update(this.app, id, formValues).subscribe(...)
+    }
+
+    // ELIMINAR - Borrar registro
+    if (action === 'delete') {
+      console.log('🗑️ [CRUD] Acción: ELIMINAR');
+
+      // TODO: Agregar confirmación antes de eliminar
+      // TODO: Agregar lógica para eliminar registro
+      // Ejemplo: mostrar confirmación y luego llamar al servicio
+      // const id = formValues.id || config.send_additional_data?.id;
+      // confirm() && this.crudS.delete(this.app, id).subscribe(...)
+    }
+
+    // RESTABLECER/RESETEAR - Limpiar formulario
+    if (action === 'reset') {
+      console.log('🔄 [CRUD] Acción: RESTABLECER/RESETEAR');
+
+      // Resetear todo el formulario
+      formGroup?.reset();
+
+      // TODO: Agregar lógica adicional después de resetear
+      // Ejemplo: limpiar arrays, resetear estados, etc.
+    }
+
+    // CANCELAR - Cancelar operación
+    if (action === 'cancel') {
+      console.log('❌ [CRUD] Acción: CANCELAR');
+
+      // Restablecer formulario a valores originales
+      formGroup?.reset();
+
+      // TODO: Agregar lógica para cancelar y volver al estado anterior
+      // Ejemplo: cerrar dialog, navegar atrás, etc.
+    }
+
+    // BUSCAR - Buscar registros
+    if (action === 'search' || action === 'find') {
+      console.log('🔍 [CRUD] Acción: BUSCAR');
+
+      // TODO: Agregar lógica de búsqueda
+      // Ejemplo: llamar servicio con filtros del formulario
+      // this.crudS.search(this.app, formValues).subscribe(...)
+    }
+
+
+  }
 
   /**
    * @param elementos Elementos que se transformarán, respuesta del servidor

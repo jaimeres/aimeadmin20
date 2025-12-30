@@ -1,10 +1,9 @@
-{{drawFormSignal()['grid'] | json}}
-
 <div *ngIf="drawFormSignal()['grid']" class="grid grid-cols-12 gap-2 "> <!-- pt-3 -->
   <div *ngFor="let entry of drawFormSignal()['grid'] | keyvalue : keyComparator;"
     [ngClass]="[ entry.value.hide ? 'hidden' : '', entry.value.class || 'col-span-6', entry.value.class_md || 'md:col-span-3']">
 
     <!--CARD-->
+
     <h6 *ngIf="entry.value.title && entry.value?.card" style="margin-top: -0.55rem; margin-bottom: -5px;">
       <strong>{{entry.value.title}}</strong>
     </h6>

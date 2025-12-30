@@ -1,5 +1,5 @@
 
-import { Component, EventEmitter, Output, signal } from '@angular/core';
+import { Component, EventEmitter, Input, Output, signal, SimpleChanges } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { ButtonModule } from 'primeng/button';
 
@@ -17,12 +17,47 @@ export class CustomButtonFooterComponent {
   @Output() resetFormAction = new EventEmitter<void>();
   @Output() cancelAction = new EventEmitter<void>();
 
+  @Input() config: any = null;
+
+
   public save = signal(true);
   public saveNotHide = signal(true);
   public resetForm = signal(true);
   public cancel = signal(true);
 
+  // Configuración de botones con valores por defecto
+  public buttonConfig = signal({
+    save: {
+      hide: false,
+      label: 'Guardar y cerrar',
+      icon: '',
+      severity: 'secondary' as 'secondary' | 'success' | 'info' | 'warn' | 'danger' | 'help' | 'contrast' | null | undefined
+    },
+    cancel: {
+      hide: false,
+      label: 'Cancelar',
+      icon: '',
+      severity: 'danger' as 'secondary' | 'success' | 'info' | 'warn' | 'danger' | 'help' | 'contrast' | null | undefined
+    },
+    save_no_hide: {
+      hide: false,
+      label: 'Guardar y nuevo',
+      icon: '',
+      severity: 'secondary' as 'secondary' | 'success' | 'info' | 'warn' | 'danger' | 'help' | 'contrast' | null | undefined
+    },
+    reset: {
+      hide: false,
+      label: 'Limpiar',
+      icon: '',
+      severity: 'warn' as 'secondary' | 'success' | 'info' | 'warn' | 'danger' | 'help' | 'contrast' | null | undefined
+    }
+  });
 
+  ngOnChanges(changes: SimpleChanges) {
+    if (changes['config'] && changes['config'].currentValue) {
+      this.applyButtonConfig(changes['config'].currentValue);
+    }
+  }
 
   ngAfterViewInit() {
     setTimeout(() => {
@@ -33,6 +68,49 @@ export class CustomButtonFooterComponent {
     });
     // Se mete al setTimeout para eviatr el error //ERROR Error: NG0100: ExpressionChangedAfterItHasBeenCheckedError: Expression has changed after it was checked. Previous value: 'true'. 
     //Current value: 'false'. Expression location: CustomButtonFooterComponent component. Find more at https://angular.io/errors/NG0100
+  }
+
+  /**
+   * Aplica la configuración personalizada a los botones
+   * @param config Configuración recibida desde el componente padre
+   */
+  private applyButtonConfig(config: any): void {
+    if (!config || typeof config !== 'object') return;
+
+    const buttons_crud = config?.buttons_crud
+
+    const currentConfig = this.buttonConfig();
+    const newConfig = { ...currentConfig };
+
+    // Procesar cada botón en la configuración
+    Object.keys(buttons_crud).forEach((buttonKey: string) => {
+      if (newConfig.hasOwnProperty(buttonKey)) {
+        const buttonSettings = buttons_crud[buttonKey];
+
+        // Aplicar hide si está definido
+        if (buttonSettings.hasOwnProperty('hide')) {
+          newConfig[buttonKey as keyof typeof newConfig].hide = buttonSettings.hide;
+        }
+
+        // Aplicar label si está definido
+        if (buttonSettings.hasOwnProperty('label')) {
+          newConfig[buttonKey as keyof typeof newConfig].label = buttonSettings.label;
+        }
+
+        // Aplicar icon si está definido
+        if (buttonSettings.hasOwnProperty('icon')) {
+          newConfig[buttonKey as keyof typeof newConfig].icon = buttonSettings.icon;
+        }
+
+        // Aplicar severity si está definido
+        if (buttonSettings.hasOwnProperty('severity')) {
+          newConfig[buttonKey as keyof typeof newConfig].severity = buttonSettings.severity;
+        }
+      }
+    });
+
+    this.buttonConfig.set(newConfig);
+    console.log('🔧 Configuración de botones aplicada:', newConfig);
   }
 
 

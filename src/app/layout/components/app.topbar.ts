@@ -14,12 +14,13 @@ import { MegaMenuModule } from 'primeng/megamenu';
 import { BadgeModule } from 'primeng/badge';
 import { OverlayBadge } from 'primeng/overlaybadge';
 import { AuthService } from '../../auth/services/auth.service';
+import { AvatarModule } from 'primeng/avatar';
 
 @Component({
   selector: '[app-topbar]',
   standalone: true,
   imports: [RouterModule, CommonModule, StyleClassModule, FormsModule, Ripple, InputText, ButtonModule,
-    MegaMenuModule, BadgeModule, OverlayBadge],
+    MegaMenuModule, BadgeModule, OverlayBadge, AvatarModule],
   templateUrl: './app.topbar.html',
   host: {
     class: 'layout-topbar'

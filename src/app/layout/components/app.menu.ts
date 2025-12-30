@@ -73,6 +73,19 @@ export class AppMenu {
             { label: 'Productos', routerLink: ['/catalogues/product'] },
             { label: 'Monedas', routerLink: ['/catalogues/currency'] },
             { label: 'Clasificadores', routerLink: ['/catalogues/classifier'] },
+            {
+              label: 'Empresas',
+              items: [
+                { label: 'Grupos', routerLink: ['/catalogues/company?pos=group'] },
+                { label: 'Empresas', routerLink: ['/catalogues/company'] },
+                { label: 'Sucursales', routerLink: ['/catalogues/company?pos=subsidiary'] },
+                { label: 'Almacenes', routerLink: ['/catalogues/company?pos=warehouse'] },
+                { label: 'Secciones', routerLink: ['/catalogues/company?pos=section'] },
+                { label: 'Anaqueles', routerLink: ['/catalogues/company?pos=rack'] },
+                { label: 'Ubicaciones', routerLink: ['/catalogues/company?pos=slots'] },
+
+              ]
+            },
           ]
         }
       ]

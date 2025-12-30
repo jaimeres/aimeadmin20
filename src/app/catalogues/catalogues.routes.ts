@@ -12,6 +12,10 @@ export const CATALOGUES_ROUTES: Routes = [
   {
     path: 'classifier',
     loadComponent: () => import('./classifier/classifier.component').then(m => m.ClassifierComponent)
+  },
+  {
+    path: 'company',
+    loadComponent: () => import('./company/company.component').then(m => m.CompanyComponent)
   }
   // Agrega más rutas para otros componentes standalone de catalogues si es necesario
 ];

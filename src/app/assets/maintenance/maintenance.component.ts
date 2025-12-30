@@ -7,6 +7,7 @@ import { TagModule } from 'primeng/tag';
 import { PRIME_MODULES } from '../../shared/primeng.index';
 import { LOCAL_BASE } from '../../shared/components.index';
 import { SelectModule } from 'primeng/select';
+import { RequestComponent } from '../../purchases/request/request.component';
 
 @Component({
   selector: 'app-maintenance',
@@ -14,6 +15,7 @@ import { SelectModule } from 'primeng/select';
     CommonModule,
     SelectModule,
     TagModule,
+    RequestComponent,
     ...PRIME_MODULES,
     ...LOCAL_BASE,
   ],
@@ -84,7 +86,7 @@ export class MaintenanceComponent extends CRUD implements OnInit {
  * se llama cuando el componente hijo avisa que el dialogo fue cerrado
  */
   closeDialogRequest() {
-    this.tasks_module = [];
+    this.tasks_module = {};
   }
 
   public installation = false;

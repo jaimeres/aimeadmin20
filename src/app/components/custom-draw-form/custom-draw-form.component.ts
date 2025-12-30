@@ -1681,17 +1681,18 @@ export class CustomDrawFormComponent {
   }
 
   /**
-   * Maneja el click en botones personalizados del formulario
+   * Maneja el click en botones personalizados del formulario con lógica CRUD
    * Emite un evento con la acción y datos configurados en el botón
    * Resetea campos del formulario si se especifica fields_reset_form
    * @param buttonConfig Configuración del botón que incluye action, send_additional_data, sent_data, fields_reset_form
    */
   onButtonClick(buttonConfig: any) {
     const formValues = this.formGroupSignal()?.value;
+    const action = buttonConfig.action || '';
 
     // Crear el objeto con la información completa
     const buttonInfo = {
-      action: buttonConfig.action || '',
+      action: action,
       label: buttonConfig.label || '',
       config: buttonConfig,
       formValues: formValues,
@@ -1700,25 +1701,106 @@ export class CustomDrawFormComponent {
     };
 
     console.log('🔘 Botón clickeado:', buttonInfo);
+    /*
+    // ============================================
+    // LÓGICA CRUD SEGÚN LA ACCIÓN
+    // ============================================
 
-    // Resetear campos del formulario si se especifica fields_reset_form
-    if (buttonConfig.fields_reset_form && Array.isArray(buttonConfig.fields_reset_form)) {
+    // AGREGAR/CREAR - Guardar nuevo registro
+    if (action === 'add') {
+      console.log('➕ Acción: AGREGAR/CREAR');
+
+      // Validar formulario antes de agregar
+      if (this.formGroupSignal()?.invalid) {
+        console.warn('⚠️ Formulario inválido, no se puede agregar');
+        // TODO: Mostrar mensaje de error al usuario
+        return;
+      }
+
+      // TODO: Agregar lógica para crear nuevo registro
+      // Ejemplo: llamar al servicio CRUD para guardar
+      // this.crudS.create(this.app, formValues).subscribe(...)
+    }
+
+    // EDITAR/ACTUALIZAR - Modificar registro existente
+    if (action === 'edit') {
+      console.log('✏️ Acción: EDITAR/ACTUALIZAR');
+
+      // Validar formulario antes de editar
+      if (this.formGroupSignal()?.invalid) {
+        console.warn('⚠️ Formulario inválido, no se puede editar');
+        // TODO: Mostrar mensaje de error al usuario
+        return;
+      }
+
+      // TODO: Agregar lógica para actualizar registro existente
+      // Ejemplo: llamar al servicio CRUD para actualizar
+      // const id = formValues.id || buttonConfig.send_additional_data?.id;
+      // this.crudS.update(this.app, id, formValues).subscribe(...)
+    }
+
+    // ELIMINAR - Borrar registro
+    if (action === 'delete') {
+      console.log('🗑️ Acción: ELIMINAR');
+
+      // TODO: Agregar confirmación antes de eliminar
+      // TODO: Agregar lógica para eliminar registro
+      // Ejemplo: mostrar confirmación y luego llamar al servicio
+      // const id = formValues.id || buttonConfig.send_additional_data?.id;
+      // confirm() && this.crudS.delete(this.app, id).subscribe(...)
+    }
+
+    // RESTABLECER/RESETEAR - Limpiar formulario
+    if (action === 'reset') {
+      console.log('🔄 Acción: RESTABLECER/RESETEAR');
+
+      // Resetear todo el formulario
+      this.formGroupSignal()?.reset();
+
+      // TODO: Agregar lógica adicional después de resetear
+      // Ejemplo: limpiar arrays, resetear estados, etc.
+    }
+
+    // CANCELAR - Cancelar operación
+    if (action === 'cancel') {
+      console.log('❌ Acción: CANCELAR');
+
+      // Restablecer formulario a valores originales
+      this.formGroupSignal()?.reset();
+
+      // TODO: Agregar lógica para cancelar y volver al estado anterior
+      // Ejemplo: cerrar dialog, navegar atrás, etc.
+    }
+
+    // BUSCAR - Buscar registros
+    if (action === 'search' || action === 'find') {
+      console.log('🔍 Acción: BUSCAR');
+
+      // TODO: Agregar lógica de búsqueda
+      // Ejemplo: llamar servicio con filtros del formulario
+      // this.crudS.search(this.app, formValues).subscribe(...)
+    }
+
+    // ============================================
+    // RESETEAR CAMPOS ESPECÍFICOS DEL FORMULARIO
+    // ============================================
+    if (buttonConfig.fields_reset_form && typeof buttonConfig.fields_reset_form === 'object') {
       const formGroup = this.formGroupSignal();
-      
+
       if (formGroup) {
-        console.log('🔄 Reseteando campos del formulario:', buttonConfig.fields_reset_form);
-        
-        buttonConfig.fields_reset_form.forEach((fieldConfig: any) => {
-          const fieldName = Object.keys(fieldConfig)[0];
-          const fieldSettings = fieldConfig[fieldName];
-          
+        console.log('🔄 Reseteando campos específicos del formulario:', buttonConfig.fields_reset_form);
+
+        // Iterar sobre las propiedades del objeto fields_reset_form
+        Object.keys(buttonConfig.fields_reset_form).forEach((fieldName: string) => {
+          const fieldSettings = buttonConfig.fields_reset_form[fieldName];
+
           if (fieldName && formGroup.get(fieldName)) {
             const control = formGroup.get(fieldName);
-            
+
             if (control) {
               // Establecer el valor
               control.setValue(fieldSettings.value !== undefined ? fieldSettings.value : '');
-              
+
               // Configurar required
               if (fieldSettings.required !== undefined) {
                 if (fieldSettings.required) {
@@ -1728,7 +1810,7 @@ export class CustomDrawFormComponent {
                 }
                 control.updateValueAndValidity();
               }
-              
+
               // Configurar disabled
               if (fieldSettings.disabled !== undefined) {
                 if (fieldSettings.disabled) {
@@ -1737,7 +1819,7 @@ export class CustomDrawFormComponent {
                   control.enable();
                 }
               }
-              
+
               console.log(`✅ Campo "${fieldName}" reseteado:`, {
                 value: fieldSettings.value,
                 required: fieldSettings.required,
@@ -1751,6 +1833,33 @@ export class CustomDrawFormComponent {
       }
     }
 
+    // ============================================
+    // DESHABILITAR CAMPOS ESPECÍFICOS
+    // ============================================
+    if (buttonConfig.fields_disable && Array.isArray(buttonConfig.fields_disable)) {
+      const formGroup = this.formGroupSignal();
+
+      if (formGroup) {
+        console.log('🔒 Deshabilitando campos específicos:', buttonConfig.fields_disable);
+
+        buttonConfig.fields_disable.forEach((fieldName: string) => {
+          if (fieldName && formGroup.get(fieldName)) {
+            const control = formGroup.get(fieldName);
+
+            if (control) {
+              control.disable();
+              console.log(`✅ Campo "${fieldName}" deshabilitado`);
+            }
+          } else {
+            console.warn(`⚠️ Campo "${fieldName}" no encontrado en el formulario`);
+          }
+        });
+      }
+    }
+    */
+    // ============================================
+    // EMITIR EVENTO AL COMPONENTE PADRE
+    // ============================================
     this.onButtonClickAction.emit(buttonInfo);
   }
 

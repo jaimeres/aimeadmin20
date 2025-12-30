@@ -360,6 +360,8 @@ export class AuthService {
 
     const user = this.cookieS.get('user');
     if (!user) {
+      console.log('............11', user);
+
       return {} as LoggedUser;
     }
 
@@ -800,9 +802,9 @@ export class AuthService {
         }
 
         // Agregar general directamente si existe
-        /*if (general && typeof general === "object") {
+        if (general && typeof general === "object") {
           customField[clave2]['general'] = general;
-        }*/
+        }
 
         // Agregar fields directamente si existe
         if (fields && typeof fields === "object") {

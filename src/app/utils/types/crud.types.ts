@@ -9,8 +9,9 @@ export type saveOptions = {
   is_file?: boolean;
   node?: boolean;
   selected?: any;
-  update_item?: boolean;
+  update_item?: any;
   data?: any;
+  custom_user?: any;
 };
 
 export type resetFormOptions = { selected?: any; pos?: string };

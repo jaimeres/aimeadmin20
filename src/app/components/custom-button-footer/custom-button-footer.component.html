@@ -1,22 +1,25 @@
 <div class="flex flex-wrap gap-x-2 justify-center">
 
-  <p-button *ngIf="resetForm()" label="Limpiar" (click)="resetFormAction.emit()" variant="text" [raised]="true"
-    severity="warn"></p-button>
+  <p-button *ngIf="resetForm() && !buttonConfig().reset.hide" [label]="buttonConfig().reset.label"
+    [icon]="buttonConfig().reset.icon" [severity]="buttonConfig().reset.severity" (click)="resetFormAction.emit()"
+    variant="text" [raised]="true"></p-button>
 
-
-  <p-button *ngIf="cancel()" label="Cancelar" (click)="cancelAction.emit()" variant="text" [raised]="true"
-    severity="danger"></p-button>
+  <p-button *ngIf="cancel() && !buttonConfig().cancel.hide" [label]="buttonConfig().cancel.label"
+    [icon]="buttonConfig().cancel.icon" [severity]="buttonConfig().cancel.severity" (click)="cancelAction.emit()"
+    variant="text" [raised]="true"></p-button>
 
   <!--para mostar ocultar los botones dependiendo del dispositivo no se pone las clases de quiere sm, md, lg, xl porque al 
         poner block los boones se descuadran-->
-  <p-button *ngIf="save()" label="Guardar" (click)="saveAction.emit()" class="hide-md-custom hide-lg-custom"
-    variant="text" [raised]="true" severity="secondary"></p-button>
+  <p-button *ngIf="save() && !buttonConfig().save.hide" label="Guardar" (click)="saveAction.emit()"
+    class="hide-md-custom hide-lg-custom" variant="text" [raised]="true" severity="secondary"></p-button>
 
-  <p-button *ngIf="saveNotHide()" label="Guardar y nuevo" (click)="saveNotHideAction.emit()" variant="text"
-    [raised]="true" severity="secondary" class="hide-sm-custom"></p-button>
+  <p-button *ngIf="saveNotHide() && !buttonConfig().save_no_hide.hide" [label]="buttonConfig().save_no_hide.label"
+    [icon]="buttonConfig().save_no_hide.icon" [severity]="buttonConfig().save_no_hide.severity"
+    (click)="saveNotHideAction.emit()" variant="text" [raised]="true" class="hide-sm-custom"></p-button>
 
-  <p-button *ngIf="save()" label="Guardar y cerrar" (click)="saveAction.emit()" variant="text" [raised]="true"
-    severity="secondary" class="hide-sm-custom"></p-button>
+  <p-button *ngIf="save() && !buttonConfig().save.hide" [label]="buttonConfig().save.label"
+    [icon]="buttonConfig().save.icon" [severity]="buttonConfig().save.severity" (click)="saveAction.emit()"
+    variant="text" [raised]="true" class="hide-sm-custom"></p-button>
 
 </div>
 <!--<p-button label="Guardar" (click)="saveAction.emit()" class="hide-single-button"  

@@ -1,8 +1,6 @@
 /* Botón flotante con la animación */
 .assistant-fab {
   position: fixed;
-  right: 20px;
-  bottom: 20px;
   width: 84px;
   height: 84px;
   border-radius: 50%;
@@ -10,8 +8,18 @@
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
   display: grid;
   place-items: center;
-  cursor: pointer;
+  cursor: grab;
   z-index: 1000;
+  transition: box-shadow 0.2s ease;
+  user-select: none;
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+}
+
+.assistant-fab:active {
+  cursor: grabbing;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.25);
 }
 
 .assistant-fab ng-lottie {
@@ -21,11 +29,17 @@
   /* para que el click sea en el contenedor */
 }
 
+.assistant-fab .assistant-image {
+  width: 64px;
+  height: 64px;
+  object-fit: contain;
+  pointer-events: none;
+  /* para que el click sea en el contenedor */
+}
+
 /* Panel de chat */
 .assistant-panel {
   position: fixed;
-  right: 20px;
-  bottom: 116px;
   width: 340px;
   max-height: 60vh;
   background: #fff;

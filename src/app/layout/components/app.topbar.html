@@ -81,31 +81,34 @@
       <li *ngIf="authS.loggedin">
         <a pStyleClass="@next" enterFromClass="hidden" enterActiveClass="animate-scalein" leaveToClass="hidden"
           leaveActiveClass="animate-fadeout" [hideOnOutsideClick]="true">
-          <p-overlay-badge severity="warn">
+
+          <p-overlay-badge value="1" severity="danger" class="inline-flex">
             <i class="pi pi-bell align-middle!"></i>
           </p-overlay-badge>
+
         </a>
         <div class="hidden">
           <ul class="list-none p-0 m-0">
-            <li class="px-4 py-1">
+            <!-- <li class="px-4 py-1">
               <span>You have <b>4</b> new notifications</span>
-            </li>
+            </li> -->
             <li class="p-4">
               <div class="flex items-center">
-                <img src="/images/avatar/avatar-1.png" />
+                <img src="/assets/icons/icon-48.webp" width="20" height="20" />
                 <div class="flex flex-col ml-4 flex-1">
                   <div class="flex items-center justify-between mb-1">
-                    <span class="font-bold">Jerome Bell</span>
-                    <small>42 mins ago</small>
+                    <span class="font-bold">Jukai</span>
+                    <small>Ahora</small>
                   </div>
-                  <span class="text-sm leading-normal">How to write content about your photographs?</span>
+                  <span class="text-sm leading-normal">Te damos la Bienvenida</span>
                 </div>
               </div>
             </li>
+
           </ul>
         </div>
       </li>
-      <li *ngIf="authS.loggedin">
+      <!-- <li *ngIf="authS.loggedin">
         <a pStyleClass="@next" enterFromClass="hidden" enterActiveClass="animate-scalein" leaveToClass="hidden"
           leaveActiveClass="animate-fadeout" [hideOnOutsideClick]="true">
           <i class="pi pi-table"></i>
@@ -118,7 +121,7 @@
             </div>
           </div>
         </div>
-      </li>
+      </li> -->
 
       <li *ngIf="authS.loggedin">
         <a (click)="onRightMenuButtonClick()">

@@ -50,7 +50,7 @@ export function playerFactory() { return import('lottie-web'); }
 
         <app-assistant-widget
         [welcomeTips]="['¿Necesitas ayuda?', 'Puedo guiarte en este módulo', 'Pregunta lo que quieras']"
-        animationPath="/assets/assistant/lottie_logo.json"
+        animationPath="/assets/assistant/logo_assistant.png"
         apiUrl="/api/assistant/chat"
       ></app-assistant-widget>
    
