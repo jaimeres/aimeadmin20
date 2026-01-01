@@ -1788,12 +1788,12 @@ export class CustomDrawFormComponent {
       const formGroup = this.formGroupSignal();
 
       if (formGroup) {
-        console.log('🔄 Reseteando campos específicos del formulario:', buttonConfig.fields_reset_form);
-
-        // Iterar sobre las propiedades del objeto fields_reset_form
-        Object.keys(buttonConfig.fields_reset_form).forEach((fieldName: string) => {
-          const fieldSettings = buttonConfig.fields_reset_form[fieldName];
-
+        console.log('🔄 Reseteando campos del formulario:', buttonConfig.fields_reset_form);
+        
+        buttonConfig.fields_reset_form.forEach((fieldConfig: any) => {
+          const fieldName = Object.keys(fieldConfig)[0];
+          const fieldSettings = fieldConfig[fieldName];
+          
           if (fieldName && formGroup.get(fieldName)) {
             const control = formGroup.get(fieldName);
 
