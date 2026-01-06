@@ -585,7 +585,7 @@ export class AuthService {
       const fieldConfig = fields?.[fieldName]?.cols;
       if (fieldConfig) {
         columnInfo = {
-          label: fieldConfig['label'] || fieldName,
+          label: fieldConfig['label'] /*|| fieldName*/,
           order: fieldConfig['order'] || claveHijo,
           hide: fieldConfig['hide'] !== undefined ? fieldConfig['hide'] : false,
           sortable: fieldConfig['sortable'] !== undefined ? fieldConfig['sortable'] : true,

@@ -831,7 +831,7 @@
               [options]="dropdownOptionsSignal()[entry.value.field]" [pAutoFocus]="entry.value.autofocus"
               [formControl]="$any(formGroupSignal()?.get(entry.value.field))"
               (onChangeAction)="onChangeDropdown($event, entry.value)" [appendTo]="'body'" [showClear]="true"
-              (onClear)="clearTreeSelect(entry.value.field)" class="height-input-custom"></p-treeSelect>
+              (onClear)="clearTreeSelect(entry.value.field)" class="height-input-custom" />
 
             <button *ngIf="entry.value.icon" type="button" pButton [icon]="entry.value.icon.icon"
               class="height-icon-custom"></button>

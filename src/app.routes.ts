@@ -9,7 +9,8 @@ export const appRoutes: Routes = [
     component: AppLayout,
     //canActivate: [appCanActivateGuard],
     children: [
-      { path: '', redirectTo: '/biometric-test', pathMatch: 'full' },
+      //{ path: '', redirectTo: '/biometric-test', pathMatch: 'full' },
+      { path: '', redirectTo: '/dashboards', pathMatch: 'full' },
       {
         path: 'dashboards',
         data: { breadcrumb: 'Indicadores' },
@@ -85,11 +86,11 @@ export const appRoutes: Routes = [
         canActivate: [appCanActivateGuardChild],
         loadChildren: () => import('./app/tasks/task.routes')
       },
-      {
+      /*{
         path: 'biometric-test',
         data: { breadcrumb: 'Test Biométrico' },
         loadComponent: () => import('./app/pages/biometric-test/biometric-test.component').then(c => c.BiometricTestComponent)
-      },
+      },*/
     ]
   },
   { path: 'auth', loadChildren: () => import('@/pages/auth/auth.routes') },

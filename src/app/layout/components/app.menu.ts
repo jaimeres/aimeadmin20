@@ -30,14 +30,14 @@ export class AppMenu {
       ]
     },
 
-    {
+    /*{
       items: [
         {
           label: 'huella',
           routerLink: ['biometric-test']
         }
       ]
-    },
+    },*/
 
     {
       label: 'Compras',
@@ -73,6 +73,7 @@ export class AppMenu {
             { label: 'Productos', routerLink: ['/catalogues/product'] },
             { label: 'Monedas', routerLink: ['/catalogues/currency'] },
             { label: 'Clasificadores', routerLink: ['/catalogues/classifier'] },
+            { label: 'Impuestos', routerLink: ['/catalogues/tax'] },
             {
               label: 'Empresas',
               items: [

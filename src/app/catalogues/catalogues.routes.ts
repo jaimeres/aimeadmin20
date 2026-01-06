@@ -16,6 +16,10 @@ export const CATALOGUES_ROUTES: Routes = [
   {
     path: 'company',
     loadComponent: () => import('./company/company.component').then(m => m.CompanyComponent)
+  },
+  {
+    path: 'tax',
+    loadComponent: () => import('./tax/tax.component').then(m => m.TaxComponent)
   }
   // Agrega más rutas para otros componentes standalone de catalogues si es necesario
 ];

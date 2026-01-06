@@ -241,7 +241,7 @@ export class AssistantWidgetComponent {
       this.setMood('talk');
       setTimeout(() => { if (!this.open) this.setMood('idle'); }, 3000);
     } catch (e: any) {
-      this.messages.push({ role: 'assistant', content: 'Error al consultar el servidor. Intenta de nuevo.', ts: new Date().toISOString(), error: true });
+      this.messages.push({ role: 'assistant', content: 'Su empresa deshabilito esta función.', ts: new Date().toISOString(), error: true });
       this.setMood('notify');
       setTimeout(() => this.setMood(this.open ? 'talk' : 'idle'), 2500);
     } finally {
