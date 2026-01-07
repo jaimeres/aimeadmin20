@@ -5,11 +5,19 @@
     "ng": "ng",
     "start": "ng serve",
     "build": "ng build",
+    "build:prod": "ng build --configuration=production",
     "watch": "ng build --watch --configuration development",
     "format": "prettier --write \"**/*.{js,mjs,ts,mts,d.ts,html}\" --cache",
     "test": "ng test",
-    "cap:sync": "npx cap sync && node scripts/register-plugin.js",
-    "cap:build": "npm run build && npm run cap:sync"
+    "cap:sync": "npx cap sync android && node scripts/register-plugin.js",
+    "cap:build": "npm run build:prod && npm run cap:sync",
+    "android:debug": "cd android && ./gradlew assembleDebug",
+    "android:release": "cd android && ./gradlew assembleRelease",
+    "android:clean": "cd android && ./gradlew clean",
+    "build:all": "./build-all.sh",
+    "build:debug": "./build-debug.sh",
+    "install:apk": "./install-apk.sh",
+    "logs": "./show-logs.sh"
   },
   "private": true,
   "dependencies": {
