@@ -209,9 +209,9 @@ p-dialog .p-button-icon-only.p-button-rounded {
 /* Estilos para dispositivos móviles */
 @media only screen and (max-width: 767px) {
   .table-fit-Custom {
-    height: calc(100vh - 100px);
+    height: calc(100vh - 120px);
     /* Fallback para navegadores antiguos */
-    height: calc(100dvh - 100px);
+    height: calc(100dvh - 120px);
     /* Dynamic viewport height para navegadores modernos */
     /* Establece la altura del contenedor principal al 100% del viewport */
   }
@@ -240,9 +240,9 @@ p-dialog .p-button-icon-only.p-button-rounded {
 /* Estilos para tabletas */
 @media only screen and (min-width: 768px) and (max-width: 1023px) {
   .table-fit-Custom {
-    height: calc(100vh - 98px);
+    height: calc(100vh - 115px);
     /* Fallback para navegadores antiguos */
-    height: calc(100dvh - 98px);
+    height: calc(100dvh - 115px);
     /* Dynamic viewport height para navegadores modernos */
     /* Establece la altura del contenedor principal al 100% del viewport */
 
@@ -259,9 +259,9 @@ p-dialog .p-button-icon-only.p-button-rounded {
 /* Estilos para pantallas de escritorio */
 @media only screen and (min-width: 1024px) {
   .table-fit-Custom {
-    height: calc(100vh - 98px) !important;
+    height: calc(100vh - 110px) !important;
     /* Fallback para navegadores antiguos */
-    height: calc(100dvh - 98px) !important;
+    height: calc(100dvh - 110px) !important;
     /* Dynamic viewport height para navegadores modernos */
     /* Establece la altura del contenedor principal al 100% del viewport */
   }
