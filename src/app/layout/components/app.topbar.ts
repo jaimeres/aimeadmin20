@@ -30,11 +30,18 @@ import { AvatarModule } from 'primeng/avatar';
       outline-width: 0px;
     }
 
-    /*@media screen and (max-width: 991px) {
+    /* Topbar más grande en móviles */
+    @media screen and (max-width: 991px) {
       :host.layout-topbar {
-        height: 7rem;
+        height: 5.5rem !important;
       }
-    }*/
+
+      :host.layout-topbar .layout-topbar-start {
+        height: 5.5rem !important;
+        align-items: flex-end !important;
+        padding-bottom: 0.75rem !important;
+      }
+    }
   `
 
 })

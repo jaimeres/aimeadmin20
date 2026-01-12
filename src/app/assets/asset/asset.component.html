@@ -23,7 +23,8 @@
 <app-custom-actions-selection [visible]="actionsSelectionDialogVisible" (visibleChange)="onVisibleChange($event)" />
 
 <p-dialog [(visible)]="formDialogVisible[$any(typeDefault)]" (onHide)="onHide($any(typeDefault))"
-  (onShow)="onShow($any(typeDefault))" [styleClass]="styleClassDialog()" modal="true">
+  (onShow)="onShow($any(typeDefault))" [styleClass]="styleClassDialog()" modal="true" [resizable]="true"
+  [draggable]="true">
 
   <ng-template #header>
     <div class="p-dialog-title">
@@ -105,7 +106,7 @@
 </p-dialog>
 
 <p-dialog [(visible)]="formDialogVisible[$any('asset-type')]" (onHide)="onHide($any(formDialogVisible['asset-type']))"
-  (onShow)="onShow('asset-type')" [styleClass]="styleClassDialog()" modal="true">
+  (onShow)="onShow('asset-type')" [styleClass]="styleClassDialog()" modal="true" [resizable]="true" [draggable]="true">
 
   <ng-template #header>
     <div class="p-dialog-title">
@@ -155,7 +156,8 @@
 </p-dialog>
 
 <p-dialog [(visible)]="formDialogVisible[$any('capacity-type')]" (onHide)="onHide($any('capacity-type'))"
-  (onShow)="onShow($any('capacity-type'))" [styleClass]="styleClassDialog()" modal="true">
+  (onShow)="onShow($any('capacity-type'))" [styleClass]="styleClassDialog()" modal="true" [resizable]="true"
+  [draggable]="true">
 
   <ng-template #header>
     <div class="p-dialog-title">

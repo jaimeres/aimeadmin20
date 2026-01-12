@@ -16,6 +16,9 @@ import { LayoutService } from '@/layout/service/layout.service';
       </a>
       <button class="layout-sidebar-anchor" type="button" (click)="anchor()"></button>
     </div>
+    <div style="padding: 0.5rem 1rem; text-align: center; font-size: 0.75rem; color: #64748b; font-weight: 500;">
+      Beta 1.0.0
+    </div>
     <div app-menu-profile #menuProfileStart *ngIf="menuProfilePosition() === 'start'"></div>
     <div #menuContainer class="layout-menu-container">
       <div app-menu></div>

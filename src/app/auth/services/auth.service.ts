@@ -10,6 +10,7 @@ import { MessageService } from '../../components/services/message.service';
 import { Router } from '@angular/router';
 import { GeneralService } from '../../utils/services/general.service';
 import { BiometricAuthService } from './biometric-auth.service';
+import { Preferences } from '@capacitor/preferences';
 
 @Injectable({
   providedIn: 'root'
@@ -31,9 +32,14 @@ export class AuthService {
   };
 
   constructor(private http: HttpClient, private cookieS: CookieService, private messageS: MessageService, private router: Router, private generalS: GeneralService, public biometricAuthS: BiometricAuthService) {
-    // Solo se agrega una vez al inicializar el servicio
+    // Cargar tokens al inicializar (solo importante para móviles)
+    this.loadTokensFromStorage();
+
+    // Evento unload: guardar tokens antes de cerrar/recargar
+    // WEB: guarda en cookie temporal por 30s para reload
+    // MÓVIL: guarda en Preferences persistente
     window.addEventListener('unload', () => {
-      this.refreshCookie();
+      this.saveTokensToStorage();
     });
 
     this.messageS.currentLogin.subscribe(
@@ -78,7 +84,8 @@ export class AuthService {
 
     this.loggedin = false;
     return this.http.post(`${this._base_url}/auth/logout/`, data).pipe(
-      tap((resp: any) => {
+      tap(async (resp: any) => {
+        await this.clearTokensFromStorage();
         this.cookieS.delete('refresh');
         this.cookieS.delete('user');
         this.access = '';
@@ -87,7 +94,8 @@ export class AuthService {
         this.messageS.changeMessage('Sesión cerrada correctamente', null, {}, 'success');
         this.redirectMP();
       }),
-      catchError((err) => {
+      catchError(async (err) => {
+        await this.clearTokensFromStorage();
         this.cookieS.delete('refresh');
         this.cookieS.delete('user');
         this.access = '';
@@ -137,10 +145,11 @@ export class AuthService {
       }
 
       return this.http.post(`${this._base_url}/auth/refresh/`, data).pipe(
-        tap((resp: any) => {
+        tap(async (resp: any) => {
           this.access = resp.data.access;
           this.refresh = resp.data.refresh;
           this.loggedin = true;
+          await this.saveTokensToStorage(); // Guardar tokens actualizados
         }),
         switchMap((resp: any) => {
           // Si no existe config, consultar settings/me
@@ -224,10 +233,11 @@ export class AuthService {
       }
 
       return this.http.post(`${this._base_url}/auth/refresh/`, data).pipe(
-        tap((resp: any) => {
+        tap(async (resp: any) => {
           this.access = resp.data.access;
           this.refresh = resp.data.refresh;
           this.loggedin = true;
+          await this.saveTokensToStorage(); // Guardar tokens actualizados
         }),
         map(resp => {
           return resp.data.access
@@ -286,11 +296,12 @@ export class AuthService {
       }
 
       return this.http.post(` ${this._base_url}/auth/login/ `, data).pipe(
-        tap((resp: any) => {
+        tap(async (resp: any) => {
           this.access = resp.data.access; // dja
           this.refresh = resp.data.refresh; // dja
           this.loggedin = true;
           this.user = resp.data.user;
+          await this.saveTokensToStorage(); // Guardar inmediatamente después del login
         }),
         switchMap((resp: any) => {
           // Hacer llamada a configuración después del login exitoso
@@ -360,8 +371,6 @@ export class AuthService {
 
     const user = this.cookieS.get('user');
     if (!user) {
-      console.log('............11', user);
-
       return {} as LoggedUser;
     }
 
@@ -388,8 +397,8 @@ export class AuthService {
    * Obtiene el ultimo token para refrescar las credenciales de logueo
    */
   get refresh(): string {
-    return this._tokenRefresh || this.cookieS.get('refresh');
-    // el token el la cookie solo estará 30 segundos o se elimina cuando se recarga el componente main y cuando se solicite el token se actualiza _tokenRefresh
+    return this._tokenRefresh;
+    // El token se carga desde Preferences/Cookie al inicializar el servicio
   }
 
   /**
@@ -413,15 +422,6 @@ export class AuthService {
    */
   private set access(access: string) {
     this._tokenAccess = access;
-  }
-
-  /**
-   * Establece el token de refresh temporalmente en una cookie
-   */
-  refreshCookie() {
-    // Es llamado antes de que se recargie la página, lo guarda en un cokkie un cuando carga el componente main lo elimina
-    this._cookieOptions.expires = new Date(new Date().getTime() + 30000)
-    this.cookieS.set('refresh', this.refresh, this._cookieOptions);
   }
 
   /**
@@ -814,6 +814,79 @@ export class AuthService {
     }
 
     return customField;
+  }
+
+  /**
+   * Guarda los tokens en storage persistente
+   * WEB: Cookie temporal de 30s (solo para reload, se elimina en ngOnInit del layout)
+   * MÓVIL: Preferences persistente (sobrevive cierre de app)
+   */
+  private async saveTokensToStorage() {
+    try {
+      if (this.generalS.isMobile()) {
+        // MÓVIL: Guardar en Preferences (persistente entre cierres de app)
+        await Preferences.set({ key: 'refresh_token', value: this._tokenRefresh });
+        await Preferences.set({ key: 'access_token', value: this._tokenAccess });
+        if (this.user && Object.keys(this.user).length > 0) {
+          await Preferences.set({ key: 'user_data', value: JSON.stringify(this.user) });
+        }
+      } else {
+        // WEB: Cookie temporal de 30s (diseño original por seguridad)
+        this._cookieOptions.expires = new Date(new Date().getTime() + 30000); // 30 segundos
+        this.cookieS.set('refresh', this._tokenRefresh, this._cookieOptions);
+      }
+    } catch (error) {
+      console.warn('Error saving tokens to storage:', error);
+    }
+  }
+
+  /**
+   * Carga los tokens desde storage al inicializar
+   * WEB: Desde cookie temporal (si existe por reload de página)
+   * MÓVIL: Desde Preferences persistente
+   */
+  private async loadTokensFromStorage() {
+    try {
+      if (this.generalS.isMobile()) {
+        // MÓVIL: Cargar desde Preferences
+        const refresh = await Preferences.get({ key: 'refresh_token' });
+        const access = await Preferences.get({ key: 'access_token' });
+        const userData = await Preferences.get({ key: 'user_data' });
+
+        if (refresh.value) this._tokenRefresh = refresh.value;
+        if (access.value) this._tokenAccess = access.value;
+        if (userData.value) {
+          try {
+            this.user = JSON.parse(userData.value);
+          } catch (e) {
+            console.warn('Error parsing user data:', e);
+          }
+        }
+      } else {
+        // WEB: Cargar desde cookie temporal (solo existe si hubo reload)
+        const refreshCookie = this.cookieS.get('refresh');
+        if (refreshCookie) {
+          this._tokenRefresh = refreshCookie;
+        }
+      }
+    } catch (error) {
+      console.warn('Error loading tokens from storage:', error);
+    }
+  }
+
+  /**
+   * Limpia los tokens del storage
+   */
+  private async clearTokensFromStorage() {
+    try {
+      if (this.generalS.isMobile()) {
+        await Preferences.remove({ key: 'refresh_token' });
+        await Preferences.remove({ key: 'access_token' });
+        await Preferences.remove({ key: 'user_data' });
+      }
+    } catch (error) {
+      console.warn('Error clearing tokens from storage:', error);
+    }
   }
 
 

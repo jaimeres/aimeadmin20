@@ -92,6 +92,17 @@ export class AppMenu {
       ]
     },
     {
+      label: 'Almacenes',
+      items: [
+        {
+          label: 'Almacenes',
+          items: [
+            { label: 'Movimientos', routerLink: ['/warehouses/warehouse-movement'] },
+          ]
+        }
+      ]
+    },
+    {
       label: 'Tareas y flujos',
       items: [
         {

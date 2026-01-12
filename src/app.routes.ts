@@ -79,6 +79,12 @@ export const appRoutes: Routes = [
         canActivate: [appCanActivateGuardChild],
         loadChildren: () => import('./app/catalogues/catalogues.routes').then(m => m.CATALOGUES_ROUTES)
       },
+      {
+        path: 'warehouses',
+        data: { breadcrumb: 'Almacenes' },
+        canActivate: [appCanActivateGuardChild],
+        loadChildren: () => import('./app/warehouses/warehouses.routes').then(m => m.WAREHOUSES_ROUTES)
+      },
 
       {
         path: 'tasks',

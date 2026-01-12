@@ -55,76 +55,62 @@ p-dialog .p-button-icon-only.p-button-rounded {
 .width-300px-custom {
   width: 300px;
   //min-height: auto;
-  overflow: auto;
 }
 
 .width-400px-custom {
   width: 400px;
   //min-height: auto;
-  overflow: auto;
 }
 
 .width-500px-custom {
   width: 500px;
   //height: 500px;
   min-height: 30%;
-  overflow: auto;
 }
 
 .width-550px-custom {
   width: 550px;
   //min-height: auto;
-  overflow: auto;
 }
 
 .width-600px-custom {
   width: 600px;
   //min-height: auto;
-  overflow: auto;
 }
 
 .width-650px-custom {
   width: 650px;
   //min-height: 65%;
-  overflow: auto;
-  border: 3px solid green;
 }
 
 .width-700px-custom {
   width: 700px;
-  overflow: auto;
 }
 
 .width-750px-custom {
   width: 750px;
-  overflow: auto;
 }
 
 .width-800px-custom {
   width: 800px;
-  overflow: auto;
 }
 
 .width-850px-custom {
   width: 850px;
-  overflow: auto;
 }
 
 .width-900px-custom {
   width: 900px;
-  overflow: auto;
 }
 
 .width-1200px-custom {
   width: 1200px;
   //min-height: 90%;
-  overflow: auto;
 }
 
 .width-1000px-custom {
   width: 1000px;
   min-height: 50%;
-  overflow: auto;
 }
 
 .min-height-550px-custom {
@@ -210,9 +196,7 @@ p-dialog .p-button-icon-only.p-button-rounded {
 @media only screen and (max-width: 767px) {
   .table-fit-Custom {
     height: calc(100vh - 120px);
-    /* Fallback para navegadores antiguos */
-    height: calc(100dvh - 120px);
-    /* Dynamic viewport height para navegadores modernos */
+    /* Ajustado para apps móviles - dvh no es compatible con todos los dispositivos */
     /* Establece la altura del contenedor principal al 100% del viewport */
   }
 
@@ -240,10 +224,8 @@ p-dialog .p-button-icon-only.p-button-rounded {
 /* Estilos para tabletas */
 @media only screen and (min-width: 768px) and (max-width: 1023px) {
   .table-fit-Custom {
-    height: calc(100vh - 115px);
-    /* Fallback para navegadores antiguos */
-    height: calc(100dvh - 115px);
-    /* Dynamic viewport height para navegadores modernos */
+    height: calc(100vh - 130px);
+    /* Ajustado para apps móviles - dvh no es compatible con todos los dispositivos */
     /* Establece la altura del contenedor principal al 100% del viewport */
 
   }
@@ -259,10 +241,7 @@ p-dialog .p-button-icon-only.p-button-rounded {
 /* Estilos para pantallas de escritorio */
 @media only screen and (min-width: 1024px) {
   .table-fit-Custom {
-    height: calc(100vh - 110px) !important;
-    /* Fallback para navegadores antiguos */
-    height: calc(100dvh - 110px) !important;
-    /* Dynamic viewport height para navegadores modernos */
+    height: calc(100vh - 100px) !important;
     /* Establece la altura del contenedor principal al 100% del viewport */
   }
 
@@ -304,12 +283,21 @@ tr.selected:not(:hover) {
   color: #333333;
 }
 
+// Permitir que el diálogo sea redimensionable con max-height
+.p-dialog {
+  max-height: 90vh !important;
+  display: flex !important;
+  flex-direction: column !important;
+}
 
 //paddin en el cuerpo de dialogo, el top en 1 para que quepa
 .p-dialog .p-dialog-content {
   background: #ffffff;
   color: #495057;
   padding: 5px;
+  flex: 1 1 auto !important;
+  overflow-y: auto !important;
+  overflow-x: hidden !important;
 }
 
 //footer del dialogo
@@ -335,8 +323,9 @@ sm: 576px
 // Fix simple para mantener los botones del footer en su lugar - PrimeNG 20
 .p-dialog .p-dialog-footer {
   margin-top: auto !important;
-  position: sticky !important;
-  bottom: 0 !important;
+  // Eliminamos position sticky para permitir el redimensionamiento correcto
+  // position: sticky !important;
+  // bottom: 0 !important;
   //z-index: 1000 !important;
 }
 
@@ -425,6 +414,14 @@ sm: 576px
 // .p-dialog-mask {
 //   z-index: 9999;
 // }
+
+// Asegurar que los paneles de dropdown aparezcan sobre los diálogos
+.p-dropdown-panel,
+.p-multiselect-panel,
+.p-datepicker-panel,
+.p-autocomplete-panel {
+  z-index: 10000 !important;
+}
 
 /*recorta el texto de las etiquetas flotantes*/
 /*.p-float-label label {
@@ -621,3 +618,30 @@ sm: 576px
 .p-tabview .p-tabview-panels {
   padding: 0;
 }*/
+
+/* Ajustes para topbar grande en móviles */
+@media screen and (max-width: 991px) {
+  .layout-sidebar {
+    top: 5.5rem !important;
+    height: calc(100vh - 5.5rem) !important;
+  }
+
+  .layout-content-wrapper {
+    padding-top: 5.5rem !important;
+  }
+
+  /* Checkboxes más grandes en móviles */
+  .p-checkbox {
+    width: 2.25rem !important;
+    height: 2.25rem !important;
+  }
+
+  .p-checkbox .p-checkbox-box {
+    width: 2.25rem !important;
+    height: 2.25rem !important;
+  }
+
+  .p-checkbox .p-checkbox-icon {
+    font-size: 1.5rem !important;
+  }
+}

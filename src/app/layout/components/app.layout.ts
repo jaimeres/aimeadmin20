@@ -180,6 +180,8 @@ export class AppLayout implements OnDestroy {
 
   ngOnInit() {
     this.messageS.showBlocked(false);
+    // En WEB: eliminar cookie temporal después de cargar (seguridad)
+    // En MÓVIL: no afecta porque usa Preferences
     this.cookieS.delete('refresh');
   }
 

@@ -974,10 +974,12 @@
 
       </div>
 
-      <p-splitbutton *ngSwitchCase="'document'" styleClass="height-input-custom" (onClick)="previewCamera()"
-        label="{{ entry.value?.label }}" />
-
-      <!-- label="{{ entry.value?.label && entry.value?.label.trim() !== '' ? entry.value?.label : customFieldSignal()[entry.value.field] }}" -->
+      <div *ngSwitchCase="'document'" class="w-full">
+        <p-splitbutton styleClass="height-input-custom w-full" class="w-full" (onClick)="previewCamera()"
+          [label]="entry.value?.label" [pAutoFocus]="entry.value?.autofocus || false"
+          [disabled]="entry.value?.disabled || false">
+        </p-splitbutton>
+      </div>
 
       <!-- BUTTON COMPONENT FREE -->
 
