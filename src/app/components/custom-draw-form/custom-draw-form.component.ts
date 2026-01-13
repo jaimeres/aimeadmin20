@@ -3,6 +3,8 @@ import { FormControl, FormGroup, FormsModule, ReactiveFormsModule, FormArray, Va
 import { Component, ElementRef, EventEmitter, inject, Input, Output, signal, computed, SimpleChanges, ViewChild } from '@angular/core';
 // ************************ADAPTADO PARA CAPACITOR*********************
 import { Camera, CameraResultType, CameraSource } from '@capacitor/camera';
+// Scanner de códigos de barras para Capacitor
+import { CapacitorBarcodeScanner, CapacitorBarcodeScannerTypeHint } from '@capacitor/barcode-scanner';
 import { AutoCompleteModule } from 'primeng/autocomplete';
 import { ButtonModule } from 'primeng/button';
 import { CardModule } from 'primeng/card';
@@ -101,6 +103,8 @@ export class CustomDrawFormComponent {
   @Output() onReloadIconDropdownAction = new EventEmitter<any>();
   @Output() onClosableIconDropdownAction = new EventEmitter<any>();
   @Output() onChangeToggleAction = new EventEmitter<any>();
+  @Output() onNewIconAction = new EventEmitter<any>();
+  @Output() onScanCodeAction = new EventEmitter<any>();
 
   /*@Output() onKeydownEnterTextAction = new EventEmitter<any>();
   @Output() onKeydownTabTextAction = new EventEmitter<any>();
@@ -1861,6 +1865,86 @@ export class CustomDrawFormComponent {
     // EMITIR EVENTO AL COMPONENTE PADRE
     // ============================================
     this.onButtonClickAction.emit(buttonInfo);
+  }
+
+  /**
+   * Escanea códigos de barras/QR usando la cámara del dispositivo
+   * Soporta múltiples formatos: QR, EAN, UPC, Code128, Data Matrix, etc.
+   * @param fieldConfig Configuración del campo que contiene info del scanner
+   */
+  async onScanCode(fieldConfig: any) {
+    try {
+      console.log('📷 Iniciando scanner de códigos...', fieldConfig);
+
+      // Configurar formato de código a escanear
+      // Si no se especifica formato, usa ALL (todos los formatos)
+      const hint: CapacitorBarcodeScannerTypeHint = fieldConfig.scanner?.hint || 17; // 17 = ALL
+
+      console.log('📋 Formato configurado:', hint);
+
+      // Iniciar el scanner con opciones
+      const result = await CapacitorBarcodeScanner.scanBarcode({
+        hint: hint,
+        scanInstructions: fieldConfig.scanner?.instructions || 'Apunta la cámara al código',
+        scanButton: false
+      });
+
+      if (result.ScanResult) {
+        console.log('✅ Código escaneado:', result.ScanResult);
+        console.log('📋 Formato detectado:', result.format);
+
+        // Asignar el valor al campo del formulario
+        const formGroup = this.formGroupSignal();
+        if (formGroup) {
+          const control = formGroup.get(fieldConfig.field);
+          if (control) {
+            control.setValue(result.ScanResult);
+            control.markAsTouched();
+            control.markAsDirty();
+            console.log(`✅ Valor "${result.ScanResult}" asignado al campo "${fieldConfig.field}"`);
+          }
+        }
+
+        // Emitir evento con el resultado
+        this.onScanCodeAction.emit({
+          success: true,
+          content: result.ScanResult,
+          format: result.format,
+          field: fieldConfig.field,
+          fieldConfig: fieldConfig
+        });
+
+      } else {
+        console.log('❌ Scanner cancelado o sin contenido');
+        this.onScanCodeAction.emit({
+          success: false,
+          error: 'Scanner cancelado',
+          field: fieldConfig.field
+        });
+      }
+
+    } catch (error) {
+      console.error('❌ Error al escanear código:', error);
+
+      // Emitir evento de error
+      this.onScanCodeAction.emit({
+        success: false,
+        error: error,
+        field: fieldConfig.field
+      });
+    }
+  }
+
+  /**
+   * Detiene el scanner de códigos si está activo
+   */
+  stopScanner() {
+    try {
+      document.body.classList.remove('scanner-active');
+      console.log('🛑 Scanner limpiado');
+    } catch (error) {
+      console.error('Error al limpiar scanner:', error);
+    }
   }
 
 

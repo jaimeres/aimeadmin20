@@ -260,11 +260,14 @@
 
                 <button *ngIf="card.value.icon" type="button" pButton [icon]="card.value.icon.icon"
                   class="height-icon-custom"></button>
+
                 <button *ngIf="card.value?.icon2" type="button" pButton [icon]="card.value.icon2.icon"
                   class="height-icon-custom"></button>
+
                 <label [for]="card.value.field">
                   {{card.value?.label }}
                 </label>
+
               </p-floatlabel>
               <input *ngIf="card.value.hidden_field" type="hidden"
                 [formControl]="$any(formGroupSignal()?.get(card.value.hidden_field.field))" />
@@ -696,14 +699,24 @@
       style="padding-top: 5px; padding-bottom: 5px;">
 
       <div *ngSwitchCase="'input-text'">
-        <p-floatlabel variant="on">
-          <input type="text" pInputText [formControl]="$any(formGroupSignal()?.get(entry.value.field))"
-            class="height-input-custom" style="padding-top: 0.5rem !important;"
-            (keydown.enter)="onKeydownEnter($event, entry.value)" (keydown.tab)="onKeydownTab($event, entry.value)" />
-          <label [for]="entry.value.field" [pAutoFocus]="entry.value.autofocus">
-            {{entry.value.label}}
-          </label>
-        </p-floatlabel>
+        <div class="p-inputgroup">
+          <p-floatlabel variant="on">
+            <input type="text" pInputText [formControl]="$any(formGroupSignal()?.get(entry.value.field))"
+              class="height-input-custom" style="padding-top: 0.5rem !important;"
+              (keydown.enter)="onKeydownEnter($event, entry.value)" (keydown.tab)="onKeydownTab($event, entry.value)" />
+            <label [for]="entry.value.field" [pAutoFocus]="entry.value.autofocus">
+              {{entry.value.label}}
+            </label>
+          </p-floatlabel>
+
+          <!-- Botón scanner -->
+          <!-- esta acotado como prueba solo aqui hay que ponerlo en todos los componentes -->
+          <button *ngIf="entry.value.scanner?.active" type="button" pButton style="width: 40px !important;"
+            [icon]="entry.value.scanner.icon || 'pi pi-qrcode'" class="height-icon-custom"
+            [pTooltip]="entry.value.scanner.tooltip || 'Escanear código'" (click)="onScanCode(entry.value)">
+          </button>
+
+        </div>
       </div>
 
       <div *ngSwitchCase="'toggle-button'">
@@ -897,6 +910,14 @@
             <label [for]="entry.value.field">
               {{entry.value?.label}}
             </label>
+
+            <button *ngIf="entry.value.scanner?.active" type="button" pButton style="width: 40px !important;"
+              [icon]="entry.value.scanner.icon || 'pi pi-qrcode'" class="height-icon-custom"
+              [pTooltip]="entry.value.scanner.tooltip || 'Escanear código'" (click)="onScanCode(entry.value)">
+            </button>
+
+
+
           </p-floatlabel>
         </p-inputgroup>
       </div>

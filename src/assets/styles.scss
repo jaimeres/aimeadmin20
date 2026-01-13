@@ -645,3 +645,25 @@ sm: 576px
     font-size: 1.5rem !important;
   }
 }
+/* Scanner de códigos de barras - Asegurar que aparezca sobre los dialogs */
+/* El plugin @capacitor/barcode-scanner usa elementos nativos pero puede tener overlays web */
+.barcode-scanner-modal,
+.barcode-scanner-ui,
+[class*="barcode-scanner"],
+[class*="BarcodeScanner"],
+.html5-qrcode-element {
+  z-index: 99999 !important;
+  position: fixed !important;
+}
+
+/* Overlay del scanner sobre todo */
+body.scanner-active::after {
+  content: "";
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 99998 !important;
+  pointer-events: none;
+}

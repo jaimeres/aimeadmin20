@@ -37,10 +37,9 @@ import { SkeletonModule } from 'primeng/skeleton';
             <div class="text-muted-color mb-12 px-12"></div>
 
             <div class="w-full flex flex-col gap-4 px-4" *ngIf="!blockedDocument">
-            v1
               <p-icon-field>
                 <p-inputicon class="pi pi-envelope" />
-                <input pInputText class="w-full" placeholder="Usuario" formControlName="username" />
+                <input pInputText type="email" class="w-full" placeholder="Usuario" formControlName="username" />
               </p-icon-field>
 
               <p-icon-field>

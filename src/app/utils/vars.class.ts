@@ -162,7 +162,7 @@ export class Vars {
   /**
    * filtro para la consulta al servidor
    */
-  protected filter = 'filter[is_active]=true';
+  protected filter = ''//'filter[is_active]=true';
 
   /**
    * numero de registros que retornará la consula

@@ -69,7 +69,7 @@ export class CRUDService {
     "rack": {
       "app": "companies/rack",
       "type": "rack",
-      "name": "Racks",
+      "name": "Anaqueles",
       "icon": "pi pi-th-large"
     },
     "section": {
@@ -78,12 +78,19 @@ export class CRUDService {
       "name": "Secciones",
       "icon": "pi pi-grid"
     },
+    "slot": {
+      "app": "companies/slot",
+      "type": "slot",
+      "name": "Ubicaciones",
+      "icon": "pi pi-boxes"
+    },
     "supplier": {
       "app": "suppliers/supplier",
       "type": "supplier",
       "name": "Proveedores",
       "icon": "pi pi-truck"
     },
+
     "product": {
       "app": "products/product",
       "type": "product",
