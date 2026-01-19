@@ -10,4 +10,5 @@ export interface LoggedUser {
   is_voidable?: boolean;
   is_active?: boolean;
   image?: string;
+  erp?: any;
 }

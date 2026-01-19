@@ -2383,12 +2383,8 @@ export class CRUD extends Vars /*implements OnInit*/ {
     // asigno el id de la relación al campo correspondiente, por ejemplo, si la relación es con user,
     //el campo se llama user ?????
 
-    console.log('*-*-*-*-* 1', pos, this.crudS.relationships, this.relationships[pos]);
-
 
     for (let element of this.crudS.relationships) {
-      console.log('*-*-*-*-* 2', element);
-
       element.id = this.currentForm(pos).value[element.field];
     }
   }
@@ -2481,9 +2477,13 @@ export class CRUD extends Vars /*implements OnInit*/ {
       this.crudS.edit({ formData, id, include /*, files*/ }).subscribe({
         next: (resp: any) => {
           const msg = this.singular[safePos] || this.singular[0];
+
+          console.log(`${msg.charAt(0).toUpperCase()}${msg.slice(1)} 
+                    ${formData.name} modificado/a.`);
+
+
           this.messageS.changeMessage(
-            `${msg.charAt(0).toUpperCase()}${msg.slice(1)} 
-                    ${formData.name} modificado/a.`,
+            `${msg.charAt(0).toUpperCase()}${msg.slice(1)} ${formData.name} modificado/a.`,
             null,
             {},
             'success',

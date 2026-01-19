@@ -4,85 +4,75 @@
     <img src="/images/logoslim.png" alt="Logo" class="layout-topbar-logo-slim" style="height: 45px; width: 45px;" />
   </a>
 
-  <a #menuButton class="layout-menu-button" (click)="onMenuButtonClick()" style="right: 0px;">
+  <a #menuButton *ngIf="authS.loggedin()" class="layout-menu-button" (click)="onMenuButtonClick()" style="right: 0px;">
     <i class="pi pi-chevron-right"></i>
   </a>
 
-  <li *ngIf="authS.loggedin" class="layout-topbar-user app-config-mobile-button">
-    <button class="rounded-full overflow-hidden w-10 h-10 flex items-center justify-center"
-      (click)="userMenuVisible = !userMenuVisible" (blur)="hideMenuOnBlur()" tabindex="0">
-      <img *ngIf="authS.user?.image" [src]="authS.user.image" alt="avatar" class="w-full h-full object-cover" />
-      <i *ngIf="!authS.user?.image" class="pi pi-user" style="font-size: 1.5rem;"></i>
-    </button>
-    <ul class="absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg py-2 z-50" *ngIf="userMenuVisible">
+  <!-- Botón 3 puntos para móvil -->
+  <a #mobileMenuButton *ngIf="authS.loggedin()" class="layout-topbar-mobile-button mobile-three-dots"
+    pStyleClass="@next" enterFromClass="hidden" enterActiveClass="animate-scalein" leaveToClass="hidden"
+    leaveActiveClass="animate-fadeout" [hideOnOutsideClick]="true">
+    <!-- <i class="pi pi-ellipsis-v"></i> -->
+    <img *ngIf="authS.user()?.image" [src]="authS.user()?.image" alt="avatar" class="w-8 h-8" />
+    <i *ngIf="!authS.user()?.image" class="pi pi-user" style="font-size: 1.5rem;" pTooltip="Configuración"
+      tooltipPosition="top"></i>
+  </a>
+
+  <!-- Panel móvil de 3 puntos -->
+  <div class="mobile-menu-panel hidden" *ngIf="authS.loggedin()">
+    <ul>
+      <!-- <a (click)="onRightMenuButtonClick()"> este panel lo utilizaré para la configuracion -->
+      <!-- <li>
+        <a routerLink="/ecommerce/shopping-cart">
+          <i class="pi pi-cart-arrow-down"></i>
+          <span>Carrito</span>
+        </a>
+      </li> -->
       <li>
-        <a class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 cursor-pointer flex items-center">
-          <i class="pi pi-cog mr-2"></i> Configuración
+        <a>
+          <i class="pi pi-cog"></i>
+          <span>Configuración</span>
         </a>
       </li>
-      <li *ngIf="authS.loggedin" (click)="toggleConfigSidebar()">
-        <a class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 cursor-pointer flex items-center">
-          <i class="pi pi-palette mr-2"></i>
+      <li>
+        <a (click)="toggleConfigSidebar()">
+          <i class="pi pi-palette"></i>
           <span>Apariencia</span>
         </a>
       </li>
       <li>
-        <a (click)="logout()"
-          class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 cursor-pointer flex items-center">
-          <i class="pi pi-power-off mr-2"></i> Salir
+        <a (click)="logout()">
+          <i class="pi pi-power-off"></i>
+          <span>Salir</span>
         </a>
       </li>
     </ul>
-  </li>
-
-  <li *ngIf="!authS.loggedin" class="app-config-mobile-button">
-    <a class="cursor-pointer px-2 py-2 text-white font-semibold hover:underline transition-all duration-150 whitespace-nowrap bg-transparent focus:bg-transparent active:bg-transparent"
-      style="background: none !important; box-shadow: none !important; white-space: nowrap;"
-      (click)="authS.redirectLogin()">
-      Iniciar sesión
-    </a>
-  </li>
-
-  <li class="app-config-mobile-button pt-2">
-    <a (click)="onRightMenuButtonClick()">
-      <i class="pi pi-cart-arrow-down" style="font-size: 2rem;"></i>
-    </a>
-  </li>
-
-  <a #mobileMenuButton *ngIf="authS.loggedin" class="layout-topbar-mobile-button" (click)="onTopbarMenuToggle()">
-    <i class="pi pi-ellipsis-v"></i>
-  </a>
+  </div>
 </div>
 
-
+<!-- Buscador de productos centrado en topbar (posición absoluta) -->
+<div class="product-search-container" *ngIf="isProductList()">
+  <input pInputText class="product-search-input" type="text" placeholder="Buscar productos" />
+</div>
 
 <div class="layout-topbar-end">
-  <div class="w-full" style="padding-right: 15px;" *ngIf="isProductList()">
-    <input pInputText class="w-full p-inputtext-sm" type="text" placeholder="Buscar productos" />
-  </div>
-
   <div class="layout-topbar-actions-start">
   </div>
   <div class="layout-topbar-actions-end">
     <ul class="layout-topbar-items">
-      <li class="layout-topbar-search" *ngIf="authS.loggedin">
-        <a pStyleClass="@next" enterFromClass="!hidden" enterActiveClass="animate-scalein" leaveToClass="!hidden"
-          leaveActiveClass="animate-fadeout" [hideOnOutsideClick]="true" (click)="focusSearchInput()">
-          <i class="pi pi-search"></i>
+      <!-- Búsqueda general - visible en desktop y móvil -->
+      <li class="layout-topbar-search mobile-always-visible" *ngIf="authS.loggedin() && !isEcommerce()">
+        <a (click)="openSearchPanel()">
+          <i class="pi pi-search" pTooltip="Buscar" tooltipPosition="top"></i>
         </a>
-
-        <div class="layout-search-panel !hidden p-input-filled">
-          <i class="pi pi-search"></i>
-          <input #searchInput type="text" pInputText placeholder="Buscador general" />
-          <button pButton pRipple type="button" icon="pi pi-times" rounded text pStyleClass=".layout-search-panel"
-            leaveToClass="!hidden" leaveActiveClass="animate-fadeout"></button>
-        </div>
       </li>
-      <li *ngIf="authS.loggedin">
+
+      <!-- Notificaciones - visible en desktop y móvil , si esta activo el ERP muestra mensages, de los contario no tiene sentido-->
+      <li *ngIf="authS.loggedin() && authS.user()?.erp?.is_active_ERP" class="mobile-always-visible">
         <a pStyleClass="@next" enterFromClass="hidden" enterActiveClass="animate-scalein" leaveToClass="hidden"
           leaveActiveClass="animate-fadeout" [hideOnOutsideClick]="true">
 
-          <p-overlay-badge value="1" severity="danger" class="inline-flex">
+          <p-overlay-badge value="1" severity="danger" class="inline-flex" pTooltip="Avisos" tooltipPosition="top">
             <i class="pi pi-bell align-middle!"></i>
           </p-overlay-badge>
 
@@ -108,7 +98,17 @@
           </ul>
         </div>
       </li>
-      <!-- <li *ngIf="authS.loggedin">
+
+      <!-- Carrito - solo visible en desktop -->
+      <li *ngIf="authS.loggedin() && isEcommerce()">
+        <!-- <a (click)="onRightMenuButtonClick()"> este panel lo utilizaré para la configuracion -->
+        <a routerLink="/ecommerce/shopping-cart">
+          <i class="pi pi-cart-arrow-down" style="font-size: 1.5rem;" pTooltip="Carrito" tooltipPosition="top"></i>
+        </a>
+      </li>
+
+      <!-- Ofertas, filtros de productor, proveedores, marcar modelos, hay necesidad de estar logueado solo en ecomerce -->
+      <li *ngIf="isEcommerce()">
         <a pStyleClass="@next" enterFromClass="hidden" enterActiveClass="animate-scalein" leaveToClass="hidden"
           leaveActiveClass="animate-fadeout" [hideOnOutsideClick]="true">
           <i class="pi pi-table"></i>
@@ -116,55 +116,59 @@
         <div class="hidden">
           <div class="flex flex-wrap">
             <div class="w-4/12 flex flex-col items-center p-4">
+              <!-- link de ofertas -->
               <button pButton pRipple rounded class="mb-2" icon="pi pi-image"></button>
-              <span>Products</span>
+
+              <span>Ofertas</span>
             </div>
+
+            <div class="w-4/12 flex flex-col items-center p-4">
+
+              <button pButton pRipple rounded class="mb-2" icon="pi pi-image"
+                (click)="onRightMenuButtonClick()"></button>
+              <span>Filtros</span>
+            </div>
+
+            <div *ngIf="authS.loggedin()" class="w-4/12 flex flex-col items-center p-4">
+              <button pButton pRipple rounded class="mb-2" icon="pi pi-image"
+                (click)="onRightMenuButtonClick()"></button>
+              <span>Historial</span>
+            </div>
+
+
           </div>
         </div>
-      </li> -->
-
-      <li *ngIf="authS.loggedin">
-        <a (click)="onRightMenuButtonClick()">
-          <i class="pi pi-cart-arrow-down" style="font-size: 1.5rem;"></i>
-        </a>
       </li>
 
-      <li *ngIf="authS.loggedin" class="layout-topbar-user">
+      <!-- Configuración - solo visible en desktop -->
+      <li *ngIf="authS.loggedin()" class="layout-topbar-user hide-on-mobile">
         <a pStyleClass="@next" enterFromClass="hidden" enterActiveClass="animate-scalein" leaveToClass="hidden"
           leaveActiveClass="animate-fadeout" [hideOnOutsideClick]="true">
-          <img *ngIf="authS.user?.image" [src]="authS.user.image" alt="avatar" class="w-8 h-8" />
-          <i *ngIf="!authS.user?.image" class="pi pi-user" style="font-size: 1.5rem;"></i>
+          <img *ngIf="authS.user()?.image" [src]="authS.user()?.image" alt="avatar" class="w-8 h-8" />
+          <i *ngIf="!authS.user()?.image" class="pi pi-user" style="font-size: 1.5rem;" pTooltip="Configuración"
+            tooltipPosition="top"></i>
         </a>
         <div class="hidden">
           <ul class="list-none p-0 m-0">
-            <li *ngIf="authS.loggedin">
+            <li>
               <a class="cursor-pointer flex items-center hover:bg-emphasis duration-150 transition-all px-4 py-2"
                 pRipple>
                 <i class="pi pi-cog mr-2"></i>
                 <span>Configuración</span>
               </a>
             </li>
-            <li *ngIf="authS.loggedin" (click)="toggleConfigSidebar()">
+            <li (click)="toggleConfigSidebar()">
               <a class="cursor-pointer flex items-center hover:bg-emphasis duration-150 transition-all px-4 py-2"
                 pRipple>
                 <i class="pi pi-palette mr-2"></i>
                 <span>Apariencia</span>
               </a>
             </li>
-            <li *ngIf="authS.loggedin">
-              <a (click)="logout()"
-                class="cursor-pointer flex items-center hover:bg-emphasis duration-150 transition-all px-4 py-2"
-                pRipple>
-                <i class="pi pi-power-off mr-2"></i>
-                <span>Salir</span>
-              </a>
-            </li>
           </ul>
         </div>
       </li>
 
-
-      <li *ngIf="!authS.loggedin" style="padding: 20px;">
+      <li *ngIf="!authS.loggedin()" style="padding: 20px;">
         <a class="cursor-pointer px-2 py-2 text-white font-semibold hover:underline transition-all duration-150 whitespace-nowrap bg-transparent focus:bg-transparent active:bg-transparent"
           style="background: none !important; box-shadow: none !important; white-space: nowrap;"
           (click)="authS.redirectLogin()">
@@ -172,7 +176,20 @@
         </a>
       </li>
 
+      <!-- Salir - solo visible en desktop -->
+      <li *ngIf="authS.loggedin()" class="hide-on-mobile">
+        <a (click)="logout()">
+          <i class="pi pi-power-off" pTooltip="Salir" tooltipPosition="top"></i>
+        </a>
+      </li>
 
     </ul>
   </div>
+</div>
+
+<!-- Panel de búsqueda general (fuera de la estructura del topbar-end) -->
+<div class="global-search-panel" [class.active]="searchPanelVisible" *ngIf="authS.loggedin()">
+  <i class="pi pi-search"></i>
+  <input #searchInput type="text" pInputText placeholder="Buscador general" class="flex-1" />
+  <button pButton pRipple type="button" icon="pi pi-times" rounded text (click)="closeSearchPanel()"></button>
 </div>

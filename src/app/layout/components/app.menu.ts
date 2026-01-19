@@ -8,6 +8,23 @@ import { AppMenuitem } from './app.menuitem';
   selector: 'app-menu, [app-menu]',
   standalone: true,
   imports: [CommonModule, AppMenuitem, RouterModule],
+  styles: `
+  /* MÓVIL / PANTALLAS PEQUEÑAS */
+    @media (max-width: 991px) {
+
+      /* El item clickeable (más alto y con más padding) */
+     
+
+      /* Texto más grande */
+      :host ::ng-deep .layout-menu .layout-menuitem-text {
+        font-size: 1.5rem !important;
+        line-height: 1.5 !important;
+      }
+
+
+    }
+
+  `,
   template: ` <ul class="layout-menu" #menuContainer>
     <ng-container *ngFor="let item of model; let i = index">
       <li app-menuitem *ngIf="!item.separator" [item]="item" [index]="i" [root]="true"></li>
@@ -182,51 +199,64 @@ export class AppMenu {
           ]
         },
     
-    
-    
+     */
+
+    {
+      label: 'Marketplace',
+      items: [
         {
-          label: 'E-Commerce',
-          icon: 'pi pi-fw pi-wallet',
+          label: 'Marketplace',
           items: [
-            {
-              label: 'Product Overview',
-              icon: 'pi pi-fw pi-image',
-              routerLink: ['ecommerce/product-overview']
-            },
-            {
-              label: 'Product List',
-              icon: 'pi pi-fw pi-list',
-              routerLink: ['ecommerce/product-list']
-            },
-            {
-              label: 'New Product',
-              icon: 'pi pi-fw pi-plus',
-              routerLink: ['ecommerce/new-product']
-            },
-            {
-              label: 'Shopping Cart',
-              icon: 'pi pi-fw pi-shopping-cart',
-              routerLink: ['ecommerce/shopping-cart']
-            },
-            {
-              label: 'Checkout Form',
-              icon: 'pi pi-fw pi-check-square',
-              routerLink: ['ecommerce/checkout-form']
-            },
-            {
-              label: 'Order History',
-              icon: 'pi pi-fw pi-history',
-              routerLink: ['ecommerce/order-history']
-            },
-            {
-              label: 'Order Summary',
-              icon: 'pi pi-fw pi-file',
-              routerLink: ['ecommerce/order-summary']
-            }
+            { label: 'Productos', routerLink: ['/ecommerce/product-list'] },
+            { label: 'Carrito', routerLink: ['/ecommerce/shopping-cart'] },
+            { label: 'Historial', routerLink: ['/ecommerce/order-history'] },
           ]
+        }
+      ]
+    },
+
+    /*{
+      label: 'E-Commerce',
+      items: [
+        {
+          label: 'Product Overview',
+          icon: 'pi pi-fw pi-image',
+          routerLink: ['ecommerce/product-overview']
         },
-    
-    */
+        {
+          label: 'Product List',
+          icon: 'pi pi-fw pi-list',
+          routerLink: ['ecommerce/product-list']
+        },
+        {
+          label: 'New Product',
+          icon: 'pi pi-fw pi-plus',
+          routerLink: ['ecommerce/new-product']
+        },
+        {
+          label: 'Shopping Cart',
+          icon: 'pi pi-fw pi-shopping-cart',
+          routerLink: ['ecommerce/shopping-cart']
+        },
+        {
+          label: 'Checkout Form',
+          icon: 'pi pi-fw pi-check-square',
+          routerLink: ['ecommerce/checkout-form']
+        },
+        {
+          label: 'Order History',
+          icon: 'pi pi-fw pi-history',
+          routerLink: ['ecommerce/order-history']
+        },
+        {
+          label: 'Order Summary',
+          icon: 'pi pi-fw pi-file',
+          routerLink: ['ecommerce/order-summary']
+        }
+      ]
+    },*/
+
+
     /*
     {
       label: 'UI Kit',

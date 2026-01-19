@@ -74,15 +74,28 @@ interface Breadcrumb {
       padding: 0 0.5rem !important;
       font-size: 0.875rem !important;
     }
+    
+    /* Ocultar buscador de productos en breadcrumb en desktop */
+    .breadcrumb-product-search {
+      display: none;
+      width: 100%;
+    }
+    
+    .breadcrumb-product-search input {
+      height: 2rem !important;
+      width: 100%;
+    }
+    
+    /* En móvil se muestra via styles.scss */
   `],
   template: `
 
-    <div *ngIf="isProductList()" class="app-config-mobile-button">
-      <input pInputText class="w-full " type="text" placeholder="Buscar productos.." />
+    <div *ngIf="isProductList()" class="breadcrumb-product-search">
+      <input pInputText class="w-full" type="text" placeholder="Buscar productos...." style="height: 3rem !important;" />
     </div>
 
 
-    <nav class="layout-breadcrumb" *ngIf="!isProductList()">
+    <nav class="layout-breadcrumb" *ngIf="!isProductList()" >
       <ol>
         <!--<li><i class="pi pi-home"></i></li>-->
         <ng-template ngFor let-item let-last="last" [ngForOf]="breadcrumbs$ | async">

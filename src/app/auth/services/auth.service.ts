@@ -1,4 +1,4 @@
-import { Injectable, signal } from '@angular/core';
+import { Injectable, signal, computed } from '@angular/core';
 import { User } from '../../types/user';
 import { LoggedUser } from '../../types/logged-user';
 import { CookieOptions, CookieService } from 'ngx-cookie-service';
@@ -11,6 +11,7 @@ import { Router } from '@angular/router';
 import { GeneralService } from '../../utils/services/general.service';
 import { BiometricAuthService } from './biometric-auth.service';
 import { Preferences } from '@capacitor/preferences';
+import { App } from '@capacitor/app';
 
 @Injectable({
   providedIn: 'root'
@@ -20,8 +21,8 @@ export class AuthService {
   private _tokenAccess: string = '';
   private _tokenRefresh: string = '';
   private _base_url: String = environment.base_url;
-  private _loggedin: boolean = false;
   private _config: any = {};
+  private _storageReady: Promise<void> = Promise.resolve();
   private _cookieOptions: CookieOptions = {
     expires: 1, // la cookie expirará en 1 día
     path: '/', // la cookie solo puede ser leída por scripts cargados desde el camino raíz del sitio
@@ -31,9 +32,33 @@ export class AuthService {
     //HttpOnly: true, //la cookie sea accesible a través del protocolo HTTP y NO permite que la cookie sea accedida por un script de JavaScript en el navegador, SOLO atraves del servidor
   };
 
+  // ========== SIGNALS PARA USUARIO Y ESTADO DE LOGIN ==========
+  private readonly _user = signal<LoggedUser | null>(null);
+  private readonly _loggedin = signal<boolean>(false);
+
+  // Solo lectura (no expones el setter)
+  readonly user = this._user.asReadonly();
+
+  // Computed útiles
+  readonly loggedin = computed(() => this._loggedin());
+  readonly userId = computed(() => this._user()?.id ?? null);
+  readonly username = computed(() => this._user()?.username ?? null);
+  readonly userImage = computed(() => this._user()?.image ?? null);
+
   constructor(private http: HttpClient, private cookieS: CookieService, private messageS: MessageService, private router: Router, private generalS: GeneralService, public biometricAuthS: BiometricAuthService) {
-    // Cargar tokens al inicializar (solo importante para móviles)
-    this.loadTokensFromStorage();
+    // Cargar tokens y usuario al inicializar (solo importante para móviles)
+    this._storageReady = this.loadTokensFromStorage();
+
+    // Guardar/restaurar tokens en segundo plano en móvil
+    if (this.generalS.isMobile()) {
+      App.addListener('appStateChange', ({ isActive }) => {
+        if (isActive) {
+          this._storageReady = this.loadTokensFromStorage();
+        } else {
+          this.saveTokensToStorage();
+        }
+      });
+    }
 
     // Evento unload: guardar tokens antes de cerrar/recargar
     // WEB: guarda en cookie temporal por 30s para reload
@@ -53,6 +78,46 @@ export class AuthService {
           }
         })
       })
+  }
+
+  // ========== MÉTODOS PARA MODIFICAR EL USUARIO ==========
+
+  /**
+   * Establece los datos del usuario logueado
+   */
+  setUser(userData: LoggedUser | null) {
+    this._user.set(userData);
+
+    console.log(this._user());
+    // Persistir en cookie para web (por si hay reload)
+    if (userData) {
+      this.cookieS.set('user', JSON.stringify(userData), this._cookieOptions);
+    } else {
+      this.cookieS.delete('user');
+    }
+  }
+
+  /**
+   * Actualiza parcialmente los datos del usuario
+   */
+  patchUser(partial: Partial<LoggedUser>) {
+
+    this._user.update(u => {
+      if (u) {
+        const updated = { ...u, ...partial };
+        // Persistir cambios
+        this.cookieS.set('user', JSON.stringify(updated), this._cookieOptions);
+        return updated;
+      }
+      return u;
+    });
+  }
+
+  /**
+   * Establece el estado de login
+   */
+  private setLoggedin(value: boolean) {
+    this._loggedin.set(value);
   }
 
   /**
@@ -82,7 +147,7 @@ export class AuthService {
       }
     }
 
-    this.loggedin = false;
+    this.setLoggedin(false);
     return this.http.post(`${this._base_url}/auth/logout/`, data).pipe(
       tap(async (resp: any) => {
         await this.clearTokensFromStorage();
@@ -90,7 +155,8 @@ export class AuthService {
         this.cookieS.delete('user');
         this.access = '';
         this.refresh = '';
-        this.loggedin = false;
+        this.setLoggedin(false);
+        this.setUser(null);
         this.messageS.changeMessage('Sesión cerrada correctamente', null, {}, 'success');
         this.redirectMP();
       }),
@@ -100,7 +166,8 @@ export class AuthService {
         this.cookieS.delete('user');
         this.access = '';
         this.refresh = '';
-        this.loggedin = false;
+        this.setLoggedin(false);
+        this.setUser(null);
         this.messageS.changeMessage('Sesión cerrada correctamente');
         this.redirectMP();
         return of(null);
@@ -113,16 +180,17 @@ export class AuthService {
   * @returns Observable que emite un valor bool.
   */
   tokenValidate(): Observable<boolean> {
-
-    if (!this.refresh) {
-      this.messageS.showLoginDialog();
-      return of(false);
-    }
-
     //console.log('tokenValidate');
 
     // Crear la función async que maneje device_id
     const performTokenValidate = async () => {
+      await this._storageReady;
+
+      if (!this.refresh) {
+        this.messageS.showLoginDialog();
+        return of(false);
+      }
+
       // Obtener device_id solo para móviles
       const deviceId = await this.generalS.getDeviceId();
 
@@ -148,7 +216,7 @@ export class AuthService {
         tap(async (resp: any) => {
           this.access = resp.data.access;
           this.refresh = resp.data.refresh;
-          this.loggedin = true;
+          this.setLoggedin(true);
           await this.saveTokensToStorage(); // Guardar tokens actualizados
         }),
         switchMap((resp: any) => {
@@ -174,7 +242,7 @@ export class AuthService {
         }),
         catchError(resp => {
           this.messageS.changeMessage('Su sesión ha terminado');
-          this.loggedin = false;
+          this.setLoggedin(false);
           return of(false)
           // Si el token de refresh existe lo verifica contra el servidor para válidar si existe la sesión
           // dado que estoy utilizando catchError tengo que regresar un Observable de tipo bool, estoy utilizando
@@ -204,13 +272,15 @@ export class AuthService {
   tokenValidateInterceptor(): Observable<string> {
     //console.log('tokenValidateInterceptor fiu llamado');
 
-    if (!this.refresh) {
-      this.messageS.showLoginDialog();
-      return of('');
-    }
-
     // Crear la función async que maneje device_id
     const performTokenValidateInterceptor = async () => {
+      await this._storageReady;
+
+      if (!this.refresh) {
+        this.messageS.showLoginDialog();
+        return of('');
+      }
+
       // Obtener device_id solo para móviles
       const deviceId = await this.generalS.getDeviceId();
 
@@ -236,7 +306,7 @@ export class AuthService {
         tap(async (resp: any) => {
           this.access = resp.data.access;
           this.refresh = resp.data.refresh;
-          this.loggedin = true;
+          this.setLoggedin(true);
           await this.saveTokensToStorage(); // Guardar tokens actualizados
         }),
         map(resp => {
@@ -244,7 +314,7 @@ export class AuthService {
         }),
         catchError(resp => {
           this.messageS.showLoginDialog();
-          this.loggedin = false;
+          this.setLoggedin(false);
           return of('')
           // Si el token de refresh existe lo verifica contra el servidor para válidar si existe la sesión
           // dado que estoy utilizando catchError tengo que regresar un Observable de tipo bool, estoy utilizando
@@ -299,8 +369,8 @@ export class AuthService {
         tap(async (resp: any) => {
           this.access = resp.data.access; // dja
           this.refresh = resp.data.refresh; // dja
-          this.loggedin = true;
-          this.user = resp.data.user;
+          this.setLoggedin(true);
+          this.setUser(resp.data.user);
           await this.saveTokensToStorage(); // Guardar inmediatamente después del login
         }),
         switchMap((resp: any) => {
@@ -356,42 +426,6 @@ export class AuthService {
     }
   }
 
-
-  /**
-   * Retorna un valor bool para indicar si el usuario esta o no logueado
-   */
-  get loggedin(): boolean {
-    return this._loggedin;
-  }
-
-  /**
-   * Retorna los datos del usuario logueado
-   */
-  get user(): LoggedUser {
-
-    const user = this.cookieS.get('user');
-    if (!user) {
-      return {} as LoggedUser;
-    }
-
-    return JSON.parse(user);
-    //return JSON.parse(localStorage.getItem('user'));
-  }
-
-  /**
-   * Establece los datos del usuario logueado en la cookie
-   */
-  set user(user: LoggedUser) {
-    this.cookieS.set('user', JSON.stringify(user), this._cookieOptions);
-  }
-
-
-  /**
-   * Establece si el usuario esta logueado
-   */
-  private set loggedin(loggedin: boolean) {
-    this._loggedin = loggedin;
-  }
 
   /**
    * Obtiene el ultimo token para refrescar las credenciales de logueo
@@ -630,7 +664,7 @@ export class AuthService {
    * Configura la autenticación biométrica para el usuario actual
    */
   setupBiometricAuth(): Observable<boolean> {
-    const currentUser = this.user;
+    const currentUser = this.user();
     if (!currentUser || !currentUser.username) {
       return throwError(() => new Error('No hay usuario logueado'));
     }
@@ -673,7 +707,10 @@ export class AuthService {
       tap((resp: any) => {
         this.access = resp.access;
         this.refresh = resp.refresh;
-        this.loggedin = true;
+        this.setLoggedin(true);
+        if (resp.user) {
+          this.setUser(resp.user);
+        }
       }),
       switchMap((resp: any) => {
         // Cargar configuración después del login biométrico
@@ -710,7 +747,7 @@ export class AuthService {
    * Desactiva la autenticación biométrica para el usuario actual
    */
   disableBiometricAuth(): Observable<boolean> {
-    const currentUser = this.user;
+    const currentUser = this.user();
     if (!currentUser || !currentUser.username) {
       return of(true); // No hay usuario, no hay nada que desactivar
     }
@@ -823,17 +860,22 @@ export class AuthService {
    */
   private async saveTokensToStorage() {
     try {
+      const currentUser = this._user();
       if (this.generalS.isMobile()) {
         // MÓVIL: Guardar en Preferences (persistente entre cierres de app)
         await Preferences.set({ key: 'refresh_token', value: this._tokenRefresh });
         await Preferences.set({ key: 'access_token', value: this._tokenAccess });
-        if (this.user && Object.keys(this.user).length > 0) {
-          await Preferences.set({ key: 'user_data', value: JSON.stringify(this.user) });
+        if (currentUser && Object.keys(currentUser).length > 0) {
+          await Preferences.set({ key: 'user_data', value: JSON.stringify(currentUser) });
         }
       } else {
         // WEB: Cookie temporal de 30s (diseño original por seguridad)
         this._cookieOptions.expires = new Date(new Date().getTime() + 30000); // 30 segundos
         this.cookieS.set('refresh', this._tokenRefresh, this._cookieOptions);
+        // También guardar user en cookie para reloads
+        if (currentUser && Object.keys(currentUser).length > 0) {
+          this.cookieS.set('user', JSON.stringify(currentUser), this._cookieOptions);
+        }
       }
     } catch (error) {
       console.warn('Error saving tokens to storage:', error);
@@ -857,7 +899,7 @@ export class AuthService {
         if (access.value) this._tokenAccess = access.value;
         if (userData.value) {
           try {
-            this.user = JSON.parse(userData.value);
+            this._user.set(JSON.parse(userData.value));
           } catch (e) {
             console.warn('Error parsing user data:', e);
           }
@@ -867,6 +909,15 @@ export class AuthService {
         const refreshCookie = this.cookieS.get('refresh');
         if (refreshCookie) {
           this._tokenRefresh = refreshCookie;
+        }
+        // Cargar usuario desde cookie si existe
+        const userCookie = this.cookieS.get('user');
+        if (userCookie) {
+          try {
+            this._user.set(JSON.parse(userCookie));
+          } catch (e) {
+            console.warn('Error parsing user cookie:', e);
+          }
         }
       }
     } catch (error) {
@@ -884,6 +935,8 @@ export class AuthService {
         await Preferences.remove({ key: 'access_token' });
         await Preferences.remove({ key: 'user_data' });
       }
+      // Limpiar el signal del usuario
+      this._user.set(null);
     } catch (error) {
       console.warn('Error clearing tokens from storage:', error);
     }

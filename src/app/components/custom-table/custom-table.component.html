@@ -20,9 +20,10 @@
         class="ml-auto" />
     </div>
   </ng-template> -->
-  <ng-template #caption style="padding: 0 !important; height: 35px !important;">
+  <ng-template #caption style="padding: 0 !important; ">
 
-    <div style="display: flex; align-items: center; justify-content: space-between; padding: 0; gap: 0.5rem;">
+    <div style="display: flex; align-items: center; justify-content: space-between; padding: 0; gap: 0.5rem;"
+      class="datatable-caption-custom">
       <div style="display: flex; align-items: center; gap: 0.5rem;">
         <!-- Leyenda de búsqueda en datos paginados -->
         <small *ngIf="showSearchWarning()"
@@ -44,6 +45,7 @@
             </i>
           </p-inputicon>
           <input #searchInput pInputText type="text" (input)="onSearchInput($event, dt)"
+            class="datatable-caption-custom datatable-caption-input p-inputtext p-component"
             (keydown.enter)="onSearchEnter($event, dt)"
             [placeholder]="searchRemoteEnabled() ? 'Escribe y presiona Enter para buscar...' : 'Buscar...'" />
         </p-iconfield>

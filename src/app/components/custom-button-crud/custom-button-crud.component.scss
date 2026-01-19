@@ -37,34 +37,99 @@
   }
 }
 
+/*
 // Ajuste para el speeddial en móvil
-:host ::ng-deep .p-speeddial {
+::ng-deep .p-speeddial {
   position: relative;
+
+  .p-speeddial-action,
+  .p-speeddial-action.p-button {
+    background: #f1f5f9 !important;
+    border: 1px solid #cbd5e1 !important;
+    color: #0f172a !important;
+  }
+
+  .p-speeddial-action:hover {
+    background: #e2e8f0 !important;
+    border-color: #94a3b8 !important;
+  }
 
   .p-speeddial-list {
     .p-speeddial-item {
       .p-speeddial-action {
         width: 3rem !important;
         height: 3rem !important;
+        background: #f1f5f9 !important;
+        border: 1px solid #cbd5e1 !important;
+        color: #0f172a !important;
 
         .p-button-icon {
           font-size: 1.1rem !important;
+          color: #0f172a !important;
         }
       }
     }
   }
 }
 
-// Posicionamiento específico para botones de inicio en móvil
-.start-button-mobile-position {
-  @media only screen and (max-width: 767px) {
+::ng-deep .crud-caption-buttons .p-speeddial {
+  margin-right: 0.75rem;
+}
+
+::ng-deep .crud-caption-buttons .p-splitbutton {
+  margin-right: 0.25rem;
+  margin-left: 0.25rem;
+}
+
+@media (max-width: 991px) {
+
+  :host ::ng-deep .crud-caption-buttons .p-button,
+  :host ::ng-deep .crud-caption-buttons .p-splitbutton,
+  :host ::ng-deep .crud-caption-buttons .p-splitbutton-defaultbutton,
+  :host ::ng-deep .crud-caption-buttons .p-splitbutton-menubutton {
+    height: 3.5rem !important;
+    min-height: 3.5rem !important;
+    width: 3.5rem !important;
+    line-height: 1.2 !important;
+  }
+
+  :host ::ng-deep .p-speeddial .p-speeddial-action {
+    width: 3.5rem !important;
+    height: 3.5rem !important;
+  }
+
+
+  .start-button-mobile-position {
+
     position: absolute !important;
-    margin-left: 60px !important;
+    width: 70px !important;
+    margin-left: 65px !important;
+
   }
 }
 
-
-:host ::ng-deep .p-button-icon-only.p-button-rounded {
-  border-radius: 50% !important;
-  height: 34px !important;
+//Botones expandidos – fondo crema 
+:host ::ng-deep p-speeddial.crud-speeddial .p-speeddial-list>li>a,
+:host ::ng-deep p-speeddial.crud-speeddial .p-speeddial-list>li>button {
+  background: #b8a276 !important;
+  border: 1px solid #e1d6c3 !important;
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.12);
 }
+
+//Ícono 
+:host ::ng-deep p-speeddial.crud-speeddial .p-speeddial-list span[class^="pi"] {
+  color: #5b21b6 !important;
+}
+
+// Hover 
+:host ::ng-deep p-speeddial.crud-speeddial .p-speeddial-list>li>a:hover,
+:host ::ng-deep p-speeddial.crud-speeddial .p-speeddial-list>li>button:hover {
+  background: #efe7da !important;
+  border-color: #d6c8ae !important;
+}
+
+// Focus (accesible) 
+:host ::ng-deep p-speeddial.crud-speeddial .p-speeddial-list>li>a:focus-visible,
+:host ::ng-deep p-speeddial.crud-speeddial .p-speeddial-list>li>button:focus-visible {
+  box-shadow: 0 0 0 0.2rem rgba(124, 58, 237, 0.25);
+}*/

@@ -103,5 +103,5 @@
 
 </p-dialog>
 
-<app-request [showComponent]="tasks_module['RE']" (closeDialog)="closeDialogRequest()">
+<app-request *ngIf="tasks_module['RE']" [showComponent]="tasks_module['RE']" (closeDialog)="closeDialogRequest()">
 </app-request>

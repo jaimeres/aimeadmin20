@@ -15,33 +15,33 @@ import { BadgeModule } from 'primeng/badge';
 import { OverlayBadge } from 'primeng/overlaybadge';
 import { AuthService } from '../../auth/services/auth.service';
 import { AvatarModule } from 'primeng/avatar';
+import { TooltipModule } from 'primeng/tooltip';
 
 @Component({
   selector: '[app-topbar]',
   standalone: true,
   imports: [RouterModule, CommonModule, StyleClassModule, FormsModule, Ripple, InputText, ButtonModule,
-    MegaMenuModule, BadgeModule, OverlayBadge, AvatarModule],
+    MegaMenuModule, BadgeModule, OverlayBadge, AvatarModule, TooltipModule],
   templateUrl: './app.topbar.html',
   host: {
     class: 'layout-topbar'
   },
   styles: `
-    :host ::ng-deep .p-overlaybadge .p-badge {
+    /*:host ::ng-deep .p-overlaybadge .p-badge {
       outline-width: 0px;
     }
 
-    /* Topbar más grande en móviles */
     @media screen and (max-width: 991px) {
-      :host.layout-topbar {
-        height: 5.5rem !important;
+      :host ::ng-deep .layout-search-panel {
+        position: fixed !important;
+        top: 0 !important;
+        left: 0 !important;
+        width: 100vw !important;
+        height: 4rem !important;
+        z-index: 1100 !important;
+        padding: 0 1rem !important;
       }
-
-      :host.layout-topbar .layout-topbar-start {
-        height: 5.5rem !important;
-        align-items: flex-end !important;
-        padding-bottom: 0.75rem !important;
-      }
-    }
+    }*/
   `
 
 })
@@ -50,6 +50,7 @@ export class AppTopbar {
   authS = inject(AuthService);
 
   isProductList = signal(false);
+  isEcommerce = signal(false);
 
   @ViewChild('searchInput') searchInput!: ElementRef<HTMLInputElement>;
 
@@ -85,6 +86,18 @@ export class AppTopbar {
     }, 150);
   }
 
+  // Panel de búsqueda global
+  searchPanelVisible = false;
+
+  openSearchPanel() {
+    this.searchPanelVisible = true;
+    this.focusSearchInput();
+  }
+
+  closeSearchPanel() {
+    this.searchPanelVisible = false;
+  }
+
   onTopbarMenuToggle() {
     this.layoutService.layoutState.update((val) => ({ ...val, topbarMenuActive: !val.topbarMenuActive }));
   }
@@ -98,6 +111,7 @@ export class AppTopbar {
   constructor(private router: Router) {
     this.router.events.pipe(filter((event) => event instanceof NavigationEnd)).subscribe(() => {
       this.isProductList.set(this.router.url.includes('ecommerce/product-list'));
+      this.isEcommerce.set(this.router.url.includes('ecommerce/'));
     });
   }
 

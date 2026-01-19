@@ -1,8 +1,24 @@
-<div class="flex flex-wrap gap-1 align-items-center  " style="padding-left: 2px; padding-top: 2px;">
+<div class="flex flex-wrap gap-1 align-items-center crud-caption-buttons" style=" padding-top: 2px;">
 
-  <p-speeddial [model]="items()" direction="right" class="hide-lg-custom hide-md-custom "
-    [style]="{'padding-left': '10px', 'height': '36px !important'}" [showIcon]="'pi pi-bars'"
-    [hideIcon]="'pi pi-times'" />
+  <!-- <p-speeddial [model]="items()" direction="right" class="hide-lg-custom hide-md-custom "
+    [style]="{'padding-left': '10px'}" [showIcon]="'pi pi-bars'" [hideIcon]="'pi pi-times'">
+
+
+    <ng-template #item let-item let-toggleCallback="toggleCallback">
+      <div style="background-color: blueviolet !important"
+        class="flex flex-col items-center justify-between gap-2 p-2 border rounded border-surface-200 dark:border-surface-700 w-15 cursor-pointer h-14"
+        (click)="toggleCallback($event, item)">
+        <span [class]="item.icon"></span>
+      </div>
+    </ng-template>
+  </p-speeddial> -->
+
+  <p-speeddial [model]="items()" direction="right" class="crud-speeddial hide-lg-custom hide-md-custom"
+    [style]="{ 'padding-left': '5px' }" [showIcon]="'pi pi-bars'" [hideIcon]="'pi pi-times'"></p-speeddial>
+
+
+
+
 
   <!-- Menú contextual para opciones adicionales -->
   <p-menu #contextMenu [popup]="true" [model]="contextMenuItems()"
@@ -18,8 +34,8 @@
 
 
   <p-button *ngIf="showRefreshSignal() && !getMenuSignal().length" icon="pi pi-refresh" severity="info"
-    (click)="refreshAction.emit()" [style]="{'height': '32px'}" pTooltip="Actualizar"
-    tooltipPosition="bottom"></p-button>
+    (click)="refreshAction.emit()" [style]="{'height': '32px'}" pTooltip="Actualizar" tooltipPosition="bottom"
+    class="hide-sm-custom"></p-button>
 
   <p-splitButton *ngIf="showRefreshSignal() && getMenuSignal().length" icon="pi pi-refresh" severity="info"
     (onClick)="refreshAction.emit()" pTooltip="Actualizar" tooltipPosition="bottom" [model]="getMenuSignal()"
@@ -50,8 +66,8 @@
   <!-- Botón completo para escritorio (oculto en móviles y tabletas) -->
   <!-- 'Más opciones' solo en pantallas grandes -->
   <!-- Mostrar solo en tablet (768-1023): usamos hide-md-custom para ocultar en tablet el botón grande y hide-lg-custom para ocultar el pequeño en escritorio -->
-  <p-splitButton *ngIf="moreOptionsSignal()?.length > 0" label="Más" [model]="moreOptionsSignal()" severity="help"
-    outlined class="hide-lg-custom hide-sm-custom" [style]="{'height': '32px'}"></p-splitButton>
+  <!-- <p-splitButton *ngIf="moreOptionsSignal()?.length > 0" label="Más" [model]="moreOptionsSignal()" severity="help"
+    outlined class="hide-lg-custom hide-sm-custom" [style]="{'height': '32px'}"></p-splitButton> -->
 
   <!-- Mostrar solo en escritorio (>=1024): ocultamos en sm y md con hide-sm-custom y hide-md-custom -->
   <p-splitButton *ngIf="moreOptionsSignal()?.length > 0" label="Más opciones" [model]="moreOptionsSignal()" outlined

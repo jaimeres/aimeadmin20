@@ -3,12 +3,13 @@ import { AppMenu } from './app.menu';
 import { AppMenuProfile } from '@/layout/components/app.menuprofile';
 import { CommonModule } from '@angular/common';
 import { LayoutService } from '@/layout/service/layout.service';
+import { AuthService } from '../../auth/services/auth.service';
 
 @Component({
   selector: '[app-sidebar]',
   standalone: true,
   imports: [AppMenuProfile, AppMenu, CommonModule],
-  template: `<div class="layout-sidebar" (mouseenter)="onMouseEnter()" (mouseleave)="onMouseLeave()">
+  template: `<div *ngIf="authS.loggedin()" class="layout-sidebar" (mouseenter)="onMouseEnter()" (mouseleave)="onMouseLeave()">
     <div class="layout-sidebar-top">
       <a href="/">
         <img src="/images/logolargo.png" alt="Logo" class="layout-sidebar-logo" style="height: 32px; width: 140px;" />
@@ -17,7 +18,7 @@ import { LayoutService } from '@/layout/service/layout.service';
       <button class="layout-sidebar-anchor" type="button" (click)="anchor()"></button>
     </div>
     <div style="padding: 0.5rem 1rem; text-align: center; font-size: 0.75rem; color: #64748b; font-weight: 500;">
-      Beta 1.0.0
+      Beta 1.0.7
     </div>
     <div app-menu-profile #menuProfileStart *ngIf="menuProfilePosition() === 'start'"></div>
     <div #menuContainer class="layout-menu-container">
@@ -30,6 +31,7 @@ export class AppSidebar implements OnDestroy {
   el = inject(ElementRef);
 
   layoutService = inject(LayoutService);
+  authS = inject(AuthService);
 
   @ViewChild(AppMenu) appMenu!: AppMenu;
 

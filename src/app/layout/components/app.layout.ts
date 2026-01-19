@@ -8,7 +8,6 @@ import { AppConfigurator } from './app.configurator';
 import { AppBreadcrumb } from './app.breadcrumb';
 import { AppSidebar } from './app.sidebar';
 import { AppRightMenu } from '@/layout/components/app.rightmenu';
-import { Toast } from 'primeng/toast';
 import { MessageService as MessageServiceP } from 'primeng/api';
 import { MessageComponent } from '../../components/message/message.component';
 import { LoginComponent } from '../../components/login/login.component';
@@ -26,14 +25,14 @@ export function playerFactory() { return import('lottie-web'); }
   selector: 'app-layout',
   standalone: true,
   imports: [CommonModule, AppTopbar, AppSidebar, RouterModule, AppConfigurator, AppBreadcrumb, AppRightMenu,
-    Toast, MessageComponent, BlockedComponent, LoginComponent, AssistantWidgetComponent,],
+    MessageComponent, BlockedComponent, LoginComponent, AssistantWidgetComponent,],
   template: `
     <div class="layout-container " [ngClass]="containerClass()">
       <div app-topbar></div>
       <div app-right-menu></div>
       <div app-sidebar></div>
       <div class="layout-content-wrapper">
-        <div app-breadcrumb></div>
+        <div app-breadcrumb ></div>
 
         <div class="layout-content" style="padding: 0px; margin: 0px;"  >
           <router-outlet></router-outlet>
@@ -45,7 +44,7 @@ export function playerFactory() { return import('lottie-web'); }
       <app-login></app-login>
     </div>
     <app-configurator />
-    <p-toast />
+    <!--<p-toast />-->
     <app-blocked />
 
         <app-assistant-widget

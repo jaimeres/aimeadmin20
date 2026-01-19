@@ -59,3 +59,35 @@
   font-weight: 500;
   letter-spacing: .5px;
 }
+
+
+
+// hacer mas alto el caption en pantallas pequeñas
+@media (max-width: 991px) {
+
+  ::ng-deep .p-datatable .p-paginator-current {
+    display: none !important;
+  }
+
+  .datatable-caption-custom {
+    height: 3.5rem !important;
+  }
+
+  .datatable-caption-input {
+    height: 3.5rem !important;
+    min-height: 3.5rem !important;
+    padding-top: .85rem !important;
+    padding-bottom: .85rem !important;
+    line-height: 1.2 !important;
+    font-size: 1rem !important;
+  }
+
+  :host ::ng-deep .p-iconfield .datatable-caption-input {
+    height: 3.5rem !important;
+    min-height: 3.5rem !important;
+  }
+
+  :host ::ng-deep .p-iconfield {
+    align-items: center;
+  }
+}

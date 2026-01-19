@@ -16,9 +16,19 @@
   /* opcional: mantener si tu tema la reconoce */
   /* valor personalizado */
   --p-tabs-tab-padding: 0.3rem !important;
+
+  //no lo utilizo porque lo necesite responsive
   //--p-button-icon-only-width: 2.4rem !important;
 
   --p-card-body-padding: 2px !important;
+
+  --p-toast-close-icon-size: 1.9rem;
+
+  --p-toast-close-icon-size: 1.9rem !important;
+
+  --p-toast-close-icon-size: 1.9rem !important;
+
+  --p-datatable-header-sm-padding: 0.1rem !important
 }
 
 //ewdusco explicitamente el icono de cerra de dialogo no uso -p-button-icon-only-width porque es general
@@ -27,6 +37,8 @@ p-dialog .p-button-icon-only.p-button-rounded {
   width: 2rem !important;
   //dale enfasis al icono
 }
+
+
 
 /* Etiqueta flotante en reposo (cuando el input NO tiene foco ni valor) */
 .p-float-label>label,
@@ -192,69 +204,11 @@ p-dialog .p-button-icon-only.p-button-rounded {
   width: 100% !important;
 }
 
-/* Estilos para dispositivos móviles */
-@media only screen and (max-width: 767px) {
-  .table-fit-Custom {
-    height: calc(100vh - 120px);
-    /* Ajustado para apps móviles - dvh no es compatible con todos los dispositivos */
-    /* Establece la altura del contenedor principal al 100% del viewport */
-  }
 
-  /* Agrega tus estilos aquí para pantallas de hasta 767px de ancho */
-
-  /*oculta en equipos moviles, se que puedo usar los puntos de quiebre sm, md, ñg y xl, pero al usar block
-   descuadra los elementos, por ejemplo hidden sm:block*/
-  .hide-sm-custom {
-    padding-top: 1px;
-    display: none !important;
-  }
-
-  /* altura de los input*/
-  .height-input-custom {
-    height: 40px !important;
-    width: 100% !important;
-  }
-
-  .height-icon-custom {
-    height: 40px !important;
-    width: 100% !important;
-  }
+.table-fit-Custom {
+  height: calc(100vh - 100px) !important;
 }
 
-/* Estilos para tabletas */
-@media only screen and (min-width: 768px) and (max-width: 1023px) {
-  .table-fit-Custom {
-    height: calc(100vh - 130px);
-    /* Ajustado para apps móviles - dvh no es compatible con todos los dispositivos */
-    /* Establece la altura del contenedor principal al 100% del viewport */
-
-  }
-
-  /* Agrega tus estilos aquí para pantallas entre 768px y 1023px de ancho */
-  /*ocultar en tabletas*/
-  .hide-md-custom {
-    display: none !important;
-  }
-
-}
-
-/* Estilos para pantallas de escritorio */
-@media only screen and (min-width: 1024px) {
-  .table-fit-Custom {
-    height: calc(100vh - 100px) !important;
-    /* Establece la altura del contenedor principal al 100% del viewport */
-  }
-
-  /* Agrega tus estilos aquí para pantallas de al menos 1024px de ancho */
-
-  /*rincipalmente para los dialogos de los form,
-  en la pantallas grandes si hay espacio para mostar varios botones, oculta el boton simple*/
-
-  /*ocultar en computadoras y monitores*/
-  .hide-lg-custom {
-    display: none !important;
-  }
-}
 
 /* alineación del numero de las tablas*/
 .align-number-Custom {
@@ -277,8 +231,8 @@ tr.selected:not(:hover) {
 /*Reduce el padding de los encabezados de los dialog*/
 .p-dialog .p-dialog-header {
   padding-left: 0.6rem !important;
-  padding-top: 0 !important;
-  padding-bottom: 0 !important;
+  padding-top: 0.2rem !important;
+  padding-bottom: 0.2rem !important;
   background-color: #c0bdbd;
   color: #333333;
 }
@@ -318,6 +272,13 @@ sm: 576px
 
 .show-custom {
   display: block !important;
+}
+
+/* Ocultar solo en escritorio */
+@media (min-width: 992px) {
+  .hide-lg-custom {
+    display: none !important;
+  }
 }
 
 // Fix simple para mantener los botones del footer en su lugar - PrimeNG 20
@@ -362,15 +323,6 @@ sm: 576px
   }
 }
 
-.p-treetable.p-treetable-sm .p-treetable-header,
-.p-datatable.p-datatable-sm .p-datatable-header {
-  padding: 0.1rem !important;
-}
-
-
-
-//viene del drow en la parte de los cambas, lo pongo aqui porque en el build en css excede el tamaño maximo permitido
-
 // Prevent canvas overflow on all screen sizes
 .signature-canvas-container {
   .signature-canvas-wrapper {
@@ -406,14 +358,6 @@ sm: 576px
   }
 }
 
-/*icono en el header del p-dialog .p-dialog-icon {
-  margin-left: 1rem !important;
-  margin-right: 1rem !important;
-}*/
-
-// .p-dialog-mask {
-//   z-index: 9999;
-// }
 
 // Asegurar que los paneles de dropdown aparezcan sobre los diálogos
 .p-dropdown-panel,
@@ -423,228 +367,9 @@ sm: 576px
   z-index: 10000 !important;
 }
 
-/*recorta el texto de las etiquetas flotantes*/
-/*.p-float-label label {
-  //color: rgb(89, 106, 107);
-  font-size: 0.9em;
-  //tamaño base (reposo)
-  display: inline-block;
-  width: 85%;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: clip;
-  //text-overflow: ellipsis;
-}*/
-
-/*recorta el texto de las etiquetas flotantes para los p-dropdown*/
-/*.p-float-label p-dropdown+label {
-  width: 77%;
-}
-*/
-
-// que tanto se alsa una etiqueta flotante
-/*.p-float-label input:focus~label,
-.p-float-label input.p-filled~label,
-.p-float-label textarea:focus~label,
-.p-float-label textarea.p-filled~label,
-.p-float-label .p-inputwrapper-focus~label,
-.p-float-label .p-inputwrapper-filled~label {
-  top: 0.42rem;
-  left: 0.1rem;
-  right: 0rem;
-  width: 95%;
-  font-size: var(--p-floatlabel-active-font-size);
-  color: #2094e8;
-  //background-color: #ffffff;
-}*/
-
-/* Ejemplo de tamaño alternativo por contexto (opcional) */
-/*.floatlabel-smaller {
-  --p-floatlabel-active-font-size: 0.30rem;
-}
-
-.floatlabel-bigger {
-  --p-floatlabel-active-font-size: 0.4rem;
-}*/
-
-
-/*Personaliza el color del toggle button cuando es falso*/
-/*.p-togglebutton.p-button {
-  // background: rgb(231, 148, 167);
-  // color: white;
-
-  //DE ESTA FORMA NO CAMBIA DE COLOR ENTRE TRUE O FALSE
-  background: #67487e; //false 
-  border-color: #67487e; //false 
-  //background: #047cec;
-  //border-color: #047cec;
-  color: #ffffff
-}*/
-
-/*
-// quita el paddin de los botones de paginación de las tablas
-.p-paginator {
-  padding: 0;
-}
-
-
-//quita el padding de los bottones para subir archivos
-.p-fileupload .p-fileupload-buttonbar {
-  //background: #f8f9fa;
-  padding: 5px;
-  //border: 1px solid #dee2e6;
-  //color: #495057;
-  //border-bottom: 0 none;
-  //border-top-right-radius: 3px;
-  //border-top-left-radius: 3px;
-}
-
-//quita el padding del la presentación de los archivos que se cargan
-.p-fileupload .p-fileupload-row>div {
-  padding: 5px;
-}
-
-//en el depurador del navegador dice que aplica primera en linea, la pongo
-//en los estilos del componete y uso :host ::ng-deep
-.p-fileupload-row>div {
-  flex: 1 1 auto;
-  width: auto;
-}
-
-//espacio entre la informacion de la vista previa de los archivos que se estan cargando
-.p-fileupload .p-fileupload-content {
-  //background: #ffffff;
-  padding: 0.2rem 0.1rem;
-  //border: 1px solid #dee2e6;
-  //color: #495057;
-  //border-bottom-right-radius: 3px;
-  //border-bottom-left-radius: 3px;
-
-  // |||propios
-  height: 200px;
-  overflow: auto;
-}*/
 
 
 
-
-/*
-//quita los espacios entre los dias para reducir el tamaño del calendario
-.p-datepicker table td {
-  padding: 0;
-  width: 30px;
-
-}
-
-//paddin de los botones de hora
-.p-datepicker .p-timepicker {
-  padding: 0.5rem 0 0 0;
-}
-
-// quita los espacios entre loses años
-.p-datepicker .p-datepicker-header {
-  padding: 0;
-}
-
-//circulo al seleccionar el día del calendario
-.p-datepicker table td>span {
-  width: 2.5rem;
-  height: 2.5rem;
-}
-
-//reduce el margen entre los margenes del calendario
-.p-datepicker table {
-  margin: 0;
-}
-
-.p-datepicker .p-timepicker button {
-  height: 1.1rem;
-}
-
-
-
-//padding de los bordes
-.p-datepicker {
-  padding: 0.1rem;
-}
-
-
-
-.p-toolbar {
-  padding: 0;
-  border: 0;
-}
-
-.p-card .p-card-body {
-  padding: 0;
-}
-
-.p-card .p-card-content {
-  padding: 0;
-}
-
-
-//obliga alñ input del multiselect a expardirse al 100% de lo ancho
-.p-multiselect-panel .p-multiselect-header .p-multiselect-filter-container .p-inputtext {
-  width: 100%;
-}*/
-
-
-
-
-/*icono de calendario del calendario,*/
-/*.p-fluid .p-button-icon-only {
-    width: 2.2rem;
-    // |||propios
-    height: 27px;
-  }*/
-
-
-
-/*
-.p-tabview .p-tabview-nav li .p-tabview-nav-link {
-  padding: 0.5rem 0.5rem 0.5rem 0.5rem;
-  flex: 1;
-}*/
-
-
-/*.p-dropdown .p-inputtext {
-  padding-top: 0.5rem;
-}*/
-
-
-
-/*
-.p-tabview .p-tabview-panels {
-  padding: 0;
-}*/
-
-/* Ajustes para topbar grande en móviles */
-@media screen and (max-width: 991px) {
-  .layout-sidebar {
-    top: 5.5rem !important;
-    height: calc(100vh - 5.5rem) !important;
-  }
-
-  .layout-content-wrapper {
-    padding-top: 5.5rem !important;
-  }
-
-  /* Checkboxes más grandes en móviles */
-  .p-checkbox {
-    width: 2.25rem !important;
-    height: 2.25rem !important;
-  }
-
-  .p-checkbox .p-checkbox-box {
-    width: 2.25rem !important;
-    height: 2.25rem !important;
-  }
-
-  .p-checkbox .p-checkbox-icon {
-    font-size: 1.5rem !important;
-  }
-}
 /* Scanner de códigos de barras - Asegurar que aparezca sobre los dialogs */
 /* El plugin @capacitor/barcode-scanner usa elementos nativos pero puede tener overlays web */
 .barcode-scanner-modal,
@@ -666,4 +391,675 @@ body.scanner-active::after {
   bottom: 0;
   z-index: 99998 !important;
   pointer-events: none;
+}
+
+
+
+/* Estilos para dispositivos móviles */
+@media (max-width: 991px) {
+
+  .hide-sm-custom {
+    padding-top: 1px;
+    display: none !important;
+  }
+
+  /* altura de los input*/
+  .height-input-custom {
+    height: 40px !important;
+    width: 100% !important;
+  }
+
+  .height-icon-custom {
+    height: 40px !important;
+    width: 100% !important;
+  }
+
+
+
+  .p-dialog .p-dialog-header {
+    padding-top: 0.5rem !important;
+    padding-bottom: 0.5rem !important;
+  }
+
+  .p-dialog .p-dialog-close-button.p-button-icon-only svg {
+    width: 1.5rem !important;
+    height: 1.5rem !important;
+    //color: #af1e1e !important;
+    /* controla el fill */
+  }
+
+  .layout-menu-button {
+    //top: 45% !important;
+    width: 3.2rem !important;
+    height: 3.2rem !important;
+  }
+
+  /* Checkboxes más grandes en móviles */
+  .p-checkbox {
+
+    width: 2.1rem !important;
+    height: 2.1rem !important;
+
+    /* TAMAÑO REAL DEL CHECK */
+    --p-md-check-icon-w: 14px !important;
+    --p-md-check-icon-h: 22px !important;
+    --p-md-check-icon-t: 16px !important;
+  }
+
+  .p-checkbox .p-checkbox-box {
+    width: 2.4rem !important;
+    height: 2.4rem !important;
+  }
+
+  /* Ícono del check */
+  .p-checkbox .p-checkbox-icon {
+    line-height: 1 !important;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+}
+
+:root {
+  --header-h: 4.1rem;
+  --vv-top: 0px;
+  --vv-bottom: 0px;
+  --vv-h: 100vh;
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --top-inset: max(var(--vv-top), var(--safe-top));
+  --bottom-inset: max(var(--vv-bottom), var(--safe-bottom));
+}
+
+
+html,
+body {
+  height: 100%;
+}
+
+/* Header normal */
+.layout-topbar {
+  position: fixed;
+  left: 0;
+  right: 0;
+  top: var(--top-inset) !important;
+  height: var(--header-h) !important;
+  padding-top: 0 !important;
+  box-sizing: border-box;
+  z-index: 1000;
+}
+
+/* Solo pinta la zona superior (no afecta layout) */
+.layout-topbar::before {
+  content: '';
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: var(--top-inset);
+  background: var(--topbar-bg);
+  z-index: 999;
+  /* o 999, pero NO -1 */
+}
+
+/* Contenido */
+/*.layout-content-wrapper {
+  // se comenta por layout-content-wrapper del breadcrumb
+  padding-top: calc(var(--header-h) + var(--top-inset)) !important;
+  box-sizing: border-box;
+}*/
+
+.layout-topbar-menu-active .p-overlaypanel {
+  margin-top: calc(var(--header-h) + var(--top-inset)) !important;
+}
+
+
+/* Cuando hay tabla fit, el shell NO scrollea */
+.table-fit-mode .layout-container {
+  height: var(--vv-h);
+  overflow: hidden;
+}
+
+.table-fit-mode .layout-content-wrapper,
+.table-fit-mode .layout-content {
+  overflow: hidden;
+}
+
+/* La única que scrollea */
+.table-fit-mode .table-fit-Custom {
+  overflow: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* =====================================================
+   TOPBAR RESPONSIVE - DESKTOP Y MÓVIL
+   ===================================================== */
+
+/* Buscador de productos centrado en topbar - DESKTOP */
+.layout-topbar .product-search-container {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: 500px;
+  z-index: 10;
+}
+
+.layout-topbar .product-search-input {
+  width: 100%;
+  height: 36px;
+}
+
+/* Ocultar por defecto elementos solo móvil */
+.mobile-three-dots,
+.mobile-menu-panel {
+  display: none !important;
+}
+
+/* Panel de búsqueda global - nuevo componente */
+.global-search-panel {
+  display: none;
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 4rem;
+  background: var(--surface-overlay, #fff);
+  z-index: 1100;
+  align-items: center;
+  padding: 0 1rem;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+
+  &.active {
+    display: flex;
+  }
+
+  >i {
+    color: var(--text-color);
+    margin-right: 1rem;
+  }
+
+  input {
+    flex: 1;
+    border: none;
+    background: transparent;
+    font-size: 1rem;
+
+    &:focus {
+      outline: none;
+    }
+  }
+}
+
+
+/* Estilos para el panel de 3 puntos en móvil */
+.mobile-menu-panel {
+  position: absolute;
+  top: 100%;
+  right: 10px;
+  background: var(--p-surface-0, #fff);
+  border-radius: 8px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+  min-width: 180px;
+  z-index: 1001;
+
+  ul {
+    list-style: none;
+    margin: 0;
+    padding: 8px 0;
+  }
+
+  li a {
+    display: flex;
+    align-items: center;
+    padding: 12px 16px;
+    color: var(--p-text-color, #333);
+    cursor: pointer;
+    transition: background 0.2s;
+
+    &:hover {
+      background: var(--p-surface-100, #f5f5f5);
+    }
+
+    i {
+      margin-right: 12px;
+      font-size: 1.1rem;
+    }
+
+    span {
+      font-size: 0.95rem;
+    }
+  }
+}
+
+/* Buscador de productos - sensible al tema */
+.layout-topbar .product-search-container {
+  background: var(--surface-card);
+  /* cambia según tema */
+  border-radius: 6px;
+  box-shadow: var(--card-shadow);
+}
+
+.layout-topbar .product-search-input {
+  background: transparent !important;
+  color: var(--text-color) !important;
+  /* texto */
+  border: 1px solid var(--surface-border);
+  /* borde visible */
+}
+
+/* Placeholder */
+.layout-topbar .product-search-input::placeholder {
+  color: var(--text-color-secondary);
+  opacity: 1;
+}
+
+.layout-topbar .product-search-input,
+.layout-topbar .product-search-input:focus {
+  background-color: transparent !important;
+  color: var(--text-color) !important;
+}
+
+html.dark .layout-topbar .product-search-container,
+html[data-theme="dark"] .layout-topbar .product-search-container {
+  background: var(--surface-ground);
+}
+
+/* =====================================================
+   MEDIA QUERY MÓVIL (max-width: 991px), topbar y fit en las columnas
+   ===================================================== */
+@media (max-width: 991px) {
+
+
+  .layout-topbar-end {
+    position: fixed !important;
+    right: 0;
+    top: var(--top-inset) !important;
+    height: var(--header-h) !important;
+    display: flex;
+    align-items: center;
+  }
+
+  .layout-topbar-menu-active .layout-topbar-end {
+    top: calc(var(--header-h) + var(--top-inset)) !important;
+  }
+
+  .table-fit-Custom {
+    height: calc(var(--vv-h) - (var(--header-h) + var(--top-inset)) - var(--bottom-inset) - 30px) !important;
+    overflow: auto;
+    //-webkit-overflow-scrolling: touch;
+  }
+
+  //muestra oculta logos en movil
+  .layout-topbar-logo-full {
+    display: none !important;
+  }
+
+  // muestra oculta logos en movil
+  .layout-topbar-logo-slim {
+    display: block !important;
+  }
+
+  .global-search-panel {
+    top: var(--top-inset) !important;
+    height: var(--header-h) !important;
+    left: 0 !important;
+    right: 0 !important;
+    width: auto !important;
+    box-sizing: border-box !important;
+  }
+
+  /* Ocultar elementos en móvil */
+  .hide-on-mobile {
+    display: none !important;
+  }
+
+  /* Mostrar botón de 3 puntos en móvil */
+  .mobile-three-dots {
+    display: flex !important;
+    align-items: center;
+    justify-content: center;
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    cursor: pointer;
+    position: absolute;
+    right: 10px;
+    top: 50%;
+    transform: translateY(-50%);
+    z-index: 100;
+
+    i {
+      font-size: 1.3rem;
+    }
+
+    &:hover {
+      background: var(--p-surface-100, rgba(0, 0, 0, 0.1));
+    }
+  }
+
+  /* Panel de 3 puntos visible cuando no tiene clase hidden */
+  .mobile-menu-panel:not(.hidden) {
+    display: block !important;
+  }
+
+  /* OCULTAR buscador de productos del topbar en móvil */
+  .layout-topbar .product-search-container {
+    display: none !important;
+  }
+
+  /* Mostrar buscador de productos en breadcrumb en móvil */
+  .layout-breadcrumb-container .breadcrumb-product-search {
+    display: flex !important;
+    width: 100%;
+  }
+
+  /* Ocultar breadcrumb normal cuando hay buscador de productos */
+  .layout-breadcrumb-container:has(.breadcrumb-product-search) .layout-breadcrumb,
+  .layout-breadcrumb-container:has(.breadcrumb-product-search) .layout-breadcrumb-buttons {
+    display: none !important;
+  }
+
+  /* FORZAR que layout-topbar-end sea visible en móvil */
+  .layout-topbar .layout-topbar-end {
+    display: flex !important;
+    position: absolute !important;
+    right: 60px !important;
+    top: 50% !important;
+    transform: translateY(-50%) !important;
+    width: auto !important;
+    flex: none !important;
+    flex-direction: row !important;
+    padding: 0 !important;
+    background: transparent !important;
+  }
+
+  .layout-topbar .layout-topbar-end .layout-topbar-actions-end {
+    display: flex !important;
+  }
+
+  .layout-topbar .layout-topbar-end .layout-topbar-actions-end .layout-topbar-items {
+    display: flex !important;
+    flex-direction: row !important;
+    gap: 8px;
+    align-items: center;
+    height: auto !important;
+    padding: 0 !important;
+  }
+
+  .layout-topbar .layout-topbar-end .layout-topbar-actions-end .layout-topbar-items>li.hide-on-mobile {
+    display: none !important;
+  }
+
+  .layout-topbar .layout-topbar-end .layout-topbar-actions-end .layout-topbar-items>li.mobile-always-visible {
+    display: flex !important;
+    align-items: center;
+    position: static !important;
+  }
+
+  /* Asegurar que el botón amarillo del menú funcione */
+  .layout-topbar-start {
+    pointer-events: none;
+
+    >* {
+      pointer-events: auto;
+    }
+  }
+
+  .layout-menu-button {
+    z-index: 998 !important;
+    pointer-events: auto !important;
+  }
+
+  /* Área táctil de cada ítem */
+  .layout-topbar-items>li,
+  .mobile-three-dots {
+    width: 48px !important;
+    height: 48px !important;
+    display: flex !important;
+    align-items: center;
+    justify-content: center;
+  }
+
+  /* Tamaño del ícono (lupa, campana, carrito, etc.) */
+  .layout-topbar-items>li i,
+  .mobile-three-dots i {
+    font-size: 2rem !important;
+  }
+
+  /* Badge de notificación (campana) */
+  .layout-topbar-items .p-badge {
+    font-size: 1.5rem !important;
+    min-width: 1.3rem;
+    height: 1.3rem;
+    line-height: 1.3rem;
+  }
+
+  /* Texto del menú de 3 puntos */
+  .mobile-menu-panel li a span {
+    font-size: 1.1rem !important;
+    font-weight: 500;
+  }
+
+  /* Íconos dentro del menú */
+  .mobile-menu-panel li a i {
+    font-size: 1.2rem !important;
+  }
+
+  /* Más altura por opción (mejor tap) */
+  .mobile-menu-panel li a {
+    padding: 0.9rem 1.25rem !important;
+  }
+}
+
+/* =====================================================
+   MOBILE (<= 991px)
+   ===================================================== */
+@media (max-width: 991px) {
+
+  .crud-caption-buttons .p-button,
+  .crud-caption-buttons .p-splitbutton,
+  .crud-caption-buttons .p-splitbutton-defaultbutton,
+  .crud-caption-buttons .p-splitbutton-menubutton {
+    height: 3.5rem !important;
+    min-height: 3.5rem !important;
+    width: 3.5rem !important;
+    line-height: 1.2 !important;
+  }
+
+  .p-speeddial .p-speeddial-action {
+    width: 3.5rem !important;
+    height: 3.5rem !important;
+  }
+
+  //espacio del boton start (verde con icono de rayo)
+  .start-button-mobile-position {
+    position: absolute !important;
+    width: 85px !important;
+    margin-left: 65px !important;
+  }
+}
+
+/* =====================================================
+   EXTRA SMALL (<= 410px)  <-- ESTA ES LA PARTE QUE EVITA EL OVERFLOW
+   cuando 
+   ===================================================== */
+@media (max-width: 410px) {
+
+  .crud-caption-buttons .p-button,
+  .crud-caption-buttons .p-splitbutton,
+  .crud-caption-buttons .p-splitbutton-defaultbutton,
+  .crud-caption-buttons .p-splitbutton-menubutton {
+    height: 3.2rem !important;
+    min-height: 3rem !important;
+    width: 3rem !important;
+    line-height: 1.2 !important;
+  }
+
+  .p-speeddial .p-speeddial-action {
+    width: 3rem !important;
+    height: 3rem !important;
+  }
+
+  //espacio del boton start (verde con icono de rayo)
+  .start-button-mobile-position {
+    position: absolute !important;
+    width: 80px !important;
+    margin-left: 55px !important;
+  }
+
+  .p-speeddial .p-speeddial-list .p-speeddial-item .p-speeddial-action .p-button-icon {
+    font-size: 0.5rem !important;
+  }
+
+  /* reduce gap entre acciones */
+  .p-speeddial .p-speeddial-list {
+    gap: 0.5rem !important;
+  }
+
+  /* si tu toolbar tiene padding/márgenes que empujan, esto lo estabiliza */
+  .crud-caption-buttons {
+    max-width: 100%;
+    overflow: hidden;
+  }
+}
+
+/* =====================================================
+   EXTRA SMALL (<= 340px)  <-- ESTA ES LA PARTE QUE EVITA EL OVERFLOW
+   depues de 340px vuelve a alcanzar el tamaño minimo del boton crud, donde el panel de los botone
+   vuelve a sobrezar el ancho de la pantalla y genera scroll, el siguiente es 257 pero ya es muy pequeño
+   ===================================================== */
+@media (max-width: 340px) {
+
+  .crud-caption-buttons .p-button,
+  .crud-caption-buttons .p-splitbutton,
+  .crud-caption-buttons .p-splitbutton-defaultbutton,
+  .crud-caption-buttons .p-splitbutton-menubutton {
+    height: 2.1rem !important;
+    min-height: 2.1rem !important;
+    width: 2.1rem !important;
+    line-height: 1.1 !important;
+  }
+
+  .p-speeddial .p-speeddial-action {
+    width: 2.1rem !important;
+    height: 2.1rem !important;
+  }
+
+  //espacio del boton start (verde con icono de rayo)
+  .start-button-mobile-position {
+    position: absolute !important;
+    width: 80px !important;
+    margin-left: 40px !important;
+  }
+
+  .p-speeddial .p-speeddial-list .p-speeddial-item .p-speeddial-action .p-button-icon {
+    font-size: 0.5rem !important;
+  }
+
+  /* reduce gap entre acciones */
+  .p-speeddial .p-speeddial-list {
+    gap: 0.5rem !important;
+  }
+
+  /* si tu toolbar tiene padding/márgenes que empujan, esto lo estabiliza */
+  .crud-caption-buttons {
+    max-width: 100%;
+    overflow: hidden;
+  }
+}
+
+/* =====================================================
+   TEMA: SOLO para el speeddial "crud-speeddial"
+   ===================================================== */
+p-speeddial.crud-speeddial .p-speeddial-list>li>a,
+p-speeddial.crud-speeddial .p-speeddial-list>li>button {
+  background: #b8a276 !important;
+  border: 1px solid #e1d6c3 !important;
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.12);
+}
+
+p-speeddial.crud-speeddial .p-speeddial-list span[class^="pi"] {
+  color: #5b21b6 !important;
+}
+
+p-speeddial.crud-speeddial .p-speeddial-list>li>a:hover,
+p-speeddial.crud-speeddial .p-speeddial-list>li>button:hover {
+  background: #efe7da !important;
+  border-color: #d6c8ae !important;
+}
+
+p-speeddial.crud-speeddial .p-speeddial-list>li>a:focus-visible,
+p-speeddial.crud-speeddial .p-speeddial-list>li>button:focus-visible {
+  box-shadow: 0 0 0 0.2rem rgba(124, 58, 237, 0.25);
+}
+
+
+/* El wrapper NO debe tener scroll */
+/* Contenido */
+/* Contenido */
+
+/* Wrapper: NO scrollea, solo empuja debajo del topbar */
+.layout-content-wrapper {
+  padding-top: calc(var(--header-h) + var(--top-inset)) !important;
+  box-sizing: border-box;
+
+  display: flex;
+  flex-direction: column;
+
+  /* CLAVE: NO restes header aquí porque ya está en padding-top */
+  height: calc(var(--vv-h, 100vh) - var(--bottom-inset)) !important;
+
+  overflow: hidden !important;
+  /* evita que el wrapper sea el scroll */
+}
+
+/* Breadcrumb fijo dentro del wrapper */
+.layout-content-wrapper>[app-breadcrumb] {
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  background: var(--surface-ground);
+  flex: 0 0 auto;
+  overflow: hidden;
+}
+
+/* Solo el centro scrollea */
+.layout-content {
+  flex: 1 1 auto;
+  min-height: 0;
+  /* CLAVE para overflow en flex */
+  overflow: auto !important;
+  -webkit-overflow-scrolling: touch;
+}
+
+
+//El breadcrumb se pega arriba dentro del wrapper
+.layout-content-wrapper>[app-breadcrumb] {
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  background: var(--surface-ground);
+}
+
+//Opcional: si tu breadcrumb tiene 2 filas (breadcrumb + botones/buscador) 
+.layout-content-wrapper>[app-breadcrumb] {
+  padding: 0.5rem 0;
+}
+
+@media screen and (min-width: 1729px) {
+
+
+  /*.layout-content {
+    //width: 1504px;
+    margin-left: auto !important;
+    margin-right: auto !important;
+  }*/
+  //sobreescribe _responsive.scss
+  .layout-content {
+    //width: 1504px;
+    margin-left: 0 !important;
+    margin-right: 0 !important;
+    width: 100% !important;
+  }
 }

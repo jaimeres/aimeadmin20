@@ -194,7 +194,7 @@ export class LoginEnhanced implements OnInit {
         this.messageS.changeMessage('¡Acceso biométrico exitoso!', null, {}, 'success');
 
         // Verificar si el usuario tiene ERP activo (mismo flujo que login tradicional)
-        const currentUser = this.authS.user as any;
+        const currentUser = this.authS.user() as any;
         if (currentUser?.erp?.is_active_ERP) {
           this.cookieS.delete('configuration');
           this.router.navigateByUrl('/');

@@ -126,10 +126,17 @@ export class CustomTableComponent implements OnChanges {
 
   }
   ngOnDestroy() {
+    //quitar esta clase es para se permita el scroll  nivel de toda la pagina, ya que a veces se visualizar 
+    // un pequeño scroll cuando se carga la tabla y como que la pagina no ajusta al 100% de altura
+    document.documentElement.classList.remove('table-fit-mode');
     this.formSubscription?.unsubscribe();
   }
 
   ngOnInit(): void {
+    //añadir esta clase es para se permita el scroll  nivel de toda la pagina, ya que a veces se visualizar
+    // un pequeño scroll cuando se carga la tabla y como que la pagina no ajusta al 100% de altura
+    document.documentElement.classList.add('table-fit-mode');
+
     this.form.set(this.fb.group({
       cols: [{ value: this.columnsSignal().map((column: any) => column.field), disabled: true },
       [Validators.required]],
@@ -149,6 +156,8 @@ export class CustomTableComponent implements OnChanges {
       this.form()?.enable();
     }
   }
+
+
 
   //°°° SOLO LO TENGO PARA VER QUE TANTO SE LLAMAS LAS FUNCIONAES CON LA REDENREZAIÓN 
   p() {

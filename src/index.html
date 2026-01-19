@@ -18,6 +18,31 @@
   <link rel="apple-touch-icon" href="/assets/icons/icon-192.webp" />
   <link rel="manifest" href="/manifest.json" />
   <link rel="stylesheet" type="text/css" href="/layout/styles/preloading.css" />
+
+  <!-- Detección de Capacitor para ajustes de safe-area -->
+  <script>
+    (function () {
+      function setVV() {
+        const vv = window.visualViewport;
+        const h = vv ? vv.height : window.innerHeight;
+        const top = vv ? vv.offsetTop : 0;
+        const bottom = Math.max(0, window.innerHeight - h - top);
+
+        document.documentElement.style.setProperty('--vv-h', h + 'px');
+        document.documentElement.style.setProperty('--vv-top', top + 'px');
+        document.documentElement.style.setProperty('--vv-bottom', bottom + 'px');
+      }
+
+      window.addEventListener('resize', setVV);
+      if (window.visualViewport) {
+        window.visualViewport.addEventListener('resize', setVV);
+        window.visualViewport.addEventListener('scroll', setVV);
+      }
+      setVV();
+    })();
+  </script>
+
+
 </head>
 
 <body>
