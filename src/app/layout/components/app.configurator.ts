@@ -47,9 +47,7 @@ declare type SurfacesType = {
     <p-drawer [(visible)]="visible" (onHide)="layoutService.hideConfigSidebar()" position="right" [transitionOptions]="'.3s cubic-bezier(0, 0, 0.2, 1)'" styleClass="layout-config-sidebar w-80" header="Settings">
       <div class="flex flex-col gap-4">
         <div>
-
-        -----------------
-          <span class="text-lg font-semibold">Primary</span>
+          <span class="text-lg font-semibold">Apariencia</span>
           <div class="pt-2 flex gap-2 flex-wrap">
             @for (primaryColor of primaryColors(); track primaryColor.name) {
               <button
@@ -69,7 +67,7 @@ declare type SurfacesType = {
         </div>
 
         <div>
-          <span class="text-lg font-semibold">Surface</span>
+          <span class="text-lg font-semibold">Superficie</span>
           <div class="pt-2 flex gap-2 flex-wrap">
             @for (surface of surfaces; track surface.name) {
               <button
@@ -90,43 +88,43 @@ declare type SurfacesType = {
 
         <!-- 'Color Scheme' Section -->
         <div class="flex flex-col gap-2">
-          <span class="text-lg font-semibold">Color Scheme</span>
+          <span class="text-lg font-semibold">Color del tema</span>
           <p-selectbutton [(ngModel)]="darkTheme" [options]="themeOptions" optionLabel="name" optionValue="value" [allowEmpty]="false"></p-selectbutton>
         </div>
 
         <ng-container *ngIf="!simple">
           <div class="flex flex-col gap-2">
-            <span class="text-lg font-semibold">Menu Type</span>
+            <span class="text-lg font-semibold">Tipo de menú</span>
             <div class="flex flex-wrap flex-col gap-3">
               <div class="flex">
                 <div class="flex items-center gap-2 w-1/2">
                   <p-radio-button name="menuMode" value="static" [(ngModel)]="menuMode"></p-radio-button>
-                  <label for="static">Static</label>
+                  <label for="static">Estático</label>
                 </div>
 
                 <div class="flex items-center gap-2 w-1/2">
                   <p-radio-button name="menuMode" value="overlay" [(ngModel)]="menuMode"></p-radio-button>
-                  <label for="overlay">Overlay</label>
+                  <label for="overlay">Superposición</label>
                 </div>
               </div>
               <div class="flex">
                 <div class="flex items-center gap-2 w-1/2">
                   <p-radio-button name="menuMode" value="slim" [(ngModel)]="menuMode"></p-radio-button>
-                  <label for="slim">Slim</label>
+                  <label for="slim">Delgado</label>
                 </div>
                 <div class="flex items-center gap-2 w-1/2">
                   <p-radio-button name="menuMode" value="slim-plus" [(ngModel)]="menuMode" inputId="slim-plus"></p-radio-button>
-                  <label for="slim-plus">Slim+</label>
+                  <label for="slim-plus">Delgado+</label>
                 </div>
               </div>
               <div class="flex">
                 <div class="flex items-center gap-2 w-1/2">
                   <p-radio-button name="menuMode" value="reveal" [(ngModel)]="menuMode"></p-radio-button>
-                  <label for="reveal">Reveal</label>
+                  <label for="reveal">Automático</label>
                 </div>
                 <div class="flex items-center gap-2 w-1/2">
                   <p-radio-button name="menuMode" value="drawer" [(ngModel)]="menuMode" inputId="drawer"></p-radio-button>
-                  <label for="drawer">Drawer</label>
+                  <label for="drawer">Automático+</label>
                 </div>
               </div>
               <div class="flex">
@@ -139,25 +137,25 @@ declare type SurfacesType = {
           </div>
 
           <div class="flex flex-col gap-2">
-            <span class="text-lg font-semibold">Menu Profile</span>
+            <span class="text-lg font-semibold">Perfil del menú</span>
             <div class="flex flex-wrap flex-col gap-3">
               <div class="flex">
                 <div class="flex items-center gap-2 w-1/2">
                   <p-radio-button name="menuProfilePosition" value="start" [(ngModel)]="menuProfilePosition"></p-radio-button>
-                  <label for="start">Start</label>
+                  <label for="start">Inicio</label>
                 </div>
 
                 <div class="flex items-center gap-2 w-1/2">
                   <p-radio-button name="menuProfilePosition" value="end" [(ngModel)]="menuProfilePosition"></p-radio-button>
-                  <label for="end">End</label>
+                  <label for="end">Fin</label>
                 </div>
               </div>
             </div>
           </div>
 
           <div class="flex flex-col gap-2">
-            <span class="text-lg font-semibold">Menu Themes</span>
-            <p *ngIf="isDarkTheme(); else menu_theme_selector">Menu themes are only available in light mode by design as large surfaces can emit too much brightness in dark mode.</p>
+            <span class="text-lg font-semibold">Temas del menú</span>
+            <p *ngIf="isDarkTheme(); else menu_theme_selector">Los temas del menú solo están disponibles en modo claro por diseño, ya que las superficies grandes pueden emitir demasiado brillo en modo oscuro.</p>
             <ng-template #menu_theme_selector>
               <div class="pt-2 flex gap-2 flex-wrap">
                 @for (theme of menuThemes; track theme) {
@@ -175,7 +173,7 @@ declare type SurfacesType = {
           </div>
 
           <div class="flex flex-col gap-2">
-            <span class="text-lg font-semibold">Topbar Themes</span>
+            <span class="text-lg font-semibold">Temas de la barra superior</span>
             <div class="pt-2 flex gap-2 flex-wrap">
               @for (theme of topbarThemes; track theme) {
                 <button
@@ -206,8 +204,8 @@ export class AppConfigurator {
   primeng = inject(PrimeNG);
 
   themeOptions = [
-    { name: 'Light', value: false },
-    { name: 'Dark', value: true }
+    { name: 'Claro', value: false },
+    { name: 'Oscuro', value: true }
   ];
 
   menuThemes = [

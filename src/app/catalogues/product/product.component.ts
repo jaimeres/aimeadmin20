@@ -86,6 +86,17 @@ export class ProductComponent extends CRUD implements OnInit {
       { field: 'sales_taxes', default: null }, //para lista de precios
     ];
 
+    //debo deprecarlo, elamente no tiene sentido tenerlo ya que es similar a additionalFieldsIncluded
+    //ademas el principio donde agrego als erializado base_product_data ya no no creop ocuparlo porque existe cols.fiels
+    //    "cols": {
+    //    "hide": True,
+    //    "label": "",
+    //    "sortable": True,
+    //    "locked": False,
+    //    "fields":  {
+    //        #0:{"field":"name"}
+    //    }
+    //}
     this.additionalFieldsAppCols[this.typeDefault as keyof typeof this.additionalFieldsAppCols] = {
       'base_product_data': { 'column_header_prefix': '', 'form_prefix': '', 'default_field': 'name' },
     };

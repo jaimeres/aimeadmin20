@@ -43,9 +43,7 @@ export class WarehouseMovementComponent extends CRUD implements OnInit {
     this.typeDefault = 'inventory-movement-detail';
     this.app[this.typeDefault] = 'inventories/inventory-movement-detail';
     //this.module[this.typeDefault] = 'MA';
-
-
-
+    //this.columns[this.typeDefault] = ['id', 'quantity']
 
     this.initCRUD();
 

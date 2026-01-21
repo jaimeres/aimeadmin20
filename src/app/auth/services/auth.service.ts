@@ -624,6 +624,7 @@ export class AuthService {
           hide: fieldConfig['hide'] !== undefined ? fieldConfig['hide'] : false,
           sortable: fieldConfig['sortable'] !== undefined ? fieldConfig['sortable'] : true,
           locked: fieldConfig['locked'] !== undefined ? fieldConfig['locked'] : false,
+          fields: fieldConfig['fields']
         };
       } /*else {
           // Si no se encuentra en fields.cols, usar valores por defecto
@@ -645,7 +646,8 @@ export class AuthService {
         'hide': columnInfo.hide,
         'sortable': columnInfo.sortable,
         //'label': columnInfo.label,
-        'locked': columnInfo.locked
+        'locked': columnInfo.locked,
+        'fields': columnInfo.fields
       };
     }
   }

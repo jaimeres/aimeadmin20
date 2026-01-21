@@ -665,6 +665,20 @@ html[data-theme="dark"] .layout-topbar .product-search-container {
   background: var(--surface-ground);
 }
 
+/* Tamaño del ícono (lupa, campana, carrito, etc.) */
+.layout-topbar-items>li i,
+.mobile-three-dots i {
+  font-size: 2rem !important;
+}
+
+/* Badge de notificación (campana) */
+.layout-topbar-items .p-badge {
+  font-size: 1.5rem !important;
+  min-width: 1.3rem;
+  height: 1.3rem;
+  line-height: 1.3rem;
+}
+
 /* =====================================================
    MEDIA QUERY MÓVIL (max-width: 991px), topbar y fit en las columnas
    ===================================================== */
@@ -821,19 +835,7 @@ html[data-theme="dark"] .layout-topbar .product-search-container {
     justify-content: center;
   }
 
-  /* Tamaño del ícono (lupa, campana, carrito, etc.) */
-  .layout-topbar-items>li i,
-  .mobile-three-dots i {
-    font-size: 2rem !important;
-  }
 
-  /* Badge de notificación (campana) */
-  .layout-topbar-items .p-badge {
-    font-size: 1.5rem !important;
-    min-width: 1.3rem;
-    height: 1.3rem;
-    line-height: 1.3rem;
-  }
 
   /* Texto del menú de 3 puntos */
   .mobile-menu-panel li a span {
@@ -1062,4 +1064,25 @@ p-speeddial.crud-speeddial .p-speeddial-list>li>button:focus-visible {
     margin-right: 0 !important;
     width: 100% !important;
   }
+}
+
+
+
+/* que el root del splitbutton ocupe todo */
+.sb-full.p-splitbutton {
+  width: 100%;
+  display: flex;
+  /* en lugar de inline-flex */
+}
+
+/* que el botón principal se estire */
+.sb-full.p-splitbutton .p-splitbutton-button {
+  flex: 1 1 auto;
+  min-width: 0;
+  /* evita overflow raro en flex */
+}
+
+/* el botón de flecha que no crezca */
+.sb-full.p-splitbutton .p-splitbutton-menubutton {
+  flex: 0 0 auto;
 }

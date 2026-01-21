@@ -16,7 +16,7 @@ import { Vars } from './vars.class';
   providedIn: 'root'
 })*/
 export class CRUD extends Vars /*implements OnInit*/ {
-  // cada vez que cambian los customField se actuakliza
+  // cada vez que cambian los customField se actualiza
   public customField = computed(() => this.crudS.customField());
   // calcula el estilo del dialogo, cada vez que hay un cambio de aplicacion
 
@@ -131,6 +131,8 @@ export class CRUD extends Vars /*implements OnInit*/ {
    */
   changePos(pos: any): void {
     //||| pos this.pos() se debe inicializar aqui
+
+    //console.log('**********------------//////', pos);
 
     this.pos.set(pos);
     if (!this.drawForm()[pos]) {
@@ -406,7 +408,7 @@ export class CRUD extends Vars /*implements OnInit*/ {
                   const userField = subField.user?.field || 'username';
                   const passwordField = subField.password?.field || 'password';
 
-                  console.log('-------', fieldName, userField, passwordField);
+                  //console.log('-------', fieldName, userField, passwordField);
 
 
                   const userValidators: any[] = [];
@@ -455,7 +457,7 @@ export class CRUD extends Vars /*implements OnInit*/ {
                 this.fb.group(signatureFormGroup)
               ]);
 
-              console.log('FormGroup de firma creado:', signatureFormGroup);
+              //console.log('FormGroup de firma creado:', signatureFormGroup);
 
             } else if (field.type === 'table') {
               // Procesar tipo table - crear FormArray con FormGroups para cada fila
@@ -463,7 +465,7 @@ export class CRUD extends Vars /*implements OnInit*/ {
               const initialRows = field.initial_rows || 0;
               const isRequired = field.required || false;
 
-              console.log('Procesando tabla:', fieldData.field, 'con', initialRows, 'filas iniciales', 'required:', isRequired);
+              //console.log('Procesando tabla:', fieldData.field, 'con', initialRows, 'filas iniciales', 'required:', isRequired);
 
               // Validador personalizado para FormArray: requiere al menos una fila
               const minLengthArrayValidator = (min: number): ValidatorFn => {
@@ -536,7 +538,7 @@ export class CRUD extends Vars /*implements OnInit*/ {
               // Crear el FormArray con validadores
               formFields[fieldData.field] = this.fb.array<FormGroup>(initialRowsArray, arrayValidators);
 
-              console.log('FormArray de tabla creado:', fieldData.field, 'con validadores:', arrayValidators.length > 0 ? 'SI' : 'NO');
+              //console.log('FormArray de tabla creado:', fieldData.field, 'con validadores:', arrayValidators.length > 0 ? 'SI' : 'NO');
 
             } else if (field.type === 'date') {
               // Procesar tipo date fuera de signature
@@ -1178,11 +1180,7 @@ export class CRUD extends Vars /*implements OnInit*/ {
       }
     }
 
-    //recorre this.drawForm().field donde encontraras claves como general, form y otros 
-    //console.log('++++++11', this.drawForm()[posIndex]);
-
     const draw = this.drawForm()[posIndex];
-
     const fields_prefixes = draw?.fields_prefixes || [];
 
     //sumar form_fields_data_ a fields_prefixes si no existe 
@@ -1210,38 +1208,40 @@ export class CRUD extends Vars /*implements OnInit*/ {
 
     // Si todavia relationshipsLocal tiene valores porque no vengan de la consulta OPTIONS, se asignan a relationOptions,
     // ya que son valores locales adicionales a los que vienen del servidor
-    /* if (relationshipsLocal.length > 0) {
-       // Si hay valores en relationshipsLocal, se asignan a relationOptions
-       relationshipsLocal.forEach((val_local) => {
-         relationOptions.push(val_local);
-       });
-     }
- 
-     if (this.includeFieldsForm[posIndex]) {
-       const includeField = this.includeFieldsForm[posIndex];
- 
-       includeField.forEach((item) => {
-         const validators = [];
-         //const  disabled = item.disabled ? true : false;
-         // se agrega los validadores si en el servidor es requerido
-         if (item.required) {
-           validators.push(Validators.required);
-         }
- 
-         // se agrega los validadores de max_length del servidor
-         if (item.max_length) {
-           validators.push(Validators.maxLength(item.max_length));
-         }
- 
-         //tambien los campos iniciales pueden ser deshabilitados
-         if (item.disabled) {
-           this.initialDisabledForm[item.field] = true;
-         }
- 
-         //no tiene caso disabled ya que al restablecer el formulario se deshabilita porque llama a enableForm
-         formFields[field_prefix + item.field] = this.fb.control({ value: item.default, disabled: true }, { nonNullable: true, validators: validators });
-       });
-     }*/
+    /* 
+        if (relationshipsLocal.length > 0) {
+          // Si hay valores en relationshipsLocal, se asignan a relationOptions
+          relationshipsLocal.forEach((val_local) => {
+            relationOptions.push(val_local);
+          });
+        }
+  
+        if (this.includeFieldsForm[posIndex]) {
+        const includeField = this.includeFieldsForm[posIndex];
+  
+        includeField.forEach((item) => {
+          const validators = [];
+          //const  disabled = item.disabled ? true : false;
+          // se agrega los validadores si en el servidor es requerido
+          if (item.required) {
+            validators.push(Validators.required);
+          }
+  
+          // se agrega los validadores de max_length del servidor
+          if (item.max_length) {
+            validators.push(Validators.maxLength(item.max_length));
+          }
+  
+          //tambien los campos iniciales pueden ser deshabilitados
+          if (item.disabled) {
+            this.initialDisabledForm[item.field] = true;
+          }
+  
+          //no tiene caso disabled ya que al restablecer el formulario se deshabilita porque llama a enableForm
+          formFields[field_prefix + item.field] = this.fb.control({ value: item.default, disabled: true }, { nonNullable: true, validators: validators });
+        });
+        }
+    */
     this.relationships[posIndex] = relationOptions;
     console.log('formmmmmmmmmmmmmmmmmm', formFields);
     return this.fb.group(formFields);
@@ -1259,10 +1259,10 @@ export class CRUD extends Vars /*implements OnInit*/ {
     if (pos === null) return cols; // Retornar cols vacío si pos es null
 
     // Obtener configuración de columnas
-    const configCols = this.crudS.config_cols(pos) || {};
+    //const configCols 
 
     // La configuración está directamente en configCols, no en configCols.cols
-    const colsConfig = configCols;
+    const colsConfig = this.crudS.config_cols(pos) || {};
     const safePos = pos ?? 0; // Crear una variable segura para usar como índice
 
     for (const field in jsonFields) {
@@ -1279,6 +1279,7 @@ export class CRUD extends Vars /*implements OnInit*/ {
             continue;
           }
         }
+
 
         // llama recursivamente si el campo tiene hijos
         const joinModelFields = field; //+ '__name'
@@ -1371,6 +1372,16 @@ export class CRUD extends Vars /*implements OnInit*/ {
             const orderValue = parseInt(fieldConfig.order, 10);
             columnObj._order = orderValue;
           }
+
+
+
+          if (colsConfig[field]?.fields) {
+            console.log('202020202020', colsConfig[field], colsConfig[field]?.fields);
+
+            this.generateJSONColumns(colsConfig[field]?.fields, pos, cols)
+          }
+
+
         }
 
         cols.push(columnObj);
@@ -1848,7 +1859,7 @@ export class CRUD extends Vars /*implements OnInit*/ {
         const additionalFieldsAppCols = this.additionalFieldsAppCols[pos] || [];
         const data = this.DJAtoObject({ resp, additionalFieldsAppCols });
 
-        console.log('000*****', data);
+        //console.log('000*****', data);
 
 
         //obtener los campos classifers del formulario form()
@@ -1990,8 +2001,8 @@ export class CRUD extends Vars /*implements OnInit*/ {
     const height = dialog?.height;
     const singular = dialog?.singular;
     const plural = dialog?.plural;
-    const singularIndefiniteArticle = dialog?.singular_indefinite_article;
-    const pluralDefiniteArticle = dialog?.plural_definite_article;
+    const singularIndefiniteArticle = dialog?.singularIndefiniteArticle;
+    const pluralDefiniteArticle = dialog?.pluralDefiniteArticle;
     const tab = dialog?.tab;
 
     //los principales tienen su propia  width y height, ESTO CASI ES EXLUCIVO PARA child_form_fields
@@ -3291,9 +3302,9 @@ export class CRUD extends Vars /*implements OnInit*/ {
           // este  objecto es para que agregar campos adicionales al objecto principal desde la relación incluida
           const fields_include = {
             classifier_level: [
-              { original_field: 'level', renamed_fields: 'level' },
-              { original_field: 'classifier_type', renamed_fields: 'classifier_type' },
-              { original_field: 'is_required', renamed_fields: 'is_required' }
+              { field: 'level', renamed_fields: 'level' },
+              { field: 'classifier_type', renamed_fields: 'classifier_type' },
+              { field: 'is_required', renamed_fields: 'is_required' }
             ]
           };
 
@@ -3301,10 +3312,10 @@ export class CRUD extends Vars /*implements OnInit*/ {
           //los clasificadores y evitar iteraciones innecesarias
           const classifiersFormat = this.DJAtoObject({
             resp: classifiers,
-            additionalFieldsIncluded: null,
+            /*additionalFieldsIncluded: null,
             customField: null,
             fieldsBool: null,
-            moreFields: null
+            moreFields: null*/
           });
 
           const pos: any = this.pos() ?? 0;
@@ -3930,14 +3941,30 @@ export class CRUD extends Vars /*implements OnInit*/ {
 
   /**
    * @param elementos Elementos que se transformarán, respuesta del servidor
+
    * @param additionalFieldsIncluded Campos adicionales que se deben agregar de la relacion incluida, si no se envia,
    *   solo retornará nombre_de_campo_incluido__name, si quiero que regrese otro valor, por ejeplo, level, tengo que enviar
-   *   [{ original_field_included: 'level', renamed_fields: 'level'}], notese que en valo lo regresara en level, por, renamed_fields: 'level',
-   *   original_field_included debe existir en el included que retorna el servidor
+   *   [{ field_included: 'level', renamed_fields: 'level'}], notese que en valo lo regresara en level, por, renamed_fields: 'level',
+
    * @param customField nombre de campos personalizados, la clave es el campo en ingles que envía el servidor
    * @param fieldsBool Campos con valor booleano que convierte a texto en base al valor bool
    * @param moreFields Toma el id y agrega un campo nombre del campo __text, y lo convierte en texto debe ser un array
    * que contienes arrays donde debe venir el nombre del campo y el array de valores [[nombre_del_campo,{id:1, name:'Nombre'}],[]],
+   * @param node regresa los valores en formato para nodo, con children, expanded, etc
+   * @param additionalFieldsAppCols Campos adicionales que se deben agregar desde las columnas de la app actual
+   *        °°°realmente esta pensado para el productos o campos que tiene el mismo principio, debo deprecarlo ya que cols de la configuración ya hace eso
+   *          "cols": {
+                "hide": True,
+                "label": "",
+                "sortable": True,
+                "locked": False,
+                "fields":  {
+                    #0:{"field":"name"}
+                }
+            },
+            OJOOOOOO: si pienso reemplzarlo por additionalFieldsIncluded debo revisar el autocomplete ya que el panel lo considera y si lo pongo
+            para el panel podria afectar a las columnas de la tabla
+            tambien hay que tomar en cuenta que additionalFieldsAppCols requieere que el campo termine en _data
    * @returns elementos transformados, un array con todos los campos en el cuerpo del objeto principal
    */
   DJAtoObject({

@@ -996,10 +996,12 @@
       </div>
 
       <div *ngSwitchCase="'document'" class="w-full">
-        <p-splitbutton styleClass="height-input-custom w-full" class="w-full" (onClick)="previewCamera()"
+        <p-splitbutton styleClass="height-input-custom w-full sb-full" (onClick)="previewCamera()"
           [label]="entry.value?.label" [pAutoFocus]="entry.value?.autofocus || false"
           [disabled]="entry.value?.disabled || false">
         </p-splitbutton>
+
+
       </div>
 
       <!-- BUTTON COMPONENT FREE -->

@@ -254,6 +254,8 @@ export class GeneralService {
    */
   search_include(included: any[], id: string, relationshipName: string, additionalFieldsIncluded: any, return_attributes = false) {
     const relationship_name: any = [];
+    console.log('212121212121', additionalFieldsIncluded);
+
     for (const item of included) {
       if (item.id == id) {
         if (return_attributes) {
@@ -262,25 +264,17 @@ export class GeneralService {
         relationship_name[relationshipName + '__name'] = item.attributes.username || item.attributes.name;
         if (additionalFieldsIncluded) {
           for (const field of additionalFieldsIncluded[relationshipName]) {
-            relationship_name[relationshipName + '_' + field.renamed_fields] = item.attributes[field.original_field];
+            const renamed_fields = field.field || field.original_field;
+            relationship_name[relationshipName + '_' + renamed_fields] = item.attributes[field.field.field];
           }
         }
         break;
       }
     }
-    //console.log(relationship_name);
 
     return relationship_name;
   }
-  /*search_include(included, id, relationshipName, additionalFieldsIncluded): string {
-    for (const item of included) {
- 
-      if (item.id == id) {
-        return item.attributes.username || item.attributes.name;
-      }
-    }
-    return '';
-  }*/
+
 
   // genera ua función llamada timeZone que reciba un paramtero y los convierta a la zona horaria local
   // para que se pueda utilizar en el formulario
@@ -346,25 +340,26 @@ export class GeneralService {
    * Debe ser un array que contienes arrays donde debe venir el nombre del campo y el array de valores [[nombre_del_campo,{id:1, name:'Nombre'}],[]]
    * @returns
    */
-  DJAtoObject({
-    respDJA,
-    additionalFieldsIncluded = null,
-    customField = [],
-    fieldsBool = [],
-    moreFields = [],
-    timeZone = [],
-    node = false,
-    additionalFieldsAppCols = []
-  }: {
-    respDJA: any;
-    additionalFieldsIncluded?: any;
-    customField?: any;
-    fieldsBool?: any[];
-    moreFields?: any[];
-    timeZone?: any[];
-    node?: boolean;
-    additionalFieldsAppCols?: any[];
-  }) {
+  DJAtoObject(
+    {
+      respDJA,
+      additionalFieldsIncluded = null,
+      customField = [],
+      fieldsBool = [],
+      moreFields = [],
+      timeZone = [],
+      node = false,
+      additionalFieldsAppCols = []
+    }: {
+      respDJA: any;
+      additionalFieldsIncluded?: any;
+      customField?: any;
+      fieldsBool?: any[];
+      moreFields?: any[];
+      timeZone?: any[];
+      node?: boolean;
+      additionalFieldsAppCols?: any[];
+    }) {
     let included = respDJA?.included;
     let dataDJA = respDJA?.data;
     let is_object = false;

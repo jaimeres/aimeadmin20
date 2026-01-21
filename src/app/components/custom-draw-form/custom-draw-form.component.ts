@@ -495,6 +495,16 @@ export class CustomDrawFormComponent {
   completeMethod(event: any, entry: any) {
     const filter = "filter[search]=" + event.query;
     const include = entry.include;
+    //debo cambiarlo por cols de de combo
+    //"cols": {
+    //    "hide": True,
+    //    "label": "",
+    //    "sortable": True,
+    //    "locked": False,
+    //    "fields":  {
+    //        #0:{"field":"name"}
+    //    }
+    //}
     const additionalFieldsIncluded = entry.fields_included_relationships;
     const app = this.crudS.appType[entry.data_type]?.app;
     const type = this.crudS.appType[entry.data_type]?.type;
