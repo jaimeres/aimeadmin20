@@ -12,18 +12,19 @@ import { debounceTime, Subscription } from 'rxjs';
   imports: [ButtonModule, ChartModule, MenuModule, Ripple],
   template: `<div class="card h-full">
     <div class="flex items-center justify-between mb-2">
-      <span class="text-xl font-semibold m-0">Insights</span>
+      <span class="text-xl font-semibold m-0">M3 diesel VS m3 bombeados</span>
       <div>
         <button pButton pRipple icon="pi pi-ellipsis-h" rounded text (click)="menu.toggle($event)"></button>
         <p-menu #menu popup [model]="items" />
       </div>
     </div>
     <div class="border-b border-surface text-sm text-muted-color mb-2 flex items-center">
-      <span>November 22 - November 29</span>
+      <!--<span>November 22 - November 29</span>-->
+      <span>Semana actual </span>
       <button pButton pRipple label="Semi/Full Data" class="ml-auto" text (click)="changeDoughnutDataView()"></button>
     </div>
     <p-chart #doughnutChart type="doughnut" [data]="doughnutData" [options]="doughnutOptions" height="200" />
-    <div class="flex flex-col justify-center">
+    <!--<div class="flex flex-col justify-center">
       <div class="flex flex-row items-center mt-6 px-4">
         <i class="pi pi-thumbs-up p-4 rounded-full bg-green-500 text-white"></i>
         <div class="flex flex-col ml-4">
@@ -40,7 +41,7 @@ import { debounceTime, Subscription } from 'rxjs';
         </div>
         <span class="text-indigo-500 ml-auto">6</span>
       </div>
-    </div>
+    </div>-->
   </div>`
 })
 export class InsightsWidget implements OnInit, OnDestroy {
@@ -111,7 +112,7 @@ export class InsightsWidget implements OnInit, OnDestroy {
     const backgroundColor = this.colorKeys.map((color: string) => documentStyle.getPropertyValue(`--p-${color}-${suffix}`));
 
     return {
-      labels: ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'],
+      labels: ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'],
       datasets: [
         {
           data: [11, 29, 71, 33, 28, 95, 6],

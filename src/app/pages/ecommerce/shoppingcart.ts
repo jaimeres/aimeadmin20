@@ -8,7 +8,7 @@ import { SelectModule } from 'primeng/select';
   selector: 'app-shopping-cart',
   imports: [ButtonModule, RippleModule, SelectModule],
   template: `
-    <div class="card">
+    <!--<div class="card">
       <div class="flex flex-col items-center mb-12">
         <div class="text-surface-900 dark:text-surface-0 text-4xl mb-6 font-medium">Your cart total is $82.00</div>
         <p class="text-surface-700 dark:text-surface-100 font-medium text-xl mt-0 mb-6">FREE SHIPPING AND RETURN</p>
@@ -114,7 +114,7 @@ import { SelectModule } from 'primeng/select';
           </li>
         </ul>
       </div>
-    </div>
+    </div>-->
   `
 })
 export class ShoppingCart {

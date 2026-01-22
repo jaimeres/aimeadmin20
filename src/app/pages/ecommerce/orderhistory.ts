@@ -8,7 +8,8 @@ import { InputIconModule } from 'primeng/inputicon';
   selector: 'app-order-history',
   imports: [DividerModule, IconFieldModule, InputIconModule, CommonModule],
   template: `
-    <div class="card">
+  
+    <!--<div class="card">
       <div class="flex flex-col md:flex-row justify-between items-center mb-6">
         <div class="flex flex-col text-center md:text-left">
           <span class="text-surface-900 dark:text-surface-0 text-2xl mb-2">My Orders</span>
@@ -78,11 +79,15 @@ import { InputIconModule } from 'primeng/inputicon';
           >
         </div>
       </div>
-    </div>
+    </div>-->
+
+
+
+    
   `
 })
 export class OrderHistory {
-  orders = [
+  /*orders = [
     {
       orderNumber: '45123',
       orderDate: '7 February 2023',
@@ -145,5 +150,5 @@ export class OrderHistory {
         }
       ]
     }
-  ];
+  ];*/
 }

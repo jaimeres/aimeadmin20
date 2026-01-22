@@ -21,7 +21,8 @@ export class UpdateManagerService {
   public currentVersion = this.currentVersion$.asObservable();
   public isOffline = this.isOffline$.asObservable();
 
-  private isInitialized = false;
+  //inicializo el sistema de actualizaciones
+  private isInitialized = true;
 
   constructor(
     private updateService: UpdateService,
@@ -46,6 +47,7 @@ export class UpdateManagerService {
     try {
       // Obtener versión actual
       const appInfo = await this.updateService.getCurrentAppInfo();
+      console.log(appInfo);
       this.currentVersion$.next(`${appInfo.versionCode} (${appInfo.versionName})`);
 
       console.log('🚀 UpdateManager inicializado');

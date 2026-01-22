@@ -9,8 +9,63 @@ import { TabsModule } from 'primeng/tabs';
 @Component({
   selector: 'app-product-list',
   imports: [CommonModule, FormsModule, InputNumberModule, ButtonModule, RippleModule, TabsModule],
+
+
   template: `
-    <div class="card">
+
+
+<div
+  class="surface-card border-round-xl overflow-hidden"
+  style="border-left: 6px solid var(--primary-color);">
+
+  <div class="p-4 text-center">
+    
+    <!-- Icono -->
+    <div
+      class="flex align-items-center justify-content-center border-circle bg-primary-100 text-primary w-4rem h-4rem mb-3 mx-auto">
+      <i class="pi pi-megaphone text-2xl"></i>
+    </div>
+
+    <!-- Título -->
+    <div class="text-900 font-semibold text-xl mb-2">
+      Haz visible tu oferta
+    </div>
+
+    <!-- Texto -->
+    <div class="text-600 mb-3">
+      Pronto podrás publicar artículos, servicios y promociones para que otros usuarios los vean dentro de la plataforma.
+    </div>
+
+    <!-- Badge estado -->
+    <div class="flex justify-content-center mb-3">
+      <span class="p-tag p-tag-rounded p-tag-warning">
+        Disponible muy pronto
+      </span>
+    </div>
+
+    <!-- CTA deshabilitado -->
+    <button
+      pButton
+      type="button"
+      label="Publicar (próximamente)"
+      icon="pi pi-clock"
+      class="p-button-sm w-full"
+      disabled>
+    </button>
+
+    <!-- Texto secundario -->
+    <div class="text-500 text-sm mt-3">
+      Estamos preparando esta funcionalidad para ti
+    </div>
+  </div>
+</div>
+
+
+
+
+
+  
+    <!--<div class="card">
       <div class="text-surface-900 dark:text-surface-0 font-medium text-4xl mb-6">Popular Products</div>
       <p class="mt-0 p-0 mb-8 text-surface-700 dark:text-surface-100 text-2xl">Exclusive Selection</p>
       <div class="grid grid-cols-12 gap-4 -mt-4 -ml-4 -mr-4">
@@ -88,7 +143,7 @@ import { TabsModule } from 'primeng/tabs';
           </div>
         </div>
       </div>
-    </div>
+    </div>-->
   `,
   styles: `
     @media screen and (max-width: 991px) {

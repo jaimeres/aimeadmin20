@@ -11,7 +11,8 @@ import { RatingsWidget } from '@/pages/dashboard/analytics/components/ratingswid
 @Component({
   selector: 'app-dashboard-analytics',
   standalone: true,
-  imports: [MonthlyComparisonWidget, InsightsWidget, StatsWidget, StoresWidget, TopSearchesWidget, AnalyticsTableWidget, ExpensesWidget, RatingsWidget],
+  //StatsWidget, StoresWidget, TopSearchesWidget, AnalyticsTableWidget, ExpensesWidget, RatingsWidget
+  imports: [MonthlyComparisonWidget, InsightsWidget,],
   template: `<div class="grid grid-cols-12 gap-8">
     <div class="col-span-12 md:col-span-8">
       <monthly-comparison-widget />
@@ -19,7 +20,7 @@ import { RatingsWidget } from '@/pages/dashboard/analytics/components/ratingswid
     <div class="col-span-12 md:col-span-4">
       <insights-widget />
     </div>
-    <stats-widget />
+    <!--<stats-widget />
     <div class="col-span-12 md:col-span-12">
       <stores-widget />
     </div>
@@ -34,7 +35,7 @@ import { RatingsWidget } from '@/pages/dashboard/analytics/components/ratingswid
     </div>
     <div class="col-span-12 md:col-span-8">
       <ratings-widget />
-    </div>
+    </div>-->
   </div>`
 })
-export class DashboardAnalytics {}
+export class DashboardAnalytics { }

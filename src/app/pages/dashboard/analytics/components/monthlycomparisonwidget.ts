@@ -13,7 +13,7 @@ import { debounceTime, Subscription } from 'rxjs';
   imports: [ButtonModule, ChartModule, RippleModule],
   template: `<div class="card h-full">
     <div class="flex items-center justify-between mb-4">
-      <span class="text-xl font-semibold m-0">Monthly Comparison</span>
+      <span class="text-xl font-semibold m-0">Indicadores Clave de Desempeño (KPI)</span>
       <button pButton pRipple label="Vertical/Stacked Data" class="ml-auto" text (click)="changeMonthlyDataView()"></button>
     </div>
 
@@ -32,8 +32,8 @@ export class MonthlyComparisonWidget implements OnInit, OnDestroy {
   colorKeys = ['indigo', 'blue', 'cyan', 'teal', 'green', 'emerald', 'lime', 'amber', 'yellow'];
 
   yearsData = [
-    { year: '2016', data: [6, 25, 47, 12, 7, 70, 42] },
-    { year: '2017', data: [81, 3, 5, 11, 59, 47, 99] },
+    //{ year: '2016', data: [6, 25, 47, 12, 7, 70, 42] },
+    //{ year: '2017', data: [81, 3, 5, 11, 59, 47, 99] },
     { year: '2018', data: [68, 47, 46, 46, 61, 70, 94] },
     { year: '2019', data: [31, 9, 18, 76, 6, 11, 79] },
     { year: '2020', data: [85, 37, 47, 29, 2, 10, 54] },
@@ -43,7 +43,7 @@ export class MonthlyComparisonWidget implements OnInit, OnDestroy {
     { year: '2024', data: [31, 4, 35, 74, 47, 35, 46] }
   ];
 
-  months = ['January', 'February', 'March', 'April', 'May', 'June', 'July'];
+  months = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio'];
 
   subscription!: Subscription;
 

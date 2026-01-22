@@ -23,11 +23,6 @@ export class CRUD extends Vars /*implements OnInit*/ {
   // Inyección directa del Router
   protected router = inject(Router);
 
-  /*public styleClassDialog = computed(() => {
-    const pos = this.pos() ?? 0;
-    return this.dialogSizeClass();
-  });*/
-
   constructor(protected override crudS: CRUDService, pos = '') {
     super(crudS);
 
@@ -56,16 +51,6 @@ export class CRUD extends Vars /*implements OnInit*/ {
     //this.getClassifierGlobal();
     this.searchRemote = undefined;
   }
-
-  /*initApp(pos: string, drawFormData: any) {
-    // en español las palabras "los" y "el" son artículos definidos, "un" y "una" son artículos indefinidos
-    this.type[pos] = pos;
-    this.unifyDialog(pos, drawFormData?.dialog);
-    //this.singular[this.type[pos]] = drawFormData['dialog'].singular;
-    //this.plural[this.type[pos]] = drawFormData['dialog'].plural;
-    //this.singularIndefiniteArticle[this.type[pos]] = drawFormData['dialog'].singularIndefiniteArticle;
-    //this.pluralDefiniteArticle[this.type[pos]] = drawFormData['dialog'].pluralDefiniteArticle;
-  }*/
 
   dialogSizeClass(drawFormData: any): string {
     // Verificar que drawFormData existe y tiene dialog
@@ -138,7 +123,6 @@ export class CRUD extends Vars /*implements OnInit*/ {
     if (!this.drawForm()[pos]) {
       const drawForm = this.crudS.drawForm(pos);
       this.drawForm()[pos] = drawForm;
-      //this.initApp(pos, drawForm);
       this.type[pos] = pos;
       this.unifyDialog(pos, drawForm?.dialog);
     }
@@ -224,7 +208,6 @@ export class CRUD extends Vars /*implements OnInit*/ {
 
     return null; // Si no se encuentra el campo
   }
-
 
   openTasksDetail(options: { pos: any, formFields: any, childFormFields: any, parentField: any }) {
 
@@ -465,8 +448,6 @@ export class CRUD extends Vars /*implements OnInit*/ {
               const initialRows = field.initial_rows || 0;
               const isRequired = field.required || false;
 
-              //console.log('Procesando tabla:', fieldData.field, 'con', initialRows, 'filas iniciales', 'required:', isRequired);
-
               // Validador personalizado para FormArray: requiere al menos una fila
               const minLengthArrayValidator = (min: number): ValidatorFn => {
                 return (control: AbstractControl): ValidationErrors | null => {
@@ -538,8 +519,6 @@ export class CRUD extends Vars /*implements OnInit*/ {
               // Crear el FormArray con validadores
               formFields[fieldData.field] = this.fb.array<FormGroup>(initialRowsArray, arrayValidators);
 
-              //console.log('FormArray de tabla creado:', fieldData.field, 'con validadores:', arrayValidators.length > 0 ? 'SI' : 'NO');
-
             } else if (field.type === 'date') {
               // Procesar tipo date fuera de signature
               let dateDefaultValue = defaultValue;
@@ -548,7 +527,6 @@ export class CRUD extends Vars /*implements OnInit*/ {
               if (dateDefaultValue === 'current') {
                 dateDefaultValue = null;
               }
-
 
               formFields[fieldData.field] = this.fb.control(
                 { value: dateDefaultValue, disabled: disabled },
@@ -568,17 +546,13 @@ export class CRUD extends Vars /*implements OnInit*/ {
           draw_child.push(field);
         });
 
-
         if (options.parentField == 'parent_form_data_') {
 
           this.drawForm()[pos + '_' + 'child_form_fields'] = {};
           this.drawForm()[pos + '_' + 'child_form_fields'][keyBase] = draw_child;
         }
-
-      })
-
+      });
     }
-
   }
 
   /**
@@ -844,10 +818,6 @@ export class CRUD extends Vars /*implements OnInit*/ {
     });
   }
 
-
-
-
-
   /**
  * Reemplaza los valores en un formulario dinámico (`drawForm`) basándose en los campos de origen y destino.
  * 
@@ -1067,7 +1037,6 @@ export class CRUD extends Vars /*implements OnInit*/ {
           continue;
         }
 
-
         const fieldObj = jsonFields[field];
         const validators = [];
 
@@ -1097,13 +1066,10 @@ export class CRUD extends Vars /*implements OnInit*/ {
           //continue;
         }
 
-        //console.log('-+-+-+-+-', fieldObj.relationship_type, field);
         // carga las relaciones antes de los excludeFieldsForm ya que esto no afecta al formulario, afecta al standar json api
         if (fieldObj.relationship_type == 'ManyToMany' || fieldObj.relationship_type == 'ManyToOne' || fieldObj.relationship_type == 'OneToOne') {
           //si tiene valores relationship personbalizados, se prioriza el vslor local
           const val_local: any = this.searchByValueObject(field, relationshipsLocal)[0];
-
-
 
           if (val_local) {
             relationOptions.push(val_local);
@@ -1114,7 +1080,6 @@ export class CRUD extends Vars /*implements OnInit*/ {
 
         if (this.excludeFieldsForm[posIndex]) {
           const excludeField = this.excludeFieldsForm[posIndex].find((item) => item.field == field_prefix + field);
-
           if (excludeField) {
             // true para indicar que el campo se debe reemplazar en lugar de la validación del formulario
             if (excludeField.reemplace) {
@@ -1126,8 +1091,6 @@ export class CRUD extends Vars /*implements OnInit*/ {
 
         // se agrega los validadores si en el servidor es requerido
         if (fieldObj.required) {
-
-
           validators.push(Validators.required);
         }
 
@@ -1193,55 +1156,6 @@ export class CRUD extends Vars /*implements OnInit*/ {
       this.addFieldsByPrefix(formFields, draw, field_prefix, posIndex);
     }
 
-    //this.addFieldsByPrefix(formFields, draw, 'request_data_', posIndex);
-
-    //Object.keys(draw).forEach(keyBase => {
-
-    //console.log('****0', keyBase, draw[keyBase]);
-
-    //this.openTasksDetail({ pos: posIndex, formFields: formFields, childFormFields: draw, parentField: 'request_data_' });
-
-    // aqui voy estoy sacado el valor de fields_prefixes para que openTasksDetail separa a quien relacionar
-    // los campos adicionales con el form
-
-    //});
-
-    // Si todavia relationshipsLocal tiene valores porque no vengan de la consulta OPTIONS, se asignan a relationOptions,
-    // ya que son valores locales adicionales a los que vienen del servidor
-    /* 
-        if (relationshipsLocal.length > 0) {
-          // Si hay valores en relationshipsLocal, se asignan a relationOptions
-          relationshipsLocal.forEach((val_local) => {
-            relationOptions.push(val_local);
-          });
-        }
-  
-        if (this.includeFieldsForm[posIndex]) {
-        const includeField = this.includeFieldsForm[posIndex];
-  
-        includeField.forEach((item) => {
-          const validators = [];
-          //const  disabled = item.disabled ? true : false;
-          // se agrega los validadores si en el servidor es requerido
-          if (item.required) {
-            validators.push(Validators.required);
-          }
-  
-          // se agrega los validadores de max_length del servidor
-          if (item.max_length) {
-            validators.push(Validators.maxLength(item.max_length));
-          }
-  
-          //tambien los campos iniciales pueden ser deshabilitados
-          if (item.disabled) {
-            this.initialDisabledForm[item.field] = true;
-          }
-  
-          //no tiene caso disabled ya que al restablecer el formulario se deshabilita porque llama a enableForm
-          formFields[field_prefix + item.field] = this.fb.control({ value: item.default, disabled: true }, { nonNullable: true, validators: validators });
-        });
-        }
-    */
     this.relationships[posIndex] = relationOptions;
     console.log('formmmmmmmmmmmmmmmmmm', formFields);
     return this.fb.group(formFields);
@@ -1373,15 +1287,11 @@ export class CRUD extends Vars /*implements OnInit*/ {
             columnObj._order = orderValue;
           }
 
-
-
           if (colsConfig[field]?.fields) {
             console.log('202020202020', colsConfig[field], colsConfig[field]?.fields);
 
             this.generateJSONColumns(colsConfig[field]?.fields, pos, cols)
           }
-
-
         }
 
         cols.push(columnObj);
@@ -2079,7 +1989,6 @@ export class CRUD extends Vars /*implements OnInit*/ {
       const posIndex = posArr.length > 1 ? posArr[1] : posArr[0];*/
       const drawForm = this.crudS.drawForm(pos);
       this.drawForm()[pos] = drawForm;
-      //this.initApp(pos, drawForm);
       this.type[pos] = pos;
     }
 
