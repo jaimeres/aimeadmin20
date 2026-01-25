@@ -1,6 +1,7 @@
 import { CommonModule, KeyValue } from '@angular/common';
 import { FormControl, FormGroup, FormsModule, ReactiveFormsModule, FormArray, Validators, FormBuilder } from '@angular/forms';
-import { Component, ElementRef, EventEmitter, inject, Input, Output, signal, computed, SimpleChanges, ViewChild } from '@angular/core';
+import { Component, ElementRef, EventEmitter, inject, Input, Output, signal, computed, SimpleChanges, ViewChild, OnDestroy } from '@angular/core';
+import { Subscription } from 'rxjs';
 // ************************ADAPTADO PARA CAPACITOR*********************
 import { Camera, CameraResultType, CameraSource } from '@capacitor/camera';
 // Scanner de códigos de barras para Capacitor
@@ -27,6 +28,8 @@ import { FloatLabelModule } from 'primeng/floatlabel';
 import { InputGroupModule } from 'primeng/inputgroup';
 import { InputGroupAddonModule } from 'primeng/inputgroupaddon';
 import { AutoFocusModule } from 'primeng/autofocus';
+
+import { StepperModule } from 'primeng/stepper';
 
 import { SplitButtonModule } from 'primeng/splitbutton';
 import { TableModule } from 'primeng/table';
@@ -66,6 +69,7 @@ import { CustomButtonCrudComponent } from '../custom-button-crud/custom-button-c
     InputGroupModule,
     InputGroupAddonModule,
     AutoFocusModule,
+    StepperModule,
     TableModule,
     TagModule,
     TooltipModule,
@@ -77,7 +81,7 @@ import { CustomButtonCrudComponent } from '../custom-button-crud/custom-button-c
   styleUrl: './custom-draw-form.component.scss',
   standalone: true
 })
-export class CustomDrawFormComponent {
+export class CustomDrawFormComponent implements OnDestroy {
 
   @ViewChild('videoElement') video!: ElementRef;
   @ViewChild('canvasElement') canvas!: ElementRef;
@@ -86,6 +90,11 @@ export class CustomDrawFormComponent {
   private sharedS: SharedDynamicDataService = inject(SharedDynamicDataService);
   private generalS: GeneralService = inject(GeneralService); // funciones generales
   private fb: FormBuilder = inject(FormBuilder);
+
+  // Suscripción para detectar cambios en el formulario
+  private formSubscription?: Subscription;
+  private formStatusSubscription?: Subscription;
+  private wasDirty: boolean = false;
 
   @Input() formGroup!: FormGroup;
   @Input() drawForm: any;
@@ -116,8 +125,8 @@ export class CustomDrawFormComponent {
   @Output() onKeydownEnterAction = new EventEmitter<any>();
   @Output() onKeydownTabAction = new EventEmitter<any>();
 
-  @Output() filesAction = new EventEmitter<[]>();
-  @Output() files64Action = new EventEmitter<[]>();
+  @Output() filesAction = new EventEmitter<any[]>();
+  @Output() files64Action = new EventEmitter<any[]>();
 
   // Button output
   @Output() onButtonClickAction = new EventEmitter<any>();
@@ -241,16 +250,6 @@ export class CustomDrawFormComponent {
           respDJA: data,
           additionalFieldsIncluded: []
         });
-        /*return {
-          id: item.id,
-          name: item.attributes.name,
-          module: item.attributes.module,
-          "rear_plate": 222
-        }*/
-        //console.log('++++++++', dataDropdown);
-
-        //return item;
-        //});
 
         // Verificamos si al menos un objeto tiene un 'module' diferente de null,
         //esto es para los registros que tienen module, es decir, deferencia a que app pertenece
@@ -268,19 +267,12 @@ export class CustomDrawFormComponent {
     }
   }
 
-  dropdownOptions(drawForm: any) {
+  /*dropdownOptions(drawForm: any) {
     if (drawForm.hasOwnProperty('grid')) {
       for (const key in drawForm.grid) {
         if (drawForm.grid.hasOwnProperty(key)) {
           const element = drawForm.grid[key];
-          /*if(element.type=='choice'){
-          #esto esta cubierto arriba porque aunque no diga explicitamente que es choice, cae en la segunda doncición,
-          # y tiene la ventaja que si se envia options sobreescribe choices que se cargan en generar el fiormulario
-              this.dropdownOptionsSignal()[element.field] = this.sharedS.data[element.field];
-              ademas ya esta diseñado para cambiar optionValue y optionLabel por id y name, seria contraproducente
-              agregar otro elemento
 
-          }else*/
           if (element?.type == 'dropdown' || element?.type == 'tree-select' || element?.type == 'multi-select' || element?.type == 'dropdown-choice') {
             this.dataDropdown(element);
 
@@ -299,8 +291,94 @@ export class CustomDrawFormComponent {
           }
         }
       }
+    } else if (drawForm?.stepper?.steps) {
+
+      for (const key in drawForm?.stepper?.steps) {
+        if (drawForm.stepper?.steps.hasOwnProperty(key)) {
+          const step = drawForm.stepper.steps[key]?.fields || {};
+          for (const key3 in step) {
+            if (step.hasOwnProperty(key3)) {
+              const element3 = step[key3];
+              if (element3.type == 'dropdown' || element3.type == 'tree-select' || element3.type == 'multi-select' || element3.type == 'dropdown-choice') {
+                this.dataDropdown(element3);
+              } else if (element3?.card || element3?.fieldset) {
+                const nestedElements = element3.card || element3.fieldset;
+
+                for (const key2 in nestedElements) {
+                  if (nestedElements.hasOwnProperty(key2)) {
+                    const element2 = nestedElements[key2];
+                    if (element2.type == 'dropdown' || element2.type == 'tree-select' || element2.type == 'multi-select' || element2.type == 'dropdown-choice') {
+
+                      this.dataDropdown(element2);
+                    }
+                  }
+                }
+              }
+
+            }
+          }
+        }
+      }
+    }
+  }*/
+
+  private readonly DROPDOWN_TYPES = new Set([
+    'dropdown',
+    'tree-select',
+    'multi-select',
+    'dropdown-choice',
+  ]);
+
+  private isDropdown(el: any): boolean {
+    return !!el?.type && this.DROPDOWN_TYPES.has(el.type);
+  }
+
+  /**
+   * Recorre un elemento y sus hijos (card/fieldset) de forma recursiva.
+   */
+  private walkElement(el: any, visit: (node: any) => void): void {
+    if (!el) return;
+
+    visit(el);
+
+    const nested = el.card || el.fieldset;
+    if (nested && typeof nested === 'object') {
+      for (const child of Object.values(nested)) {
+        this.walkElement(child, visit);
+      }
     }
   }
+
+  /**
+   * Procesa una colección { 0: {...}, 1: {...} } o array de elementos
+   */
+  private processElements(collection: any): void {
+    if (!collection || typeof collection !== 'object') return;
+
+    for (const el of Object.values(collection)) {
+      this.walkElement(el, (node) => {
+        if (this.isDropdown(node)) {
+          this.dataDropdown(node);
+        }
+      });
+    }
+  }
+
+  dropdownOptions(drawForm: any): void {
+    // grid
+    if (drawForm?.grid) {
+      this.processElements(drawForm.grid);
+    }
+
+    // stepper
+    const steps = drawForm?.stepper?.steps;
+    if (steps) {
+      for (const step of Object.values(steps)) {
+        this.processElements((step as any)?.fields);
+      }
+    }
+  }
+
 
   initializeTableFields(drawForm: any) {
     if (drawForm.hasOwnProperty('grid')) {
@@ -452,11 +530,60 @@ export class CustomDrawFormComponent {
 
       this.formGroupSignal.set(currentValue);
 
-      // Si el formGroup cambió (reset o nuevo objeto), limpiar todos los canvas de firma
+      // Limpiar suscripciones anteriores si existen
+      if (this.formSubscription) {
+        this.formSubscription.unsubscribe();
+      }
+      if (this.formStatusSubscription) {
+        this.formStatusSubscription.unsubscribe();
+      }
+
+      // Si el formGroup cambió (reset o nuevo objeto), limpiar todos los canvas de firma Y archivos multimedia
       if (previousValue !== currentValue && currentValue) {
         setTimeout(() => {
           this.clearAllSignatureCanvases();
+          this.clearAllMediaFiles();
         }, 300);
+      }
+
+      // Suscribirse a cambios de estado del formulario para detectar reset automático
+      if (currentValue) {
+        console.log('📋 Inicializando suscripción al formulario');
+        this.wasDirty = currentValue.dirty;
+
+        // Suscribirse al estado del formulario (pristine/dirty)
+        this.formStatusSubscription = currentValue.statusChanges.subscribe(() => {
+          const isPristine = currentValue.pristine;
+          const isDirty = currentValue.dirty;
+
+          console.log('📊 Estado del formulario:', {
+            pristine: isPristine,
+            dirty: isDirty,
+            wasDirty: this.wasDirty,
+            hasMultimedia: this.hasMultimediaFiles()
+          });
+
+          // Detectar reset: el formulario estaba dirty y ahora es pristine
+          if (this.wasDirty && isPristine) {
+            console.log('🔄 Reset detectado (dirty -> pristine) - limpiando multimedia, firmas y reseteando stepper');
+            setTimeout(() => {
+              if (this.hasMultimediaFiles()) {
+                this.clearAllMediaFiles();
+                this.clearAllSignatureCanvases();
+              }
+              // Resetear el stepper al valor inicial
+              const drawForm = this.drawFormSignal();
+              if (drawForm?.stepper) {
+                const initialStep = drawForm.stepper.value || 1;
+                this.setCurrentStep(initialStep);
+                console.log(`📍 Stepper reseteado al step inicial: ${initialStep}`);
+              }
+            }, 50);
+          }
+
+          // Actualizar estado
+          this.wasDirty = isDirty;
+        });
       }
     }
     if (changes['drawForm']) {
@@ -467,6 +594,17 @@ export class CustomDrawFormComponent {
       this.initializeSignatureFields(changes['drawForm'].currentValue);
       this.initializeEmailChipsFields(changes['drawForm'].currentValue);
 
+      // Inicializar el step actual si hay un stepper
+      const drawForm = changes['drawForm'].currentValue;
+      if (drawForm?.stepper) {
+        const initialStep = drawForm.stepper.value || 1;
+        this.setCurrentStep(initialStep);
+        console.log('📍 Step inicial del stepper:', initialStep);
+      } else {
+        // Si no hay stepper, usar null para mostrar toda la multimedia
+        this.setCurrentStep(null);
+        console.log('📍 Sin stepper - mostrando toda la multimedia');
+      }
     }
     if (changes['app']) {
       this.appSignal.set(changes['app'].currentValue);
@@ -484,6 +622,70 @@ export class CustomDrawFormComponent {
       this.showIconSignal.set(changes['showIcon'].currentValue);
     }
 
+  }
+
+  /**
+   * Limpia las suscripciones cuando el componente se destruye
+   */
+  ngOnDestroy(): void {
+    console.log('🧹 Limpiando suscripciones del componente');
+    if (this.formSubscription) {
+      this.formSubscription.unsubscribe();
+    }
+    if (this.formStatusSubscription) {
+      this.formStatusSubscription.unsubscribe();
+    }
+  }
+
+  /**
+   * Verifica si hay archivos multimedia guardados
+   */
+  private hasMultimediaFiles(): boolean {
+    return this.files64Signal().length > 0;
+  }
+
+  /**
+   * Valida todos los campos que pertenecen a un step específico
+   * Retorna true si todos los campos del step son válidos
+   */
+  validateStepFields(stepNumber: number): boolean {
+    const drawForm = this.drawFormSignal();
+    if (!drawForm?.stepper?.steps) return true;
+
+    const step = drawForm.stepper.steps[stepNumber];
+    if (!step?.fields) return true;
+
+    const formGroup = this.formGroupSignal();
+    if (!formGroup) return false;
+
+    console.log(`🔍 Validando campos del step ${stepNumber}`);
+
+    // Obtener todos los campos del step
+    const stepFields = Object.values(step.fields);
+    let allValid = true;
+
+    for (const fieldConfig of stepFields) {
+      const fieldName = (fieldConfig as any).field;
+      if (!fieldName) continue;
+
+      const control = formGroup.get(fieldName);
+      if (control) {
+        // Marcar como touched Y dirty para mostrar errores visualmente
+        control.markAsTouched();
+        control.markAsDirty();
+        control.updateValueAndValidity();
+
+        if (control.invalid) {
+          console.log(`❌ Campo "${fieldName}" inválido:`, control.errors);
+          allValid = false;
+        } else {
+          console.log(`✅ Campo "${fieldName}" válido`);
+        }
+      }
+    }
+
+    console.log(`${allValid ? '✅' : '❌'} Step ${stepNumber} es ${allValid ? 'válido' : 'inválido'}`);
+    return allValid;
   }
 
   keyComparator(a: KeyValue<number, any>, b: KeyValue<number, any>): number {
@@ -1252,9 +1454,6 @@ export class CustomDrawFormComponent {
       changedValue: currentValue
     };
 
-    console.log('¿¿¿¿¿¿¿¿', changeInfo);
-
-
     this.onSelectAutoCompleteAction.emit(changeInfo);
 
     // Aplicar las mismas validaciones que onChangeDropdown
@@ -1966,7 +2165,7 @@ export class CustomDrawFormComponent {
 
 
   //iamgenes videos
-  public files64: any = [];
+  public files64Signal = signal<any[]>([]);
   public files: any = [];
   public mediaStream!: MediaStream;
 
@@ -1976,6 +2175,30 @@ export class CustomDrawFormComponent {
        * Muestra el tiempo del video en segundo
        */
   public timeVideo = signal<number>(6);
+  /**
+   * Signal para trackear el step actual del stepper
+   */
+  public currentStepSignal = signal<number | null>(null);
+
+  /**
+   * Computed signal que filtra los archivos multimedia (no firmas)
+   * Opcionalmente por step si currentStepSignal tiene valor
+   */
+  public nonSignatureFilesSignal = computed(() => {
+    const allFiles = this.files64Signal();
+    const currentStep = this.currentStepSignal();
+
+    // Filtrar archivos que no son firmas
+    const nonSignatureFiles = allFiles.filter((f: any) => f.type !== 'signature');
+
+    // Si hay un step activo, filtrar solo los archivos de ese step
+    if (currentStep !== null) {
+      return nonSignatureFiles.filter((f: any) => f.step === currentStep);
+    }
+
+    // Si no hay step activo, mostrar todos (comportamiento global)
+    return nonSignatureFiles;
+  });
 
   async getMediaDevices() {
     try {
@@ -2000,7 +2223,7 @@ export class CustomDrawFormComponent {
   private currentCameraIndex: number = -1;
   private videoDevices: MediaDeviceInfo[] = [];
 
-  // ************************ADAPTADO PARA CAPACITOR*********************
+  /*// ************************ADAPTADO PARA CAPACITOR*********************
   async previewCamera() {
     if (this.isCapacitorNative()) {
       // Usar Capacitor Camera en móvil
@@ -2012,8 +2235,19 @@ export class CustomDrawFormComponent {
           resultType: CameraResultType.DataUrl,
           source: CameraSource.Camera
         });
-        this.files64.push({ type: 'image', file_name: 'evidencia.jpg', file: photo.dataUrl });
-        this.files64Action.emit(this.files64);
+        const currentStep = this.currentStepSignal();
+        // Crear nueva referencia del array para que el signal reaccione
+        const newFiles = [
+          ...this.files64Signal(),
+          {
+            type: 'image',
+            file_name: 'evidencia66.jpg',
+            file: photo.dataUrl,
+            step: currentStep
+          }
+        ];
+        this.files64Signal.set(newFiles);
+        this.files64Action.emit(newFiles);
         this.previewCameraDialogVisible = false;
       } catch (error) {
         console.error('Error al capturar imagen con Capacitor:', error);
@@ -2055,7 +2289,7 @@ export class CustomDrawFormComponent {
         }
       }
     }
-  }
+  } 
 
   // ************************ADAPTADO PARA CAPACITOR*********************
   async captureMedia(type: 'image' | 'video' = 'image') {
@@ -2068,8 +2302,19 @@ export class CustomDrawFormComponent {
             resultType: CameraResultType.DataUrl,
             source: CameraSource.Camera
           });
-          this.files64.push({ type: 'image', file_name: 'evidencia.jpg', file: photo.dataUrl });
-          this.files64Action.emit(this.files64);
+          const currentStep = this.currentStepSignal();
+          // Crear nueva referencia del array para que el signal reaccione
+          const newFiles = [
+            ...this.files64Signal(),
+            {
+              type: 'image',
+              file_name: 'evidencia55.jpg',
+              file: photo.dataUrl,
+              step: currentStep
+            }
+          ];
+          this.files64Signal.set(newFiles);
+          this.files64Action.emit(newFiles);
           this.previewCameraDialogVisible = false;
         } catch (error) {
           console.error('Error al capturar imagen con Capacitor:', error);
@@ -2088,8 +2333,19 @@ export class CustomDrawFormComponent {
         const canvasContext = canvas.getContext('2d');
         canvasContext?.drawImage(video, 0, 0, canvas.width, canvas.height);
         const imagenCapturada = canvas.toDataURL('image/jpeg');
-        this.files64.push({ type: 'image', file_name: 'evidencia.jpg', file: imagenCapturada });
-        this.files64Action.emit(this.files64);
+        const currentStep = this.currentStepSignal();
+        // Crear nueva referencia del array para que el signal reaccione
+        const newFiles = [
+          ...this.files64Signal(),
+          {
+            type: 'image',
+            file_name: 'evidencia77.jpg',
+            file: imagenCapturada,
+            step: currentStep
+          }
+        ];
+        this.files64Signal.set(newFiles);
+        this.files64Action.emit(newFiles);
         this.previewCameraDialogVisible = false;
       } else if (type === 'video') {
         const mediaRecorder = new MediaRecorder(this.mediaStream);
@@ -2102,8 +2358,19 @@ export class CustomDrawFormComponent {
           const reader = new FileReader();
           reader.onloadend = () => {
             const videoBase64 = reader.result as string;
-            this.files64.push({ type: 'video', file_name: 'evidencia.webm', file: videoBase64 });
-            this.files64Action.emit(this.files64);
+            const currentStep = this.currentStepSignal();
+            // Crear nueva referencia del array para que el signal reaccione
+            const newFiles = [
+              ...this.files64Signal(),
+              {
+                type: 'video',
+                file_name: 'evidencia.webm',
+                file: videoBase64,
+                step: currentStep
+              }
+            ];
+            this.files64Signal.set(newFiles);
+            this.files64Action.emit(newFiles);
           };
           reader.readAsDataURL(blob);
         };
@@ -2120,7 +2387,229 @@ export class CustomDrawFormComponent {
         }, 1000);
       }
     }
+  }*/
+
+  private appendFile(payload: {
+    type: 'image' | 'video';
+    file_name: string;
+    file: string;
+    field?: string;
+    fieldConfig?: any;
+  }) {
+    const currentStep = this.currentStepSignal();
+
+    // Determinar el nombre del archivo basado en name_file_user o usar 'evidencia'
+    let fileName = payload.file_name;
+    if (payload.fieldConfig?.name_file_user) {
+      const extension = payload.file_name.split('.').pop();
+      fileName = `${payload.fieldConfig.name_file_user}.${extension}`;
+    }
+
+    const fileObject = {
+      type: payload.type,
+      file_name: fileName,
+      file: payload.file,
+      step: currentStep,
+      field: payload.field // Agregar el campo que capturó la imagen
+    };
+
+    const newFiles = [
+      ...this.files64Signal(),
+      fileObject
+    ];
+
+    this.files64Signal.set(newFiles);
+    this.files64Action.emit(newFiles);
+
+    // Establecer el valor en el FormControl si hay un campo especificado
+    if (payload.field) {
+      const formGroup = this.formGroupSignal();
+      const control = formGroup?.get(payload.field);
+
+      if (control) {
+        // Filtrar todos los archivos que pertenecen a este campo
+        const fieldFiles = newFiles.filter(f => f.field === payload.field);
+
+        // Si es un solo archivo, establecer el objeto; si son múltiples, establecer el array
+        const valueToSet = fieldFiles.length === 1 ? fieldFiles[0] : fieldFiles;
+
+        control.setValue(valueToSet);
+        control.markAsDirty();
+
+        console.log(`📁 Valor establecido en FormControl "${payload.field}":`, valueToSet);
+      }
+    }
   }
+
+  // Campo activo que está capturando multimedia
+  public activeFieldCapture: string | null = null;
+  public activeFieldConfig: any = null;
+
+  async previewCamera(fieldName?: string | null, fieldConfig?: any) {
+    // Guardar el campo que está capturando
+    this.activeFieldCapture = fieldName || null;
+    this.activeFieldConfig = fieldConfig || null;
+
+    if (this.isCapacitorNative()) {
+      // En móvil, "preview" = abrir cámara nativa y tomar foto
+      return this.captureMedia('image');
+    }
+
+    // WEB: solo abrir preview (stream)
+    try {
+      // (Opcional) detener stream anterior si existe
+      if (this.mediaStream) {
+        this.mediaStream.getTracks().forEach(t => t.stop());
+      }
+
+      if (this.videoDevices.length === 0) {
+        this.videoDevices = await this.getMediaDevices();
+        if (this.videoDevices.length === 0) throw new Error('No se encontraron cámaras disponibles.');
+
+        let backCamera = this.videoDevices.find(d => (d.label || '').toLowerCase().includes('back'))
+          || this.videoDevices.find(d => (d.label || '').toLowerCase().includes('rear'))
+          || this.videoDevices[0];
+
+        this.currentCameraIndex = this.videoDevices.indexOf(backCamera);
+      } else {
+        // si usas previewCamera también para cambiar cámara
+        this.currentCameraIndex = (this.currentCameraIndex + 1) % this.videoDevices.length;
+      }
+
+      const deviceId = this.videoDevices[this.currentCameraIndex].deviceId;
+
+      try {
+        this.mediaStream = await navigator.mediaDevices.getUserMedia({
+          video: { deviceId: { exact: deviceId } },
+          audio: false
+        });
+      } catch {
+        // fallback si exact falla
+        this.mediaStream = await navigator.mediaDevices.getUserMedia({
+          video: true,
+          audio: false
+        });
+      }
+
+      this.video.nativeElement.srcObject = this.mediaStream;
+      await this.video.nativeElement.play();
+      this.previewCameraDialogVisible = true;
+    } catch (error: any) {
+      if (error?.name === 'OverconstrainedError') {
+        console.error('No se pudo satisfacer las restricciones de video:', error);
+      } else if (error?.name === 'NotAllowedError' || error?.name === 'SecurityError') {
+        console.error('Permiso denegado para acceder a la cámara:', error);
+      } else {
+        console.error('Error al acceder a la cámara:', error);
+      }
+    }
+  }
+
+  async captureMedia(type: 'image' | 'video' = 'image') {
+    if (this.isCapacitorNative()) {
+      if (type === 'image') {
+        try {
+          const photo = await Camera.getPhoto({
+            quality: 90,
+            allowEditing: false,
+            resultType: CameraResultType.DataUrl,
+            source: CameraSource.Camera
+          });
+
+          this.appendFile({
+            type: 'image',
+            file_name: 'evidencia.jpg',
+            file: photo.dataUrl!,
+            field: this.activeFieldCapture || undefined,
+            fieldConfig: this.activeFieldConfig
+          });
+
+          this.previewCameraDialogVisible = false;
+        } catch (error) {
+          console.error('Error al capturar imagen con Capacitor:', error);
+        }
+      } else {
+        console.warn('Grabación de video no soportada con Capacitor Camera por defecto.');
+      }
+      return;
+    }
+
+    // WEB
+    const video = this.video.nativeElement;
+    const canvas = this.canvas.nativeElement;
+
+    if (type === 'image') {
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+
+      const ctx = canvas.getContext('2d');
+      ctx?.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+      const imagenCapturada = canvas.toDataURL('image/jpeg');
+
+      this.appendFile({
+        type: 'image',
+        file_name: 'evidencia.jpg',
+        file: imagenCapturada,
+        field: this.activeFieldCapture || undefined,
+        fieldConfig: this.activeFieldConfig
+      });
+
+      this.previewCameraDialogVisible = false;
+
+      // (Opcional) cerrar stream al capturar
+      if (this.mediaStream) this.mediaStream.getTracks().forEach(t => t.stop());
+
+      return;
+    }
+
+    // WEB video
+    const mediaRecorder = new MediaRecorder(this.mediaStream);
+    const chunks: BlobPart[] = [];
+
+    mediaRecorder.ondataavailable = (event) => {
+      if (event.data?.size) chunks.push(event.data);
+    };
+
+    mediaRecorder.onstop = () => {
+      const blob = new Blob(chunks, { type: 'video/webm' });
+      const reader = new FileReader();
+
+      reader.onloadend = () => {
+        const videoBase64 = reader.result as string;
+
+        this.appendFile({
+          type: 'video',
+          file_name: 'evidencia.webm',
+          file: videoBase64,
+          field: this.activeFieldCapture || undefined,
+          fieldConfig: this.activeFieldConfig
+        });
+      };
+
+      reader.readAsDataURL(blob);
+    };
+
+    mediaRecorder.start();
+
+    const interval = setInterval(() => {
+      this.timeVideo.update((t: number) => t - 1);
+
+      if (this.timeVideo() <= 0) {
+        clearInterval(interval);
+        this.timeVideo.set(0);
+
+        mediaRecorder.stop();
+        this.previewCameraDialogVisible = false;
+
+        this.timeVideo.set(6);
+
+        // (Opcional) cerrar stream al terminar
+        if (this.mediaStream) this.mediaStream.getTracks().forEach(t => t.stop());
+      }
+    }, 1000);
+  }
+
 
   /*removeMedia(i: number) {
       this.files64.splice(i, 1);
@@ -2129,6 +2618,8 @@ export class CustomDrawFormComponent {
   onHidePreviousCamera() {
     //cuando se cierra la camara reinicia el indice para que siempre inicie con la 1
     this.currentCameraIndex = -1;
+    //this.files64Signal.set([]);
+    //this.files = [];
     if (this.mediaStream) {
       const tracks = this.mediaStream.getTracks();
       tracks.forEach(track => track.stop());
@@ -2137,10 +2628,59 @@ export class CustomDrawFormComponent {
 
   removeImage(i: number, type = '64') {
     if (type == '64') {
-      this.files64.splice(i, 1);
-      this.files64Action.emit(this.files64); // Emitir el evento con la lista actualizada de archivos
+      const currentStep = this.currentStepSignal();
+      const allFiles = this.files64Signal();
+      const fileToRemove = this.nonSignatureFilesSignal()[i];
+
+      // Verificar que el archivo pertenece al step actual
+      if (currentStep !== null && fileToRemove.step !== currentStep) {
+        console.warn(`⚠️ No se puede eliminar archivo de otro step. Step actual: ${currentStep}, Step del archivo: ${fileToRemove.step}`);
+        return;
+      }
+
+      // Buscar el índice real en el array completo
+      const realIndex = allFiles.findIndex(f =>
+        f.file === fileToRemove.file &&
+        f.file_name === fileToRemove.file_name &&
+        f.step === fileToRemove.step
+      );
+
+      if (realIndex === -1) {
+        console.warn('⚠️ No se encontró el archivo para eliminar');
+        return;
+      }
+
+      // Crear nueva referencia del array sin el elemento eliminado
+      const newFiles = allFiles.filter((_, index) => index !== realIndex);
+      this.files64Signal.set(newFiles);
+      this.files64Action.emit(newFiles);
+      console.log(`🗑️ Archivo eliminado del step ${fileToRemove.step}`);
+
+      // Actualizar el valor del FormControl si el archivo tenía campo asociado
+      if (fileToRemove.field) {
+        const formGroup = this.formGroupSignal();
+        const control = formGroup?.get(fileToRemove.field);
+
+        if (control) {
+          // Filtrar todos los archivos que quedan para este campo
+          const remainingFieldFiles = newFiles.filter(f => f.field === fileToRemove.field);
+
+          // Si no quedan archivos, establecer null; si queda uno, establecer el objeto; si son múltiples, establecer el array
+          let valueToSet = null;
+          if (remainingFieldFiles.length === 1) {
+            valueToSet = remainingFieldFiles[0];
+          } else if (remainingFieldFiles.length > 1) {
+            valueToSet = remainingFieldFiles;
+          }
+
+          control.setValue(valueToSet);
+          control.markAsDirty();
+
+          console.log(`📁 Valor actualizado en FormControl "${fileToRemove.field}":`, valueToSet);
+        }
+      }
     } else if (type == 'bin') {
-      this.filesAction.emit(this.files); // Emitir el evento con la lista actualizada de archivos
+      this.filesAction.emit(this.files);
       this.files.splice(i, 1);
     }
   }
@@ -2150,26 +2690,115 @@ export class CustomDrawFormComponent {
     event.target.blur();  // fuerza pérdida de foco
   }
 
-
-  // getFormControl(field: string): FormControl | null {
-  //   return this.formGroupSignal()?.get(field) as FormControl | null;
-  // }
-
-
-  getFormControl(field: string): FormControl | null {
-    const formGroup = this.formGroupSignal();
-    if (formGroup && formGroup.get(field)) {
-      return formGroup.get(field) as FormControl;
-    }
-    // Return null if form group doesn't exist or field doesn't exist
-    return null;
+  /**
+   * Actualiza el step actual para filtrar multimedia
+   * @param stepNumber número del step (usar null para mostrar todos)
+   */
+  setCurrentStep(stepNumber: number | null): void {
+    console.log('📍 Cambiando a step:', stepNumber);
+    this.currentStepSignal.set(stepNumber);
   }
 
-  // Table methods
-  initializeTableData(tableConfig: any): any[] {
-    const initialRows = tableConfig.initial_rows || 0;
-    const data: any[] = [];
+  /**
+   * Maneja el evento de cambio de step del p-stepper
+   * @param event evento emitido por el stepper
+   */
+  onStepChange(event: any): void {
+    const stepNumber = event?.value ?? event;
+    console.log('📍 Evento de cambio de step:', event, 'Valor extraído:', stepNumber);
+    this.setCurrentStep(stepNumber);
+  }
 
+  /**
+   * Activa un callback y actualiza el step actual
+   * Se usa en los botones de navegación del stepper
+   */
+  activateStepAndCallback(callback: Function, stepNumber: number): void {
+    this.setCurrentStep(stepNumber);
+    callback(stepNumber);
+  }
+
+  /**
+   * Verifica si se puede avanzar al siguiente step
+   * Si linear es true, valida los campos del step actual antes de permitir avanzar
+   */
+  canNavigateToStep(targetStep: number): boolean {
+    const drawForm = this.drawFormSignal();
+    if (!drawForm?.stepper) return true;
+
+    const isLinear = drawForm.stepper.linear === true;
+    if (!isLinear) return true; // Si no es linear, permitir navegar libremente
+
+    const currentStep = this.currentStepSignal();
+    if (currentStep === null) return true;
+
+    // Si vamos hacia atrás, siempre permitir
+    if (targetStep <= currentStep) return true;
+
+    // Si vamos hacia adelante, validar todos los steps intermedios
+    for (let step = currentStep; step < targetStep; step++) {
+      if (!this.validateStepFields(step)) {
+        console.warn(`⚠️ No se puede avanzar al step ${targetStep}. El step ${step} tiene campos inválidos.`);
+        return false;
+      }
+    }
+
+    return true;
+  }
+
+  /**
+   * Intenta navegar a un step específico
+   * Valida si es posible navegar según la configuración linear
+   */
+  navigateToStep(stepNumber: number, callback?: Function): void {
+    if (this.canNavigateToStep(stepNumber)) {
+      this.setCurrentStep(stepNumber);
+      if (callback) {
+        callback(stepNumber);
+      }
+    } else {
+      // Mantener en el step actual si la validación falla
+      console.log(`🚫 Navegación bloqueada al step ${stepNumber}`);
+    }
+  }
+
+  /**
+   * Limpia archivos multimedia de un step específico o todos si step es null
+   * @param step número del step o null para limpiar todos
+   */
+  clearMediaFiles(step: number | null = null): void {
+    const currentFiles = this.files64Signal();
+    let filteredFiles: any[];
+
+    if (step === null) {
+      // Limpiar todos los archivos excepto firmas
+      filteredFiles = currentFiles.filter((f: any) => f.type === 'signature');
+      console.log('🧹 Limpiando toda la multimedia');
+    } else {
+      // Limpiar solo los archivos del step específico
+      filteredFiles = currentFiles.filter((f: any) => f.step !== step || f.type === 'signature');
+      console.log(`🧹 Limpiando multimedia del step ${step}`);
+    }
+
+    this.files64Signal.set(filteredFiles);
+    this.files64Action.emit(filteredFiles);
+  }
+
+  /**
+   * Limpia TODOS los archivos multimedia (incluidas firmas) cuando se resetea el formulario
+   */
+  clearAllMediaFiles(): void {
+    console.log('🧹 Limpiando TODOS los archivos multimedia por reset del formulario');
+    this.files64Signal.set([]);
+    this.files64Action.emit([]);
+  }
+
+  /**
+   * Inicializa los datos de una tabla con filas vacías
+   */
+  initializeTableData(tableConfig: any): any[] {
+    const data: any[] = [];
+    const initialRows = tableConfig?.initial_rows || 0;
     console.log('Inicializando tabla con filas::::::::::', initialRows);
     for (let i = 0; i < initialRows; i++) {
       const row: any = {};
@@ -2180,6 +2809,12 @@ export class CustomDrawFormComponent {
     }
 
     return data;
+  }
+
+  getFormControl(field: string): FormControl | null {
+    const formGroup = this.formGroupSignal();
+    if (!formGroup) return null;
+    return formGroup.get(field) as FormControl;
   }
 
   getTableData(field: string): any[] {
@@ -2587,9 +3222,11 @@ export class CustomDrawFormComponent {
 
   /**
    * Obtiene archivos que no sean firmas para mostrar en la sección de archivos
+   * Ahora usa el computed signal para mejor rendimiento
+   * @deprecated Usar directamente nonSignatureFilesSignal() en el template
    */
   getNonSignatureFiles(): any[] {
-    return this.files64.filter((f: any) => f.type !== 'signature');
+    return this.nonSignatureFilesSignal();
   }
 
   /**
@@ -3169,15 +3806,22 @@ export class CustomDrawFormComponent {
 
 
 
-      // Añadir a files64 para compatibilidad
-      this.files64.push({
-        type: 'signature',
-        file_name: `firma_${field}_${index}_${Date.now()}.png`,
-        file: signatureBase64,
-        field: field,
-        index: index
-      });
-      this.files64Action.emit(this.files64);
+      // Añadir a files64Signal para compatibilidad
+      const currentStep = this.currentStepSignal();
+      // Crear nueva referencia del array para que el signal reaccione
+      const newFiles = [
+        ...this.files64Signal(),
+        {
+          type: 'signature',
+          file_name: `firma_${field}_${index}_${Date.now()}.png`,
+          file: signatureBase64,
+          field: field,
+          index: index,
+          step: currentStep
+        }
+      ];
+      this.files64Signal.set(newFiles);
+      this.files64Action.emit(newFiles);
     }
   }
 

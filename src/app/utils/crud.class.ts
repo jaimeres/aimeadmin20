@@ -209,6 +209,10 @@ export class CRUD extends Vars /*implements OnInit*/ {
     return null; // Si no se encuentra el campo
   }
 
+  /**
+   * 
+   * @param options 
+   */
   openTasksDetail(options: { pos: any, formFields: any, childFormFields: any, parentField: any }) {
 
     const pos = options.pos;
@@ -562,12 +566,15 @@ export class CRUD extends Vars /*implements OnInit*/ {
    * @param fieldPrefix - Cadena raíz para filtrar los campos (ej: 'request_data_')
    */
   addFieldsByPrefix(formFields: any, dynamicFields: any, fieldPrefix: string, pos: string) {
+
     if (!dynamicFields || typeof dynamicFields !== 'object') {
       return;
     }
 
     // Iterar sobre todos los nodos del objeto dinámico, excluyendo dialog y fields_prefixes
     Object.keys(dynamicFields).forEach(nodeKey => {
+      console.log(nodeKey);
+
       if (nodeKey === 'dialog' || nodeKey === 'fields_prefixes') {
         return; // Saltar estos nodos
       }
@@ -575,247 +582,261 @@ export class CRUD extends Vars /*implements OnInit*/ {
       const node = dynamicFields[nodeKey];
       if (!node || typeof node !== 'object') return;
 
-      // Buscar grid o nested dentro del nodo
-      let fieldsLayout: any = null;
+      // Array para almacenar múltiples layouts a procesar
+      const layoutsToProcess: any[] = [];
 
+      // Buscar grid o nested dentro del nodo
       if (node.grid && typeof node.grid === 'object') {
-        fieldsLayout = node.grid;
+        layoutsToProcess.push(node.grid);
       } else if (node.nested && typeof node.nested === 'object') {
-        fieldsLayout = node.nested;
+        layoutsToProcess.push(node.nested);
       }
 
-      if (!fieldsLayout) return;
-
-      // Iterar sobre los campos dentro de grid/nested (estructura 0:{field:'', ...}, 1:{field:'', ...})
-      Object.keys(fieldsLayout).forEach(key => {
-        const fieldData = fieldsLayout[key];
-        const fieldName = fieldData?.field;
-
-
-        if (!fieldName) return;
-
-        // Verificar si el campo inicia con el prefijo especificado
-        if (!fieldName.startsWith(fieldPrefix)) {
-          return; // Saltar campos que no tienen el prefijo
-        }
-
-        // Obtener valores por defecto
-        const active = fieldData?.default?.active || false;
-        const value = fieldData?.default?.value || null;
-        let defaultValue = value;
-        const edit = fieldData?.default?.edit !== false; // si edit no está definido, se asume true
-
-        if (active && edit && value === 'device') {
-          defaultValue = new Date();
-        }
-
-        // Si edit es false o readonly es true, el campo debe ser disabled
-        const disabled = fieldData.readonly || !edit;
-
-
-        // Guardar el estado readonly en el fieldData para que el template pueda usarlo
-        if (disabled) {
-          if (!this.initialDisabledForm[pos]) {
-            this.initialDisabledForm[pos] = {};
+      // Buscar stepper dentro del nodo
+      if (node.stepper && typeof node.stepper === 'object' && node.stepper.steps) {
+        // Iterar sobre cada step del stepper y agregar sus fields
+        Object.keys(node.stepper.steps).forEach(stepKey => {
+          const step = node.stepper.steps[stepKey];
+          if (step && step.fields && typeof step.fields === 'object') {
+            layoutsToProcess.push(step.fields);
           }
-          this.initialDisabledForm[pos][fieldName] = true;
-        }
+        });
+      }
 
-        const validators: any[] = [];
+      // Si no hay layouts para procesar, saltar este nodo
+      if (layoutsToProcess.length === 0) return;
 
-        // Agregar validadores
-        if (fieldData.required) {
-          validators.push(Validators.required);
-        }
-        if (fieldData.max_length) {
-          validators.push(Validators.maxLength(fieldData.max_length));
-        }
-        if (fieldData.min_length) {
-          validators.push(Validators.minLength(fieldData.min_length));
-        }
+      // Procesar cada layout encontrado (grid, nested, o fields de cada step)
+      layoutsToProcess.forEach(fieldsLayout => {
+        // Iterar sobre los campos dentro del layout (estructura 0:{field:'', ...}, 1:{field:'', ...})
+        Object.keys(fieldsLayout).forEach(key => {
+          const fieldData = fieldsLayout[key];
+          const fieldName = fieldData?.field;
+          if (!fieldName) return;
 
-        // Procesar según el tipo de campo
-        if (fieldData.type === 'dropdown' || fieldData.type === 'auto-complete' || fieldData.type === 'tree-select') {
-          // Crear campo oculto para objetos completos
-          const hiddenFieldName = 'object_' + fieldName;
-          formFields[hiddenFieldName] = this.fb.control(
-            { value: defaultValue, disabled: disabled },
-            { nonNullable: false, validators: validators }
-          );
-
-          //quita expliictamente required cuando es drowpdown, auto-complete o tree-select PARA QUE LOS CAMPOS QUE NO
-          // CONTIENE object_ no se quejen si son obligatorios, pero despues de haberlo establecido al que inicio con object_
-          validators.splice(validators.indexOf(Validators.required), 1);
-
-          // Agregar prefijo object_ al field si no lo tiene
-          if (!fieldData.field.startsWith('object_')) {
-            fieldData.field = 'object_' + fieldData.field;
+          // Verificar si el campo inicia con el prefijo especificado
+          if (!fieldName.startsWith(fieldPrefix)) {
+            return; // Saltar campos que no tienen el prefijo
           }
 
-          // Si field trae children, recorrer el objeto para procesar campos en cascada
-          if (fieldData.children && fieldData.children.fields) {
-            // Procesar campos children que recibirán valores en cascada
+          // Obtener valores por defecto
+          const active = fieldData?.default?.active || false;
+          const value = fieldData?.default?.value || null;
+          let defaultValue = value;
+          const edit = fieldData?.default?.edit !== false; // si edit no está definido, se asume true
 
-            // Iterar primero por tipos: static, dynamic, derived
-            ['static', 'dynamic', 'derived'].forEach(typeKey => {
-              if (fieldData.children.fields[typeKey]) {
-                for (const [childFieldKey, childFieldValue] of Object.entries(fieldData.children.fields[typeKey])) {
-                  const typedChildFieldValue = childFieldValue as any;
+          if (active && edit && value === 'device') {
+            defaultValue = new Date();
+          }
 
-                  // Solo necesita cambiar el campo de los siguientes tipos porque son los únicos que requieren cambio
-                  // para poder ser duplicados y se pueda enviar el objeto en lugar de solo el id
-                  if (typedChildFieldValue.type === 'dropdown' || typedChildFieldValue.type === 'auto-complete' || typedChildFieldValue.type === 'tree-select') {
-                    // Solo agregar object_ si no lo tiene ya
-                    const newChildFieldKey = childFieldKey.startsWith('object_' + fieldPrefix) ? childFieldKey : 'object_' + childFieldKey;
+          // Si edit es false o readonly es true, el campo debe ser disabled
+          const disabled = fieldData.readonly || !edit;
 
-                    fieldData.children.fields[typeKey][newChildFieldKey] = typedChildFieldValue;
-                    delete fieldData.children.fields[typeKey][childFieldKey];
+
+          // Guardar el estado readonly en el fieldData para que el template pueda usarlo
+          if (disabled) {
+            if (!this.initialDisabledForm[pos]) {
+              this.initialDisabledForm[pos] = {};
+            }
+            this.initialDisabledForm[pos][fieldName] = true;
+          }
+
+          const validators: any[] = [];
+
+          // Agregar validadores
+          if (fieldData.required) {
+            validators.push(Validators.required);
+          }
+          if (fieldData.max_length) {
+            validators.push(Validators.maxLength(fieldData.max_length));
+          }
+          if (fieldData.min_length) {
+            validators.push(Validators.minLength(fieldData.min_length));
+          }
+
+          // Procesar según el tipo de campo
+          if (fieldData.type === 'dropdown' || fieldData.type === 'auto-complete' || fieldData.type === 'tree-select') {
+            // Crear campo oculto para objetos completos
+            const hiddenFieldName = 'object_' + fieldName;
+            formFields[hiddenFieldName] = this.fb.control(
+              { value: defaultValue, disabled: disabled },
+              { nonNullable: false, validators: validators }
+            );
+
+            //quita expliictamente required cuando es drowpdown, auto-complete o tree-select PARA QUE LOS CAMPOS QUE NO
+            // CONTIENE object_ no se quejen si son obligatorios, pero despues de haberlo establecido al que inicio con object_
+            validators.splice(validators.indexOf(Validators.required), 1);
+
+            // Agregar prefijo object_ al field si no lo tiene
+            if (!fieldData.field.startsWith('object_')) {
+              fieldData.field = 'object_' + fieldData.field;
+            }
+
+            // Si field trae children, recorrer el objeto para procesar campos en cascada
+            if (fieldData.children && fieldData.children.fields) {
+              // Procesar campos children que recibirán valores en cascada
+
+              // Iterar primero por tipos: static, dynamic, derived
+              ['static', 'dynamic', 'derived'].forEach(typeKey => {
+                if (fieldData.children.fields[typeKey]) {
+                  for (const [childFieldKey, childFieldValue] of Object.entries(fieldData.children.fields[typeKey])) {
+                    const typedChildFieldValue = childFieldValue as any;
+
+                    // Solo necesita cambiar el campo de los siguientes tipos porque son los únicos que requieren cambio
+                    // para poder ser duplicados y se pueda enviar el objeto en lugar de solo el id
+                    if (typedChildFieldValue.type === 'dropdown' || typedChildFieldValue.type === 'auto-complete' || typedChildFieldValue.type === 'tree-select') {
+                      // Solo agregar object_ si no lo tiene ya
+                      const newChildFieldKey = childFieldKey.startsWith('object_' + fieldPrefix) ? childFieldKey : 'object_' + childFieldKey;
+
+                      fieldData.children.fields[typeKey][newChildFieldKey] = typedChildFieldValue;
+                      delete fieldData.children.fields[typeKey][childFieldKey];
+                    }
                   }
                 }
+              });
+            }
+
+          } //no lleva else para que carga el el else del if y agregue el campo normal, sin object_
+          // ya que los combos el campo normal del form que será para guardar un objeto en lugar del id
+          // y un campo que inicie con object para que guarde la referencia al campo del formulario y se pueda poner el rojo
+          //y cause los evenetos necesarios para visualizar el usuario
+
+          if (fieldData.type === 'signature') {
+            // Procesar campos de firma
+            const subFields = fieldData.fields || [];
+            const signatureFormGroup: any = {};
+
+            subFields.forEach((subField: any) => {
+              const subFieldName = subField.field;
+              const fieldType = subField.type;
+              const required = subField.required || false;
+              const maxLength = subField.max_length;
+              const subValidators: any[] = [];
+              if (required) subValidators.push(Validators.required);
+              if (maxLength) subValidators.push(Validators.maxLength(maxLength));
+
+              let subDefaultValue: any = '';
+              if (subField.default?.active && subField.default?.edit) {
+                subDefaultValue = subField.default.value === 'device' ? new Date() : subField.default.value;
+              }
+
+              // Determinar si el campo debe ser de solo lectura
+              const isReadonly = subField.default?.edit === false;
+
+
+              if (fieldType === 'login') {
+                const userField = subField.user?.field || 'username';
+                const passwordField = subField.password?.field || 'password';
+                const loginValidators: any[] = required ? [Validators.required] : [];
+                if (maxLength) loginValidators.push(Validators.maxLength(maxLength));
+
+                signatureFormGroup[userField] = this.fb.nonNullable.control({ value: '', disabled: isReadonly }, loginValidators);
+                signatureFormGroup[passwordField] = this.fb.nonNullable.control({ value: '', disabled: isReadonly }, loginValidators);
+              } else if (fieldType === 'input-text') {
+                signatureFormGroup[subFieldName] = this.fb.nonNullable.control({ value: subDefaultValue, disabled: isReadonly }, subValidators);
+              } else if (fieldType === 'date') {
+                //si subDefaultValue==current entonces inicializalo con null, hacerlo de solo lectura y quitar el validador de requerido
+                console.log('entro a fecha222222222222222222222');
+
+                if (subDefaultValue === 'current') {
+                  console.log("dejo en null la fecha 333333333333333");
+
+                  subDefaultValue = null;
+                  //subValidators.splice(subValidators.indexOf(Validators.required), 1);
+                }
+
+                signatureFormGroup[subFieldName] = this.fb.nonNullable.control({ value: subDefaultValue, disabled: isReadonly }, subValidators);
+              } else if (fieldType === 'signature-pad') {
+                signatureFormGroup[subFieldName] = this.fb.control<string | null>({ value: null, disabled: isReadonly }, subValidators);
+              } else if (fieldType === 'selfie') {
+                signatureFormGroup[subFieldName] = this.fb.control<File | string | null>({ value: null, disabled: isReadonly }, subValidators);
+              } else if (fieldType === 'pin_global' || fieldType === 'pin_user') {
+                signatureFormGroup[subFieldName] = this.fb.nonNullable.control({ value: '', disabled: isReadonly }, subValidators);
+              } else {
+                signatureFormGroup[subFieldName] = this.fb.control({ value: subDefaultValue, disabled: isReadonly }, subValidators);
               }
             });
-          }
 
-        } //no lleva else para que carga el el else del if y agregue el campo normal, sin object_
-        // ya que los combos el campo normal del form que será para guardar un objeto en lugar del id
-        // y un campo que inicie con object para que guarde la referencia al campo del formulario y se pueda poner el rojo
-        //y cause los evenetos necesarios para visualizar el usuario
+            formFields[fieldName] = this.fb.array<FormGroup>([this.fb.group(signatureFormGroup)]);
 
-        if (fieldData.type === 'signature') {
-          // Procesar campos de firma
-          const subFields = fieldData.fields || [];
-          const signatureFormGroup: any = {};
+          } else if (fieldData.type === 'table') {
+            // Procesar tipo table
+            const columns = fieldData.columns || [];
+            const initialRows = fieldData.initial_rows || 0;
+            const isRequired = fieldData.required || false;
 
-          subFields.forEach((subField: any) => {
-            const subFieldName = subField.field;
-            const fieldType = subField.type;
-            const required = subField.required || false;
-            const maxLength = subField.max_length;
-            const subValidators: any[] = [];
-            if (required) subValidators.push(Validators.required);
-            if (maxLength) subValidators.push(Validators.maxLength(maxLength));
-
-            let subDefaultValue: any = '';
-            if (subField.default?.active && subField.default?.edit) {
-              subDefaultValue = subField.default.value === 'device' ? new Date() : subField.default.value;
-            }
-
-            // Determinar si el campo debe ser de solo lectura
-            const isReadonly = subField.default?.edit === false;
-
-
-            if (fieldType === 'login') {
-              const userField = subField.user?.field || 'username';
-              const passwordField = subField.password?.field || 'password';
-              const loginValidators: any[] = required ? [Validators.required] : [];
-              if (maxLength) loginValidators.push(Validators.maxLength(maxLength));
-
-              signatureFormGroup[userField] = this.fb.nonNullable.control({ value: '', disabled: isReadonly }, loginValidators);
-              signatureFormGroup[passwordField] = this.fb.nonNullable.control({ value: '', disabled: isReadonly }, loginValidators);
-            } else if (fieldType === 'input-text') {
-              signatureFormGroup[subFieldName] = this.fb.nonNullable.control({ value: subDefaultValue, disabled: isReadonly }, subValidators);
-            } else if (fieldType === 'date') {
-              //si subDefaultValue==current entonces inicializalo con null, hacerlo de solo lectura y quitar el validador de requerido
-              console.log('entro a fecha222222222222222222222');
-
-              if (subDefaultValue === 'current') {
-                console.log("dejo en null la fecha 333333333333333");
-
-                subDefaultValue = null;
-                //subValidators.splice(subValidators.indexOf(Validators.required), 1);
-              }
-
-              signatureFormGroup[subFieldName] = this.fb.nonNullable.control({ value: subDefaultValue, disabled: isReadonly }, subValidators);
-            } else if (fieldType === 'signature-pad') {
-              signatureFormGroup[subFieldName] = this.fb.control<string | null>({ value: null, disabled: isReadonly }, subValidators);
-            } else if (fieldType === 'selfie') {
-              signatureFormGroup[subFieldName] = this.fb.control<File | string | null>({ value: null, disabled: isReadonly }, subValidators);
-            } else if (fieldType === 'pin_global' || fieldType === 'pin_user') {
-              signatureFormGroup[subFieldName] = this.fb.nonNullable.control({ value: '', disabled: isReadonly }, subValidators);
-            } else {
-              signatureFormGroup[subFieldName] = this.fb.control({ value: subDefaultValue, disabled: isReadonly }, subValidators);
-            }
-          });
-
-          formFields[fieldName] = this.fb.array<FormGroup>([this.fb.group(signatureFormGroup)]);
-
-        } else if (fieldData.type === 'table') {
-          // Procesar tipo table
-          const columns = fieldData.columns || [];
-          const initialRows = fieldData.initial_rows || 0;
-          const isRequired = fieldData.required || false;
-
-          // Validador personalizado para FormArray
-          const minLengthArrayValidator = (min: number): ValidatorFn => {
-            return (control: AbstractControl): ValidationErrors | null => {
-              if (control instanceof FormArray) {
-                return control.length < min ? { 'minlength': { requiredLength: min, actualLength: control.length } } : null;
-              }
-              return null;
+            // Validador personalizado para FormArray
+            const minLengthArrayValidator = (min: number): ValidatorFn => {
+              return (control: AbstractControl): ValidationErrors | null => {
+                if (control instanceof FormArray) {
+                  return control.length < min ? { 'minlength': { requiredLength: min, actualLength: control.length } } : null;
+                }
+                return null;
+              };
             };
-          };
 
-          const createRowFormGroup = () => {
-            const rowGroup: any = {};
-            columns.forEach((column: any) => {
-              const columnValidators: any[] = [];
-              if (column.required && column.editable !== false) {
-                columnValidators.push(Validators.required);
-              }
-              if (column.validation?.max_length) {
-                columnValidators.push(Validators.maxLength(column.validation.max_length));
-              }
-              if (column.validation?.min_length) {
-                columnValidators.push(Validators.minLength(column.validation.min_length));
-              }
+            const createRowFormGroup = () => {
+              const rowGroup: any = {};
+              columns.forEach((column: any) => {
+                const columnValidators: any[] = [];
+                if (column.required && column.editable !== false) {
+                  columnValidators.push(Validators.required);
+                }
+                if (column.validation?.max_length) {
+                  columnValidators.push(Validators.maxLength(column.validation.max_length));
+                }
+                if (column.validation?.min_length) {
+                  columnValidators.push(Validators.minLength(column.validation.min_length));
+                }
 
-              let defaultColumnValue: any = '';
-              if (column.type === 'input-number') defaultColumnValue = null;
-              else if (column.type === 'date') defaultColumnValue = null;
-              else if (column.type === 'dropdown' || column.type === 'multi-select') {
-                defaultColumnValue = column.type === 'multi-select' ? [] : '';
-              } else if (column.type === 'checkbox') defaultColumnValue = false;
+                let defaultColumnValue: any = '';
+                if (column.type === 'input-number') defaultColumnValue = null;
+                else if (column.type === 'date') defaultColumnValue = null;
+                else if (column.type === 'dropdown' || column.type === 'multi-select') {
+                  defaultColumnValue = column.type === 'multi-select' ? [] : '';
+                } else if (column.type === 'checkbox') defaultColumnValue = false;
 
-              rowGroup[column.field] = this.fb.control(defaultColumnValue, columnValidators);
-            });
-            return this.fb.group(rowGroup);
-          };
+                rowGroup[column.field] = this.fb.control(defaultColumnValue, columnValidators);
+              });
+              return this.fb.group(rowGroup);
+            };
 
-          const initialRowsArray: FormGroup[] = [];
-          for (let i = 0; i < initialRows; i++) {
-            initialRowsArray.push(createRowFormGroup());
+            const initialRowsArray: FormGroup[] = [];
+            for (let i = 0; i < initialRows; i++) {
+              initialRowsArray.push(createRowFormGroup());
+            }
+
+            const arrayValidators: ValidatorFn[] = [];
+            if (isRequired) arrayValidators.push(minLengthArrayValidator(1));
+
+            formFields[fieldName] = this.fb.array<FormGroup>(initialRowsArray, arrayValidators);
+
+          } else if (fieldData.type === 'date') {
+            // Procesar tipo date
+            let dateDefaultValue = defaultValue;
+
+            // Si defaultValue es 'current', inicializarlo con null
+            if (dateDefaultValue === 'current') {
+              dateDefaultValue = null;
+            }
+
+            formFields[fieldName] = this.fb.control(
+              { value: dateDefaultValue, disabled: disabled },
+              { nonNullable: true, validators: validators }
+            );
+            formFields[fieldName].updateValueAndValidity();
+
+          } else {
+            // AQUI VUELVEN A CAER LOS dropdown, auto-complete y tree-select y agrega las validaciones al form del campo principa
+            formFields[fieldName] = this.fb.control(
+              { value: defaultValue, disabled: disabled },
+              { nonNullable: true, validators: validators }
+            );
+            formFields[fieldName].updateValueAndValidity();
           }
-
-          const arrayValidators: ValidatorFn[] = [];
-          if (isRequired) arrayValidators.push(minLengthArrayValidator(1));
-
-          formFields[fieldName] = this.fb.array<FormGroup>(initialRowsArray, arrayValidators);
-
-        } else if (fieldData.type === 'date') {
-          // Procesar tipo date
-          let dateDefaultValue = defaultValue;
-
-          // Si defaultValue es 'current', inicializarlo con null
-          if (dateDefaultValue === 'current') {
-            dateDefaultValue = null;
-          }
-
-          formFields[fieldName] = this.fb.control(
-            { value: dateDefaultValue, disabled: disabled },
-            { nonNullable: true, validators: validators }
-          );
-          formFields[fieldName].updateValueAndValidity();
-
-        } else {
-          // AQUI VUELVEN A CAER LOS dropdown, auto-complete y tree-select y agrega las validaciones al form del campo principa
-          formFields[fieldName] = this.fb.control(
-            { value: defaultValue, disabled: disabled },
-            { nonNullable: true, validators: validators }
-          );
-          formFields[fieldName].updateValueAndValidity();
-        }
-      });
-    });
+        }); // Cierre del forEach de campos (fieldsLayout)
+      }); // Cierre del forEach de layouts (layoutsToProcess)
+    }); // Cierre del forEach de nodos (dynamicFields)
   }
 
   /**
@@ -1017,11 +1038,6 @@ export class CRUD extends Vars /*implements OnInit*/ {
     pos = (pos !== null && pos !== undefined && pos !== "") ? pos : this.pos();
     const posIndex = pos as string; // Cast explícito a string
 
-    /*if (!this.drawForm()[posIndex]) {
-      this.drawForm()[posIndex] = this.crudS.drawForm(posIndex);
-    }
-    this.verboseDialog(posIndex);*/
-
     // se desestructura el array para para poder eliminar los campos afectados y optimizar la busqueda
     const boolLocal = this.fieldsBool[0][posIndex] ? [...this.fieldsBool][0][posIndex] : [];
     const relationshipsLocal = this.relationships[posIndex] ? [...this.relationships[posIndex]] : [];
@@ -1029,7 +1045,9 @@ export class CRUD extends Vars /*implements OnInit*/ {
     // lo utilizo para abrir los campos hijos solo una vez
     let auxParentSelect = true;
     const parentSelect = this.selected()[0];
+    console.log(jsonFields);
     for (const field in jsonFields) {
+
       if (jsonFields.hasOwnProperty(field)) {
 
         //se envia campo individual
@@ -1044,8 +1062,6 @@ export class CRUD extends Vars /*implements OnInit*/ {
         if (parentSelect?.child_form_fields?.draw && auxParentSelect) {
           auxParentSelect = false;
           this.openTasksDetail({ pos: posIndex, formFields: formFields, childFormFields: parentSelect.child_form_fields, parentField: 'parent_form_data_' });
-          //elimianr parent_form_data del formulario 
-          //delete parentSelect.child_form_fields;
         }
 
         // si el modelo del servidor tiene modelos anidadas, se llama recursivamente,
@@ -1172,9 +1188,6 @@ export class CRUD extends Vars /*implements OnInit*/ {
 
     if (pos === null) return cols; // Retornar cols vacío si pos es null
 
-    // Obtener configuración de columnas
-    //const configCols 
-
     // La configuración está directamente en configCols, no en configCols.cols
     const colsConfig = this.crudS.config_cols(pos) || {};
     const safePos = pos ?? 0; // Crear una variable segura para usar como índice
@@ -1193,7 +1206,6 @@ export class CRUD extends Vars /*implements OnInit*/ {
             continue;
           }
         }
-
 
         // llama recursivamente si el campo tiene hijos
         const joinModelFields = field; //+ '__name'
@@ -1298,7 +1310,6 @@ export class CRUD extends Vars /*implements OnInit*/ {
       }
     }
 
-
     // Ordenar columnas por orden si se especificó
     cols.sort((a: any, b: any) => {
       // Si ambos tienen orden, comparar numéricamente
@@ -1318,15 +1329,12 @@ export class CRUD extends Vars /*implements OnInit*/ {
       return 0;
     });
 
-
     // Limpiar la propiedad temporal _order
     cols.forEach((col: any) => {
       delete col._order;
     });
 
     console.log('colssssssss ordenadas:', cols);
-
-
     return cols;
   }
 
@@ -2115,6 +2123,12 @@ export class CRUD extends Vars /*implements OnInit*/ {
     //console.log('inicio resetFormDialog....', this.currentForm());
 
     pos = pos || this.pos();
+
+
+
+
+    this.files = [];
+    this.files64 = [];
     if (selected) {
       // agrega un objecto con id, key y label a los componentes multi, menos a los classifiers
       // se agrega key porque treeSelect lo necesita
@@ -2140,6 +2154,7 @@ export class CRUD extends Vars /*implements OnInit*/ {
       this.currentForm(pos).reset(selected);
     } else {
       //const data = this.resetForm[pos] || this.resetForm[0]
+      console.log('reset formmm0000');
       this.currentForm(pos).reset(/*{
         ...data
       }*/);
@@ -2532,42 +2547,21 @@ export class CRUD extends Vars /*implements OnInit*/ {
     this.validateRelationships(safePos);
     this.showBlocked();
 
-    if (is_file) {
-      if (this.files.length > 0) {
-        this.file(options);
+    //if (is_file) {
+    if (this.files.length > 0) {
+      this.file(options);
 
-        /*const base64FilesPromises = [];
-
-                // Convertir todos los archivos en promesas
-                for (let i = 0; i < this.files.length; i++) {
-                    base64FilesPromises.push(this.convertFileToBase64(this.files[i]));
-                }
-
-                // Cuando todas las promesas se resuelvan
-                Promise.all(base64FilesPromises)
-                    .then((base64Files) => {
-                        // Agregar todos los base64 al campo 'files'
-                        form.get('documents')?.setValue([...base64Files, ...this.files64]);
-
-                        // Ahora sí, puedes enviar el formulario aquí o llamar a tu función de submit
-                        this.submitForm({ pos, hide, reset, is_file, node, selected, update_item, data });
-                    })
-                    .catch((error) => {
-                        console.error('Error al convertir archivos a base64', error);
-                        this.messageS.changeMessage('Error al convertir los documentos.');
-                    });
-        */
-
-      } else {
-
-        console.log('save else', form.get('documents'), this.files64);
-        form.get('maintenance_document_data_documents')?.setValue(this.files64);
-        form.get('documents')?.setValue(this.files64);
-        this.submitForm({ pos, hide, reset, is_file, node, selected, update_item, data, custom_user });
-      }
     } else {
+
+      console.log('save else', form.get('documents'), this.files64);
+
+      form.get('maintenance_document_data_documents')?.setValue(this.files64);
+      form.get('documents')?.setValue(this.files64);
       this.submitForm({ pos, hide, reset, is_file, node, selected, update_item, data, custom_user });
     }
+    /*} else {
+      this.submitForm({ pos, hide, reset, is_file, node, selected, update_item, data, custom_user });
+    }*/
   }
 
   saveSecundary(options: saveOptions = {}) {
@@ -2623,6 +2617,10 @@ export class CRUD extends Vars /*implements OnInit*/ {
         this.crudS.app = this.app[currentPos];
       }
     }
+  }
+
+  cancel() {
+    //cancela la accion y elimina lo registrado en la bd
   }
 
   delete(pos: any = null, node = false) {
@@ -2853,146 +2851,6 @@ export class CRUD extends Vars /*implements OnInit*/ {
   /*onShowConfig() {
       this.configForm.controls['columns'].setValue(this.selectedColumns().map(column => column.field));
     }*/
-
-  /*
-  public videoDevices: MediaDeviceInfo[] = [];
-  public currentCameraIndex: number = -1;
-  async previewCamera() {
-
-    try {
-      this.mediaStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
-      this.video.nativeElement.srcObject = this.mediaStream;
-      this.video.nativeElement.play();
-      this.previewCameraDialogVisible = true;
-    } catch (error) {
-      this.messageS.changeMessage('Debe permitir el acceso a la cámara.')
-    }
-  }
-  async getMediaDevices() {
-    try {
-      // Solicita permisos para acceder a la cámara y el micrófono
-      await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
-
-      // Enumera los dispositivos de medios disponibles
-      const devices = await navigator.mediaDevices.enumerateDevices();
-      const videoDevices = devices.filter(device => device.kind === 'videoinput');
-      return videoDevices;
-    } catch (error) {
-      console.error('Error al enumerar dispositivos de medios:', error);
-      return [];
-    }
-  }
-  async selectCamera() {
-    try {
-      if (this.videoDevices.length === 0) {
-        this.videoDevices = await this.getMediaDevices();
-        if (this.videoDevices.length === 0) {
-          throw new Error('No se encontraron cámaras disponibles.');
-        }
-
-        // Intenta encontrar la cámara trasera
-        let backCamera = this.videoDevices.find((device: MediaDeviceInfo) => device.label.toLowerCase().includes('back'));
-        if (!backCamera) {
-          // Si no encuentra la cámara trasera, intenta con la delantera
-          backCamera = this.videoDevices.find((device: MediaDeviceInfo) => device.label.toLowerCase().includes('front'));
-        }
-        if (!backCamera) {
-          // Si no encuentra ni la trasera ni la delantera, usa la primera disponible
-          backCamera = this.videoDevices[0];
-        }
-        this.currentCameraIndex = this.videoDevices.indexOf(backCamera);
-      } else {
-        // Avanza al siguiente dispositivo de video
-        this.currentCameraIndex = (this.currentCameraIndex + 1) % this.videoDevices.length;
-      }
-
-      const deviceId = this.videoDevices[this.currentCameraIndex].deviceId;
-
-      this.mediaStream = await navigator.mediaDevices.getUserMedia({
-        video: { deviceId: { exact: deviceId } },
-        audio: true
-      });
-      this.video.nativeElement.srcObject = this.mediaStream;
-      this.video.nativeElement.play();
-      this.previewCameraDialogVisible = true;
-    } catch (error: any) {
-      if (error.name === 'OverconstrainedError') {
-        console.error('No se pudo satisfacer las restricciones de video:', error);
-        this.messageS.changeMessage('No se pudo satisfacer las restricciones de video. Intente con otra cámara.');
-      } else if (error.name === 'NotAllowedError' || error.name === 'SecurityError') {
-        console.error('Permiso denegado para acceder a la cámara:', error);
-        this.messageS.changeMessage('Debe permitir el acceso a la cámara.');
-      } else {
-        console.error('Error al acceder a la cámara:', error);
-        this.messageS.changeMessage('Debe permitir el acceso a la cámara.');
-      }
-    }
-  }
-  captureMedia(type: 'image' | 'video' = 'image') {
-    const video = this.video.nativeElement;
-    const canvas = this.canvas.nativeElement;
-
-    if (type === 'image') {
-      canvas.width = video.videoWidth;
-      canvas.height = video.videoHeight;
-
-      const canvasContext = canvas.getContext('2d');
-      canvasContext?.drawImage(video, 0, 0, canvas.width, canvas.height);
-
-      const imagenCapturada = canvas.toDataURL('image/jpeg'); // Cambia 'image/png' a 'image/jpeg'
-      this.files64.push({ type: 'image', file_name: 'evidencia.jpg', file: imagenCapturada });
-
-      this.previewCameraDialogVisible = false;
-    } else if (type === 'video') {
-      const mediaRecorder = new MediaRecorder(this.mediaStream);
-      const chunks: BlobPart[] = [];
-
-      mediaRecorder.ondataavailable = (event) => {
-        chunks.push(event.data);
-      };
-
-      mediaRecorder.onstop = () => {
-        const blob = new Blob(chunks, { type: 'video/webm' });
-        const reader = new FileReader();
-        reader.onloadend = () => {
-          const videoBase64 = reader.result as string;
-          this.files64.push({ type: 'video', file_name: 'evidencia.webm', file: videoBase64 });
-
-        };
-        reader.readAsDataURL(blob);
-      };
-
-      mediaRecorder.start();
-
-      const interval = setInterval(() => {
-        this.timeVideo.update(time => time - 1);
-        if (this.timeVideo() <= 0) {
-          clearInterval(interval);
-          this.timeVideo.set(0);
-          mediaRecorder.stop();
-          this.previewCameraDialogVisible = false;
-          this.timeVideo.set(6); // Reinicia el tiempo para la próxima grabación
-        }
-      }, 1000); // Decrementa cada segundo
-    }
-  }
-  removeMedia(i: number) {
-    this.files64.splice(i, 1);
-  }
-  onHidePreviousCamera() {
-    if (this.mediaStream) {
-      const tracks = this.mediaStream.getTracks();
-      tracks.forEach(track => track.stop());
-    }
-  }
-  removeImage(i: number, type: string = '64') {
-    if (type == '64') {
-      this.files64.splice(i, 1);
-    } else if (type == 'bin') {
-      this.files.splice(i, 1);
-    }
-  }
-*/
 
   onFiles64(event: any[]) {
     console.log('event', event);

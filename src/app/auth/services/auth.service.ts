@@ -225,7 +225,6 @@ export class AuthService {
             return this.http.get(`${this._base_url}/settings/settings/me/`).pipe(
               tap((config: any) => {
                 console.log('refresh', config);
-
                 this.config = config; // Asignar la configuración
               }),
               map(() => true), // Retornar true para indicar éxito
@@ -545,9 +544,11 @@ export class AuthService {
           if (fields && fields[fieldName]) {
             // Mantener algunas propiedades originales si existen
             const originalField = value as any;
+
             result[key] = {
               ...fields[fieldName], // Configuración completa del campo desde fields
-              field: fieldName, // Asegurar que el field se mantiene
+              //esta sobreescribiendo fieldName el por field
+              //field: fieldName, // Usar la clave del diccionario (nombre completo con prefijos) //lo comento porque en teoria field el el nombre del formulario
               // Preservar propiedades específicas del draw original si existen
               ...(originalField.class && { class: originalField.class }),
               ...(originalField.class_md && { class_md: originalField.class_md }),
@@ -837,6 +838,7 @@ export class AuthService {
 
         // Procesar draw si existe
         if (draw && typeof draw === "object") {
+
           this.processDrawConfig(draw, fields, clave2, customField, fieldsPrefixes);
         }
 

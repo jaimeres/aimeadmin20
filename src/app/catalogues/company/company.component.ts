@@ -59,7 +59,7 @@ export class CompanyComponent extends CRUD implements OnInit {
 
   }
 
-  ngOnChanges(changes: SimpleChanges) {
+  /*ngOnChanges(changes: SimpleChanges) {
     this.showComponentSignal()['local'] = false;
 
     if (changes['showComponent'] && changes['showComponent'].currentValue) {
@@ -80,6 +80,34 @@ export class CompanyComponent extends CRUD implements OnInit {
         this.getAll();
       }
     }
+  }*/
+
+  ngOnChanges(changes: SimpleChanges) {
+    const cv = changes['showComponent']?.currentValue;
+    if (!cv) return;
+
+    const mode =
+      cv.create ? 'create' :
+        cv.update ? 'update' :
+          cv.delete ? 'delete' :
+            cv.read ? 'read' : null;
+
+    this.showComponentSignal.update(s => ({
+      ...s,
+      local: false,
+      create: mode === 'create',
+      update: mode === 'update',
+      delete: mode === 'delete',
+      read: mode === 'read',
+    }));
+
+    switch (mode) {
+      case 'create': this.openNew(); break;
+      case 'update': this.edit(); break;
+      case 'delete': this.delete(); break;
+      case 'read': this.getAll(); break;
+    }
   }
+
 
 }

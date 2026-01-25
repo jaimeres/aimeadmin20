@@ -27,32 +27,39 @@
             </div>
 
             <div class="p-inputgroup" *ngSwitchCase="'dropdown'">
-              <p-floatlabel variant="on">
-                <!-- [readonly]="card.value.readonly" -->
-                <p-select [options]="dropdownOptionsSignal()[card.value.field]"
-                  [optionValue]="card.value.option_value || 'id'" [optionLabel]="card.value.option_label || 'name'"
-                  placeholder="." [editable]="card.value.editable"
-                  [formControl]="$any(formGroupSignal()?.get(card.value.field))"
-                  [scrollHeight]="card.value.scrollHeight || '200px'" (onShow)="onShowDropdownAction.emit($event)"
-                  [showClear]="card.value.showClear !== undefined ? card.value.showClear : true"
-                  [filter]="card.value.filter !== undefined ? card.value.filter : false"
-                  [filterBy]="card.value.filter_by !== undefined ? card.value.filter_by : false"
-                  (onChange)="onChangeDropdown($event, card.value)" [appendTo]="'body'"
-                  styleClass="height-input-custom" />
+              <p-inputgroup>
+                <p-floatlabel variant="on">
+                  <!-- [readonly]="card.value.readonly" -->
+                  <p-select [options]="dropdownOptionsSignal()[card.value.field]"
+                    [optionValue]="card.value.option_value || 'id'" [optionLabel]="card.value.option_label || 'name'"
+                    placeholder="." [editable]="card.value.editable"
+                    [formControl]="$any(formGroupSignal()?.get(card.value.field))"
+                    [scrollHeight]="card.value.scrollHeight || '200px'" (onShow)="onShowDropdownAction.emit($event)"
+                    [showClear]="card.value.showClear !== undefined ? card.value.showClear : true"
+                    [filter]="card.value.filter !== undefined ? card.value.filter : false"
+                    [filterBy]="card.value.filter_by !== undefined ? card.value.filter_by : false"
+                    (onChange)="onChangeDropdown($event, card.value)" [appendTo]="'body'"
+                    styleClass="height-input-custom" />
 
-                <button *ngIf="card.value.new_icon !== undefined ? card.value.new_icon : false" type="button" pButton
-                  icon="pi pi-plus" class="height-icon-custom"
-                  (click)="onNewIconDropdownAction.emit(card.value.field)"></button>
-                <button *ngIf="card.value.reload_icon !== undefined ? card.value.reload_icon : false" type="button"
-                  pButton icon="pi pi-replay" class="height-icon-custom"
-                  (click)="onReloadIconDropdownAction.emit(card.value.field)"></button>
-                <button *ngIf="card.value.closable_icon !== undefined ? card.value.closable_icon : false" type="button"
-                  pButton icon="pi pi-times" class="height-icon-custom"
-                  (click)="onClosableIconDropdownAction.emit(card.value.field)"></button>
-                <label [for]="card.value.field">
-                  {{ card.value?.label}}
-                </label>
-              </p-floatlabel>
+                  <button *ngIf="card.value.new_icon !== undefined ? card.value.new_icon : false" type="button" pButton
+                    icon="pi pi-plus" class="height-icon-custom"
+                    (click)="onNewIconDropdownAction.emit(card.value.field)"></button>
+                  <button *ngIf="card.value.reload_icon !== undefined ? card.value.reload_icon : false" type="button"
+                    pButton icon="pi pi-replay" class="height-icon-custom"
+                    (click)="onReloadIconDropdownAction.emit(card.value.field)"></button>
+                  <button *ngIf="card.value.closable_icon !== undefined ? card.value.closable_icon : false"
+                    type="button" pButton icon="pi pi-times" class="height-icon-custom"
+                    (click)="onClosableIconDropdownAction.emit(card.value.field)"></button>
+                  <label [for]="card.value.field">
+                    {{ card.value?.label}}
+                  </label>
+                  <button *ngIf="card.value.scanner?.active" type="button" pButton style="width: 40px !important;"
+                    [icon]="card.value.scanner.icon || 'pi pi-qrcode'" class="height-icon-custom"
+                    [pTooltip]="card.value.scanner.tooltip || 'Escanear código'" (click)="onScanCode(card.value)">
+                  </button>
+
+                </p-floatlabel>
+              </p-inputgroup>
             </div>
 
 
@@ -446,8 +453,16 @@
               </p-button>
             </div>
 
+            <div *ngSwitchCase="'document'" class="w-full">
+              <p-splitbutton styleClass="height-input-custom w-full sb-full"
+                (onClick)="previewCamera(card.value.field, card.value)" [label]="card.value?.label"
+                [pAutoFocus]="card.value?.autofocus || false" [disabled]="card.value?.disabled || false">
+              </p-splitbutton>
+            </div>
+
+
+
             <!-- SIGNATURE COMPONENT IN CARD -->
-            <!-- SIGNATURE COMPONENT FREE -->
             <div *ngSwitchCase="'signature'" class="w-full">
 
               <!-- Título -->
@@ -693,7 +708,6 @@
 
     </p-card>
 
-
     <!-- LIBRE -->
     <div *ngIf="!entry.value?.card && !entry.value?.fieldset" [ngSwitch]="getType(entry.value)"
       style="padding-top: 5px; padding-bottom: 5px;">
@@ -735,7 +749,7 @@
         </p-floatlabel>
       </div>
 
-      <!-- EMAILS CHIPS -->
+      <!-- EMAILS CHIPS EN FREE-->
       <div *ngSwitchCase="'emails-chips'">
         <p-floatlabel variant="on">
           <!-- [disabled]="entry.value.disabled || entry.value.readonly"  -->
@@ -922,7 +936,6 @@
         </p-inputgroup>
       </div>
 
-
       <div *ngSwitchCase="'dropdown-choice'">
         <p-inputgroup>
           <p-floatlabel variant="on">
@@ -951,7 +964,6 @@
           </p-floatlabel>
         </p-inputgroup>
       </div>
-
 
       <div *ngSwitchCase="'multi-select'">
         <p-inputgroup>
@@ -995,17 +1007,30 @@
 
       </div>
 
-      <div *ngSwitchCase="'document'" class="w-full">
-        <p-splitbutton styleClass="height-input-custom w-full sb-full" (onClick)="previewCamera()"
-          [label]="entry.value?.label" [pAutoFocus]="entry.value?.autofocus || false"
-          [disabled]="entry.value?.disabled || false">
-        </p-splitbutton>
+      <div *ngSwitchCase="'select-button'">
 
+        <div *ngIf="entry.value.description" [style.height]="entry?.value?.description?.height"
+          class="overflow-hidden text-ellipsis flex items-end justify-start">
+          {{ entry.value.description?.label?.length > 100 ?
+          (entry.value.description?.label | slice:0:entry.value.description?.slice) +
+          entry.value.description?.caracter_slice :
+          entry.value.description?.label }}
+        </div>
+
+        <p-selectButton styleClass="height-input-custom" [formControl]="$any(formGroupSignal()?.get(entry.value.field))"
+          [options]="entry.value.options" [optionLabel]="entry.value.option_label || 'name'"
+          [optionValue]="entry.value.option_value || 'id'" class="w-full" />
 
       </div>
 
-      <!-- BUTTON COMPONENT FREE -->
+      <div *ngSwitchCase="'document'" class="w-full">
+        <p-splitbutton styleClass="height-input-custom w-full sb-full"
+          (onClick)="previewCamera(entry.value.field, entry.value)" [label]="entry.value?.label"
+          [pAutoFocus]="entry.value?.autofocus || false" [disabled]="entry.value?.disabled || false">
+        </p-splitbutton>
+      </div>
 
+      <!-- BUTTON COMPONENT FREE -->
       <div *ngSwitchCase="'button'">
         <p-button [label]="entry.value?.label" [icon]="entry.value?.icon"
           [iconPos]="entry.value?.icon_position || 'left'" [severity]="entry.value?.severity || 'primary'"
@@ -1444,47 +1469,52 @@
                 </div>
               </div>
 
-
               <p-inputgroup *ngSwitchCase="'dropdown'">
                 <!-- no uso -inputgroup-addon porque se deforma los iconos -->
                 <!-- uso padding-bottom: 4px !important; porque quedan muy pegados los select-->
                 <!-- height-input-custom" porque la altura del select es del doble que el resto de los elementos, 
                  no veo css desponsable por eso uso la clase -->
-                <p-floatlabel variant="on">
-                  <!-- [readonly]="card.value.readonly" -->
-                  <p-select [options]="dropdownOptionsSignal()[card.value.field]"
-                    [optionValue]="card.value.option_value || 'id'" [optionLabel]="card.value.option_label || 'name'"
-                    placeholder="." [editable]="card.value.editable"
-                    [formControl]="$any(formGroupSignal()?.get(card.value.field))"
-                    [scrollHeight]="card.value.scrollHeight || '200px'" (onShow)="onShowDropdownAction.emit($event)"
-                    [showClear]="card.value.showClear !== undefined ? card.value.showClear : true"
-                    [filter]="card.value.filter !== undefined ? card.value.filter : false"
-                    [filterBy]="card.value.filter_by !== undefined ? card.value.filter_by : false"
-                    (onChange)="onChangeDropdown($event, card.value)" [appendTo]="'body'"
-                    styleClass="height-input-custom" />
+                <p-inputgroup>
+                  <p-floatlabel variant="on">
+                    <!-- [readonly]="card.value.readonly" -->
+                    <p-select [options]="dropdownOptionsSignal()[card.value.field]"
+                      [optionValue]="card.value.option_value || 'id'" [optionLabel]="card.value.option_label || 'name'"
+                      placeholder="." [editable]="card.value.editable"
+                      [formControl]="$any(formGroupSignal()?.get(card.value.field))"
+                      [scrollHeight]="card.value.scrollHeight || '200px'" (onShow)="onShowDropdownAction.emit($event)"
+                      [showClear]="card.value.showClear !== undefined ? card.value.showClear : true"
+                      [filter]="card.value.filter !== undefined ? card.value.filter : false"
+                      [filterBy]="card.value.filter_by !== undefined ? card.value.filter_by : false"
+                      (onChange)="onChangeDropdown($event, card.value)" [appendTo]="'body'"
+                      styleClass="height-input-custom" />
 
-                  <button *ngIf="card.value.new_icon !== undefined ? card.value.new_icon : false" type="button" pButton
-                    icon="pi pi-plus" class="height-icon-custom"
-                    (click)="onNewIconDropdownAction.emit(card.value.field)"></button>
+                    <button *ngIf="card.value.new_icon !== undefined ? card.value.new_icon : false" type="button"
+                      pButton icon="pi pi-plus" class="height-icon-custom"
+                      (click)="onNewIconDropdownAction.emit(card.value.field)"></button>
 
-                  <button *ngIf="card.value.reload_icon !== undefined ? card.value.reload_icon : false" type="button"
-                    pButton icon="pi pi-replay" class="height-icon-custom"
-                    (click)="onReloadIconDropdownAction.emit(card.value.field)" style="margin-left: -5px;"
-                    variant="text"></button>
+                    <button *ngIf="card.value.reload_icon !== undefined ? card.value.reload_icon : false" type="button"
+                      pButton icon="pi pi-replay" class="height-icon-custom"
+                      (click)="onReloadIconDropdownAction.emit(card.value.field)" style="margin-left: -5px;"
+                      variant="text"></button>
 
-                  <button *ngIf="card.value.closable_icon !== undefined ? card.value.closable_icon : false"
-                    type="button" pButton icon="pi pi-times" class="height-icon-custom"
-                    (click)="onClosableIconDropdownAction.emit(card.value.field)"></button>
+                    <button *ngIf="card.value.closable_icon !== undefined ? card.value.closable_icon : false"
+                      type="button" pButton icon="pi pi-times" class="height-icon-custom"
+                      (click)="onClosableIconDropdownAction.emit(card.value.field)"></button>
 
-                  <label [for]="card.value.field">
-                    {{ card.value?.label }}
-                    <!-- {{ card.value?.label && card.value?.label.trim() !== '' ? card.value?.label :
+                    <label [for]="card.value.field">
+                      {{ card.value?.label }}
+                      <!-- {{ card.value?.label && card.value?.label.trim() !== '' ? card.value?.label :
                     customFieldSignal()[card.value.field] }} -->
-                  </label>
+                    </label>
 
-                </p-floatlabel>
+                    <button *ngIf="card.value.scanner?.active" type="button" pButton style="width: 40px !important;"
+                      [icon]="card.value.scanner.icon || 'pi pi-qrcode'" class="height-icon-custom"
+                      [pTooltip]="card.value.scanner.tooltip || 'Escanear código'" (click)="onScanCode(card.value)">
+                    </button>
+
+                  </p-floatlabel>
+                </p-inputgroup>
               </p-inputgroup>
-
 
               <p-inputgroup *ngSwitchCase="'dropdown-choice'">
                 <!-- no uso -inputgroup-addon porque se deforma los iconos -->
@@ -1526,7 +1556,6 @@
                 </p-floatlabel>
               </p-inputgroup>
 
-
               <div *ngSwitchCase="'multi-select'">
                 <p-floatlabel variant="on">
                   <p-multiSelect [formControl]="$any(formGroupSignal()?.get(card.value.field))"
@@ -1555,7 +1584,6 @@
                   [offLabel]="card.value?.label_false"
                   (onChange)="onChangeToggle($event, card.value.field)"></p-toggleButton>
               </div>
-
 
               <div *ngSwitchCase="'textarea'">
                 <p-floatlabel>
@@ -1638,7 +1666,6 @@
                     class="height-input-custom"></button>
                 </p-inputgroup-addon>
               </p-inputgroup>
-
 
               <div *ngSwitchCase="'date'">
                 <p-floatlabel variant="on">
@@ -1889,14 +1916,37 @@
                 </p-button>
               </div>
 
-              <!-- SIGNATURE COMPONENT IN FIELDSET -->
 
-              <!-- SIGNATURE COMPONENT FREE -->
+              <div *ngSwitchCase="'select-button'">
+                <div *ngIf="card.value.description" [style.height]="card?.value?.description?.height"
+                  class="overflow-hidden text-ellipsis flex items-end justify-start">
+                  {{ card.value.description?.label?.length > 100 ?
+                  (card.value.description?.label | slice:0:card.value.description?.slice) +
+                  card.value.description?.caracter_slice :
+                  card.value.description?.label }}
+                </div>
+
+                <p-selectButton styleClass="height-input-custom"
+                  [formControl]="$any(formGroupSignal()?.get(card.value.field))" [options]="card.value.options"
+                  [optionLabel]="card.value.option_label || 'name'" [optionValue]="card.value.option_value || 'id'"
+                  class="w-full" />
+              </div>
+
+
+
+              <div *ngSwitchCase="'document'" class="w-full">
+                <p-splitbutton styleClass="height-input-custom w-full sb-full"
+                  (onClick)="previewCamera(card.value.field, card.value)" [label]="card.value?.label"
+                  [pAutoFocus]="card.value?.autofocus || false" [disabled]="card.value?.disabled || false">
+                </p-splitbutton>
+              </div>
+
+              <!-- SIGNATURE COMPONENT IN FIELDSET -->
               <div *ngSwitchCase="'signature'" class="w-full">
 
                 <!-- Título -->
                 <div class="mb-3">
-                  <h5 *ngIf="entry.value.label" class="mb-2">{{ entry.value.label }}</h5>
+                  <h5 *ngIf="card.value.label" class="mb-2">{{ card.value.label }}</h5>
                 </div>
 
                 <!-- ÁREA PRINCIPAL DE FIRMADO (SIEMPRE ÍNDICE 0) -->
@@ -2129,16 +2179,181 @@
                   <p>No hay firmas registradas</p>
                   <small>Use el botón "Añadir Firma" para crear una nueva</small>
                 </div>
-
               </div>
-
-
             </div>
           </div>
         </div>
       </p-fieldset>
     </div>
 
+  </div>
+
+</div>
+
+
+<div *ngIf="drawFormSignal()['stepper']" class="justify-center">
+
+  <p-stepper [value]="currentStepSignal() ?? undefined" (valueChange)="currentStepSignal.set($event ?? null)"
+    (onChangeAction)="onStepChange($event)" [linear]="drawFormSignal()['stepper'].linear === true">
+    <p-step-list *ngIf="drawFormSignal()['stepper']?.buttons?.active">
+      <!-- [value]="entry.key" FALLA , pienso que el valor es undefined PORQUE ESTA EN EL MIMO NIVEL DE FOR -->
+      <p-step *ngFor="let entry of drawFormSignal()['stepper']?.steps | keyvalue : keyComparator;" [value]="+entry.key">
+        {{entry.value.label}}
+      </p-step>
+    </p-step-list>
+
+    <p-step-panels>
+      <p-step-panel [value]="+entry.key"
+        *ngFor="let entry of drawFormSignal()['stepper']?.steps | keyvalue : keyComparator;">
+        <ng-template #content let-activateCallback="activateCallback">
+          <div class="grid grid-cols-12 gap-2 pt-2">
+
+            <div *ngFor="let field of entry.value.fields | keyvalue : keyComparator;"
+              [ngClass]="[ field.value.hide ? 'hidden' : '', field.value.class || 'col-span-6', field.value.class_md || 'md:col-span-3']">
+
+              <div [ngSwitch]="getType(field.value)">
+
+                <div *ngSwitchCase="'document'" class="w-full">
+                  <p-splitbutton styleClass="height-input-custom w-full sb-full"
+                    (onClick)="previewCamera(field.value.field, field.value)" [label]="field.value?.label"
+                    [pAutoFocus]="field.value?.autofocus || false" [disabled]="field.value?.disabled || false">...
+                  </p-splitbutton>
+                </div>
+
+                <div *ngSwitchCase="'input-text'">
+                  <div class="p-inputgroup">
+                    <p-floatlabel variant="on">
+                      <input type="text" pInputText [formControl]="$any(formGroupSignal()?.get(field.value.field))"
+                        class="height-input-custom" style="padding-top: 0.5rem !important;"
+                        (keydown.enter)="onKeydownEnter($event, field.value)"
+                        (keydown.tab)="onKeydownTab($event, field.value)" />
+                      <label [for]="field.value.field" [pAutoFocus]="field.value.autofocus">
+                        {{field.value.label}}
+                      </label>
+                    </p-floatlabel>
+                    <button *ngIf="field.value.scanner?.active" type="button" pButton style="width: 40px !important;"
+                      [icon]="field.value.scanner.icon || 'pi pi-qrcode'" class="height-icon-custom"
+                      [pTooltip]="field.value.scanner.tooltip || 'Escanear código'" (click)="onScanCode(field.value)">
+                    </button>
+                  </div>
+                </div>
+
+                <div class="p-inputgroup" *ngSwitchCase="'dropdown'">
+                  <p-inputgroup>
+                    <p-floatlabel variant="on">
+                      <p-select [options]="dropdownOptionsSignal()[field.value.field]"
+                        [optionValue]="field.value.option_value || 'id'"
+                        [optionLabel]="field.value.option_label || 'name'" placeholder="."
+                        [editable]="field.value.editable"
+                        [formControl]="$any(formGroupSignal()?.get(field.value.field))"
+                        [scrollHeight]="field.value.scrollHeight || '200px'"
+                        (onShow)="onShowDropdownAction.emit($event)"
+                        [showClear]="field.value.showClear !== undefined ? field.value.showClear : true"
+                        [filter]="field.value.filter !== undefined ? field.value.filter : false"
+                        [filterBy]="field.value.filter_by !== undefined ? field.value.filter_by : false"
+                        (onChange)="onChangeDropdown($event, field.value)" [appendTo]="'body'"
+                        styleClass="height-input-custom" />
+
+                      <button *ngIf="field.value.new_icon !== undefined ? field.value.new_icon : false" type="button"
+                        pButton icon="pi pi-plus" class="height-icon-custom"
+                        (click)="onNewIconDropdownAction.emit(field.value.field)"></button>
+                      <button *ngIf="field.value.reload_icon !== undefined ? field.value.reload_icon : false"
+                        type="button" pButton icon="pi pi-replay" class="height-icon-custom"
+                        (click)="onReloadIconDropdownAction.emit(field.value.field)"></button>
+                      <button *ngIf="field.value.closable_icon !== undefined ? field.value.closable_icon : false"
+                        type="button" pButton icon="pi pi-times" class="height-icon-custom"
+                        (click)="onClosableIconDropdownAction.emit(field.value.field)"></button>
+                      <label [for]="field.value.field">
+                        {{ field.value?.label}}
+                      </label>
+                      <button *ngIf="field.value.scanner?.active" type="button" pButton style="width: 40px !important;"
+                        [icon]="field.value.scanner.icon || 'pi pi-qrcode'" class="height-icon-custom"
+                        [pTooltip]="field.value.scanner.tooltip || 'Escanear código'" (click)="onScanCode(field.value)">
+                      </button>
+                    </p-floatlabel>
+                  </p-inputgroup>
+                </div>
+
+                <div *ngSwitchCase="'input-number'">
+                  <div class="p-inputgroup">
+                    <p-floatlabel variant="on">
+                      <p-inputNumber [minFractionDigits]="field.value?.min_fraction_digits"
+                        [mode]="field.value?.mode || 'decimal'"
+                        [formControl]="$any(formGroupSignal()?.get(field.value.field))"
+                        [maxFractionDigits]="field.value?.max_fraction_digits" [min]="field.value?.min"
+                        [prefix]="field.value?.prefix" [suffix]="field.value?.suffix"
+                        [inputStyle]="{'padding-top': '0.5rem'}" [max]="field.value?.max"
+                        [showButtons]="field.value?.show_buttons" [buttonLayout]="field.value?.button_layout"
+                        spinnerMode="field.value?.spinner_mode"
+                        [decrementButtonClass]="field.value?.decrement_button_class"
+                        [incrementButtonClass]="field.value?.increment_button_class"
+                        [incrementButtonIcon]="field.value?.increment_button_icon"
+                        [decrementButtonIcon]="field.value?.decrement_button_icon" [inputId]="field.value.field"
+                        (keydown.enter)="onKeydownEnter($event, field.value)" class="height-input-custom"
+                        (keydown.tab)="onKeydownTab($event, field.value)" [pAutoFocus]="field.value.autofocus" />
+                      <label [for]="field.value.field">
+                        {{field.value?.label }}
+                      </label>
+                    </p-floatlabel>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="flex pt-6 justify-between">
+            <p-button *ngIf="entry.value?.back" [label]="entry.value?.back.label || 'Anterior'" severity="secondary"
+              icon="pi pi-arrow-left"
+              (onClick)="navigateToStep(entry.value?.back?.step || +entry.key - 1, activateCallback)" />
+
+            <p-button *ngIf="entry.value?.next" [label]="entry.value?.next.label || 'Siguiente'"
+              icon="pi pi-arrow-right" iconPos="right"
+              (onClick)="navigateToStep(entry.value?.next?.step || +entry.key + 1, activateCallback)" />
+          </div>
+        </ng-template>
+      </p-step-panel>
+    </p-step-panels>
+  </p-stepper>
+
+  <div style="overflow: auto; height: 200px; padding-top: 10px; " *ngIf="nonSignatureFilesSignal().length > 0">
+
+    <div class="flex flex-wrap gap-4">
+      <div *ngFor="let file of nonSignatureFilesSignal(); let i = index" class="relative">
+        <p-image *ngIf="file.type=='image'" [src]="file.file" alt="Imagen capturada" width="140"
+          [preview]="true">...</p-image>
+
+        <video *ngIf="file.type === 'video'" width="140" controls>
+          <source [src]="file.file" type="video/mp4">
+          Video no soportado.
+        </video>
+
+        <p-button icon="pi pi-trash" class="w-full mt-3" severity="danger" [text]="true"
+          [style]="{ position: 'absolute', left: '11%', transform: 'translateX(-50%)',  }" (click)="removeImage(i )">
+        </p-button>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+
+<div class="w-full" style="overflow: auto; height: 200px; padding-top: 10px;"
+  *ngIf="nonSignatureFilesSignal().length > 0 && drawFormSignal()['grid']">
+
+  <div class="flex flex-wrap gap-4">
+    <div *ngFor="let file of nonSignatureFilesSignal(); let i = index" class="relative">
+      <p-image *ngIf="file.type=='image'" [src]="file.file" alt="Imagen capturada" width="140"
+        [preview]="true">...</p-image>
+
+      <video *ngIf="file.type === 'video'" width="140" controls>
+        <source [src]="file.file" type="video/mp4">
+        Video no soportado.
+      </video>
+
+      <p-button icon="pi pi-trash" class="w-full mt-3" severity="danger" [text]="true"
+        [style]="{ position: 'absolute', left: '11%', transform: 'translateX(-50%)',  }" (click)="removeImage(i )">
+      </p-button>
+    </div>
   </div>
 </div>
 
@@ -2147,7 +2362,7 @@
   <video #videoElement autoplay></video>
   <canvas #canvasElement style="display:none;"></canvas>
   <ng-template #footer>
-    <p-button *ngIf="timeVideo()==6" (click)="previewCamera()">
+    <p-button *ngIf="timeVideo()==6" (click)="previewCamera(activeFieldCapture, activeFieldConfig)">
       <i class="pi pi-video"></i>
       &nbsp;
       Camara
@@ -2164,22 +2379,3 @@
     <h1 *ngIf="timeVideo()!=6"> {{timeVideo()}}</h1>
   </ng-template>
 </p-dialog>
-
-<div style="overflow: auto; height: 200px;" *ngIf="getNonSignatureFiles().length > 0">
-
-  <div class="flex flex-wrap gap-4">
-    <div *ngFor="let file of getNonSignatureFiles(); let i = index" class="relative">
-      <p-image *ngIf="file.type=='image'" [src]="file.file" alt="Imagen capturada" width="140"
-        [preview]="true">...</p-image>
-
-      <video *ngIf="file.type === 'video'" width="140" controls>
-        <source [src]="file.file" type="video/mp4">
-        Video no soportado.
-      </video>
-
-      <p-button icon="pi pi-trash" class="w-full mt-3" severity="danger" [text]="true"
-        [style]="{ position: 'absolute', left: '11%', transform: 'translateX(-50%)',  }" (click)="removeImage(i )">
-      </p-button>
-    </div>
-  </div>
-</div>

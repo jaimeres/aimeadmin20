@@ -16,6 +16,8 @@ export class CustomButtonFooterComponent {
   @Output() saveNotHideAction = new EventEmitter<boolean>();
   @Output() resetFormAction = new EventEmitter<void>();
   @Output() cancelAction = new EventEmitter<void>();
+  //@Output() helpAction = new EventEmitter<void>();
+  //@Output() helpVideoAction = new EventEmitter<void>();
 
   @Input() config: any = null;
 
@@ -24,6 +26,8 @@ export class CustomButtonFooterComponent {
   public saveNotHide = signal(true);
   public resetForm = signal(true);
   public cancel = signal(true);
+  //public help = signal(true);
+  //public helpVideo = signal(true);
 
   // Configuración de botones con valores por defecto
   public buttonConfig = signal({
@@ -50,6 +54,20 @@ export class CustomButtonFooterComponent {
       label: 'Limpiar',
       icon: '',
       severity: 'warn' as 'secondary' | 'success' | 'info' | 'warn' | 'danger' | 'help' | 'contrast' | null | undefined
+    },
+    help: {
+      hide: false,
+      label: 'Ayuda',
+      icon: 'pi pi-question-circle',
+      severity: 'help' as 'secondary' | 'success' | 'info' | 'warn' | 'danger' | 'help' | 'contrast' | null | undefined,
+      url: ''
+    },
+    help_video: {
+      hide: false,
+      label: 'Video',
+      icon: 'pi pi-youtube',
+      severity: 'danger' as 'secondary' | 'success' | 'info' | 'warn' | 'danger' | 'help' | 'contrast' | null | undefined,
+      url: ''
     }
   });
 
@@ -61,10 +79,13 @@ export class CustomButtonFooterComponent {
 
   ngAfterViewInit() {
     setTimeout(() => {
+      //|||pienso que con la nueva configuración de los botones ya no es necesario esto
       this.save.set(this.saveAction.observed);
       this.saveNotHide.set(this.saveNotHideAction.observed);
       this.resetForm.set(this.resetFormAction.observed);
       this.cancel.set(this.cancelAction.observed);
+      //this.help.set(this.helpAction.observed);
+      //this.helpVideo.set(this.helpVideoAction.observed);
     });
     // Se mete al setTimeout para eviatr el error //ERROR Error: NG0100: ExpressionChangedAfterItHasBeenCheckedError: Expression has changed after it was checked. Previous value: 'true'. 
     //Current value: 'false'. Expression location: CustomButtonFooterComponent component. Find more at https://angular.io/errors/NG0100
@@ -111,6 +132,14 @@ export class CustomButtonFooterComponent {
 
     this.buttonConfig.set(newConfig);
     console.log('🔧 Configuración de botones aplicada:', newConfig);
+  }
+
+  help() {
+    //abrir dialogo con documento de ayuda de jukai o usuario previamente revisado
+  }
+
+  helpVideo() {
+    //redirigir a la url de youtube de la pagina de jukai.io
   }
 
 

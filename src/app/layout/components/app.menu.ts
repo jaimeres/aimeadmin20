@@ -56,32 +56,19 @@ export class AppMenu {
       ]
     },*/
 
-    {
-      label: 'Compras',
-      items: [
-        {
-          label: 'Compras',
-          items: [
-            { label: 'Solicitudes', routerLink: ['/purchases/request'] },
-            { label: 'Pedidos', routerLink: ['/purchases/orders'] },
-          ]
-        },
-      ]
-    },
-
-    {
-      label: 'Activos',
-      items: [
-        {
-          label: 'Activos',
-          items: [
-            { label: 'Equipos y activos', routerLink: ['/assets/asset'] },
-            { label: 'Mantenimiento', routerLink: ['/assets/maintenance'] },
-          ]
-        },
-      ]
-    },
-    {
+    /*{
+       label: 'Compras',
+       items: [
+         {
+           label: 'Compras',
+           items: [
+             { label: 'Solicitudes', routerLink: ['/purchases/request'] },
+             { label: 'Pedidos', routerLink: ['/purchases/orders'] },
+           ]
+         },
+       ]
+     },
+     {
       label: 'Catálogos',
       items: [
         {
@@ -108,13 +95,43 @@ export class AppMenu {
         }
       ]
     },
-    {
-      label: 'Almacenes',
+    
+       {
+      label: 'Marketplace',
       items: [
         {
-          label: 'Almacenes',
+          label: 'Marketplace',
           items: [
-            { label: 'Movimientos', routerLink: ['/warehouses/warehouse-movement'] },
+            { label: 'Productos', routerLink: ['/ecommerce/product-list'] },
+            { label: 'Carrito', routerLink: ['/ecommerce/shopping-cart'] },
+            { label: 'Historial', routerLink: ['/ecommerce/order-history'] },
+          ]
+        }
+      ]
+    },
+    
+    
+    */
+
+    {
+      label: 'Bombas y utilitarios',
+      items: [
+        {
+          label: 'Bombas y utilitarios',
+          items: [
+            { label: 'Bombas y utilitarios', routerLink: ['/assets/asset'] },
+            { label: 'Mantenimiento', routerLink: ['/assets/maintenance'] },
+          ]
+        },
+      ]
+    },
+    {
+      label: 'Diesel',
+      items: [
+        {
+          label: 'Diesel',
+          items: [
+            { label: 'Cargar consumo', routerLink: ['/warehouses/warehouse-movement'] },
           ]
         }
       ]
@@ -129,6 +146,7 @@ export class AppMenu {
           ]
         }]
     },
+
     /*
         {
           label: 'Apps',
@@ -201,19 +219,7 @@ export class AppMenu {
     
      */
 
-    {
-      label: 'Marketplace',
-      items: [
-        {
-          label: 'Marketplace',
-          items: [
-            { label: 'Productos', routerLink: ['/ecommerce/product-list'] },
-            { label: 'Carrito', routerLink: ['/ecommerce/shopping-cart'] },
-            { label: 'Historial', routerLink: ['/ecommerce/order-history'] },
-          ]
-        }
-      ]
-    },
+
 
     /*{
       label: 'E-Commerce',

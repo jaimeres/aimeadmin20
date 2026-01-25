@@ -21,6 +21,13 @@
     [icon]="buttonConfig().save.icon" [severity]="buttonConfig().save.severity" (click)="saveAction.emit()"
     variant="text" [raised]="true" class="hide-sm-custom"></p-button>
 
+  <p-button *ngIf="!buttonConfig().help.hide" [label]="buttonConfig().help.label" [icon]="buttonConfig().help.icon"
+    [severity]="buttonConfig().help.severity" (click)="help()" variant="text" [raised]="true"></p-button>
+
+  <p-button *ngIf=" !buttonConfig().help_video.hide" [label]="buttonConfig().help_video.label"
+    [icon]="buttonConfig().help_video.icon" [severity]="buttonConfig().help_video.severity" (click)="helpVideo()"
+    variant="text" [raised]="true"></p-button>
+
 </div>
 <!--<p-button label="Guardar" (click)="saveAction.emit()" class="hide-single-button"  
 styleClass="p-button-raised p-button-text p-button-secondary"></p-button>

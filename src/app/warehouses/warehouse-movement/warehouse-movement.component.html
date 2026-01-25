@@ -80,9 +80,11 @@
 
   <ng-template #footer>
     <div class="p-dialog-footer">
-      <app-custom-button-footer (saveAction)="save({pos: typeDefault, is_file: true})"
-        (saveNotHideAction)="save({pos: typeDefault, hide:false, is_file: true})"
-        (resetFormAction)="resetFormDialog()" />
+      <app-custom-button-footer [config]="config_general(typeDefault)"
+        (saveAction)="save({pos: typeDefault, is_file: true})"
+        (saveNotHideAction)="save({pos: typeDefault, hide:false, is_file: true})" (resetFormAction)="resetFormDialog()"
+        (saveAction)="save({ pos: typeDefault})" (cancelAction)="cancel()"
+        (saveNotHideAction)="save({hide:false, pos: typeDefault})" (resetFormAction)="resetFormDialog()" />
     </div>
   </ng-template>
 
