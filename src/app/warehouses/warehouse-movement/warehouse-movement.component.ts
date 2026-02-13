@@ -33,6 +33,7 @@ export class WarehouseMovementComponent extends CRUD implements OnInit {
   }
   ]);
 
+
   constructor(crudS: WarehouseMovementService) {
     super(crudS, 'inventory-movement-detail');
   }
@@ -42,12 +43,22 @@ export class WarehouseMovementComponent extends CRUD implements OnInit {
     //Inicializa los valores por defecto para completar las funciones crud del servicio
     this.typeDefault = 'inventory-movement-detail';
     this.app[this.typeDefault] = 'inventories/inventory-movement-detail';
+    //this.additionalFieldsAppCols[this.typeDefault as keyof typeof this.additionalFieldsAppCols] = {
+    //  'inventory_movement_data': { 'column_header_prefix': '', 'form_prefix': '', 'default_field': 'name' },
+    //};
     //this.module[this.typeDefault] = 'MA';
     //this.columns[this.typeDefault] = ['id', 'quantity']
+
+    this.timeZone[this.typeDefault] = ['inventory_movement']
+
+
+    this.relationships[this.typeDefault] = [{ id: 'asset', field: 'asset', type: 'asset' }]
 
     this.initCRUD();
 
 
   }
+
+
 
 }

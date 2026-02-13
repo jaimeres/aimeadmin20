@@ -45,7 +45,9 @@ export class CRUD extends Vars /*implements OnInit*/ {
 
     this.getAll({ pos: this.pos(), node, filter }); // carga los elementos al inicio
     this.configForm = this.fb.group({
-      columns: [this.selectedColumns().map((column: any) => column.field), [Validators.required]]
+      columns: [this.selectedColumns().map((column: any) => column.field), [Validators.required]],
+      filters: this.fb.group({}),
+      filters_query: ['']
     });
     //this.getClassifierLevelsGlogal();
     //this.getClassifierGlobal();
@@ -95,17 +97,8 @@ export class CRUD extends Vars /*implements OnInit*/ {
       }
     });
 
-    this.include = include.slice(0, -1);
-
-    if (this.fields[this.pos()] == undefined) {
-      this.fields[this.pos()] = '';
-    }
-
-    //.update(cont => include.slice(0, -1) ); //porngo update en lugar de set porque es una
-    //actualización, pero supongo que da lo mismo
-    this.fields[this.pos()] += include + fields.slice(0, -1);
-    //.update( cont => include + fields.slice(0, -1)); //porngo update en lugar de set porque es una
-    //actualización, pero supongo que da lo mismo
+    this.fields[this.pos()] = include + fields.slice(0, -1);
+    this.include[this.pos()] = include.slice(0, -1);
   }
 
   styleClassDialog = signal<string>('width-650px-custom min-height-550px-custom');
@@ -115,9 +108,6 @@ export class CRUD extends Vars /*implements OnInit*/ {
    * @param pos nombre de la app/posición
    */
   changePos(pos: any): void {
-    //||| pos this.pos() se debe inicializar aqui
-
-    //console.log('**********------------//////', pos);
 
     this.pos.set(pos);
     if (!this.drawForm()[pos]) {
@@ -152,10 +142,10 @@ export class CRUD extends Vars /*implements OnInit*/ {
 
       // no utilizo directamente this.cols() al enviar la columna porque this.fieldConfig() es un objecto de varios valores,
       // y en este caso solo estoy inicializando la propiedad cols de objecto this.fieldConfig()
-      this.fieldConfig().cols = this.cols();
+      this.fieldConfig.update(cfg => ({ ...cfg, cols: this.cols(), fields: this.crudS.fields_form(pos) }));
       //°°°mismo caso de arriba pero creo que este si puede utlizar this.cols() ya que no se requieres muchos campos o
       //por lo tanto podria no utilizar el objecto
-      this.fieldExport().cols = this.cols();
+      this.fieldExport.update(exp => ({ ...exp, cols: this.cols() }));
       this.iniParam();
     }
     if (this.columns[safePos]) {
@@ -219,8 +209,6 @@ export class CRUD extends Vars /*implements OnInit*/ {
     const formFields = options.formFields;
     let draw = options.childFormFields?.draw;
     const fields = options.childFormFields?.fields;
-
-
     const draw_child: any = []
 
     if (draw) {
@@ -233,7 +221,6 @@ export class CRUD extends Vars /*implements OnInit*/ {
         Object.keys(drawLayOut).forEach(key => {
           const fieldData = drawLayOut[key];
           const field = fields[fieldData.field];
-
 
           // Toma directamente el field del diccionario
           if (field) {
@@ -573,7 +560,7 @@ export class CRUD extends Vars /*implements OnInit*/ {
 
     // Iterar sobre todos los nodos del objeto dinámico, excluyendo dialog y fields_prefixes
     Object.keys(dynamicFields).forEach(nodeKey => {
-      console.log(nodeKey);
+      //console.log(nodeKey);
 
       if (nodeKey === 'dialog' || nodeKey === 'fields_prefixes') {
         return; // Saltar estos nodos
@@ -631,7 +618,6 @@ export class CRUD extends Vars /*implements OnInit*/ {
 
           // Si edit es false o readonly es true, el campo debe ser disabled
           const disabled = fieldData.readonly || !edit;
-
 
           // Guardar el estado readonly en el fieldData para que el template pueda usarlo
           if (disabled) {
@@ -736,10 +722,10 @@ export class CRUD extends Vars /*implements OnInit*/ {
                 signatureFormGroup[subFieldName] = this.fb.nonNullable.control({ value: subDefaultValue, disabled: isReadonly }, subValidators);
               } else if (fieldType === 'date') {
                 //si subDefaultValue==current entonces inicializalo con null, hacerlo de solo lectura y quitar el validador de requerido
-                console.log('entro a fecha222222222222222222222');
+                //console.log('entro a fecha222222222222222222222');
 
                 if (subDefaultValue === 'current') {
-                  console.log("dejo en null la fecha 333333333333333");
+                  //console.log("dejo en null la fecha 333333333333333");
 
                   subDefaultValue = null;
                   //subValidators.splice(subValidators.indexOf(Validators.required), 1);
@@ -826,6 +812,22 @@ export class CRUD extends Vars /*implements OnInit*/ {
             );
             formFields[fieldName].updateValueAndValidity();
 
+          } if (fieldData.type === 'document') {
+            // el validador ordinario del formularo, es decir, casmpos field
+            formFields[fieldName] = this.fb.control(
+              { value: null, disabled: disabled },
+              { nonNullable: false, validators: validators }
+            );
+
+            //campos repetidos para que tambien detengas el formulario cuando son obligatorios,
+            //si el documentos es mas de 1 campo, porejemplo, imagen_inicial, imagen_final, etc
+            formFields[fieldData.key] = this.fb.control(
+              { value: null, disabled: disabled },
+              { nonNullable: false, validators: validators }
+            );
+
+            formFields[fieldName].updateValueAndValidity();
+
           } else {
             // AQUI VUELVEN A CAER LOS dropdown, auto-complete y tree-select y agrega las validaciones al form del campo principa
             formFields[fieldName] = this.fb.control(
@@ -833,6 +835,7 @@ export class CRUD extends Vars /*implements OnInit*/ {
               { nonNullable: true, validators: validators }
             );
             formFields[fieldName].updateValueAndValidity();
+
           }
         }); // Cierre del forEach de campos (fieldsLayout)
       }); // Cierre del forEach de layouts (layoutsToProcess)
@@ -1034,6 +1037,11 @@ export class CRUD extends Vars /*implements OnInit*/ {
    * @returns el form
    */
   generateJSONform(jsonFields: any, pos = '', formFields: any = {}, relationOptions: any[] = [], field_prefix = '') {
+    //aqui no se aplica la configuración  del sistema, toma la que trae el servidor (options) directamente
+    // en estricta teoria es lo mismo ya que esa configuracion de aplica en el servidor al generar el options
+    // aqui no aplica la logica de field/clave del campo de la configuracion, en particular para documents
+
+
     //pos = pos ?? this.pos(); // Asegurar que pos no sea null
     pos = (pos !== null && pos !== undefined && pos !== "") ? pos : this.pos();
     const posIndex = pos as string; // Cast explícito a string
@@ -1045,7 +1053,7 @@ export class CRUD extends Vars /*implements OnInit*/ {
     // lo utilizo para abrir los campos hijos solo una vez
     let auxParentSelect = true;
     const parentSelect = this.selected()[0];
-    console.log(jsonFields);
+    //console.log(jsonFields);
     for (const field in jsonFields) {
 
       if (jsonFields.hasOwnProperty(field)) {
@@ -1083,7 +1091,10 @@ export class CRUD extends Vars /*implements OnInit*/ {
         }
 
         // carga las relaciones antes de los excludeFieldsForm ya que esto no afecta al formulario, afecta al standar json api
-        if (fieldObj.relationship_type == 'ManyToMany' || fieldObj.relationship_type == 'ManyToOne' || fieldObj.relationship_type == 'OneToOne') {
+        if (fieldObj.relationship_type == 'ManyToMany' || fieldObj.relationship_type == 'ManyToOne' || fieldObj.relationship_type == 'OneToOne'
+          //hay que tener en cuenta que dejar solo Relationship puede afectar con otras relaciones
+          || fieldObj.type == 'Relationship'
+        ) {
           //si tiene valores relationship personbalizados, se prioriza el vslor local
           const val_local: any = this.searchByValueObject(field, relationshipsLocal)[0];
 
@@ -1138,6 +1149,10 @@ export class CRUD extends Vars /*implements OnInit*/ {
           val = initial || null;
         } else if (fieldObj.type == 'List') {
           //si initian es un array, ub objecto o un json
+
+          //°°°aqui caen los documents deberia llamar a la configuración y agregar elementos por documents_ y algo, por ejemplo
+          //document_inicial, document_final, etc, para permitir que e usuario pueda separar los documentos en mas de un campo
+          //como se hace en addFieldsByPrefix
 
           if (fieldObj?.choices) {
             (this.sharedS as any).data[field_prefix + field] = fieldObj?.choices;
@@ -1210,10 +1225,6 @@ export class CRUD extends Vars /*implements OnInit*/ {
         // llama recursivamente si el campo tiene hijos
         const joinModelFields = field; //+ '__name'
         if ((fieldObj.children && fieldObj.relationship_type != 'ManyToMany') || this.searchByKeyObject(joinModelFields, this.additionalFieldsAppCols[pos])) {
-          /*if(fieldObj.relationship_type=='ManyToMany'){
-                        
-                        continue;
-                    }*/
 
           // si se definieron prefijos y sufijos para los campos, se agregan
           if (this.additionalFieldsAppCols[pos][joinModelFields]) {
@@ -1299,11 +1310,12 @@ export class CRUD extends Vars /*implements OnInit*/ {
             columnObj._order = orderValue;
           }
 
-          if (colsConfig[field]?.fields) {
+          /*if (colsConfig[field]?.fields) {
+
             console.log('202020202020', colsConfig[field], colsConfig[field]?.fields);
 
             this.generateJSONColumns(colsConfig[field]?.fields, pos, cols)
-          }
+          }*/
         }
 
         cols.push(columnObj);
@@ -1492,7 +1504,8 @@ export class CRUD extends Vars /*implements OnInit*/ {
       }
     }
 
-    const include = this.include; // incluir todas las relaciones para que se muestren en la tabla
+    //const include = this.include; // incluir todas las relaciones para que se muestren en la tabla
+    const include = this.include[safePos];
     sort = sort || this.sort; // ordenar por defecto por id
     const fields = this.fields[safePos]; // incluir todos los campos para que se muestren en la tabla
 
@@ -1605,8 +1618,8 @@ export class CRUD extends Vars /*implements OnInit*/ {
   }
 
   onReloadIconDropdown($event: any) {
-    console.log($event);
-    console.log(123);
+    const timestamp = new Date().toISOString();
+    console.log(`🔄 [${timestamp}] CRUD onReloadIconDropdown`, { event: $event });
   }
 
   /**
@@ -1669,6 +1682,9 @@ export class CRUD extends Vars /*implements OnInit*/ {
   // Controla el retraso de la búsqueda: local=200ms, remote=800ms
   filterDelayTable = signal(200);
 
+  // Evita doble llamada al servidor en la carga inicial del componente
+  private lazyLoadInitialized: { [key: string]: boolean } = {};
+
   /**
    * Maneja la búsqueda y paginación de la tabla.
    * - Los datos SIEMPRE vienen paginados del servidor (items() = solo página actual)
@@ -1694,6 +1710,19 @@ export class CRUD extends Vars /*implements OnInit*/ {
     pos = pos || this.pos();
     if (pos === null) return;
 
+    // Evitar doble llamada al cargar: PrimeNG dispara onLazyLoad en init
+    const lazyKey = String(pos ?? 0);
+    if (!this.lazyLoadInitialized[lazyKey]) {
+      this.lazyLoadInitialized[lazyKey] = true;
+      return;
+    }
+
+    // Determinar ordenamiento desde el evento
+    const sortParam = this.buildSortParam(event);
+    if (sortParam !== null) {
+      this.sort = sortParam;
+    }
+
     const currentGlobalFilterValue = event.globalFilter || null;
     const hasFilters = currentGlobalFilterValue && currentGlobalFilterValue.trim().length > 0;
 
@@ -1705,7 +1734,7 @@ export class CRUD extends Vars /*implements OnInit*/ {
         // Búsqueda remota: recargar desde el servidor
         this.limit()[pos] = event.rows;
         this.offset[pos] = event.first;
-        this.getAll({ pos: pos, filter: '', force: true });
+        this.getAll({ pos: pos, filter: '', force: true, sort: this.sort });
         console.log('🔄 Limpiando filtros REMOTOS - Recargando desde servidor');
       } else {
         // Búsqueda local: restaurar datos originales de la página
@@ -1733,7 +1762,7 @@ export class CRUD extends Vars /*implements OnInit*/ {
       this.offset[pos] = event.first;
 
       console.log('🌐 Búsqueda remota en servidor:', currentGlobalFilterValue);
-      this.getAll({ pos: pos, filter: filter, force: true });
+      this.getAll({ pos: pos, filter: filter, force: true, sort: this.sort });
       this.previousGlobalFilterValue = currentGlobalFilterValue;
       return;
     }
@@ -1742,14 +1771,91 @@ export class CRUD extends Vars /*implements OnInit*/ {
     if (hasFilters && !this.searchRemote) {
       // Buscar solo en los items ORIGINALES de la página actual (no los ya filtrados)
       const filteredItems = this.applyFilters(event.filters, this.originalPageItems);
-      this.items.set(filteredItems);
+      const sortedItems = this.applyLocalSort(filteredItems, event);
+      this.items.set(sortedItems);
 
       console.log('📊 Búsqueda local en página visible - Items encontrados:', filteredItems.length);
       this.previousGlobalFilterValue = currentGlobalFilterValue;
       return;
     }
 
+    // ============== PAGINACIÓN NORMAL (SIN FILTROS) ==============
+    // Actualizar offset/limit y recargar datos desde servidor
+    this.limit()[pos] = event.rows;
+    this.offset[pos] = event.first;
+    this.getAll({ pos: pos, filter: filter, force: true, sort: this.sort });
+    console.log('📄 Paginación normal - recargando página:', { pos, rows: event.rows, first: event.first });
+
     this.previousGlobalFilterValue = currentGlobalFilterValue;
+  }
+
+  /**
+   * Construye el parámetro sort para el backend (JSON:API)
+   * Soporta sort simple y múltiple
+   */
+  private buildSortParam(event: any): string | null {
+    if (!event) return null;
+
+    const normalizeField = (field: string) => {
+      if (!field) return field;
+      return field.replace(/(__name|__text)$/g, '');
+    };
+
+    // Multi sort
+    if (Array.isArray(event.multiSortMeta) && event.multiSortMeta.length > 0) {
+      const sortParts = event.multiSortMeta
+        .filter((m: any) => !!m?.field)
+        .map((m: any) => `${m.order === -1 ? '-' : ''}${normalizeField(m.field)}`);
+      return sortParts.length > 0 ? sortParts.join(',') : null;
+    }
+
+    // Single sort
+    if (event.sortField) {
+      return `${event.sortOrder === -1 ? '-' : ''}${normalizeField(event.sortField)}`;
+    }
+
+    return null;
+  }
+
+  /**
+   * Aplica ordenamiento local cuando la búsqueda es local
+   */
+  private applyLocalSort(items: any[], event: any): any[] {
+    if (!items || items.length === 0) return items;
+
+    const meta = Array.isArray(event?.multiSortMeta) && event.multiSortMeta.length > 0
+      ? event.multiSortMeta
+      : (event?.sortField ? [{ field: event.sortField, order: event.sortOrder }] : []);
+
+    if (meta.length === 0) return items;
+
+    const compareValues = (a: any, b: any, order: number) => {
+      if (a == null && b == null) return 0;
+      if (a == null) return -1 * order;
+      if (b == null) return 1 * order;
+
+      if (typeof a === 'string' || typeof b === 'string') {
+        return String(a).localeCompare(String(b), undefined, { numeric: true, sensitivity: 'base' }) * order;
+      }
+
+      if (a < b) return -1 * order;
+      if (a > b) return 1 * order;
+      return 0;
+    };
+
+    const sorted = [...items].sort((a: any, b: any) => {
+      for (const m of meta) {
+        const field = m?.field;
+        const order = m?.order ?? 1;
+        if (!field) continue;
+
+        const result = compareValues(a?.[field], b?.[field], order);
+        if (result !== 0) return result;
+      }
+      return 0;
+    });
+
+    return sorted;
   }
 
   /**
@@ -1770,7 +1876,7 @@ export class CRUD extends Vars /*implements OnInit*/ {
     this.iniParam(this.cols()); //se inicializa el include y el fields para que se muestren todos los campos en el form
     this.showBlocked();
 
-    const include = this.include;
+    const include = this.include[pos];
     this.crudS.getDetail({ id, include }).subscribe({
       next: (resp: any) => {
         this.showBlocked(false);
@@ -1995,8 +2101,7 @@ export class CRUD extends Vars /*implements OnInit*/ {
       // task--task-detail
       /*const posArr = String(pos).split('--');
       const posIndex = posArr.length > 1 ? posArr[1] : posArr[0];*/
-      const drawForm = this.crudS.drawForm(pos);
-      this.drawForm()[pos] = drawForm;
+      this.drawForm()[pos] = this.crudS.drawForm(pos);
       this.type[pos] = pos;
     }
 
@@ -2120,15 +2225,11 @@ export class CRUD extends Vars /*implements OnInit*/ {
    */
   resetFormDialog(options: resetFormOptions = {}) {
     let { selected = null, pos = null } = options;
-    //console.log('inicio resetFormDialog....', this.currentForm());
 
     pos = pos || this.pos();
-
-
-
-
     this.files = [];
     this.files64 = [];
+
     if (selected) {
       // agrega un objecto con id, key y label a los componentes multi, menos a los classifiers
       // se agrega key porque treeSelect lo necesita
@@ -2154,7 +2255,7 @@ export class CRUD extends Vars /*implements OnInit*/ {
       this.currentForm(pos).reset(selected);
     } else {
       //const data = this.resetForm[pos] || this.resetForm[0]
-      console.log('reset formmm0000');
+      //console.log('reset formmm0000');
       this.currentForm(pos).reset(/*{
         ...data
       }*/);
@@ -2363,8 +2464,19 @@ export class CRUD extends Vars /*implements OnInit*/ {
 
     //this.fields siempre se debe inclui sino no es validado el form
     const formData = data ? data : this.currentForm(safePos).value;
-    const include = this.include;
+    const include = this.include[safePos];
     const filter = this.filter;
+
+    //recorer formData y quitar todos los campos quue tiene la cadena document_
+    Object.keys(formData).forEach((key) => {
+      if (key.includes('document_')) {
+        delete formData[key];
+      }
+
+      if (key.includes('documents_')) {
+        delete formData[key];
+      }
+    });
 
     //console.log('forrmmmmmmmmmmmmmmmmmm', formData);
     //revisar porque la primer seleccion del archivo se envia vacio de asset-document
@@ -2412,10 +2524,6 @@ export class CRUD extends Vars /*implements OnInit*/ {
       this.crudS.edit({ formData, id, include /*, files*/ }).subscribe({
         next: (resp: any) => {
           const msg = this.singular[safePos] || this.singular[0];
-
-          console.log(`${msg.charAt(0).toUpperCase()}${msg.slice(1)} 
-                    ${formData.name} modificado/a.`);
-
 
           this.messageS.changeMessage(
             `${msg.charAt(0).toUpperCase()}${msg.slice(1)} ${formData.name} modificado/a.`,
@@ -2550,13 +2658,14 @@ export class CRUD extends Vars /*implements OnInit*/ {
     //if (is_file) {
     if (this.files.length > 0) {
       this.file(options);
-
     } else {
 
-      console.log('save else', form.get('documents'), this.files64);
+      console.log('save else', data, form.get('documents'), this.files64);
 
-      form.get('maintenance_document_data_documents')?.setValue(this.files64);
-      form.get('documents')?.setValue(this.files64);
+
+
+      //form.get('maintenance_document_data_documents')?.setValue(this.files64);
+      //form.get('documents')?.setValue(this.files64);
       this.submitForm({ pos, hide, reset, is_file, node, selected, update_item, data, custom_user });
     }
     /*} else {
@@ -2684,7 +2793,7 @@ export class CRUD extends Vars /*implements OnInit*/ {
   }
 
   import() {
-    this.importDialogVisible.set(true);
+    this.importDialogVisible = true;
   }
 
   sortable(e: any) {
@@ -2810,38 +2919,40 @@ export class CRUD extends Vars /*implements OnInit*/ {
   }
 
   export() {
-    this.exportDialogVisible.set(true);
+    this.exportDialogVisible = true;
   }
 
   /**
    * Activa la bandera para mostrar el dialogo de configuración local
    */
   localSettings() {
-    this.localSettingsDialogVisible.set(true);
+    this.localSettingsDialogVisible = true;
     //inicializa el select de las columnas visibles de cada app cuando se abre la configuración local,
     //tambien puedo poner una funcion que se ejecute cuando se dispare el evento de mostrar la pantalla de configuracion local
     //this.configForm.controls['columns'].setValue(this.selectedColumns().map(column => column.field));
-    this.configForm.reset({
+    this.configForm.patchValue({
       columns: this.selectedColumns().map((column) => column.field)
     });
   }
 
   saveConfig() {
     const fieldsForm: any[] = this.configForm.value.columns;
-    const missingFields = this.cols()
-      .filter((col: any) => !fieldsForm.includes(col.field))
-      .map((col: any) => col.field);
+    const missingFields = this.cols().filter((col: any) => !fieldsForm.includes(col.field)).map((col: any) => col.field);
     this.removeColumns.set(missingFields);
 
     const currentPos: any = this.pos() ?? 0;
     if (currentPos !== null) {
       this.itemsRemove[currentPos] = missingFields;
     }
+
+    const filtersQuery = this.configForm.value.filters_query || '';
+    this.filter = filtersQuery;
+
     this.iniParam();
-    this.getAll({ pos: this.pos() ?? '0' });
+    this.getAll({ pos: currentPos, force: true });
 
     //this.configS.saveConfig(this.configForm.value);
-    this.localSettingsDialogVisible.set(false);
+    this.localSettingsDialogVisible = false;
   }
 
   onExportServer(e: any) { }
@@ -2894,15 +3005,17 @@ export class CRUD extends Vars /*implements OnInit*/ {
   }
 
   onExportDialogVisible(event: any) {
-    this.exportDialogVisible.set(event);
+    console.log(event);
+
+    this.exportDialogVisible = event;
   }
 
   onLocalSettingsDialogVisible(event: any) {
-    this.localSettingsDialogVisible.set(event);
+    this.localSettingsDialogVisible = event;
   }
 
   onImportDialogVisible(event: any) {
-    this.importDialogVisible.set(event);
+    this.importDialogVisible = event;
   }
 
   get classifierFormGen() {
@@ -3262,7 +3375,7 @@ export class CRUD extends Vars /*implements OnInit*/ {
     const type = this.type[safePos];
     const app = this.app[safePos];
     const relationships = [{ field: 'status', type: 'status', id: status }];
-    this.crudS.edit({ id, app, type, relationships, include: this.include }).subscribe({
+    this.crudS.edit({ id, app, type, relationships, include: this.include[safePos] }).subscribe({
       next: (resp: any) => {
         this.updateRecord(resp, id, pos);
         this.showBlocked(false);
@@ -3452,6 +3565,14 @@ export class CRUD extends Vars /*implements OnInit*/ {
 
 
   onChangeDropdown(e: any) {
+    const startTime = performance.now();
+    const timestamp = new Date().toISOString();
+    console.log(`🔄 [${timestamp}] CRUD onChangeDropdown INICIO`, {
+      field: e?.field,
+      eventValue: e?.event?.value,
+      hasObject: !!e?.object
+    });
+    
     const field = e?.field;
     const id = e?.event.value;
     /*const object = e?.object;
@@ -3487,6 +3608,14 @@ export class CRUD extends Vars /*implements OnInit*/ {
     } else {
       console.log('No tiene campo oculto asociado:', object);
     }*/
+    
+    const endTime = performance.now();
+    const duration = endTime - startTime;
+    const endTimestamp = new Date().toISOString();
+    console.log(`✅ [${endTimestamp}] CRUD onChangeDropdown FIN`, {
+      field: e?.field,
+      durationMs: duration.toFixed(2)
+    });
   }
 
   onKeydownEnter(e: any) {
@@ -3501,14 +3630,18 @@ export class CRUD extends Vars /*implements OnInit*/ {
   onChangeToggle(e: any) { }
 
   onNewIconDropdown(e: any) {
+    const timestamp = new Date().toISOString();
+    console.log(`➕ [${timestamp}] CRUD onNewIconDropdown`, { field: e });
   }
 
   onSelectAutoComplete(e: any) {
+    const startTime = performance.now();
+    const timestamp = new Date().toISOString();
     const field = e?.field;
     const selectedObject = e?.event; // En autocomplete, el event es el objeto seleccionado
     const object = e?.object;
 
-    console.log('onSelectAutoComplete llamado:', { field, selectedObject, object });
+    console.log(`🔍 [${timestamp}] CRUD onSelectAutoComplete INICIO`, { field, hasObject: !!selectedObject });
 
     // Verificar si el campo tiene un campo oculto asociado para objetos
     if (object?._hidden_object_field) {
@@ -3520,6 +3653,14 @@ export class CRUD extends Vars /*implements OnInit*/ {
         console.log(`Campo oculto ${hiddenFieldName} actualizado con:`, selectedObject);
       }
     }
+    
+    const endTime = performance.now();
+    const duration = endTime - startTime;
+    const endTimestamp = new Date().toISOString();
+    console.log(`✅ [${endTimestamp}] CRUD onSelectAutoComplete FIN`, {
+      field,
+      durationMs: duration.toFixed(2)
+    });
   }
 
   configDialog() { }
@@ -3760,7 +3901,9 @@ export class CRUD extends Vars /*implements OnInit*/ {
       moreFields: moreFields === null ? this.moreFields[safePos] : moreFields,
       timeZone: this.timeZone[safePos],
       node: node,
-      additionalFieldsAppCols: additionalFieldsAppCols
+      additionalFieldsAppCols: additionalFieldsAppCols,
+      //los capos para las configuraciones
+      fields: this.crudS.fields_form(safePos)
     });
   }
 }

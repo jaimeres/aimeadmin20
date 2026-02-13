@@ -550,6 +550,7 @@ export class AuthService {
               //esta sobreescribiendo fieldName el por field
               //field: fieldName, // Usar la clave del diccionario (nombre completo con prefijos) //lo comento porque en teoria field el el nombre del formulario
               // Preservar propiedades específicas del draw original si existen
+              key: fieldName,
               ...(originalField.class && { class: originalField.class }),
               ...(originalField.class_md && { class_md: originalField.class_md }),
               ...(originalField.autofocus !== undefined && { autofocus: originalField.autofocus }),

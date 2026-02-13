@@ -11,16 +11,16 @@
 <div *ngIf="pos()!='classifier-level'" class="table-fit-Custom">
   <app-custom-table class="table-fit-Custom" [value]="items()" [columns]="selectedColumns()" [selected]="selected()"
     (selectionAction)="onSelection($event)" (rowDoubleClick)="onRowDoubleClick($event)"
-    [exportDialogVisible]="exportDialogVisible()" [field]="fieldExport()"
+    [exportDialogVisible]="exportDialogVisible" [field]="fieldExport()"
     (exportDialogVisibleAction)="onExportDialogVisible($event)" (exportServerAction)="onExportServer($event)"
     (lazyLoadAction)="onLazyLoad({event:$event})" [rows]="limit()[pos()]" [totalRecords]="totalRecords()[pos()]"
     [filterDelayTable]="filterDelayTable()" />
 </div>
 
-<app-custom-local-settings [visible]="localSettingsDialogVisible()" [field]="fieldConfig()" [formGroup]="configForm"
+<app-custom-local-settings [visible]="localSettingsDialogVisible" [field]="fieldConfig()" [formGroup]="configForm"
   (saveAction)="saveConfig()" (visibleAction)="onLocalSettingsDialogVisible($event)" />
 
-<app-custom-import [visible]="importDialogVisible()" (visibleAction)="onImportDialogVisible($event)"
+<app-custom-import [visible]="importDialogVisible" (visibleAction)="onImportDialogVisible($event)"
   (saveAction)="onImportSave($event)" />
 
 <app-custom-actions-selection [visible]="actionsSelectionDialogVisible" (visibleChange)="onVisibleChange($event)" />

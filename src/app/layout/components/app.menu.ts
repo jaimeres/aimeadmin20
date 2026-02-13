@@ -9,21 +9,14 @@ import { AppMenuitem } from './app.menuitem';
   standalone: true,
   imports: [CommonModule, AppMenuitem, RouterModule],
   styles: `
-  /* MÓVIL / PANTALLAS PEQUEÑAS */
     @media (max-width: 991px) {
-
-      /* El item clickeable (más alto y con más padding) */
-     
-
+      /* El item clickeable (más alto y con más padding) */    
       /* Texto más grande */
       :host ::ng-deep .layout-menu .layout-menuitem-text {
         font-size: 1.5rem !important;
         line-height: 1.5 !important;
       }
-
-
     }
-
   `,
   template: ` <ul class="layout-menu" #menuContainer>
     <ng-container *ngFor="let item of model; let i = index">
@@ -47,79 +40,80 @@ export class AppMenu {
       ]
     },
 
-    /*{
-      items: [
-        {
-          label: 'huella',
-          routerLink: ['biometric-test']
-        }
-      ]
-    },*/
+    /* 
+      {
+        items: [
+          {
+            label: 'huella',
+            routerLink: ['biometric-test']
+          }
+        ]
+      },
 
-    /*{
-       label: 'Compras',
-       items: [
-         {
-           label: 'Compras',
-           items: [
-             { label: 'Solicitudes', routerLink: ['/purchases/request'] },
-             { label: 'Pedidos', routerLink: ['/purchases/orders'] },
-           ]
-         },
-       ]
-     },
-     {
-      label: 'Catálogos',
-      items: [
-        {
-          label: 'Catálogos',
-          items: [
-            { label: 'Productos', routerLink: ['/catalogues/product'] },
-            { label: 'Monedas', routerLink: ['/catalogues/currency'] },
-            { label: 'Clasificadores', routerLink: ['/catalogues/classifier'] },
-            { label: 'Impuestos', routerLink: ['/catalogues/tax'] },
-            {
-              label: 'Empresas',
-              items: [
-                { label: 'Grupos', routerLink: ['/catalogues/company?pos=group'] },
-                { label: 'Empresas', routerLink: ['/catalogues/company'] },
-                { label: 'Sucursales', routerLink: ['/catalogues/company?pos=subsidiary'] },
-                { label: 'Almacenes', routerLink: ['/catalogues/company?pos=warehouse'] },
-                { label: 'Secciones', routerLink: ['/catalogues/company?pos=section'] },
-                { label: 'Anaqueles', routerLink: ['/catalogues/company?pos=rack'] },
-                { label: 'Ubicaciones', routerLink: ['/catalogues/company?pos=slots'] },
+      {
+        label: 'Compras',
+        items: [
+          {
+            label: 'Compras',
+            items: [
+              { label: 'Solicitudes', routerLink: ['/purchases/request'] },
+              { label: 'Pedidos', routerLink: ['/purchases/orders'] },
+            ]
+          },
+        ]
+      },
+      {
+        label: 'Catálogos',
+        items: [
+          {
+            label: 'Catálogos',
+            items: [
+              { label: 'Productos', routerLink: ['/catalogues/product'] },
+              { label: 'Monedas', routerLink: ['/catalogues/currency'] },
+              { label: 'Clasificadores', routerLink: ['/catalogues/classifier'] },
+              { label: 'Impuestos', routerLink: ['/catalogues/tax'] },
+              {
+                label: 'Empresas',
+                items: [
+                  { label: 'Grupos', routerLink: ['/catalogues/company?pos=group'] },
+                  { label: 'Empresas', routerLink: ['/catalogues/company'] },
+                  { label: 'Sucursales', routerLink: ['/catalogues/company?pos=subsidiary'] },
+                  { label: 'Almacenes', routerLink: ['/catalogues/company?pos=warehouse'] },
+                  { label: 'Secciones', routerLink: ['/catalogues/company?pos=section'] },
+                  { label: 'Anaqueles', routerLink: ['/catalogues/company?pos=rack'] },
+                  { label: 'Ubicaciones', routerLink: ['/catalogues/company?pos=slots'] },
 
-              ]
-            },
-          ]
-        }
-      ]
-    },
-    
-       {
-      label: 'Marketplace',
-      items: [
+                ]
+              },
+            ]
+          }
+        ]
+      },
+      
         {
-          label: 'Marketplace',
-          items: [
-            { label: 'Productos', routerLink: ['/ecommerce/product-list'] },
-            { label: 'Carrito', routerLink: ['/ecommerce/shopping-cart'] },
-            { label: 'Historial', routerLink: ['/ecommerce/order-history'] },
-          ]
-        }
-      ]
-    },
+        label: 'Marketplace',
+        items: [
+          {
+            label: 'Marketplace',
+            items: [
+              { label: 'Productos', routerLink: ['/ecommerce/product-list'] },
+              { label: 'Carrito', routerLink: ['/ecommerce/shopping-cart'] },
+              { label: 'Historial', routerLink: ['/ecommerce/order-history'] },
+            ]
+          }
+        ]
+      },
     
     
     */
 
     {
-      label: 'Bombas y utilitarios',
+      label: 'Bombas/utilitarios',
       items: [
         {
-          label: 'Bombas y utilitarios',
+          label: 'Bombas/utilitarios',
           items: [
-            { label: 'Bombas y utilitarios', routerLink: ['/assets/asset'] },
+            { label: 'Bombas/utilitarios', routerLink: ['/assets/asset'] },
             { label: 'Mantenimiento', routerLink: ['/assets/maintenance'] },
           ]
         },

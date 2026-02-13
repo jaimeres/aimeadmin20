@@ -1,6 +1,6 @@
 import { CommonModule, KeyValue } from '@angular/common';
 import { FormControl, FormGroup, FormsModule, ReactiveFormsModule, FormArray, Validators, FormBuilder } from '@angular/forms';
-import { Component, ChangeDetectionStrategy, ElementRef, EventEmitter, inject, Input, Output, signal, computed, SimpleChanges, ViewChild, OnDestroy } from '@angular/core';
+import { Component, ElementRef, EventEmitter, inject, Input, Output, signal, computed, SimpleChanges, ViewChild, OnDestroy } from '@angular/core';
 import { Subscription } from 'rxjs';
 // ************************ADAPTADO PARA CAPACITOR*********************
 import { Camera, CameraResultType, CameraSource } from '@capacitor/camera';
@@ -28,11 +28,14 @@ import { FloatLabelModule } from 'primeng/floatlabel';
 import { InputGroupModule } from 'primeng/inputgroup';
 import { InputGroupAddonModule } from 'primeng/inputgroupaddon';
 import { AutoFocusModule } from 'primeng/autofocus';
+
 import { StepperModule } from 'primeng/stepper';
+
 import { SplitButtonModule } from 'primeng/splitbutton';
 import { TableModule } from 'primeng/table';
 import { TagModule } from 'primeng/tag';
 import { TooltipModule } from 'primeng/tooltip';
+
 import { CRUDService } from '../../utils/services/crud.service';
 import { SharedDynamicDataService } from '@/utils/services/shared-dynamic-data.service';
 import { GeneralService } from '@/utils/services/general.service';
@@ -78,7 +81,6 @@ export class JoinOrSelfPipe implements PipeTransform {
     FormsModule,
     ReactiveFormsModule,
     //JoinOrSelfPipe,
-
     AutoCompleteModule,
     MultiSelectModule,
     ToggleButtonModule,
@@ -111,8 +113,7 @@ export class JoinOrSelfPipe implements PipeTransform {
   ],
   templateUrl: './custom-draw-form.component.html',
   styleUrl: './custom-draw-form.component.scss',
-  standalone: true,
-  changeDetection: ChangeDetectionStrategy.OnPush,
+  standalone: true
 })
 export class CustomDrawFormComponent implements OnDestroy {
 
@@ -240,6 +241,15 @@ export class CustomDrawFormComponent implements OnDestroy {
    */
   /*async*/ dataDropdownExists(element: any, force = false)/*: Promise<any[] | false>*/ {
     const optionLabelField = this.getOptionLabelField(element);
+    /*console.log('🔍 dataDropdownExists', {
+      field: element?.field,
+      option_label: element?.option_label,
+      optionLabelField,
+      force,
+      hasOptions: Array.isArray(element?.options) ? element.options.length : 0,
+      hasSharedData: !!this.sharedS.data?.[element?.field],
+      hasSharedDropdown: !!this.sharedS.drawDropdown?.[element?.field]
+    });*/
     // si tiene opciones no se consulta al servidor    
     //aqui voy estoy revisando porque option no se inicializa con los dartos del choice y como se parseMarkerlos dropdawn en sabe al modulo
     //no lleva force ya que no consulta al servidor
@@ -254,6 +264,11 @@ export class CustomDrawFormComponent implements OnDestroy {
     //si ya existe datos para ese dropdown no se vuelve a consultar
     if (this.sharedS.data[element.field] && !force) {
       if (optionLabelField && !this.hasOptionLabelField(this.sharedS.data[element.field], optionLabelField)) {
+        /*console.log('⚠️ dataDropdownExists missing labelField in sharedS.data', {
+          field: element?.field,
+          optionLabelField,
+          sample: this.sharedS.data[element.field]?.[0]
+        });*/
         return false;
       }
       return this.sharedS.data[element.field];
@@ -263,6 +278,11 @@ export class CustomDrawFormComponent implements OnDestroy {
     // porque seguramente trae los datos mas actualizados, por ejemplo cuando se agregan  o eliminan elementos
     if (this.sharedS.drawDropdown[element.field] && !force) {
       if (optionLabelField && !this.hasOptionLabelField(this.sharedS.drawDropdown[element.field], optionLabelField)) {
+        /*console.log('⚠️ dataDropdownExists missing labelField in drawDropdown', {
+          field: element?.field,
+          optionLabelField,
+          sample: this.sharedS.drawDropdown[element.field]?.[0]
+        });*/
         return false;
       }
       return this.sharedS.drawDropdown[element.field];
@@ -286,8 +306,14 @@ export class CustomDrawFormComponent implements OnDestroy {
    */
   async dataDropdown(element: any, force = false) {
 
-    const dropdownOptions = /*await*/ this.dataDropdownExists(element, force);
+    const dropdownOptions = await this.dataDropdownExists(element, force);
     if (dropdownOptions && !force) {
+      /*console.log('✅ dataDropdown using cached options', {
+        field: element?.field,
+        option_label: element?.option_label,
+        optionLabelField: this.getOptionLabelField(element),
+        length: dropdownOptions?.length
+      });*/
       this.dropdownOptionsSignal()[element.field] = dropdownOptions;
       return;
     }
@@ -674,9 +700,6 @@ export class CustomDrawFormComponent implements OnDestroy {
 
   ngOnChanges(changes: SimpleChanges) {
 
-    console.log('cambios----------------------');
-
-
     if (changes['formGroup']) {
       const previousValue = changes['formGroup'].previousValue;
       const currentValue = changes['formGroup'].currentValue;
@@ -927,7 +950,7 @@ export class CustomDrawFormComponent implements OnDestroy {
    * @param event evento del dropdown
    * @param object objeto que contiene el evento y el campo que se esta modificando
    */
-  /*async*/ onChangeDropdown(event: any, object: any) {
+  async onChangeDropdown(event: any, object: any) {
     const field = object.field; //se obtiene el campo del objeto
     const currentValue = this.formGroupSignal()?.get(field)?.value;
     const formValues = this.formGroupSignal()?.value;
@@ -938,6 +961,8 @@ export class CustomDrawFormComponent implements OnDestroy {
       object.options = this.dropdownOptionsSignal()[field];
     }*/
     console.log('inicio onChangeDropdown');
+
+
     const eventValue = event.value; // ID/valor seleccionado del dropdown
 
     // Asignar las opciones del dropdown al objeto
@@ -1026,7 +1051,7 @@ export class CustomDrawFormComponent implements OnDestroy {
 
     if (fields && Object.keys(fields).length > 0) {
       // Obtener opciones del dropdown padre actual
-      const dropdownOptions = /*await*/ this.dataDropdownExists(object);
+      const dropdownOptions = await this.dataDropdownExists(object);
       let currentDropdownOption: any = null;
       if (dropdownOptions) {
         currentDropdownOption = this.searchByValueObject(currentValue, dropdownOptions, 'id', false)[0];
@@ -1643,7 +1668,7 @@ export class CustomDrawFormComponent implements OnDestroy {
 
     if (fields && Object.keys(fields).length > 0) {
       // Obtener opciones del autocomplete padre actual
-      const dropdownOptions = /*await*/ this.dataDropdownExists(config);
+      const dropdownOptions = await this.dataDropdownExists(config);
       let currentDropdownOption: any = null;
       if (dropdownOptions) {
         currentDropdownOption = this.searchByValueObject(currentValue, dropdownOptions, 'id', false)[0];
@@ -4096,6 +4121,7 @@ export class CustomDrawFormComponent implements OnDestroy {
   }
 
 
+
 }
 
 
@@ -4106,3 +4132,1002 @@ export class CustomDrawFormComponent implements OnDestroy {
  * 
  * 
  */
+
+
+html
+<!-- TEMPLATE REUTILIZABLE PARA DROPDOWN -->
+<!-- DEBO PONER TEMPLETE EN ESLO 3 PRIMEROS COMBOS -->
+<ng-template #dropdownTemplate let-fieldConfig="fieldConfig">
+  <p-inputgroup>
+    <p-floatlabel variant="on">
+      <p-select [options]="dropdownOptionsSignal()[fieldConfig.field]" [optionValue]="fieldConfig.option_value || 'id'"
+        [optionLabel]="fieldConfig.option_label" [placeholder]="fieldConfig.placeholder || '.'"
+        [editable]="fieldConfig.editable" [formControl]="$any(formGroupSignal()?.get(fieldConfig.field))"
+        [scrollHeight]="fieldConfig.scrollHeight || '200px'" (onShow)="onShowDropdownAction.emit($event)"
+        [showClear]="fieldConfig.showClear !== undefined ? fieldConfig.showClear : true"
+        [filter]="fieldConfig.filter_local !== undefined ? fieldConfig.filter_local : false"
+        [filterBy]="fieldConfig.filter_by ? fieldConfig.filter_by : null"
+        (onChange)="onChangeDropdown($event, fieldConfig)" [appendTo]="'body'" styleClass="height-input-custom" />
+
+      <button *ngIf="fieldConfig.new_icon !== undefined ? fieldConfig.new_icon : false" type="button" pButton
+        icon="pi pi-plus" class="height-icon-custom" (click)="onNewIconDropdownAction.emit(fieldConfig.field)"></button>
+
+      <button *ngIf="fieldConfig.reload_icon !== undefined ? fieldConfig.reload_icon : false"
+        style="width: 40px !important;" type="button" pButton icon="pi pi-replay" class="height-icon-custom"
+        (click)="dataDropdown(fieldConfig, true)"></button>
+
+      <button *ngIf="fieldConfig.closable_icon !== undefined ? fieldConfig.closable_icon : false" type="button" pButton
+        icon="pi pi-times" class="height-icon-custom"
+        (click)="onClosableIconDropdownAction.emit(fieldConfig.field)"></button>
+
+      <label [for]="fieldConfig.field">
+        {{ fieldConfig?.label }}
+      </label>
+
+      <button *ngIf="fieldConfig.scanner?.active" type="button" pButton style="width: 40px !important;"
+        [icon]="fieldConfig.scanner.icon || 'pi pi-qrcode'" class="height-icon-custom"
+        [pTooltip]="fieldConfig.scanner.tooltip || 'Escanear código'" (click)="onScanCode(fieldConfig)">
+      </button>
+    </p-floatlabel>
+  </p-inputgroup>
+</ng-template>
+
+<!-- TEMPLATE REUTILIZABLE PARA MULTI-SELECT -->
+<ng-template #multiSelectTemplate let-fieldConfig="fieldConfig">
+  <p-floatlabel variant="on">
+    <p-multiSelect [formControl]="$any(formGroupSignal()?.get(fieldConfig.field))" [pAutoFocus]="fieldConfig.autofocus"
+      [options]="dropdownOptionsSignal()[fieldConfig.field]" (onChange)="onChangeDropdown($event, fieldConfig)"
+      [showClear]="true" [optionValue]="fieldConfig.option_value || 'id'"
+      [filter]="fieldConfig.filter_local !== undefined ? fieldConfig.filter_local : false"
+      [filterBy]="fieldConfig.filter_by ? fieldConfig.filter_by : null" [optionLabel]="fieldConfig.option_label  "
+      display="chip" styleClass="height-input-custom" />
+
+    <button *ngIf="fieldConfig.reload_icon" type="button" pButton icon="pi pi-replay" class="height-icon-custom"
+      (click)="onReloadIconDropdownAction.emit(fieldConfig.field)"></button>
+    <button *ngIf="fieldConfig.new_icon" type="button" pButton icon="pi pi-plus" class="height-icon-custom"
+      (click)="onNewIconDropdownAction.emit(fieldConfig.field)"></button>
+    <button *ngIf="fieldConfig.closable_icon" type="button" pButton icon="pi pi-times" class="height-icon-custom"
+      (click)="onClosableIconDropdownAction.emit(fieldConfig.field)"></button>
+
+    <label [for]="fieldConfig.field">
+      {{ fieldConfig?.label }}
+    </label>
+  </p-floatlabel>
+</ng-template>
+
+<!-- TEMPLATE REUTILIZABLE PARA TREE-SELECT -->
+<ng-template #treeSelectTemplate let-fieldConfig="fieldConfig">
+
+  <p-floatlabel variant="on">
+    <p-treeSelect display="chip" [metaKeySelection]="false" selectionMode="checkbox"
+      [options]="dropdownOptionsSignal()[fieldConfig.field]" [pAutoFocus]="fieldConfig.autofocus"
+      [formControl]="$any(formGroupSignal()?.get(fieldConfig.field))" key="id" [appendTo]="'body'" [showClear]="true"
+      (onClear)="clearTreeSelect(fieldConfig.field)" (onChangeAction)="onChangeDropdown($event, fieldConfig)"
+      styleClass="height-input-custom"
+      [filter]="fieldConfig.filter_local !== undefined ? fieldConfig.filter_local : false"
+      [filterBy]="fieldConfig.filter_by ? fieldConfig.filter_by : null" />
+
+    <button *ngIf="fieldConfig.icon" type="button" pButton [icon]="fieldConfig.icon.icon"
+      class="height-icon-custom"></button>
+    <button *ngIf="fieldConfig?.icon2" type="button" pButton [icon]="fieldConfig.icon2.icon"
+      class="height-icon-custom"></button>
+    <label [for]="fieldConfig.field">
+      {{ fieldConfig?.label }}
+    </label>
+  </p-floatlabel>
+</ng-template>
+
+
+<!-- TEMPLATE REUTILIZABLE PARA AUTO-COMPLETE -->
+<ng-template #autoCompleteTemplate let-fieldConfig="fieldConfig">
+  <p-floatlabel variant="on">
+    <p-autoComplete #autoCompleteRef [minLength]="fieldConfig.min_length"
+      [showEmptyMessage]="fieldConfig.show_empty_message" [emptyMessage]="fieldConfig.empty_message"
+      [suggestions]="suggestions()" (completeMethod)="completeMethod($event, fieldConfig)" [delay]="fieldConfig.delay"
+      [optionLabel]="fieldConfig.option_label || 'name'" (onSelect)="onSelectAutoComplete($event, fieldConfig)"
+      (onShow)="adjustPanelStyle(autoCompleteRef)" [panelStyle]="panelStyleSignal()"
+      [pAutoFocus]="fieldConfig.autofocus" [formControl]="$any(formGroupSignal()?.get(fieldConfig.field))"
+      styleClass="height-input-custom" [appendTo]="'body'">
+
+      <ng-template #header>
+        <div class="grid grid-cols-12 gap-2 items-center border-bottom-1 pb-1 mb-2">
+          <div *ngFor="let field of fieldConfig.panel.fields | keyvalue"
+            [ngClass]="[$any(field.value).class || 'col-span-6', $any(field.value).class_md || 'md:col-span-3']">
+            <div class="text-xs font-semibold text-gray-600">
+              {{ $any(field.value).header }}
+            </div>
+          </div>
+        </div>
+      </ng-template>
+
+      <ng-template let-row #item>
+        <div class="grid grid-cols-12 gap-2 items-center">
+          <div *ngFor="let field of fieldConfig.panel.fields | keyvalue"
+            [ngClass]="[$any(field.value).class || 'col-span-6', $any(field.value).class_md || 'md:col-span-3']"
+            class="flex items-center gap-1">
+            <img *ngIf="$any(field.value)?.type === 'image'" [src]="$any($any(row)[$any($any(field.value).field)])"
+              style="width: 35px;" />
+            <span *ngIf="$any(field.value)?.type === 'text'">{{ $any($any(row)[$any($any(field.value).field)]) }}</span>
+          </div>
+        </div>
+      </ng-template>
+    </p-autoComplete>
+
+    <button *ngIf="fieldConfig.icon" type="button" pButton [icon]="fieldConfig.icon.icon"
+      class="height-icon-custom"></button>
+
+    <button *ngIf="fieldConfig?.icon2" type="button" pButton [icon]="fieldConfig.icon2.icon"
+      class="height-icon-custom"></button>
+
+    <label [for]="fieldConfig.field">
+      {{ fieldConfig?.label }}
+    </label>
+  </p-floatlabel>
+  <input *ngIf="fieldConfig.hidden_field" type="hidden"
+    [formControl]="$any(formGroupSignal()?.get(fieldConfig.hidden_field.field))" />
+</ng-template>
+
+
+<!-- TEMPLATE REUTILIZABLE PARA TABLE -->
+<ng-template #tableTemplate let-tableConfig="tableConfig" let-rowData="rowData" let-rowIndex="rowIndex">
+  <!-- Table Toolbar -->
+  <div *ngIf="tableConfig?.add_row || tableConfig?.delete_row" class="table-title-toolbar">
+    <app-custom-button-crud [selected]="[]" (newAction)="addTableRow(tableConfig.field, tableConfig)"
+      style="margin: 0px;">
+    </app-custom-button-crud>
+    <h5 *ngIf="tableConfig.label">{{ tableConfig.label }}</h5>
+  </div>
+
+  <!-- Table -->
+  <p-table [value]="getTableData(tableConfig.field)" [sortMode]="tableConfig?.sort ? 'multiple' : 'single'"
+    [globalFilterFields]="getColumnFields(tableConfig.columns)" [showGridlines]="tableConfig?.show_grid_lines !== false"
+    [stripedRows]="tableConfig?.striped_rows !== false" [responsiveLayout]="tableConfig?.responsive_layout || 'scroll'"
+    [paginator]="tableConfig?.paginator || false" [rows]="10"
+    [resizableColumns]="tableConfig?.column_resizing !== false" columnResizeMode="expand"
+    [selectionMode]="tableConfig?.selection_mode || null" (onRowSelect)="onRowSelect($event, tableConfig.field)"
+    (onRowUnselect)="onRowUnselect($event, tableConfig.field)" styleClass="p-datatable-sm compact-table">
+
+    <ng-template pTemplate="header">
+      <tr>
+        <th *ngIf="tableConfig?.row_number"
+          style="width: 35px; min-width: 35px; position: sticky; left: 0; z-index: 1; background: var(--surface-ground); padding: 0.5rem 0.3rem;"
+          class="border-right-1 border-300">#</th>
+        <th *ngIf="tableConfig?.add_row || tableConfig?.delete_row"
+          style="width: 75px; min-width: 75px; position: sticky; left: 35px; z-index: 1; background: var(--surface-ground); padding: 0.2rem 0.2rem !important;"
+          class="border-right-1 border-300">Acciones</th>
+        <th *ngFor="let col of tableConfig.columns" [style]="{'width': getColumnWidth(col)}"
+          [pSortableColumn]="col.sortable !== false ? col.field : null">
+          {{ col.header }}
+          <p-sortIcon *ngIf="col.sortable !== false" [field]="col.field"></p-sortIcon>
+        </th>
+      </tr>
+    </ng-template>
+
+    <ng-template pTemplate="body" let-rowData let-rowIndex="rowIndex">
+      <tr>
+        <td *ngIf="tableConfig?.row_number"
+          style="position: sticky; left: 0; z-index: 1; background: var(--surface-0); padding: 0.4rem 0.3rem; text-align: center; font-weight: 500;"
+          class="border-right-1 border-300">
+          {{ rowIndex + 1 }}
+        </td>
+        <td *ngIf="tableConfig?.add_row || tableConfig?.delete_row"
+          style="position: sticky; left: 35px; z-index: 1; background: var(--surface-0); padding: 0.2rem 0.2rem !important;"
+          class="border-right-1 border-300">
+          <div class="flex gap-1 justify-content-center">
+            <p-button *ngIf="!isRowOrCellEditing(tableConfig.field, rowIndex)" icon="pi pi-pencil" size="small"
+              severity="secondary" [text]="true" (onClick)="startRowEdit(tableConfig.field, rowIndex)"
+              pTooltip="Editar fila" [style]="{'height': '28px', 'width': '28px'}">
+            </p-button>
+            <p-button *ngIf="isRowOrCellEditing(tableConfig.field, rowIndex)" icon="pi pi-check" size="small"
+              severity="success" [text]="true" (onClick)="finishRowEdit(tableConfig.field, rowIndex)"
+              pTooltip="Guardar cambios" [style]="{'height': '28px', 'width': '28px'}">
+            </p-button>
+            <p-button *ngIf="isRowOrCellEditing(tableConfig.field, rowIndex)" icon="pi pi-times" size="small"
+              severity="danger" [text]="true" (onClick)="cancelRowEdit(tableConfig.field, rowIndex)"
+              pTooltip="Cancelar edición" [style]="{'height': '28px', 'width': '28px'}">
+            </p-button>
+            <p-button *ngIf="tableConfig?.delete_row && !isRowOrCellEditing(tableConfig.field, rowIndex)"
+              icon="pi pi-trash" size="small" severity="danger" [text]="true"
+              (onClick)="deleteTableRow(rowIndex, tableConfig.field)" pTooltip="Eliminar fila"
+              [style]="{'height': '28px', 'width': '28px'}">
+            </p-button>
+          </div>
+        </td>
+        <td *ngFor="let col of tableConfig.columns"
+          (dblclick)="!isRowEditing(tableConfig.field, rowIndex) && !isCellEditing(tableConfig.field, rowIndex, col.field) && isColumnEditable(col) && startCellEdit(tableConfig.field, rowIndex, col.field)"
+          [class.cursor-pointer]="!isRowEditing(tableConfig.field, rowIndex) && !isCellEditing(tableConfig.field, rowIndex, col.field) && isColumnEditable(col)">
+          <div [ngSwitch]="getColumnType(col)">
+            <!-- Input Text -->
+            <div *ngSwitchCase="'input-text'">
+              <!-- Modo lectura -->
+              <span
+                *ngIf="!isRowEditing(tableConfig.field, rowIndex) && !isCellEditing(tableConfig.field, rowIndex, col.field)"
+                [class]="getCellClass(rowData[col.field], col, tableConfig.field, rowIndex)">
+                <p-tag *ngIf="col.tag?.active; else plainText" [severity]="getTagSeverity(col)"
+                  [value]="formatTagValue(rowData[col.field], col)">
+                </p-tag>
+                <ng-template #plainText>
+                  {{ formatTagValue(rowData[col.field], col) || '-' }}
+                </ng-template>
+              </span>
+
+              <!-- Modo edición de fila -->
+              <input *ngIf="isRowEditing(tableConfig.field, rowIndex) && isColumnEditable(col)" type="text" pInputText
+                [(ngModel)]="rowData[col.field]"
+                [class]="'w-full ' + getCellClass(rowData[col.field], col, tableConfig.field, rowIndex)"
+                [placeholder]="col.header" [maxlength]="col.validation?.max_length"
+                [minlength]="col.validation?.min_length" />
+
+              <!-- Modo edición de celda -->
+              <input *ngIf="isCellEditing(tableConfig.field, rowIndex, col.field)" type="text" pInputText
+                [(ngModel)]="rowData[col.field]"
+                [class]="'w-full ' + getCellClass(rowData[col.field], col, tableConfig.field, rowIndex)"
+                [placeholder]="col.header" [maxlength]="col.validation?.max_length"
+                [minlength]="col.validation?.min_length"
+                (keydown)="onCellKeydown($event, tableConfig.field, rowIndex, col.field)" [pAutoFocus]="true" />
+            </div>
+
+            <!-- Input Number -->
+            <div *ngSwitchCase="'input-number'">
+              <!-- Modo lectura -->
+              <span
+                *ngIf="!isRowEditing(tableConfig.field, rowIndex) && !isCellEditing(tableConfig.field, rowIndex, col.field)"
+                [class]="getCellClass(rowData[col.field], col, tableConfig.field, rowIndex)">
+                {{ rowData[col.field] ?? '-' }}
+              </span>
+
+              <!-- Modo edición de fila -->
+              <p-inputNumber *ngIf="isRowEditing(tableConfig.field, rowIndex) && isColumnEditable(col)"
+                [(ngModel)]="rowData[col.field]" [mode]="col.mode || 'decimal'" [min]="col.min" [max]="col.max"
+                [minFractionDigits]="col.min_fraction_digits" [maxFractionDigits]="col.max_fraction_digits"
+                class="w-full" />
+
+              <!-- Modo edición de celda -->
+              <p-inputNumber *ngIf="isCellEditing(tableConfig.field, rowIndex, col.field)"
+                [(ngModel)]="rowData[col.field]" [mode]="col.mode || 'decimal'" [min]="col.min" [max]="col.max"
+                [minFractionDigits]="col.min_fraction_digits" [maxFractionDigits]="col.max_fraction_digits"
+                (onKeyDown)="onCellKeydown($event, tableConfig.field, rowIndex, col.field)" class="w-full"
+                [pAutoFocus]="true" />
+            </div>
+
+            <!-- Default case -->
+            <div *ngSwitchDefault>
+              <!-- Modo lectura -->
+              <span
+                *ngIf="!isRowEditing(tableConfig.field, rowIndex) && !isCellEditing(tableConfig.field, rowIndex, col.field)"
+                [class]="getCellClass(rowData[col.field], col, tableConfig.field, rowIndex)">
+                {{ rowData[col.field] || '-' }}
+              </span>
+
+              <!-- Modo edición de fila -->
+              <input *ngIf="isRowEditing(tableConfig.field, rowIndex) && isColumnEditable(col)" type="text" pInputText
+                [(ngModel)]="rowData[col.field]"
+                [class]="'w-full ' + getCellClass(rowData[col.field], col, tableConfig.field, rowIndex)"
+                [placeholder]="col.header" />
+
+              <!-- Modo edición de celda -->
+              <input *ngIf="isCellEditing(tableConfig.field, rowIndex, col.field)" type="text" pInputText
+                [(ngModel)]="rowData[col.field]"
+                [class]="'w-full ' + getCellClass(rowData[col.field], col, tableConfig.field, rowIndex)"
+                [placeholder]="col.header" (keydown)="onCellKeydown($event, tableConfig.field, rowIndex, col.field)"
+                [pAutoFocus]="true" />
+            </div>
+          </div>
+        </td>
+      </tr>
+    </ng-template>
+
+  </p-table>
+</ng-template>
+
+<!-- TEMPLATE REUTILIZABLE PARA INPUT-NUMBER -->
+<ng-template #inputNumberTemplate let-fieldConfig="fieldConfig">
+  <p-floatlabel variant="on">
+    <p-inputNumber [minFractionDigits]="fieldConfig.min_fraction_digits" [mode]="fieldConfig.mode || 'decimal'"
+      [formControl]="$any(formGroupSignal()?.get(fieldConfig.field))"
+      [maxFractionDigits]="fieldConfig.max_fraction_digits" [min]="fieldConfig.min" [prefix]="fieldConfig.prefix"
+      [suffix]="fieldConfig.suffix" [inputStyle]="{'padding-top': '0.5rem'}" [max]="fieldConfig.max"
+      [showButtons]="fieldConfig.show_buttons" [buttonLayout]="fieldConfig.button_layout"
+      [decrementButtonClass]="fieldConfig.decrement_button_class"
+      [incrementButtonClass]="fieldConfig.increment_button_class"
+      [incrementButtonIcon]="fieldConfig.increment_button_icon"
+      [decrementButtonIcon]="fieldConfig.decrement_button_icon" [inputId]="fieldConfig.field"
+      (keydown.enter)="onKeydownEnter($event, fieldConfig)" class="w-full height-input-custom"
+      (keydown.tab)="onKeydownTab($event, fieldConfig)" [pAutoFocus]="fieldConfig.autofocus" />
+    <label [for]="fieldConfig.field">
+      {{ fieldConfig.label }}
+    </label>
+  </p-floatlabel>
+</ng-template>
+
+<!-- TEMPLATE REUTILIZABLE PARA SIGNATURE -->
+<ng-template #signatureTemplate let-signatureConfig="signatureConfig">
+  <!-- Título -->
+  <div class="mb-3">
+    <h5 *ngIf="signatureConfig.label" class="mb-2">{{ signatureConfig.label }}</h5>
+  </div>
+
+  <!-- ÁREA PRINCIPAL DE FIRMADO (SIEMPRE ÍNDICE 0) -->
+  <div class="signature-main-area mb-4 p-3 border-2 border-blue-200 rounded-lg bg-blue-50"
+    style="padding: 0; border: 0 !important;">
+
+    <!-- Campos del área principal (siempre índice 0) -->
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+      <div *ngFor="let field of signatureConfig.fields" [ngClass]="{'col-span-full': field.type === 'signature-pad'}">
+
+        <!-- Campo de texto del área principal -->
+        <div *ngIf="field.type === 'input-text' && !field.hide">
+          <ng-container *ngIf="$any(formGroupSignal()?.get(signatureConfig.field)) as formArray">
+            <ng-container *ngIf="$any(formArray).at($any(formArray).length - 1) as activeGroup">
+              <div class="p-inputgroup">
+                <p-floatlabel variant="on">
+                  <input type="text" pInputText [formControl]="$any(activeGroup.get(field.field))"
+                    [attr.maxlength]="field.max_length" class="height-input-custom w-full"
+                    style="padding-top: 0.5rem !important;" />
+                  <label [for]="field.field">{{ field.label }}</label>
+                </p-floatlabel>
+              </div>
+            </ng-container>
+          </ng-container>
+        </div>
+
+        <!-- Campo de fecha del área principal -->
+        <div *ngIf="field.type === 'date' && !field.hide">
+          <ng-container *ngIf="$any(formGroupSignal()?.get(signatureConfig.field)) as formArray">
+            <ng-container *ngIf="$any(formArray).at($any(formArray).length - 1) as activeGroup">
+              <div class="p-inputgroup">
+                <p-floatlabel variant="on">
+                  <p-datepicker [formControl]="$any(activeGroup.get(field.field))" [appendTo]="'body'"
+                    class="height-input-custom w-full" styleClass="height-input-custom" />
+                  <label [for]="field.field">{{ field.label }}</label>
+                </p-floatlabel>
+              </div>
+            </ng-container>
+          </ng-container>
+        </div>
+
+        <!-- Campo de login del área principal -->
+        <div *ngIf="field.type === 'login' && !field.hide">
+          <ng-container *ngIf="$any(formGroupSignal()?.get(signatureConfig.field)) as formArray">
+            <ng-container *ngIf="$any(formArray).at($any(formArray).length - 1) as activeGroup">
+              <div [ngClass]="field.position === 'horizontal' ? 'grid grid-cols-2 gap-4' : 'flex flex-col gap-4'"
+                class="login-container">
+                <div class="p-inputgroup">
+                  <p-floatlabel variant="on">
+                    <input type="text" pInputText [formControl]="$any(activeGroup.get(field.user.field))"
+                      class="height-input-custom w-full" />
+                    <label [for]="field.user.field">{{ field?.user?.label }}</label>
+                  </p-floatlabel>
+                </div>
+                <div class="p-inputgroup">
+                  <p-floatlabel variant="on">
+                    <p-password [formControl]="$any(activeGroup.get(field.password.field))"
+                      [maxlength]="field.max_length" [toggleMask]="field?.show_password_toggle" [feedback]="false"
+                      styleClass="w-full height-input-custom" inputStyleClass="w-full" />
+                    <label [for]="field.password.field">{{ field.password.label }}</label>
+                  </p-floatlabel>
+                </div>
+              </div>
+            </ng-container>
+          </ng-container>
+        </div>
+
+        <!-- Selfie -->
+        <div *ngIf="field.type === 'selfie' && !field.hide">
+          <button type="button" pButton *ngIf="!field.allow_image_upload" icon="pi pi-camera" class="height-icon-custom"
+            (click)="onCapturePhoto(signatureConfig.field, field.field)"></button>
+          <button type="button" pButton *ngIf="field.allow_image_upload" icon="pi pi-camera" class="height-icon-custom"
+            (click)="onUploadPhoto(signatureConfig.field, field.field)"></button>
+        </div>
+
+        <!-- Canvas principal de firma (ÚLTIMO índice del FormArray) -->
+        <div *ngIf="field.type === 'signature-pad' && !field.hide">
+          <div *ngIf="!field.allow_image_upload" class="signature-canvas-container">
+            <ng-container *ngIf="$any(formGroupSignal()?.get(signatureConfig.field)) as formArray">
+              <ng-container *ngIf="$any(formArray).at($any(formArray).length - 1) as lastFormGroup">
+                <ng-container *ngIf="$any(lastFormGroup).get('signature') as signatureControl">
+                  <label *ngIf="field.label"
+                    [class.text-red-500]="field.required && signatureControl.invalid && (signatureControl.touched || signatureControl.dirty)"
+                    [class.text-gray-700]="!(field.required && signatureControl.invalid && (signatureControl.touched || signatureControl.dirty))"
+                    class="block mb-2 font-medium">{{ field.label }}</label>
+                  <div class="signature-canvas-wrapper">
+                    <canvas [id]="'signature-canvas-main-' + signatureConfig.field"
+                      class="signature-canvas rounded cursor-crosshair bg-white border-2"
+                      [style.border-color]="(field.required && signatureControl.invalid && (signatureControl.touched || signatureControl.dirty)) ? '#ef4444' : '#60a5fa'"
+                      [width]="field?.width || signatureConfig.signature_width || 300"
+                      [height]="field?.height || signatureConfig.signature_height || 150"
+                      (mousedown)="initSignatureCanvas('signature-canvas-main-' + signatureConfig.field, field, signatureConfig.field)"
+                      (touchstart)="initSignatureCanvas('signature-canvas-main-' + signatureConfig.field, field, signatureConfig.field)"
+                      (mouseup)="autoSaveSignature('signature-canvas-main-' + signatureConfig.field, signatureConfig.field, getLastFormArrayIndex(signatureConfig.field))"
+                      (touchend)="autoSaveSignature('signature-canvas-main-' + signatureConfig.field, signatureConfig.field, getLastFormArrayIndex(signatureConfig.field))">
+                    </canvas>
+                  </div>
+                </ng-container>
+              </ng-container>
+            </ng-container>
+
+            <!-- Botones del área principal -->
+            <div class="signature-buttons flex gap-2 mt-2">
+              <p-button label="Limpiar" size="small" severity="secondary" [text]="true"
+                (onClick)="clearSignature('signature-canvas-main-' + signatureConfig.field, signatureConfig.field, getLastFormArrayIndex(signatureConfig.field))"
+                [style]="{'height': '28px'}"></p-button>
+              <p-button *ngIf="signatureConfig.add_signature" label="Nueva Firma" size="small" severity="primary"
+                [text]="true" (onClick)="addNewSignature(signatureConfig.field, signatureConfig)"
+                [style]="{'height': '28px'}"></p-button>
+              <p-button *ngIf="signatureConfig.add_signature && canCancelSignature(signatureConfig.field)"
+                label="Cancelar Firma" size="small" severity="danger" [text]="true"
+                (onClick)="cancelCurrentSignature(signatureConfig.field)" [style]="{'height': '28px'}"></p-button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Upload signature button -->
+        <button type="button" pButton *ngIf="field.allow_image_upload" icon="pi pi-camera" class="height-icon-custom"
+          (click)="onUploadSignature(signatureConfig.field, field.field)"></button>
+      </div>
+    </div>
+  </div>
+
+  <!-- HISTORIAL DE FIRMAS -->
+  <div *ngIf="signatureDataSignal()[signatureConfig.field]?.hasHistory" class="signature-history mt-6">
+    <div
+      *ngFor="let historySignature of signatureDataSignal()[signatureConfig.field]?.history; let historyIndex = index"
+      class="history-item mb-3 p-3 border border-gray-200 rounded-lg bg-gray-50">
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div *ngFor="let field of signatureConfig.fields" [ngClass]="{'col-span-full': field.type === 'signature-pad'}">
+          <div *ngIf="field.type === 'input-text' && !field.hide" class="text-sm">
+            <strong>{{ field.label }}:</strong> {{ historySignature[field.field] }}
+          </div>
+          <div *ngIf="field.type === 'date' && !field.hide" class="text-sm">
+            <strong>{{ field.label }}:</strong> {{ historySignature[field.field] | date:'short' }}
+          </div>
+          <div *ngIf="field.type === 'login' && !field.hide" class="text-sm">
+            <strong>{{ field.label }}:</strong> {{ historySignature[field.field] }}
+          </div>
+          <div *ngIf="field.type === 'input-password' && !field.hide" class="text-sm">
+            <strong>{{ field.label }}:</strong> ••••
+          </div>
+          <div *ngIf="field.type === 'pin_global' && !field.hide" class="text-sm">
+            <strong>{{ field.label }}:</strong> ••••
+          </div>
+          <div *ngIf="field.type === 'pin_user' && !field.hide" class="text-sm">
+            <strong>{{ field.label }}:</strong> ••••
+          </div>
+          <div *ngIf="field.type === 'selfie' && historySignature[field.field] && !field.hide"
+            class="text-sm col-span-full">
+            <strong>{{ field.label }}:</strong>
+            <img [src]="historySignature[field.field]" alt="Selfie" class="mt-1 border border-gray-200 rounded"
+              style="max-width: 150px; max-height: 150px;" />
+          </div>
+          <div *ngIf="field.type === 'signature-pad' && historySignature['signature']" class="col-span-full">
+            <small class="text-gray-600">Firma guardada:</small>
+            <img [src]="historySignature['signature']" alt="Firma histórica"
+              class="signature-history-img mt-1 border border-gray-200 rounded" />
+            <div class="text-right mt-2">
+              <p-button label="Eliminar" icon="pi pi-trash" size="small" severity="danger" [text]="true"
+                (onClick)="deleteHistorySignature(signatureConfig.field, historyIndex + 1)"
+                [style]="{'height': '24px'}"></p-button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Mensaje cuando no hay firmas -->
+  <div *ngIf="!signatureDataSignal()[signatureConfig.field]?.hasData" class="text-center text-gray-500 py-4">
+    <i class="pi pi-file-edit text-4xl mb-2 block"></i>
+    <p>No hay firmas registradas</p>
+    <small>Use el botón "Añadir Firma" para crear una nueva</small>
+  </div>
+</ng-template>
+
+<!-- TEMPLATE REUTILIZABLE PARA INPUT-TEXT -->
+<ng-template #inputTextTemplate let-fieldConfig="fieldConfig">
+  <p-floatlabel variant="on">
+    <input type="text" pInputText [formControl]="$any(formGroupSignal()?.get(fieldConfig.field))"
+      style="padding-top: 0.5rem !important;" [pAutoFocus]="fieldConfig.autofocus" class="height-input-custom" />
+    <label [for]="fieldConfig.field" (keydown.enter)="onKeydownEnter($event, fieldConfig)"
+      (keydown.tab)="onKeydownTab($event, fieldConfig)">
+      {{ fieldConfig?.label }}
+    </label>
+  </p-floatlabel>
+</ng-template>
+
+<!-- TEMPLATE REUTILIZABLE PARA TOGGLE-BUTTON -->
+<ng-template #toggleButtonTemplate let-fieldConfig="fieldConfig">
+  <p-toggleButton [pAutoFocus]="fieldConfig.autofocus" styleClass="height-input-custom"
+    [formControl]="$any(formGroupSignal()?.get(fieldConfig.field))" [onLabel]="fieldConfig.label_true"
+    [offLabel]="fieldConfig.label_false" (onChange)="onChangeToggle($event, fieldConfig.field)">
+  </p-toggleButton>
+</ng-template>
+
+<!-- TEMPLATE REUTILIZABLE PARA TEXTAREA -->
+<ng-template #textareaTemplate let-fieldConfig="fieldConfig">
+  <p-floatlabel variant="on">
+    <textarea [rows]="fieldConfig.rows" cols="30" pTextarea [autoResize]="fieldConfig.auto_resize" class="w-full"
+      [formControl]="$any(formGroupSignal()?.get(fieldConfig.field))"></textarea>
+    <label [for]="fieldConfig.field">
+      {{ fieldConfig.label }}
+    </label>
+  </p-floatlabel>
+</ng-template>
+
+<!-- TEMPLATE REUTILIZABLE PARA EMAILS-CHIPS -->
+<ng-template #emailsChipsTemplate let-fieldConfig="fieldConfig">
+  <p-floatlabel variant="on">
+    <p-autocomplete [formControl]="$any(formGroupSignal()?.get(fieldConfig.field))" [multiple]="true"
+      [pAutoFocus]="fieldConfig.autofocus" [addOnBlur]="fieldConfig.separator?.blur !== false"
+      [addOnTab]="fieldConfig.separator?.tab !== false"
+      [separator]="emailSeparatorsSignal()[fieldConfig.field] || emailSeparatorsSignal()['default']"
+      [typeahead]="fieldConfig.suggestions?.enabled || false"
+      [suggestions]="fieldConfig.suggestions?.enabled ? suggestions() : []"
+      [showEmptyMessage]="fieldConfig.suggestions?.enabled" [emptyMessage]="'Sin sugerencias'"
+      (completeMethod)="fieldConfig.suggestions?.enabled && completeEmailMethod($event, fieldConfig)"
+      (onAdd)="validateEmailsField(fieldConfig)" (ngModelChange)="validateEmailsField(fieldConfig)"
+      styleClass="height-input-custom w-full">
+
+      <ng-template let-item pTemplate="chip">
+        <p-chip [label]="item" [icon]="fieldConfig.chip_style?.icon || 'pi pi-envelope'"
+          [removable]="fieldConfig.chip_style?.removable !== false">
+        </p-chip>
+      </ng-template>
+    </p-autocomplete>
+    <label [for]="fieldConfig.field">
+      {{ fieldConfig?.label }}
+    </label>
+  </p-floatlabel>
+  <small *ngIf="fieldConfig.description?.active" class="block mt-1">
+    {{ fieldConfig.description?.name }}
+  </small>
+</ng-template>
+
+
+<!-- TEMPLATE REUTILIZABLE PARA DATE -->
+<ng-template #dateTemplate let-fieldConfig="fieldConfig">
+  <p-floatlabel variant="on">
+    <p-datepicker [formControl]="$any(formGroupSignal()?.get(fieldConfig.field))" styleClass="height-input-custom"
+      [appendTo]="'body'" [showIcon]="showIconSignal()" (onFocus)="removeFocus($event)" />
+    <label [for]="fieldConfig.field">
+      {{ fieldConfig?.label }}
+    </label>
+  </p-floatlabel>
+</ng-template>
+
+<!-- TEMPLATE REUTILIZABLE PARA TIME -->
+<ng-template #timeTemplate let-fieldConfig="fieldConfig">
+  <p-floatlabel variant="on">
+    <p-datepicker [formControl]="$any(formGroupSignal()?.get(fieldConfig.field))" [iconDisplay]="'input'"
+      [showIcon]="showIconSignal()" styleClass="height-input-custom" [timeOnly]="true" [appendTo]="'body'">
+      <ng-template #inputicon let-clickCallBack="clickCallBack">
+        <i class="pi pi-user pointer-events-none" (click)="clickCallBack($event)"></i>
+      </ng-template>
+    </p-datepicker>
+    <label [for]="fieldConfig.field">
+      {{ fieldConfig?.label }}
+    </label>
+  </p-floatlabel>
+</ng-template>
+
+<!-- TEMPLATE REUTILIZABLE PARA SELECT-BUTTON -->
+<ng-template #selectButtonTemplate let-fieldConfig="fieldConfig">
+  <div *ngIf="fieldConfig.description" [style.height]="fieldConfig?.description?.height"
+    class="overflow-hidden text-ellipsis flex items-end justify-start">
+    {{ fieldConfig.description?.label?.length > 100 ?
+    (fieldConfig.description?.label | slice:0:fieldConfig.description?.slice) +
+    fieldConfig.description?.caracter_slice :
+    fieldConfig.description?.label }}
+  </div>
+  <p-selectButton styleClass="height-input-custom" [formControl]="$any(formGroupSignal()?.get(fieldConfig.field))"
+    [options]="fieldConfig.options" [optionLabel]="fieldConfig.option_label || 'name'"
+    [optionValue]="fieldConfig.option_value || 'id'" class="w-full" />
+</ng-template>
+
+<!-- TEMPLATE REUTILIZABLE PARA BUTTON -->
+<ng-template #buttonTemplate let-fieldConfig="fieldConfig">
+  <p-button [label]="fieldConfig?.label" [icon]="fieldConfig?.icon" [iconPos]="fieldConfig?.icon_position || 'left'"
+    [severity]="fieldConfig?.severity || 'primary'" [rounded]="fieldConfig?.rounded || false"
+    [disabled]="fieldConfig?.disabled || false" [pAutoFocus]="fieldConfig?.autofocus || false"
+    (onClick)="onButtonClick(fieldConfig)" styleClass="w-full height-input-custom">
+  </p-button>
+</ng-template>
+
+<!-- TEMPLATE REUTILIZABLE PARA DOCUMENT -->
+<ng-template #documentTemplate let-fieldConfig="fieldConfig">
+  <p-splitbutton styleClass="height-input-custom w-full sb-full"
+    (onClick)="previewCamera(fieldConfig.field, fieldConfig)" [label]="fieldConfig?.label"
+    [pAutoFocus]="fieldConfig?.autofocus || false" [disabled]="fieldConfig?.disabled || false">
+  </p-splitbutton>
+</ng-template>
+
+<div *ngIf="drawFormSignal()['grid']" class="grid grid-cols-12 gap-2 "> <!-- pt-3 -->
+  <div *ngFor="let entry of drawFormSignal()['grid'] | keyvalue : keyComparator;"
+    [ngClass]="[ entry.value.hide ? 'hidden' : '', entry.value.class || 'col-span-6', entry.value.class_md || 'md:col-span-3']">
+
+    <!--CARD-->
+    <h6 *ngIf="entry.value.title && entry.value?.card" style="margin-top: -0.55rem; margin-bottom: -5px;">
+      <strong>{{entry.value.title}}</strong>
+    </h6>
+    <p-card *ngIf="entry.value.card" class="w-full " [style]="{'padding-bottom': '3px'}">
+      <div class="grid grid-cols-12 gap-2">
+        <div *ngFor="let card of entry.value.card | keyvalue : keyComparator;"
+          [ngClass]="[card.value.hide ? 'hidden' : '', card.value.class || 'col-span-6', card.value.class_md || 'md:col-span-3']">
+          <div [ngSwitch]="getType(card.value)">
+
+            <div *ngSwitchCase="'input-text'">
+              <ng-container *ngTemplateOutlet="inputTextTemplate; context: {fieldConfig: card.value}"></ng-container>
+            </div>
+
+            <div class="p-inputgroup" *ngSwitchCase="'dropdown'">
+              <ng-container *ngTemplateOutlet="dropdownTemplate; context: {fieldConfig: card.value}"></ng-container>
+            </div>
+
+            <div class="p-inputgroup" *ngSwitchCase="'dropdown-choice'">
+              <ng-container *ngTemplateOutlet="dropdownTemplate; context: {fieldConfig: card.value}"></ng-container>
+            </div>
+
+            <div class="p-inputgroup" *ngSwitchCase="'multi-select'">
+              <ng-container *ngTemplateOutlet="multiSelectTemplate; context: {fieldConfig: card.value}"></ng-container>
+            </div>
+
+            <div *ngSwitchCase="'toggle-button'">
+              <ng-container *ngTemplateOutlet="toggleButtonTemplate; context: {fieldConfig: card.value}"></ng-container>
+            </div>
+
+            <div *ngSwitchCase="'textarea'">
+              <ng-container *ngTemplateOutlet="textareaTemplate; context: {fieldConfig: card.value}"></ng-container>
+            </div>
+
+            <div *ngSwitchCase="'emails-chips'">
+              <ng-container *ngTemplateOutlet="emailsChipsTemplate; context: {fieldConfig: card.value}"></ng-container>
+            </div>
+
+            <div *ngSwitchCase="'input-number'" class="p-inputgroup">
+              <ng-container *ngTemplateOutlet="inputNumberTemplate; context: {fieldConfig: card.value}"></ng-container>
+            </div>
+
+            <div class="p-inputgroup" *ngSwitchCase="'tree-select'">
+              <ng-container *ngTemplateOutlet="treeSelectTemplate; context: {fieldConfig: card.value}"></ng-container>
+            </div>
+
+            <div class="p-inputgroup" *ngSwitchCase="'date'">
+              <ng-container *ngTemplateOutlet="dateTemplate; context: {fieldConfig: card.value}"></ng-container>
+            </div>
+
+            <div class="p-inputgroup" *ngSwitchCase="'time'">
+              <ng-container *ngTemplateOutlet="timeTemplate; context: {fieldConfig: card.value}"></ng-container>
+            </div>
+
+            <div class="p-inputgroup" *ngSwitchCase="'auto-complete'">
+              <ng-container *ngTemplateOutlet="autoCompleteTemplate; context: {fieldConfig: card.value}"></ng-container>
+            </div>
+
+            <!-- TABLE COMPONENT IN CARD -->
+            <div *ngSwitchCase="'table'" class="col-span-12">
+              <ng-container *ngTemplateOutlet="tableTemplate; context: {tableConfig: card.value}"></ng-container>
+            </div>
+
+            <div *ngSwitchCase="'button'">
+              <ng-container *ngTemplateOutlet="buttonTemplate; context: {fieldConfig: card.value}"></ng-container>
+            </div>
+
+            <div *ngSwitchCase="'document'" class="w-full">
+              <ng-container *ngTemplateOutlet="documentTemplate; context: {fieldConfig: card.value}"></ng-container>
+            </div>
+
+            <!-- SIGNATURE COMPONENT IN CARD -->
+            <div *ngSwitchCase="'signature'" class="w-full">
+              <ng-container
+                *ngTemplateOutlet="signatureTemplate; context: {signatureConfig: card.value}"></ng-container>
+            </div>
+
+          </div>
+        </div>
+      </div>
+
+    </p-card>
+
+    <!-- LIBRE -->
+    <div *ngIf="!entry.value?.card && !entry.value?.fieldset" [ngSwitch]="getType(entry.value)"
+      style="padding-top: 5px; padding-bottom: 5px;">
+
+      <div *ngSwitchCase="'input-text'">
+        <ng-container *ngTemplateOutlet="inputTextTemplate; context: {fieldConfig: entry.value}"></ng-container>
+      </div>
+
+      <div *ngSwitchCase="'toggle-button'">
+        <ng-container *ngTemplateOutlet="toggleButtonTemplate; context: {fieldConfig: entry.value}"></ng-container>
+      </div>
+
+      <div *ngSwitchCase="'textarea'">
+        <ng-container *ngTemplateOutlet="textareaTemplate; context: {fieldConfig: entry.value}"></ng-container>
+      </div>
+
+      <div *ngSwitchCase="'emails-chips'">
+        <ng-container *ngTemplateOutlet="emailsChipsTemplate; context: {fieldConfig: entry.value}"></ng-container>
+      </div>
+
+      <div *ngSwitchCase="'input-number'">
+        <ng-container *ngTemplateOutlet="inputNumberTemplate; context: {fieldConfig: entry.value}"></ng-container>
+      </div>
+
+      <div *ngSwitchCase="'auto-complete'">
+        <p-inputgroup>
+          <ng-container *ngTemplateOutlet="autoCompleteTemplate; context: {fieldConfig: entry.value}"></ng-container>
+        </p-inputgroup>
+      </div>
+
+      <div *ngSwitchCase="'tree-select'">
+        <p-inputgroup>
+          <ng-container *ngTemplateOutlet="treeSelectTemplate; context: {fieldConfig: entry.value}"></ng-container>
+        </p-inputgroup>
+      </div>
+
+      <div *ngSwitchCase="'date'">
+        <ng-container *ngTemplateOutlet="dateTemplate; context: {fieldConfig: entry.value}"></ng-container>
+      </div>
+
+      <div *ngSwitchCase="'time'">
+        <ng-container *ngTemplateOutlet="timeTemplate; context: {fieldConfig: entry.value}"></ng-container>
+      </div>
+
+      <div *ngSwitchCase="'dropdown'">
+        <ng-container *ngTemplateOutlet="dropdownTemplate; context: {fieldConfig: entry.value}"></ng-container>
+      </div>
+
+      <div *ngSwitchCase="'dropdown-choice'">
+        <ng-container *ngTemplateOutlet="dropdownTemplate; context: {fieldConfig: entry.value}"></ng-container>
+      </div>
+
+      <div *ngSwitchCase="'multi-select'">
+        <p-inputgroup>
+          <ng-container *ngTemplateOutlet="multiSelectTemplate; context: {fieldConfig: entry.value}"></ng-container>
+        </p-inputgroup>
+      </div>
+
+      <div *ngSwitchCase="'select-button'">
+        <ng-container *ngTemplateOutlet="selectButtonTemplate; context: {fieldConfig: entry.value}"></ng-container>
+      </div>
+
+      <div *ngSwitchCase="'document'" class="w-full">
+        <ng-container *ngTemplateOutlet="documentTemplate; context: {fieldConfig: entry.value}"></ng-container>
+      </div>
+
+      <div *ngSwitchCase="'button'">
+        <ng-container *ngTemplateOutlet="buttonTemplate; context: {fieldConfig: entry.value}"></ng-container>
+      </div>
+
+      <!-- TABLE COMPONENT -->
+      <div *ngSwitchCase="'table'" class="w-full">
+        <ng-container *ngTemplateOutlet="tableTemplate; context: {tableConfig: entry.value}"></ng-container>
+      </div>
+
+      <!-- SIGNATURE COMPONENT FREE -->
+      <div *ngSwitchCase="'signature'" class="w-full">
+        <ng-container *ngTemplateOutlet="signatureTemplate; context: {signatureConfig: entry.value}"></ng-container>
+      </div>
+
+    </div>
+
+    <!--FIELDSET-->
+    <div *ngIf="!closeFieldset()" style=" margin-top: -0.65rem;">
+      <p-fieldset *ngIf="entry.value.fieldset" [toggleable]="true">
+        <ng-template #header>
+          <div class="fieldset-header">{{entry.value.title}}</div>
+        </ng-template>
+
+        <div class="grid grid-cols-12 gap-2">
+
+          <div *ngFor="let card of entry.value.fieldset | keyvalue : keyComparator;"
+            [ngClass]="[card.value.hide ? 'hidden' : '', card.value.class || 'col-span-6', card.value.class_md || 'md:col-span-3']">
+
+            <div [ngSwitch]="getType(card.value)">
+
+              <div *ngSwitchCase="'input-text'">
+                <ng-container *ngTemplateOutlet="inputTextTemplate; context: {fieldConfig: card.value}"></ng-container>
+              </div>
+
+              <p-inputgroup *ngSwitchCase="'dropdown'">
+                <ng-container *ngTemplateOutlet="dropdownTemplate; context: {fieldConfig: card.value}"></ng-container>
+              </p-inputgroup>
+
+              <p-inputgroup *ngSwitchCase="'dropdown-choice'">
+                <ng-container *ngTemplateOutlet="dropdownTemplate; context: {fieldConfig: card.value}"></ng-container>
+              </p-inputgroup>
+
+              <div *ngSwitchCase="'multi-select'">
+                <ng-container
+                  *ngTemplateOutlet="multiSelectTemplate; context: {fieldConfig: card.value}"></ng-container>
+              </div>
+
+              <div *ngSwitchCase="'toggle-button'">
+                <ng-container
+                  *ngTemplateOutlet="toggleButtonTemplate; context: {fieldConfig: card.value}"></ng-container>
+              </div>
+
+              <div *ngSwitchCase="'textarea'">
+                <ng-container *ngTemplateOutlet="textareaTemplate; context: {fieldConfig: card.value}"></ng-container>
+              </div>
+
+              <div *ngSwitchCase="'emails-chips'">
+                <ng-container
+                  *ngTemplateOutlet="emailsChipsTemplate; context: {fieldConfig: card.value}"></ng-container>
+              </div>
+
+              <div *ngSwitchCase="'input-number'" class="p-inputgroup">
+                <ng-container
+                  *ngTemplateOutlet="inputNumberTemplate; context: {fieldConfig: card.value}"></ng-container>
+              </div>
+
+              <p-inputgroup *ngSwitchCase="'tree-select'">
+                <ng-container *ngTemplateOutlet="treeSelectTemplate; context: {fieldConfig: card.value}"></ng-container>
+              </p-inputgroup>
+
+              <div *ngSwitchCase="'date'">
+                <ng-container *ngTemplateOutlet="dateTemplate; context: {fieldConfig: card.value}"></ng-container>
+              </div>
+
+              <div class="p-inputgroup" *ngSwitchCase="'time'">
+                <ng-container *ngTemplateOutlet="timeTemplate; context: {fieldConfig: card.value}"></ng-container>
+              </div>
+
+              <div class="p-inputgroup" *ngSwitchCase="'auto-complete'">
+                <ng-container
+                  *ngTemplateOutlet="autoCompleteTemplate; context: {fieldConfig: card.value}"></ng-container>
+              </div>
+
+              <!-- TABLE COMPONENT IN FIELDSET -->
+              <div *ngSwitchCase="'table'" class="col-span-12">
+                <ng-container *ngTemplateOutlet="tableTemplate; context: {tableConfig: card.value}"></ng-container>
+              </div>
+
+              <div *ngSwitchCase="'button'">
+                <ng-container *ngTemplateOutlet="buttonTemplate; context: {fieldConfig: card.value}"></ng-container>
+              </div>
+
+
+              <div *ngSwitchCase="'select-button'">
+                <ng-container
+                  *ngTemplateOutlet="selectButtonTemplate; context: {fieldConfig: card.value}"></ng-container>
+              </div>
+
+              <div *ngSwitchCase="'document'" class="w-full">
+                <ng-container *ngTemplateOutlet="documentTemplate; context: {fieldConfig: card.value}"></ng-container>
+              </div>
+
+              <!-- SIGNATURE COMPONENT IN FIELDSET -->
+              <div *ngSwitchCase="'signature'" class="w-full">
+                <ng-container
+                  *ngTemplateOutlet="signatureTemplate; context: {signatureConfig: entry.value}"></ng-container>
+              </div>
+            </div>
+          </div>
+        </div>
+      </p-fieldset>
+    </div>
+
+  </div>
+</div>
+
+
+<div *ngIf="drawFormSignal()['stepper']" class="justify-center">
+
+  <p-stepper [value]="currentStepSignal() ?? undefined" (valueChange)="currentStepSignal.set($event ?? null)"
+    (onChangeAction)="onStepChange($event)" [linear]="drawFormSignal()['stepper'].linear === true">
+    <p-step-list *ngIf="drawFormSignal()['stepper']?.buttons?.active">
+      <p-step *ngFor="let entry of drawFormSignal()['stepper']?.steps | keyvalue : keyComparator;" [value]="+entry.key">
+        {{entry.value.label}}
+      </p-step>
+    </p-step-list>
+
+    <p-step-panels>
+      <p-step-panel [value]="+entry.key"
+        *ngFor="let entry of drawFormSignal()['stepper']?.steps | keyvalue : keyComparator;">
+        <ng-template #content let-activateCallback="activateCallback">
+          <div class="grid grid-cols-12 gap-2 pt-2">
+
+            <div *ngFor="let field of entry.value.fields | keyvalue : keyComparator;"
+              [ngClass]="[ field.value.hide ? 'hidden' : '', field.value.class || 'col-span-6', field.value.class_md || 'md:col-span-3']">
+
+              <div [ngSwitch]="getType(field.value)">
+
+                <div *ngSwitchCase="'document'" class="w-full">
+                  <ng-container
+                    *ngTemplateOutlet="documentTemplate; context: {fieldConfig: field.value}"></ng-container>
+                </div>
+
+                <div *ngSwitchCase="'input-text'">
+                  <ng-container
+                    *ngTemplateOutlet="inputTextTemplate; context: {fieldConfig: field.value}"></ng-container>
+                </div>
+
+                <div class="p-inputgroup" *ngSwitchCase="'dropdown'">
+                  <ng-container
+                    *ngTemplateOutlet="dropdownTemplate; context: {fieldConfig: field.value}"></ng-container>
+                </div>
+
+                <div *ngSwitchCase="'input-number'" class="p-inputgroup">
+                  <ng-container
+                    *ngTemplateOutlet="inputNumberTemplate; context: {fieldConfig: field.value}"></ng-container>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="flex pt-6 justify-between">
+            <p-button *ngIf="entry.value?.back" [label]="entry.value?.back.label || 'Anterior'" severity="secondary"
+              icon="pi pi-arrow-left"
+              (onClick)="navigateToStep(entry.value?.back?.step || +entry.key - 1, activateCallback)" />
+
+            <p-button *ngIf="entry.value?.next" [label]="entry.value?.next.label || 'Siguiente'"
+              icon="pi pi-arrow-right" iconPos="right"
+              (onClick)="navigateToStep(entry.value?.next?.step || +entry.key + 1, activateCallback)" />
+          </div>
+        </ng-template>
+      </p-step-panel>
+    </p-step-panels>
+  </p-stepper>
+
+  <div style="overflow: auto; height: 200px; padding-top: 10px; " *ngIf="nonSignatureFilesSignal().length > 0">
+
+    <div class="flex flex-wrap gap-4">
+      <div *ngFor="let file of nonSignatureFilesSignal(); let i = index" class="relative">
+        <p-image *ngIf="file.type=='image'" [src]="file.file" alt="Imagen capturada" width="140"
+          [preview]="true">...</p-image>
+
+        <video *ngIf="file.type === 'video'" width="140" controls>
+          <source [src]="file.file" type="video/mp4">
+          Video no soportado.
+        </video>
+
+        <p-button icon="pi pi-trash" class="w-full mt-3" severity="danger" [text]="true"
+          [style]="{ position: 'absolute', left: '11%', transform: 'translateX(-50%)',  }" (click)="removeImage(i )">
+        </p-button>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+
+<div class="w-full" style="overflow: auto; height: 200px; padding-top: 10px;"
+  *ngIf="nonSignatureFilesSignal().length > 0 && drawFormSignal()['grid']">
+
+  <div class="flex flex-wrap gap-4">
+    <div *ngFor="let file of nonSignatureFilesSignal(); let i = index" class="relative">
+      <p-image *ngIf="file.type=='image'" [src]="file.file" alt="Imagen capturada" width="140"
+        [preview]="true">...</p-image>
+
+      <video *ngIf="file.type === 'video'" width="140" controls>
+        <source [src]="file.file" type="video/mp4">
+        Video no soportado.
+      </video>
+
+      <p-button icon="pi pi-trash" class="w-full mt-3" severity="danger" [text]="true"
+        [style]="{ position: 'absolute', left: '11%', transform: 'translateX(-50%)',  }" (click)="removeImage(i )">
+      </p-button>
+    </div>
+  </div>
+</div>
+
+<p-dialog [(visible)]="previewCameraDialogVisible" styleClass="width-650px-custom" (onHide)="onHidePreviousCamera()">
+  <video #videoElement autoplay></video>
+  <canvas #canvasElement style="display:none;"></canvas>
+  <ng-template #footer>
+    <p-button *ngIf="timeVideo()==6" (click)="previewCamera(activeFieldCapture, activeFieldConfig)">
+      <i class="pi pi-video"></i>
+      &nbsp;
+      Camara
+
+    </p-button>
+    <p-button *ngIf="timeVideo()==6" (click)="captureMedia('image')">
+      <i class="pi pi-bolt"></i>
+      Fotografia
+    </p-button>
+    <p-button *ngIf="timeVideo()==6" (click)="captureMedia('video')">
+      <i class="pi pi-bolt"></i>
+      Video 6s
+    </p-button>
+    <h1 *ngIf="timeVideo()!=6"> {{timeVideo()}}</h1>
+  </ng-template>
+</p-dialog>

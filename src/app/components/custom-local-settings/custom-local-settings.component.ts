@@ -53,37 +53,37 @@ export class CustomLocalSettingsComponent implements OnChanges {
   }
 
 
-
-
-
-  formasPago = [
-    { label: 'Efectivo', value: '01' },
-    { label: 'Cheque', value: '02' },
-    { label: 'Transferencia', value: '03' },
-    { label: 'Por definir', value: '99' }
-  ];
-  monedas = [
-    { label: 'MXN', value: 'MXN' },
-    { label: 'USD', value: 'USD' }
-  ];
-
-  tipoComprobante = [
-    { label: 'Ingreso', value: 'I' },
-    { label: 'Egreso', value: 'E' },
-    { label: 'Traslado', value: 'T' }
-  ]
-
-  metodoPago = [
-    { label: 'Pago en una sola exhibición', value: 'PUE' },
-    { label: 'Pago en parcialidades', value: 'PPD' }
-  ];
-
-  usoDelCFDI = [
-    { label: 'Gastos en general', value: 'G01' },
-    { label: 'Adquisición de mercancías', value: 'G02' },
-    { label: 'Servicios generales', value: 'G03' },
-    { label: 'Por definir', value: 'G99' }
-  ]
-
+  /*
+  
+  
+    formasPago = [
+      { label: 'Efectivo', value: '01' },
+      { label: 'Cheque', value: '02' },
+      { label: 'Transferencia', value: '03' },
+      { label: 'Por definir', value: '99' }
+    ];
+    monedas = [
+      { label: 'MXN', value: 'MXN' },
+      { label: 'USD', value: 'USD' }
+    ];
+  
+    tipoComprobante = [
+      { label: 'Ingreso', value: 'I' },
+      { label: 'Egreso', value: 'E' },
+      { label: 'Traslado', value: 'T' }
+    ]
+  
+    metodoPago = [
+      { label: 'Pago en una sola exhibición', value: 'PUE' },
+      { label: 'Pago en parcialidades', value: 'PPD' }
+    ];
+  
+    usoDelCFDI = [
+      { label: 'Gastos en general', value: 'G01' },
+      { label: 'Adquisición de mercancías', value: 'G02' },
+      { label: 'Servicios generales', value: 'G03' },
+      { label: 'Por definir', value: 'G99' }
+    ]
+  */
 
 }

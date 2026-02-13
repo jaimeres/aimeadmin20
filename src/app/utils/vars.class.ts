@@ -23,50 +23,12 @@ export class Vars {
   //protected crudS: any = inject(CRUDService); // servicio CRUD
 
 
-  constructor(protected crudS: CRUDService) {
-    //°°° DESPRECIADO
-    /*this.commonIdCode = [
-            { field: 'id', },
-            { field: 'code', },
-        ]
-        this.commonGeneralName = [
-
-            { field: 'name', },
-            { field: 'description', },
-        ];
-        this.commonGeneralName2 = [
-            { field: 'short_name', },
-            { field: 'name2', },
-        ];
-        this.commonGeneralBool = [
-            { field: 'is_active__text', },
-            { field: 'is_default__text', },
-            { field: 'sys__text', },
-        ];
-        this.commonVoidable = [
-            { field: 'is_voidable__text', }
-        ];
-        this.commonGeneralCrud = [
-            { field: 'created_at', },
-            { field: 'created_by__name', },
-            { field: 'modified_at', },
-            { field: 'modified_by__name', },
-            { field: 'inactivated_at', },
-            { field: 'inactivated_by__name', },
-        ];
-        this.commonId = [
-            { field: 'id', },
-        ]
-
-        this.commonName = [
-            { field: 'name', },
-        ]*/
-  }
+  constructor(protected crudS: CRUDService) { }
 
   /**
    * muestra u oculta el dialogo para la configuración local
    */
-  public localSettingsDialogVisible = signal<boolean>(false);
+  public localSettingsDialogVisible = false;
 
   /**
    * Más opciones del menú
@@ -114,12 +76,12 @@ export class Vars {
   /**
    * Muestra u oculta el dialogo para la exportación
    */
-  protected exportDialogVisible = signal<boolean>(false);
+  protected exportDialogVisible = false;
 
   /**
    * Muestra u oculta el dialogo para la importación
    */
-  protected importDialogVisible = signal<boolean>(false);
+  protected importDialogVisible = false;
 
   /**
    * Muestra u oculta el dialogo para la acción de varios elementos seleccionados
@@ -147,8 +109,7 @@ export class Vars {
   /**
    * relaciones para la consulta al servidor
    */
-  protected include = '';
-
+  protected include: { [key: string]: string } = { 0: '' };
   /**
    * campos para la consulta al servidor
    **/
@@ -201,6 +162,8 @@ export class Vars {
   /**
    * Contienes todas las columnas(campos) de la app ACTUAL, mismo caso que columns pero este contiene un array de
    * las columnas de cada app
+   * NOTA: parece que esta demas porque columns ya contiene lo mismo, pero es necesario que cuando cambia cols 
+   * para que selectedColumns compute
    */
   public cols = signal<any[]>([]);
 
@@ -401,7 +364,8 @@ export class Vars {
    * Los campos y valores que se mostrarán en el formulario de configuración local
    */
   public fieldConfig = signal<any>({
-    cols: ([] = [])
+    cols: ([] = []),
+    fields: ([] = [])
   });
 
   /**

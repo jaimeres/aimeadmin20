@@ -204,6 +204,10 @@ export class CRUDService {
     return this.authS.config[module]['general'];
   }
 
+  fields_form(module: string) {
+    return this.authS.config[module]['fields'];
+  }
+
   /**
    * Obtiene los nombres de los campos, se accede a ellos por el nombre de campo en ingles.
    */
@@ -324,7 +328,7 @@ export class CRUDService {
     limit: limit = 0, app: app = '', type: type = '', url: url = '', offset = 0
   }) {
 
-    console.log('-------++........', sort);
+    //console.log('-------++........', sort);
 
     const query = this.query(include, filter, sort, fields, limit, type, offset);
     url = url ? url : `${this.baseUrl(app)}${query}`;

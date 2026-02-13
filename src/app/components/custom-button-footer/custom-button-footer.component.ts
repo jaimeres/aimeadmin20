@@ -33,7 +33,7 @@ export class CustomButtonFooterComponent {
   public buttonConfig = signal({
     save: {
       hide: false,
-      label: 'Guardar y cerrar',
+      label: 'Guardar y cerrar..',
       icon: '',
       severity: 'secondary' as 'secondary' | 'success' | 'info' | 'warn' | 'danger' | 'help' | 'contrast' | null | undefined
     },

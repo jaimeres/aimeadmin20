@@ -33,17 +33,6 @@ export class CustomImportComponent {
   @Input() field: any = {};
 
 
-  public visibleSignal = signal<boolean>(false);
-
-  ngOnChanges(changes: SimpleChanges) {
-    //console.log('CustomTableComponent',changes);
-
-    if (changes['visible']) {
-      this.visibleSignal.set(changes['visible'].currentValue);
-    }
-  }
-
-
   onHide(e: any) {
     this.visibleAction.emit(false);
   }

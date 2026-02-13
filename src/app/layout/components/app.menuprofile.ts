@@ -14,7 +14,7 @@ import { AuthService } from '../../auth/services/auth.service';
   imports: [CommonModule, TooltipModule, ButtonModule, RouterModule],
   template: `<button *ngIf="authS.loggedin()" (click)="toggleMenu()" pTooltip="Profile" [tooltipDisabled]="isTooltipDisabled()">
       <img *ngIf="authS.user()?.image" [src]="authS.user()?.image" alt="avatar" style="width: 32px; height: 32px;" />
-      <i *ngIf="!authS.user()?.image" class="pi pi-user" style="font-size: 1.5rem;"></i>
+      <!--<i *ngIf="!authS.user()?.image" class="pi pi-user" style="font-size: 1.5rem;"></i>-->
       <span class="text-start">
         <strong>{{authS.user()?.username}}</strong>
       </span>
@@ -22,30 +22,38 @@ import { AuthService } from '../../auth/services/auth.service';
     </button>
 
     <ul *ngIf="menuProfileActive()" [@menu]="isHorizontal() ? 'overlay' : 'inline'">
-      <li pTooltip="Settings" [tooltipDisabled]="isTooltipDisabled()" [routerLink]="['/profile/create']">
+      <!--<li pTooltip="Settings" [tooltipDisabled]="isTooltipDisabled()" [routerLink]="['/profile/create']">
         <button [routerLink]="['/documentation']">
-          <i class="pi pi-cog pi-fw"></i>
+         
           <span>Settings</span>
         </button>
       </li>
       <li pTooltip="Profile" [tooltipDisabled]="isTooltipDisabled()">
         <button [routerLink]="['/documentation']">
-          <i class="pi pi-file-o pi-fw"></i>
+          
           <span>Profile</span>
         </button>
       </li>
       <li pTooltip="Support" [tooltipDisabled]="isTooltipDisabled()">
         <button [routerLink]="['/documentation']">
-          <i class="pi pi-compass pi-fw"></i>
+          
           <span>Support</span>
         </button>
       </li>
       <li pTooltip="Logout" [tooltipDisabled]="isTooltipDisabled()" [routerLink]="['/auth/login2']">
-        <button class="p-link">
-          <i class="pi pi-power-off pi-fw"></i>
+        <button >
+         
           <span>Logout</span>
         </button>
       </li>
+
+      <li>
+       <button >
+         
+          <span>Versión: 1.01</span>
+        </button>
+      </li>-->
+      
     </ul>`,
   animations: [
     trigger('menu', [

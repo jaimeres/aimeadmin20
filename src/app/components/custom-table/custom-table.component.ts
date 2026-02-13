@@ -55,8 +55,6 @@ export class CustomTableComponent implements OnChanges {
   @Output() selectionAction = new EventEmitter<any[]>();
   @Output() lazyLoadAction = new EventEmitter<any>();
 
-  //esportar datos
-  exportDialogVisibleSignal = signal<boolean>(false);
   //Casi nuca van a cambiar
   rowsSignal = signal<number>(250);
   scrollableSignal = signal<boolean>(true);
@@ -78,10 +76,6 @@ export class CustomTableComponent implements OnChanges {
   private formSubscription: Subscription | undefined;
 
   ngOnChanges(changes: SimpleChanges) {
-
-    if (changes['exportDialogVisible']) {
-      this.exportDialogVisibleSignal.set(changes['exportDialogVisible'].currentValue);
-    }
 
     if (changes['value']) {
       this.valueSignal.set(changes['value'].currentValue);
@@ -182,7 +176,7 @@ export class CustomTableComponent implements OnChanges {
       this.exportServerAction.emit(this.form()?.value);
     }
 
-    this.exportDialogVisibleAction.emit(false);
+    this.onExportDialogVisible(false);
   }
 
   /**
@@ -243,13 +237,6 @@ export class CustomTableComponent implements OnChanges {
   }
 
 
-
-
-  /*
-    j(e: any) {
-      this.lazyLoadAction.emit(e);
-    }*/
-
   // Métodos para el paginador responsive
   getFirstRecord(): number {
     if (!this.valueSignal() || this.valueSignal().length === 0) return 0;
@@ -269,6 +256,20 @@ export class CustomTableComponent implements OnChanges {
     const selected = this.selectedSignal().length;
 
     return `Mostrar del ${first} al ${last} de ${total} registros - ${selected} seleccionados`;
+  }
+
+  getRowsPerPageOptions(): number[] {
+    const currentRows = Number(this.rowsSignal()) || 0;
+    const baseOptions = [10, 20, 50, 100, 250, 500, 1000];
+    const options = new Set<number>(baseOptions);
+    if (currentRows > 0) {
+      options.add(currentRows);
+    }
+    return Array.from(options).sort((a, b) => a - b);
+  }
+
+  onExportDialogVisible(event: any) {
+    this.exportDialogVisibleAction.emit(false);
   }
 
 }

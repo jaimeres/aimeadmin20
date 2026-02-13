@@ -8,8 +8,8 @@
   sortMode="multiple" (selectionChange)="selectionAction.emit($event)" showJumpToPageInput="true"
   currentPageReportTemplate="Del {first} al {last} de {{totalRecordsSignal()}} - {{selectedSignal().length}} seleccionados"
   [showCurrentPageReport]="showCurrentPageReportSignal()" [scrollable]="scrollableSignal()"
-  [paginator]="paginatorSignal()" [rows]="50" [totalRecords]="valueSignal().length" [lazy]="true"
-  (onLazyLoad)="onLazyLoadInternal($event);" [rowsPerPageOptions]="[250,500,1000]"
+  [paginator]="paginatorSignal()" [rows]="rowsSignal()" [totalRecords]="totalRecordsSignal()" [lazy]="true"
+  (onLazyLoad)="onLazyLoadInternal($event);" [rowsPerPageOptions]="getRowsPerPageOptions()"
   [filterDelay]="filterDelayTableSignal()">
 
   <!-- pongo esto [globalFilterFields]="columns" para que solo busque en las columnas visibles, cuando se busca y luego se oculta sigue 
@@ -85,7 +85,7 @@
   </ng-template>
 </p-table>
 
-<p-dialog [visible]="exportDialogVisibleSignal()" (onHide)="exportDialogVisibleAction.emit(false)" header="Exportar"
+<p-dialog [visible]="exportDialogVisible" (onHide)="onExportDialogVisible($event)" header="Exportar"
   styleClass="width-500px-custom">
 
   <div class="flex flex-wrap -mx-1 pt-3">

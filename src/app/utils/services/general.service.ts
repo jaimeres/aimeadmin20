@@ -252,26 +252,35 @@ export class GeneralService {
    * @param additionalFieldsIncluded Campos adicionales que se deben agregar de la relacion incluida, si no se envia,
    * @returns El nombre si encuentra el id, si no, retorna un string vacio
    */
-  search_include(included: any[], id: string, relationshipName: string, additionalFieldsIncluded: any, return_attributes = false) {
+  search_include(included: any[], id: string, relationshipName: string, additionalFieldsIncluded: any, return_attributes = false, fields: any = []) {
     const relationship_name: any = [];
-    console.log('212121212121', additionalFieldsIncluded);
 
     for (const item of included) {
       if (item.id == id) {
         if (return_attributes) {
           return item.attributes;
         }
-        relationship_name[relationshipName + '__name'] = item.attributes.username || item.attributes.name;
+        let value = item.attributes?.username || item.attributes?.name;
+        //si no existe name lo busco
+        const blocked = ['name', 'username'];
+        if (!value && !blocked.includes(relationshipName)) {
+
+          const alternate_label = fields[relationshipName]?.option_label
+          //quitar temporal
+          value = this.timeZone(item.attributes[alternate_label]);
+        }
+
+        relationship_name[relationshipName + '__name'] = value;
         if (additionalFieldsIncluded) {
           for (const field of additionalFieldsIncluded[relationshipName]) {
-            const renamed_fields = field.field || field.original_field;
-            relationship_name[relationshipName + '_' + renamed_fields] = item.attributes[field.field.field];
+            const renamed_fields = field.renamed_fields || field.field || field.original_field;
+            const original_field = field.original_field || field.field;
+            relationship_name[relationshipName + '_' + renamed_fields] = item.attributes[original_field];
           }
         }
         break;
       }
     }
-
     return relationship_name;
   }
 
@@ -340,6 +349,10 @@ export class GeneralService {
    * Debe ser un array que contienes arrays donde debe venir el nombre del campo y el array de valores [[nombre_del_campo,{id:1, name:'Nombre'}],[]]
    * @returns
    */
+  /**
+   * Convierte respuesta DJA a objetos planos.
+   * Ahora acepta `option_label` como array o string separado por comas.
+   */
   DJAtoObject(
     {
       respDJA,
@@ -349,7 +362,9 @@ export class GeneralService {
       moreFields = [],
       timeZone = [],
       node = false,
-      additionalFieldsAppCols = []
+      additionalFieldsAppCols = [],
+      fields = [],
+      option_label = []
     }: {
       respDJA: any;
       additionalFieldsIncluded?: any;
@@ -359,6 +374,9 @@ export class GeneralService {
       timeZone?: any[];
       node?: boolean;
       additionalFieldsAppCols?: any[];
+      fields?: any[];
+      //viene por separado  proqwue normalmente es para carga de combos
+      option_label?: any[] | string;
     }) {
     let included = respDJA?.included;
     let dataDJA = respDJA?.data;
@@ -379,60 +397,7 @@ export class GeneralService {
 
       is_object = true; // lo utilizo para retornar un objeto en lugar de un array
     }
-    /*
-    // typeof identifica a un array y un objecto como un objecto, por eso si typeof dice que es un objeto y isArray dice que no es array, 
-    //entonces es un objeto
-   if (typeof dataDJA === 'object' && !Array.isArray(dataDJA)) {
- 
-      //lo hago para que el id de los campos relacionados esté dentro del array general, principalmente para que cuando se resetee a un form, 
-      //se pueda asignar directamente, aquí hay un tema dja se queja si el id de los campos relacionados no está dentro del array relationships,
-      //y se envía directamente dentro del objeto attributes, PERO, si tambien lo envío dentro del objeto relationships lo toma como el bueno y ya no se queja,
-      //por lo tanto, lo envío en ambos lados
-      let relationship = [];
-      let relationship_name = [];
-      for (const relationshipName in dataDJA.relationships) {
-        const id = dataDJA.relationships[relationshipName].data?.id;
-        relationship[relationshipName] = dataDJA.relationships[relationshipName].data?.id;
-        //relationship.push({relationshipName:dja.relationships[relationshipName].data?.id});
- 
-        //Asigna el nombre del campo relacionado
-        if (id && included) {
-          relationship_name[relationshipName + '_name'] = this.search_include(included, id);
-        }
-      }
- 
-      let data = {
-        id: dataDJA.id,
-        type_type: dataDJA.type, // para que esté dentro del array, repito el nombre para que no vaya a chocar con el nombre de un campos
-        ...dataDJA.attributes,
-        ...relationship,
-        ...relationship_name,
-        relationships: dataDJA.relationships
-      }
- 
-      fieldsBool.forEach((field) => {
-        // Dependioendo de valor de campo carga el valor para el verdadero o falso, en los datos mostrados al usuario se llama __text
-        data[field + '__text'] = dataDJA.attributes[field] ? customField[field + '_true'] : customField[field + '_false'];
-      });
- 
-      moreFields.forEach((field) => {
- 
-        const id = dataDJA.attributes[field[0]]
-        for (const item of field[1]) {
-          // Itera el array donde buscara la clave que se envía en la respuesta del servidor
-          if (item.id == id) {
-            //compara el Id del array vs el id del servidor
-            data[field[0] + '__text'] = item.name;
-            //al campo enviado le agrego __text para indicar que es el valor en texto y le asigno el nombre
-            break;
-            // Detiene la iteración cuando se encuentra la coincidencia
-          }
-        }
-      });
- 
-      return data;
- 
-    } else if (Array.isArray(dataDJA)) {*/
+
     const resp = dataDJA.map((dja: any) => {
       /*lo hago para que el id de los campos relacionados esté dentro del array general, principalmente para que cuando se resetee a un form, 
       se pueda asignar directamente, aquí hay un tema dja se queja si el id de los campos relacionados no está dentro del array relationships,
@@ -449,22 +414,14 @@ export class GeneralService {
           relationship_name[relationshipName + '__array'] = item;
           relationship_name[relationshipName + '__name'] = item.length > 0 ? item.length + ' elemento(s)' : '';
           relationship[relationshipName] = item.map((item: any) => item.id);
-          /*relationship[relationshipName] = item.map((element: any) => ({
-              id: element.id,
-              label: '123123123'//element.attributes?.name || ''
-            }));*/
 
-          // no estor seguri si debe ir
-          /*for (const field of additionalFieldsIncluded) {
-            console.log(field);            
-          }*/
         } else {
           const id = item?.id;
           relationship[relationshipName] = id;
           const additional: any = relationshipName + '_data';
 
           if (additionalFieldsAppCols[additional]) {
-            const additional_fields = this.search_include(included, id, relationshipName, null, true);
+            const additional_fields = this.search_include(included, id, relationshipName, null, true, fields);
 
             //cocatenarle a los campos del objecto additional_fields la variabnle additional + '_'
             for (const field in additional_fields) {
@@ -474,9 +431,8 @@ export class GeneralService {
             // relaciona los id con los nombres, por default solo relaciona con el nombre, si se envia additionalFieldsIncluded,
             // se agregan con los campos enviados
           } else if (id && included) {
-            const r = this.search_include(included, id, relationshipName, additionalFieldsIncluded);
+            const r = this.search_include(included, id, relationshipName, additionalFieldsIncluded, false, fields);
             relationship_name = { ...relationship_name, ...r };
-            //relationship_name[relationshipName + '__name'] = this.search_include(included, id, relationshipName, additionalFieldsIncluded);
           }
         }
       }
@@ -489,12 +445,30 @@ export class GeneralService {
         ...relationship_name,
         relationships: dja.relationships
       };
+      /*const labelFields = Array.isArray(option_label)
+        ? option_label
+        : typeof option_label === 'string'
+          ? option_label.split(',').map((v) => v.trim()).filter((v) => v.length > 0)
+          : [];
+
+      if (labelFields.length > 0) {
+        const labelField = labelFields.join('');
+        const label = labelFields
+          .map((key: string) => data[key])
+          .filter((val: any) => val !== undefined && val !== null && String(val).trim() !== '')
+          .map((val: any) => String(val))
+          .join(' ');
+        data[labelField] = label;
+      }*/
+      console.log('DJAtoObject:::::::::::::');
+
 
       data.created_at = this.timeZone(dja.attributes?.created_at);
       data.modified_at = this.timeZone(dja.attributes?.modified_at);
       data.inactivated_at = this.timeZone(dja.attributes?.inactivated_at);
 
       timeZone.forEach((field) => {
+
         data[field + '__text'] = this.timeZone(dja.attributes[field]);
         //solo si dja.attributes[field] no es nulo
         data[field] = dja.attributes[field] ? new Date(dja.attributes[field]) : null;
