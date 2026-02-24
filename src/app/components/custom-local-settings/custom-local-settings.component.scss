@@ -22,9 +22,11 @@
   }
 }
 
-// Op select (compact)
+// Op select (compact) — legacy class kept for backward compat
 :host ::ng-deep .filter-op-select {
-  min-width: 160px;
+  width: auto !important;
+  min-width: 120px;
+  max-width: 160px;
 
   .p-select-label {
     font-size: 0.78rem;
@@ -48,4 +50,321 @@
 // Inactive filter row — visible but dimmed
 .filter-row-inactive {
   opacity: 0.55;
+}
+
+// ── Unified field rows ─────────────────────────────────────────────────────────
+
+.uf-legend {
+  border-bottom: 1px solid var(--surface-300, #ddd);
+  margin-bottom: 0.25rem;
+}
+
+.uf-row {
+  transition: box-shadow 0.15s;
+
+  &.cdk-drag-animating {
+    transition: transform 250ms cubic-bezier(0, 0, 0.2, 1);
+  }
+}
+
+.cdk-drag-preview.uf-row {
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.18);
+  border-radius: 6px;
+  padding: 0.5rem;
+  background: var(--surface-card);
+}
+
+.uf-row-inactive {
+  opacity: 0.6;
+}
+
+.uf-no-filter-spacer {
+  display: inline-block;
+  width: 1.25rem;
+  flex-shrink: 0;
+}
+
+:host ::ng-deep .uf-badge-toggle {
+  .p-togglebutton {
+    padding: 0.2rem 0.4rem !important;
+    min-width: unset !important;
+  }
+}
+
+// ── Compact icon-only toggle (single row) ──────────────────────────────────────
+
+:host ::ng-deep .uf-icon-toggle {
+  // height-input-custom pone width:100%, lo anulamos para que sea cuadrado
+  width: auto !important;
+
+  .p-togglebutton {
+    aspect-ratio: 1 / 1;
+    padding: 0 !important;
+    min-width: unset !important;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+}
+
+// Label input in main row
+.uf-label-input {
+  flex: 1 1 80px;
+  min-width: 60px;
+  max-width: 160px;
+}
+
+// ── Row line (flex container per fila, NO wrap → single line) ────────────────
+.uf-row-line {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  flex-wrap: nowrap;
+  min-width: 0;
+  overflow-x: auto;
+  padding: 0.1rem 0;
+}
+
+// ── Filter op select (compact, single-line fix) ───────────────────────────────
+:host ::ng-deep .uf-filter-op {
+  width: auto !important;
+  min-width: 110px;
+  max-width: 148px;
+
+  .p-select-label {
+    font-size: 0.78rem;
+  }
+}
+
+// Filter value input in main filter row (width:auto overrides height-input-custom)
+.uf-filter-val {
+  flex: 1 1 80px;
+  min-width: 70px;
+  max-width: 180px;
+}
+
+:host ::ng-deep .uf-filter-val {
+  width: auto !important;
+}
+
+// Vertical separator inside a row line
+.uf-sep-v {
+  display: inline-block;
+  width: 1px;
+  height: 1.5rem;
+  background: var(--surface-300, #ddd);
+  flex-shrink: 0;
+  align-self: center;
+}
+
+// Legend separator
+.uf-legend-sep {
+  color: var(--surface-400, #bbb);
+  padding: 0 0.25rem;
+}
+
+// Visual separator between config and filter icons
+.uf-sep {
+  display: inline-block;
+  width: 1px;
+  height: 1.5rem;
+  background: var(--surface-300, #ddd);
+  flex-shrink: 0;
+  align-self: center;
+}
+
+// ── Preview dialog grid ────────────────────────────────────────────────────────
+
+:host ::ng-deep .preview-dialog {
+  width: min(90vw, 900px) !important;
+
+  .p-dialog-content {
+    overflow: auto;
+  }
+}
+
+.preview-grid {
+  display: grid;
+  grid-template-columns: repeat(12, 1fr);
+  gap: 0.5rem;
+  padding: 0.5rem 0;
+  min-height: 120px;
+  align-items: start;
+}
+
+.preview-cell {
+  background: var(--surface-100);
+  border: 1px solid var(--primary-300, #93c5fd);
+  border-radius: 6px;
+  padding: 0.4rem 0.5rem;
+  min-height: 3.5rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  cursor: grab;
+  gap: 0.25rem;
+  position: relative;
+  transition: box-shadow 0.15s;
+
+  &:active {
+    cursor: grabbing;
+  }
+
+  &.cdk-drag-animating {
+    transition: transform 250ms cubic-bezier(0, 0, 0.2, 1);
+  }
+}
+
+.preview-cell.cdk-drag-preview {
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.22);
+  border-radius: 6px;
+  background: var(--surface-card);
+}
+
+.preview-cell-active {
+  background: var(--surface-100);
+  border-color: var(--primary-400, #60a5fa);
+}
+
+.preview-cell-inactive {
+  grid-column: span 1 !important;
+  opacity: 0.35;
+  border-style: dashed;
+  border-color: var(--surface-400, #aaa);
+  min-height: 2rem;
+  background: var(--surface-50);
+}
+
+.preview-cell-label {
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-align: center;
+  word-break: break-word;
+  color: var(--text-color);
+}
+
+.preview-cell-controls {
+  display: flex;
+  align-items: center;
+  gap: 0.15rem;
+  margin-top: 0.2rem;
+}
+
+.preview-cell-span {
+  font-size: 0.68rem;
+  color: var(--text-color-secondary);
+  min-width: 2rem;
+  text-align: center;
+}
+
+.preview-cell-placeholder {
+  background: var(--primary-100, #dbeafe);
+  border: 2px dashed var(--primary-400, #60a5fa);
+  border-radius: 6px;
+  min-height: 3.5rem;
+  width: 100%;
+}
+
+
+// ── Drag-drop ordering ─────────────────────────────────────────────────────────
+
+.drag-handle {
+  cursor: grab;
+
+  &:active {
+    cursor: grabbing;
+  }
+}
+
+.col-order-row,
+.grid-order-row {
+  transition: box-shadow 0.15s;
+
+  &.cdk-drag-animating {
+    transition: transform 250ms cubic-bezier(0, 0, 0.2, 1);
+  }
+}
+
+.cdk-drag-preview {
+
+  &.col-order-row,
+  &.grid-order-row {
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.18);
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem;
+    background: var(--surface-card);
+  }
+}
+
+.col-order-placeholder {
+  background: var(--primary-100, #e0f2ff);
+  border: 2px dashed var(--primary-400, #60a5fa);
+  border-radius: 6px;
+  min-height: 42px;
+  transition: all 250ms;
+}
+
+.order-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.4rem;
+  height: 1.4rem;
+  background: var(--primary-100, #e0f2ff);
+  color: var(--primary-700, #1d4ed8);
+  border-radius: 50%;
+  font-size: 0.7rem;
+  font-weight: bold;
+  flex-shrink: 0;
+}
+
+.grid-order-inactive {
+  opacity: 0.5;
+}
+
+// Mini span preview bars
+.grid-span-preview {
+  width: 3rem;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex-shrink: 0;
+}
+
+.span-bar {
+  height: 6px;
+  border-radius: 3px;
+  min-width: 2px;
+  transition: width 0.2s;
+
+  &.desktop-bar {
+    background: var(--primary-400, #60a5fa);
+  }
+
+  &.mobile-bar {
+    background: var(--orange-400, #fb923c);
+  }
+}
+
+// Compact inputNumber for span controls
+:host ::ng-deep .grid-span-input {
+  .p-inputnumber {
+    width: 5.2rem;
+  }
+
+  .p-inputtext {
+    width: 2rem !important;
+    padding: 0.25rem !important;
+    font-size: 0.75rem !important;
+    text-align: center;
+  }
+
+  .p-button {
+    width: 1.3rem !important;
+    padding: 0 !important;
+  }
 }

@@ -1,5 +1,5 @@
 <p-dialog [(visible)]="visible" styleClass="width-650px-custom min-height-document-custom"
-  header="Configuración del módulo" (onHide)="onHide($event)">
+  header="Configuración del módulo" (onHide)="onHide($event)" [maximizable]="true" [resizable]="true">
 
   <p-accordion [multiple]="true">
 
@@ -12,176 +12,268 @@
       </form>
     </p-accordion-panel>
 
-    <!-- ══ Panel 2: Filtros ══ -->
+    <!-- ══ Panel 2: Configuración de campos ══ -->
     <p-accordion-panel>
 
       <ng-template pTemplate="header">
         <div class="flex align-items-center gap-2">
-          <span>Filtros</span>
+          <span>Configuración de campos</span>
           <p-tag *ngIf="activeFilterCount() > 0" [value]="activeFilterCount().toString()" severity="info">
           </p-tag>
         </div>
       </ng-template>
 
-      <!-- Sin columnas -->
-      <div *ngIf="filterableCols().length === 0" class="text-center text-color-secondary py-4">
+      <!-- ─ Leyenda de columnas ─ -->
+      <div class="uf-legend flex gap-3 pt-2 pb-1 text-xs text-color-secondary flex-wrap">
+        <span><i class="pi pi-bars mr-1"></i>Orden</span>
+        <span><i class="pi pi-table mr-1"></i>Tabla</span>
+        <span><i class="pi pi-mobile mr-1"></i>Oculto móvil</span>
+        <span><i class="pi pi-sort-alt mr-1"></i>Ordenable</span>
+        <span><i class="pi pi-lock mr-1"></i>Bloqueado</span>
+        <span class="uf-legend-sep">|</span>
+        <span><i class="pi pi-window-maximize mr-1"></i>Form</span>
+        <span><i class="pi pi-eye-slash mr-1"></i>Ocultar field</span>
+        <span><i class="pi pi-asterisk mr-1"></i>Requerido</span>
+        <span><i class="pi pi-ban mr-1"></i>Solo lectura</span>
+        <span><i class="pi pi-desktop mr-1"></i>Cols escritorio / <i class="pi pi-mobile mx-1"></i>móvil</span>
+        <span class="uf-legend-sep">|</span>
+        <span><i class="pi pi-filter mr-1"></i>Filtro</span>
+      </div>
+
+      <!-- Sin campos -->
+      <div *ngIf="unifiedRows().length === 0" class="text-center text-color-secondary py-4">
         <i class="pi pi-table text-2xl mb-2"></i>
         <p class="text-sm">No hay columnas disponibles.</p>
       </div>
 
-      <!-- ── Por columna ── -->
-      <div *ngFor="let col of filterableCols(); let last = last"
-        [class.filter-row-inactive]="!getRow(col.field).active">
+      <!-- ── Lista drag-drop unificada ── -->
+      <div cdkDropList (cdkDropListDropped)="onUnifiedDrop($event)" class="flex flex-col gap-1 pt-1">
 
-        <!-- ─ Fila de cabecera ─ -->
-        <div class="filter-row-header flex align-items-center gap-2 flex-wrap">
+        @for (row of unifiedRows(); track row.field; let i = $index; let last = $last) {
+        @let col = getFilterCol(row.field);
 
-          <!-- Checkbox activo -->
-          <p-checkbox [ngModel]="getRow(col.field).active" (ngModelChange)="toggleFilter(col.field, $event)"
-            [binary]="true" pTooltip="Activar filtro" tooltipPosition="top">
-          </p-checkbox>
+        <div cdkDrag class="uf-row border-1 surface-border border-round surface-card p-2"
+          [class.uf-row-inactive]="!row.colActive && !row.gridActive">
+          <div *cdkDragPlaceholder class="col-order-placeholder"></div>
 
-          <!-- Etiqueta de columna -->
-          <span class="font-semibold text-sm flex-1 min-w-0 overflow-hidden text-ellipsis whitespace-nowrap"
-            [title]="col.header">{{ col.header }}</span>
+          <!-- ─ Fila 1: COLS (tabla) ─ -->
+          <div class="uf-row-line">
+            <i cdkDragHandle class="pi pi-bars drag-handle text-color-secondary flex-shrink-0"></i>
+            <span class="order-badge flex-shrink-0">{{ i + 1 }}</span>
 
-          <!-- Selector de operador — siempre visible -->
-          <p-select [options]="getOpsOptions(col)" [ngModel]="getRow(col.field).op"
-            (ngModelChange)="setOp(col.field, $event)" [disabled]="!getRow(col.field).active" optionLabel="label"
-            optionValue="value" placeholder="Operador" styleClass="filter-op-select" appendTo="body">
-          </p-select>
+            <!-- Etiqueta editable -->
+            <input pInputText [ngModel]="row.colsCfg.label" (ngModelChange)="setColsCfg(i, 'label', $event)"
+              placeholder="Etiqueta" class="height-input-custom p-inputtext-sm uf-label-input"
+              [title]="'Campo: ' + row.field" />
 
-          <!-- Botón reset individual (solo cuando activo) -->
-          <p-button *ngIf="getRow(col.field).active" icon="pi pi-times" severity="danger" [text]="true" size="small"
-            pTooltip="Limpiar filtro" tooltipPosition="top" (onClick)="resetFilter(col.field)"
-            styleClass="shrink-0 p-0">
-          </p-button>
+            <!-- Visible en tabla -->
+            <p-toggleButton [ngModel]="row.colActive" (ngModelChange)="toggleUnifiedColActive(i, $event)"
+              [onIcon]="'pi pi-table'" [offIcon]="'pi pi-table'" onLabel="" offLabel="" pTooltip="Visible en tabla"
+              tooltipPosition="top" styleClass="height-input-custom uf-icon-toggle">
+            </p-toggleButton>
 
-        </div><!-- /filter-row-header -->
+            <!-- Oculto en móvil -->
+            <p-toggleButton [ngModel]="row.colsCfg.hideMobile" (ngModelChange)="setColsCfg(i, 'hideMobile', $event)"
+              [onIcon]="'pi pi-mobile'" [offIcon]="'pi pi-mobile'" onLabel="" offLabel="" pTooltip="Ocultar en móvil"
+              tooltipPosition="top" styleClass="height-input-custom uf-icon-toggle">
+            </p-toggleButton>
 
-        <!-- ─ Presets de fecha — siempre visibles para datetime ─ -->
-        <div *ngIf="getColFilterType(col) === 'datetime'" class="pl-6 pt-1 pb-1 flex gap-1 flex-wrap">
-          <p-button label="Hoy" severity="secondary" [outlined]="true" size="small"
-            [disabled]="!getRow(col.field).active" (onClick)="applyRelativePreset(col.field, 'day')"></p-button>
-          <p-button label="Semana" severity="secondary" [outlined]="true" size="small"
-            [disabled]="!getRow(col.field).active" (onClick)="applyRelativePreset(col.field, 'week')"></p-button>
-          <p-button label="Mes" severity="secondary" [outlined]="true" size="small"
-            [disabled]="!getRow(col.field).active" (onClick)="applyRelativePreset(col.field, 'month')"></p-button>
-          <p-button label="Año" severity="secondary" [outlined]="true" size="small"
-            [disabled]="!getRow(col.field).active" (onClick)="applyRelativePreset(col.field, 'year')"></p-button>
-        </div>
+            <!-- Ordenable -->
+            <p-toggleButton [ngModel]="row.colsCfg.sortable" (ngModelChange)="setColsCfg(i, 'sortable', $event)"
+              [onIcon]="'pi pi-sort-alt'" [offIcon]="'pi pi-sort-alt-slash'" onLabel="" offLabel=""
+              pTooltip="Columna ordenable" tooltipPosition="top" styleClass="height-input-custom uf-icon-toggle">
+            </p-toggleButton>
 
-        <!-- ─ Aviso isnull ─ -->
-        <div *ngIf="isNullOp(getRow(col.field).op)" class="pl-6 pb-1 pt-1 text-sm text-color-secondary">
-          Filtra registros donde <strong>{{ col.header }}</strong> no tenga valor.
-        </div>
+            <!-- Bloqueada -->
+            <p-toggleButton [ngModel]="row.colsCfg.locked" (ngModelChange)="setColsCfg(i, 'locked', $event)"
+              [onIcon]="'pi pi-lock'" [offIcon]="'pi pi-lock-open'" onLabel="" offLabel="" pTooltip="Columna bloqueada"
+              tooltipPosition="top" styleClass="height-input-custom uf-icon-toggle">
+            </p-toggleButton>
+          </div>
 
-        <!-- ─ Inputs de valor — SIEMPRE VISIBLES ─ -->
-        <div *ngIf="!isNullOp(getRow(col.field).op)" class="pl-6 pt-1 pb-2">
+          <!-- ─ Fila 2: FIELDS / FORMULARIO ─ -->
+          <div class="uf-row-line">
+            <!-- Form visible -->
+            <p-toggleButton [ngModel]="row.gridActive" (ngModelChange)="toggleUnifiedGridActive(i, $event)"
+              [onIcon]="'pi pi-window-maximize'" [offIcon]="'pi pi-window-maximize'" onLabel="" offLabel=""
+              pTooltip="Visible en formulario" tooltipPosition="top" styleClass="height-input-custom uf-icon-toggle">
+            </p-toggleButton>
 
-          <!-- == RANGO == -->
-          <ng-container *ngIf="isRangeOp(getRow(col.field).op)">
-            <div class="flex gap-2 align-items-center flex-wrap">
+            <!-- Ocultar field -->
+            <p-toggleButton [ngModel]="row.fieldHide" (ngModelChange)="setFieldProp(i, 'fieldHide', $event)"
+              [onIcon]="'pi pi-eye-slash'" [offIcon]="'pi pi-eye'" onLabel="" offLabel=""
+              pTooltip="Ocultar campo en formulario (hide)" tooltipPosition="top"
+              styleClass="height-input-custom uf-icon-toggle">
+            </p-toggleButton>
 
-              <ng-container [ngSwitch]="getColFilterType(col)">
+            <!-- Requerido -->
+            <p-toggleButton [ngModel]="row.fieldRequired" (ngModelChange)="setFieldProp(i, 'fieldRequired', $event)"
+              [onIcon]="'pi pi-asterisk'" [offIcon]="'pi pi-asterisk'" onLabel="" offLabel="" pTooltip="Campo requerido"
+              tooltipPosition="top" styleClass="height-input-custom uf-icon-toggle">
+            </p-toggleButton>
 
-                <!-- Numérico rango -->
-                <p-inputNumber *ngSwitchCase="'numeric'" [formControl]="$any(getControl('fv_' + col.field))"
-                  placeholder="Desde" styleClass="w-36" [useGrouping]="false" />
-                <span *ngSwitchCase="'numeric'" class="text-color-secondary text-xs font-bold">→</span>
-                <p-inputNumber *ngSwitchCase="'numeric'" [formControl]="$any(getControl('fv_' + col.field + '_2'))"
-                  placeholder="Hasta" styleClass="w-36" [useGrouping]="false" />
+            <!-- Solo lectura -->
+            <p-toggleButton [ngModel]="row.fieldReadonly" (ngModelChange)="setFieldProp(i, 'fieldReadonly', $event)"
+              [onIcon]="'pi pi-ban'" [offIcon]="'pi pi-ban'" onLabel="" offLabel="" pTooltip="Solo lectura (readonly)"
+              tooltipPosition="top" styleClass="height-input-custom uf-icon-toggle">
+            </p-toggleButton>
 
-                <!-- Fecha rango -->
-                <p-datepicker *ngSwitchCase="'datetime'" [formControl]="$any(getControl('fv_' + col.field))"
-                  appendTo="body" placeholder="Desde" styleClass="w-40" />
-                <span *ngSwitchCase="'datetime'" class="text-color-secondary text-xs font-bold">→</span>
-                <p-datepicker *ngSwitchCase="'datetime'" [formControl]="$any(getControl('fv_' + col.field + '_2'))"
-                  appendTo="body" placeholder="Hasta" styleClass="w-40" />
+            <!-- Sep -->
+            <span class="uf-sep-v"></span>
 
-              </ng-container>
-
+            <!-- Spans (solo si activo en formulario) -->
+            @if (row.inGrid && row.gridActive) {
+            <i class="pi pi-desktop text-xs text-color-secondary flex-shrink-0" pTooltip="Columnas escritorio (1-12)"
+              tooltipPosition="top"></i>
+            <p-inputNumber [ngModel]="row.gridSpan" (ngModelChange)="setUnifiedSpan(i, $event, 'gridSpan')" [min]="1"
+              [max]="12" [showButtons]="true" buttonLayout="horizontal" decrementButtonIcon="pi pi-minus"
+              incrementButtonIcon="pi pi-plus" styleClass="grid-span-input" inputStyleClass="text-center text-xs">
+            </p-inputNumber>
+            <i class="pi pi-mobile text-xs text-color-secondary flex-shrink-0" pTooltip="Columnas móvil (1-12)"
+              tooltipPosition="top"></i>
+            <p-inputNumber [ngModel]="row.gridSpanMd" (ngModelChange)="setUnifiedSpan(i, $event, 'gridSpanMd')"
+              [min]="1" [max]="12" [showButtons]="true" buttonLayout="horizontal" decrementButtonIcon="pi pi-minus"
+              incrementButtonIcon="pi pi-plus" styleClass="grid-span-input" inputStyleClass="text-center text-xs">
+            </p-inputNumber>
+            <div class="grid-span-preview" pTooltip="Proporciones escritorio / móvil" tooltipPosition="top">
+              <div class="span-bar desktop-bar" [style.width.%]="(row.gridSpan / 12) * 100"></div>
+              <div class="span-bar mobile-bar" [style.width.%]="(row.gridSpanMd / 12) * 100"></div>
             </div>
-          </ng-container>
+            <!-- Botón vista previa -->
+            <p-button icon="pi pi-eye" size="small" [text]="true" severity="secondary"
+              pTooltip="Vista previa del formulario" tooltipPosition="top" (onClick)="openPreview()"
+              styleClass="uf-icon-toggle height-input-custom ml-auto">
+            </p-button>
+            }
+          </div>
 
-          <!-- == VALOR ÚNICO / EN LISTA == -->
-          <ng-container *ngIf="!isRangeOp(getRow(col.field).op)">
-            <ng-container [ngSwitch]="getColFilterType(col)">
+          <!-- ─ Fila 3: FILTRO en UNA sola línea (solo si filtrable) ─ -->
+          @if (col) {
+          @let fRow = getRow(col.field);
+          @let fType = getColFilterType(col);
 
-              <!-- ── Texto: chips manuales (op=in) o input simple ── -->
-              <ng-container *ngSwitchCase="'text'">
-                <p-autoComplete *ngIf="isInOp(getRow(col.field).op)" [formControl]="$any(getControl('fv_' + col.field))"
-                  [disabled]="!getRow(col.field).active" [multiple]="true" [typeahead]="false" [addOnBlur]="true"
-                  [addOnTab]="true" placeholder="Escribir y presionar Enter..." styleClass="w-full" />
-                <input *ngIf="!isInOp(getRow(col.field).op)" pInputText
-                  [formControl]="$any(getControl('fv_' + col.field))" [disabled]="!getRow(col.field).active"
-                  placeholder="Buscar..." class="w-full p-inputtext-sm" />
-              </ng-container>
+          <div class="uf-row-line uf-filter-line" [class.filter-row-inactive]="!fRow.active">
+            <!-- Toggle filtro -->
+            <p-toggleButton [ngModel]="fRow.active" (ngModelChange)="toggleFilter(col.field, $event)"
+              [onIcon]="'pi pi-filter'" [offIcon]="'pi pi-filter-slash'" onLabel="" offLabel=""
+              pTooltip="Activar filtro" tooltipPosition="top" styleClass="height-input-custom uf-icon-toggle">
+            </p-toggleButton>
 
-              <!-- ── Numérico ── -->
+            <!-- Op selector -->
+            <p-select [options]="getOpsOptions(col)" [ngModel]="fRow.op" (ngModelChange)="setOp(col.field, $event)"
+              [disabled]="!fRow.active" optionLabel="label" optionValue="value" placeholder="Op"
+              styleClass="height-input-custom uf-filter-op" appendTo="body">
+            </p-select>
+
+            <!-- Valor inline (no range / isnull / in) -->
+            @if (!isNullOp(fRow.op) && !isRangeOp(fRow.op) && !isInOp(fRow.op)) {
+            <ng-container [ngSwitch]="fType">
+              <input *ngSwitchCase="'text'" pInputText [formControl]="$any(getControl('fv_' + col.field))"
+                [disabled]="!fRow.active" placeholder="Valor" class="height-input-custom uf-filter-val" />
               <p-inputNumber *ngSwitchCase="'numeric'" [formControl]="$any(getControl('fv_' + col.field))"
-                [disabled]="!getRow(col.field).active"
-                [placeholder]="isInOp(getRow(col.field).op) ? 'Ej: 1, 5, 10' : 'Valor'" styleClass="w-full"
+                [disabled]="!fRow.active" placeholder="Valor" styleClass="height-input-custom uf-filter-val"
                 [useGrouping]="false" />
-
-              <!-- ── Fecha ── -->
               <p-datepicker *ngSwitchCase="'datetime'" [formControl]="$any(getControl('fv_' + col.field))"
-                [disabled]="!getRow(col.field).active" appendTo="body" styleClass="w-full" />
-
-              <!-- ── Booleano ── -->
+                [disabled]="!fRow.active" appendTo="body" styleClass="height-input-custom uf-filter-val" />
               <p-select *ngSwitchCase="'boolean'" [formControl]="$any(getControl('fv_' + col.field))"
-                [disabled]="!getRow(col.field).active" [options]="booleanOptions" optionLabel="name" optionValue="id"
-                [showClear]="true" appendTo="body" styleClass="w-full" />
-
-              <!-- ── FK / relación ── -->
-              <ng-container *ngSwitchCase="'fk'">
-
-                <!-- FK varios elementos (op = in): auto complete con búsqueda remota → chips -->
-                <ng-container *ngIf="isInOp(getRow(col.field).op)">
-                  <p-autoComplete [formControl]="$any(getControl('fv_' + col.field))"
-                    [disabled]="!getRow(col.field).active" [multiple]="true" [suggestions]="getFkSuggestions(col.field)"
-                    (completeMethod)="completeFkMethod($event, col)" [optionLabel]="getOptionLabel(col)" [minLength]="0"
-                    [forceSelection]="true" [addOnBlur]="false" [addOnTab]="false"
-                    placeholder="Escriba {{col.data_type ? 5 : 1}} caract. para buscar..." appendTo="body"
-                    styleClass="w-full" />
-                  <small *ngIf="getFkHint(col.field)" class="text-color-secondary text-xs pl-1">
-                    <i class="pi pi-info-circle mr-1"></i>{{ getFkHint(col.field) }}
-                  </small>
-                </ng-container>
-
-                <!-- FK único (op = exact u otro): auto complete single con búsqueda remota -->
-                <ng-container *ngIf="!isInOp(getRow(col.field).op)">
-                  <p-autoComplete [formControl]="$any(getControl('fv_' + col.field))"
-                    [disabled]="!getRow(col.field).active" [multiple]="false"
-                    [suggestions]="getFkSuggestions(col.field)" (completeMethod)="completeFkMethod($event, col)"
-                    [optionLabel]="getOptionLabel(col)" [minLength]="0" [forceSelection]="true"
-                    placeholder="Escriba {{col.data_type ? 5 : 1}} caract. para buscar..." appendTo="body"
-                    styleClass="w-full" />
-                  <small *ngIf="getFkHint(col.field)" class="text-color-secondary text-xs pl-1">
-                    <i class="pi pi-info-circle mr-1"></i>{{ getFkHint(col.field) }}
-                  </small>
-                </ng-container>
-
-              </ng-container>
-
+                [disabled]="!fRow.active" [options]="booleanOptions" optionLabel="name" optionValue="id"
+                [showClear]="true" appendTo="body" styleClass="height-input-custom uf-filter-val" />
+              <p-autoComplete *ngSwitchCase="'fk'" [formControl]="$any(getControl('fv_' + col.field))"
+                [disabled]="!fRow.active" [multiple]="false" [suggestions]="getFkSuggestions(col.field)"
+                (completeMethod)="completeFkMethod($event, col)" [optionLabel]="getOptionLabel(col)" [minLength]="0"
+                [forceSelection]="true" placeholder="Buscar..." appendTo="body"
+                styleClass="height-input-custom uf-filter-val" />
             </ng-container>
-          </ng-container>
+            }
 
-        </div><!-- /value input -->
+            <!-- isnull info inline -->
+            <span *ngIf="isNullOp(fRow.op)" class="text-xs text-color-secondary">sin valor</span>
 
-        <p-divider *ngIf="!last" styleClass="my-1"></p-divider>
-      </div><!-- /forEach col -->
+            <!-- Reset filtro -->
+            <p-button *ngIf="fRow.active" icon="pi pi-times" severity="danger" [text]="true" size="small"
+              pTooltip="Limpiar filtro" tooltipPosition="top" (onClick)="resetFilter(col.field)"
+              styleClass="uf-icon-toggle height-input-custom">
+            </p-button>
+          </div>
 
-      <!-- ─ Acciones globales ─ -->
-      <div *ngIf="filterableCols().length > 0"
+          <!-- Extras del filtro (desborde: sólo rangos, chips, presets) -->
+
+          <!-- FK hint -->
+          <small *ngIf="fRow.active && getFkHint(col.field)" class="text-color-secondary text-xs pl-5 block mt-1">
+            <i class="pi pi-info-circle mr-1"></i>{{ getFkHint(col.field) }}
+          </small>
+
+          <!-- Chips texto (op = in) -->
+          <div *ngIf="isInOp(fRow.op) && fType === 'text'" class="pt-1 pl-5">
+            <p-autoComplete [formControl]="$any(getControl('fv_' + col.field))" [disabled]="!fRow.active"
+              [multiple]="true" [typeahead]="false" [addOnBlur]="true" [addOnTab]="true"
+              placeholder="Escribir y presionar Enter..." styleClass="w-full" />
+          </div>
+
+          <!-- FK lista (op = in) -->
+          <div *ngIf="isInOp(fRow.op) && fType === 'fk'" class="pt-1 pl-5">
+            <p-autoComplete [formControl]="$any(getControl('fv_' + col.field))" [disabled]="!fRow.active"
+              [multiple]="true" [suggestions]="getFkSuggestions(col.field)"
+              (completeMethod)="completeFkMethod($event, col)" [optionLabel]="getOptionLabel(col)" [minLength]="0"
+              [forceSelection]="true" [addOnBlur]="false" [addOnTab]="false"
+              placeholder="Escriba {{ col.data_type ? 5 : 1 }} caract. para buscar..." appendTo="body"
+              styleClass="w-full" />
+            <small *ngIf="getFkHint(col.field)" class="text-color-secondary text-xs pl-1">
+              <i class="pi pi-info-circle mr-1"></i>{{ getFkHint(col.field) }}
+            </small>
+          </div>
+
+          <!-- Numérico lista (op = in) -->
+          <div *ngIf="isInOp(fRow.op) && fType === 'numeric'" class="pt-1 pl-5">
+            <p-inputNumber [formControl]="$any(getControl('fv_' + col.field))" [disabled]="!fRow.active"
+              placeholder="Ej: 1, 5, 10" styleClass="w-full" [useGrouping]="false" />
+          </div>
+
+          <!-- Rango -->
+          <div *ngIf="isRangeOp(fRow.op) && fType !== 'boolean'"
+            class="flex gap-2 align-items-center flex-wrap pt-1 pl-5">
+            <ng-container [ngSwitch]="fType">
+              <p-inputNumber *ngSwitchCase="'numeric'" [formControl]="$any(getControl('fv_' + col.field))"
+                placeholder="Desde" styleClass="w-36" [useGrouping]="false" />
+              <span *ngSwitchCase="'numeric'" class="text-color-secondary text-xs font-bold">→</span>
+              <p-inputNumber *ngSwitchCase="'numeric'" [formControl]="$any(getControl('fv_' + col.field + '_2'))"
+                placeholder="Hasta" styleClass="w-36" [useGrouping]="false" />
+              <p-datepicker *ngSwitchCase="'datetime'" [formControl]="$any(getControl('fv_' + col.field))"
+                appendTo="body" placeholder="Desde" styleClass="w-40" />
+              <span *ngSwitchCase="'datetime'" class="text-color-secondary text-xs font-bold">→</span>
+              <p-datepicker *ngSwitchCase="'datetime'" [formControl]="$any(getControl('fv_' + col.field + '_2'))"
+                appendTo="body" placeholder="Hasta" styleClass="w-40" />
+            </ng-container>
+          </div>
+
+          <!-- Presets de fecha -->
+          <div *ngIf="fType === 'datetime'" class="flex gap-1 flex-wrap pt-1 pl-5">
+            <p-button label="Hoy" severity="secondary" [outlined]="true" size="small" [disabled]="!fRow.active"
+              (onClick)="applyRelativePreset(col.field, 'day')"></p-button>
+            <p-button label="Semana" severity="secondary" [outlined]="true" size="small" [disabled]="!fRow.active"
+              (onClick)="applyRelativePreset(col.field, 'week')"></p-button>
+            <p-button label="Mes" severity="secondary" [outlined]="true" size="small" [disabled]="!fRow.active"
+              (onClick)="applyRelativePreset(col.field, 'month')"></p-button>
+            <p-button label="Año" severity="secondary" [outlined]="true" size="small" [disabled]="!fRow.active"
+              (onClick)="applyRelativePreset(col.field, 'year')"></p-button>
+          </div>
+          }
+
+          <p-divider *ngIf="!last" styleClass="my-1 mt-2"></p-divider>
+        </div><!-- /uf-row -->
+        }
+
+      </div><!-- /cdkDropList -->
+
+      <!-- Acciones globales -->
+      <div *ngIf="unifiedRows().length > 0"
         class="flex justify-content-between align-items-center mt-3 gap-2 flex-wrap">
         <p-button label="Limpiar filtros" icon="pi pi-filter-slash" severity="secondary" [outlined]="true" size="small"
           (onClick)="resetAllFilters()">
         </p-button>
-
-        <!-- <small *ngIf="filterUrl()" class="text-color-secondary text-xs break-all filter-url-preview">
-          {{ filterUrl() }}
-        </small> -->
+        <p-button label="Vista previa" icon="pi pi-eye" severity="secondary" [outlined]="true" size="small"
+          (onClick)="openPreview()">
+        </p-button>
       </div>
 
     </p-accordion-panel>
@@ -199,5 +291,41 @@
       </p-button>
     </div>
   </ng-template>
+
+</p-dialog>
+
+<!-- ══ Dialog: Vista previa del formulario ══ -->
+<p-dialog [visible]="previewVisible()" (visibleChange)="previewVisible.set($event)" header="Vista previa del formulario"
+  [modal]="true" [resizable]="true" [maximizable]="true" styleClass="preview-dialog" appendTo="body">
+
+  <p class="text-xs text-color-secondary mb-3">
+    <i class="pi pi-info-circle mr-1"></i>
+    Arrastra las celdas para reordenar. Usa <strong>–</strong> / <strong>+</strong> para ajustar el ancho (columnas de
+    12).
+    Los cambios se aplican al guardar.
+  </p>
+
+  <div cdkDropList (cdkDropListDropped)="onUnifiedDrop($event)" class="preview-grid">
+    @for (row of unifiedRows(); track row.field; let i = $index) {
+    <div cdkDrag class="preview-cell" [class.preview-cell-active]="row.inGrid && row.gridActive"
+      [class.preview-cell-inactive]="!row.inGrid || !row.gridActive"
+      [style.grid-column]="(row.inGrid && row.gridActive) ? ('span ' + row.gridSpan) : 'span 1'"
+      [pTooltip]="row.inGrid && row.gridActive ? 'Campo: ' + row.field : row.field + ' (oculto)'" tooltipPosition="top">
+      <div *cdkDragPlaceholder class="preview-cell-placeholder"></div>
+      <div class="preview-cell-label">{{ row.colsCfg.label || row.header }}</div>
+      @if (row.inGrid && row.gridActive) {
+      <div class="preview-cell-controls">
+        <p-button icon="pi pi-minus" size="small" [text]="true" severity="secondary" pTooltip="Reducir ancho escritorio"
+          tooltipPosition="top" (onClick)="setUnifiedSpan(i, row.gridSpan - 1, 'gridSpan')">
+        </p-button>
+        <span class="preview-cell-span">{{ row.gridSpan }}/12</span>
+        <p-button icon="pi pi-plus" size="small" [text]="true" severity="secondary" pTooltip="Ampliar ancho escritorio"
+          tooltipPosition="top" (onClick)="setUnifiedSpan(i, row.gridSpan + 1, 'gridSpan')">
+        </p-button>
+      </div>
+      }
+    </div>
+    }
+  </div>
 
 </p-dialog>

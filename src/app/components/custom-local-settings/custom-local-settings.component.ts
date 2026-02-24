@@ -7,6 +7,7 @@ import {
   FormControl, FormGroup, UntypedFormGroup,
   FormsModule, ReactiveFormsModule
 } from '@angular/forms';
+import { CdkDragDrop, DragDropModule, moveItemInArray } from '@angular/cdk/drag-drop';
 
 import { AccordionModule } from 'primeng/accordion';
 import { AutoCompleteModule } from 'primeng/autocomplete';
@@ -22,6 +23,7 @@ import { MultiSelectModule } from 'primeng/multiselect';
 import { SelectModule } from 'primeng/select';
 import { TagModule } from 'primeng/tag';
 import { TooltipModule } from 'primeng/tooltip';
+import { ToggleButtonModule } from 'primeng/togglebutton';
 import { CRUDService } from '../../utils/services/crud.service';
 import { GeneralService } from '../../utils/services/general.service';
 import { MessageService } from '../services/message.service';
@@ -37,6 +39,32 @@ export interface FilterRow {
 
 interface OpOption { label: string; value: string; }
 
+/** Config de columna de tabla (fields[field].cols) */
+export interface ColsCfgData {
+  label: string;        // cabecera de la columna
+  sortable: boolean;    // la columna permite ordenar
+  locked: boolean;      // la columna está bloqueada
+  hideMobile: boolean;  // ocultar en móvil (cols.hide_mobile)
+}
+
+/** Fila unificada: agrupa tabla + formulario + filtro por campo */
+export interface UnifiedFieldRow {
+  field: string;
+  header: string;
+  hasFilter: boolean;    // el campo tiene config de filtro
+  inCols: boolean;       // el campo aparece en cols[] (tabla)
+  colActive: boolean;    // visible en la tabla
+  inGrid: boolean;       // el campo aparece en draw.general.grid (formulario)
+  gridActive: boolean;   // visible en el formulario
+  gridSpan: number;      // col-span-N (escritorio, 1–12)
+  gridSpanMd: number;    // md:col-span-N (móvil/tablet, 1–12)
+  colsCfg: ColsCfgData;  // config de la columna en la tabla (fields[field].cols)
+  // ─ campos de fields[field] ─
+  fieldHide: boolean;     // fields[].hide
+  fieldRequired: boolean; // fields[].required
+  fieldReadonly: boolean; // fields[].readonly
+  fieldPlaceholder: string; // fields[].placeholder
+}
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 /** Tipos de campo que no admiten filtros (se omiten del panel) */
@@ -47,11 +75,15 @@ const FK_MIN_CHARS = 5;
 
 /** Mapeo col.type → FilterFieldType */
 function colTypeToFilterType(colType: string): FilterFieldType {
+
+  //faltan tambine existen los campos table, button, document, signature, emails-chips, 
+  // code - aunque es un input-text trae muchos campos que no son de input-text
+
   switch (colType) {
     case 'input-text':
     case 'textarea':
-    case 'emails-chips':
-      return 'text';
+    //case 'emails-chips':
+    //  return 'text';
     case 'input-number':
       return 'numeric';
     case 'date':
@@ -118,6 +150,8 @@ const DEFAULT_OPS: Record<FilterFieldType, string[]> = {
     SelectModule,
     TagModule,
     TooltipModule,
+    ToggleButtonModule,
+    DragDropModule,
   ],
   templateUrl: './custom-local-settings.component.html',
   styleUrl: './custom-local-settings.component.scss',
@@ -148,6 +182,12 @@ export class CustomLocalSettingsComponent implements OnChanges, OnDestroy {
 
   /** Mensaje de ayuda por campo FK (ej: "Escriba al menos 5 caracteres") */
   fkSearchHintSignal = signal<Record<string, string>>({});
+
+  /** Lista unificada arrastrable: un elemento por campo, con estado de tabla, formulario y filtro */
+  unifiedRows = signal<UnifiedFieldRow[]>([]);
+
+  /** Controla la visibilidad del diálogo de vista previa del formulario */
+  previewVisible = signal<boolean>(false);
 
   /** FormGroup con controles fv_{field} y fv_{field}_2 */
   filterValuesFormGroup = new UntypedFormGroup({});
@@ -235,6 +275,7 @@ export class CustomLocalSettingsComponent implements OnChanges, OnDestroy {
     if (changes['field']) {
       this.fieldSignal.set(changes['field'].currentValue);
       this._initFilterState();
+      this._initUnifiedRows();
     }
     if (changes['formGroup']) this.formGroupSignal.set(changes['formGroup'].currentValue);
   }
@@ -353,6 +394,11 @@ export class CustomLocalSettingsComponent implements OnChanges, OnDestroy {
     return (this.filterValuesFormGroup.get(name) ?? new FormControl(null)) as FormControl<any>;
   }
 
+  /** Devuelve la definición filtrable de un campo (undefined si no es filtrable) */
+  getFilterCol(field: string): any | undefined {
+    return this.filterableCols().find(c => c.field === field);
+  }
+
   /** Opciones cargadas para un campo FK */
   getDropdownOptions(field: string): any[] {
     return this.dropdownOptionsSignal()[field] ?? [];
@@ -366,6 +412,52 @@ export class CustomLocalSettingsComponent implements OnChanges, OnDestroy {
 
   getOptionValue(col: any): string {
     return col?.filter?.option_value ?? col?.option_value ?? 'id';
+  }
+
+  // ─── Drag-drop unificado
+
+  onUnifiedDrop(event: CdkDragDrop<UnifiedFieldRow[]>): void {
+    const arr = [...this.unifiedRows()];
+    moveItemInArray(arr, event.previousIndex, event.currentIndex);
+    this.unifiedRows.set(arr);
+  }
+
+  // ─── Vista previa del formulario ──────────────────────────────────────────
+
+  openPreview(): void { this.previewVisible.set(true); }
+  closePreview(): void { this.previewVisible.set(false); }
+
+  toggleUnifiedColActive(i: number, colActive: boolean): void {
+    const arr = [...this.unifiedRows()];
+    // Si se activa un campo que no estaba en cols, marcarlo como parte de cols
+    arr[i] = { ...arr[i], colActive, inCols: colActive ? true : arr[i].inCols };
+    this.unifiedRows.set(arr);
+  }
+
+  toggleUnifiedGridActive(i: number, gridActive: boolean): void {
+    const arr = [...this.unifiedRows()];
+    // Si se activa un campo que no estaba en grid, marcarlo como parte del grid
+    arr[i] = { ...arr[i], gridActive, inGrid: gridActive ? true : arr[i].inGrid };
+    this.unifiedRows.set(arr);
+  }
+
+  setUnifiedSpan(i: number, val: number, key: 'gridSpan' | 'gridSpanMd'): void {
+    const clamped = Math.min(12, Math.max(1, Math.round(val ?? 1)));
+    const arr = [...this.unifiedRows()];
+    arr[i] = { ...arr[i], [key]: clamped };
+    this.unifiedRows.set(arr);
+  }
+
+  setColsCfg(i: number, key: keyof ColsCfgData, val: any): void {
+    const arr = [...this.unifiedRows()];
+    arr[i] = { ...arr[i], colsCfg: { ...arr[i].colsCfg, [key]: val } };
+    this.unifiedRows.set(arr);
+  }
+
+  setFieldProp(i: number, key: 'fieldHide' | 'fieldRequired' | 'fieldReadonly' | 'fieldPlaceholder', val: any): void {
+    const arr = [...this.unifiedRows()];
+    arr[i] = { ...arr[i], [key]: val };
+    this.unifiedRows.set(arr);
   }
 
   // ─── User interactions ────────────────────────────────────────────────────
@@ -460,20 +552,22 @@ export class CustomLocalSettingsComponent implements OnChanges, OnDestroy {
    */
   private _buildModifiedField(): any {
     const rawFields = this.fieldSignal()?.fields ?? {};
-    const fieldsOut: Record<string, any> = {};
 
+    // Paso 1: copiar todos los campos originales
+    const rawEntries: [string, any][] = Array.isArray(rawFields)
+      ? (rawFields as any[]).map((f: any) => [f?.field ?? f?.name, f])
+      : Object.entries(rawFields as Record<string, any>);
+    const fieldsOut: Record<string, any> = {};
+    for (const [k, v] of rawEntries) fieldsOut[k] = { ...(v ?? {}) };
+
+    // Paso 2: aplicar cambios de filtro (solo campos filtrables)
     for (const col of this.filterableCols()) {
       const row = this.getRow(col.field);
       const val = this.filterValuesFormGroup.get(`fv_${col.field}`)?.value;
-
-      const originalCfg: any = Array.isArray(rawFields)
-        ? (rawFields.find((f: any) => (f?.field ?? f?.name) === col.field) ?? {})
-        : (rawFields[col.field] ?? {});
-
       fieldsOut[col.field] = {
-        ...originalCfg,
+        ...(fieldsOut[col.field] ?? {}),
         filter: {
-          ...(originalCfg?.filter ?? {}),
+          ...((fieldsOut[col.field] ?? {})?.filter ?? {}),
           active: row.active,
           default: row.op,
           default_value: val ?? null,
@@ -481,9 +575,71 @@ export class CustomLocalSettingsComponent implements OnChanges, OnDestroy {
       };
     }
 
-    // Retorna el objeto field completo con fields actualizado; el resto de propiedades
-    // (general, fields_prefixes, draw, cols, app) vienen del servidor sin modificar.
-    return { ...(this.fieldSignal() ?? {}), fields: fieldsOut };
+    // Paso 3: aplicar cambios de cols config + fields props para todos los campos
+    for (const urow of this.unifiedRows()) {
+      if (!fieldsOut[urow.field]) continue;
+      fieldsOut[urow.field] = {
+        ...fieldsOut[urow.field],
+        // ─ fields-level props ─
+        hide: urow.fieldHide,
+        required: urow.fieldRequired,
+        readonly: urow.fieldReadonly,
+        placeholder: urow.fieldPlaceholder || undefined,
+        // ─ cols config ─
+        cols: {
+          ...(fieldsOut[urow.field]?.cols ?? {}),
+          hide: !urow.colActive,
+          hide_mobile: urow.colsCfg.hideMobile,
+          label: urow.colsCfg.label,
+          sortable: urow.colsCfg.sortable,
+          locked: urow.colsCfg.locked,
+        },
+      };
+    }
+
+    // ─ Reconstruir cols con nuevo orden y visibilidad ─
+    const rawColsArr: any[] = this.fieldSignal()?.cols ?? [];
+    const colsOrigMap: Record<string, any> = {};
+    for (const c of rawColsArr) colsOrigMap[c?.field ?? ''] = c;
+    const colsOut = this.unifiedRows()
+      .filter(r => r.inCols && r.colActive)
+      .map(r => ({
+        ...(colsOrigMap[r.field] ?? { field: r.field }),
+        header: r.colsCfg.label || r.header,
+      }));
+
+    // ─ Reconstruir draw.general.grid con nuevo orden, visibilidad y spans ─
+    const rawGrid: Record<string, any> = this.fieldSignal()?.draw?.general?.grid ?? {};
+    const gridOrigMap: Record<string, any> = {};
+    for (const cfg of Object.values(rawGrid)) {
+      if (cfg?.field) gridOrigMap[cfg.field] = cfg;
+    }
+    const gridOut: Record<string, any> = {};
+    let gridKey = 1;
+    this.unifiedRows()
+      .filter(r => r.inGrid)
+      .forEach(row => {
+        gridOut[String(gridKey++)] = {
+          ...(gridOrigMap[row.field] ?? {}),
+          field: row.field,
+          hide: !row.gridActive,
+          class: `col-span-${row.gridSpan}`,
+          class_md: `md:col-span-${row.gridSpanMd}`,
+        };
+      });
+
+    return {
+      ...(this.fieldSignal() ?? {}),
+      fields: fieldsOut,
+      cols: colsOut,
+      draw: {
+        ...(this.fieldSignal()?.draw ?? {}),
+        general: {
+          ...(this.fieldSignal()?.draw?.general ?? {}),
+          grid: gridOut,
+        },
+      },
+    };
   }
 
   private _findCol(field: string): any | undefined {
@@ -542,6 +698,87 @@ export class CustomLocalSettingsComponent implements OnChanges, OnDestroy {
   }
 
   /** Carga opciones locales para dropdown-choice. Los FK remotos se buscan en completeFkMethod. */
+  private _initUnifiedRows(): void {
+    const rawCols: any[] = this.fieldSignal()?.cols ?? [];
+    const rawGrid: Record<string, any> = this.fieldSignal()?.draw?.general?.grid ?? {};
+    // Si el servidor no envía el grid, asumimos que todos los campos están en el formulario con defaults
+    const gridIsEmpty = Object.keys(rawGrid).length === 0;
+
+    // Map: field → col config (table)
+    const colsMap = new Map<string, any>();
+    rawCols.forEach(c => { if (c?.field) colsMap.set(c.field, c); });
+
+    // Map: field → grid config (form), ordenado por clave numérica
+    const gridMap = new Map<string, any>();
+    Object.entries(rawGrid)
+      .sort(([a], [b]) => Number(a) - Number(b))
+      .forEach(([, cfg]: [string, any]) => { if (cfg?.field) gridMap.set(cfg.field, cfg); });
+
+    // Conjunto de campos con config de filtro
+    const filterCols = this.filterableCols();
+    const filterableSet = new Set(filterCols.map(c => c.field));
+
+    // Ordenar: primero los de cols (orden de tabla), luego grid-only, luego filter-only
+    const seen = new Set<string>();
+    const ordered: Array<{ field: string; header: string }> = [];
+
+    rawCols.forEach(c => {
+      if (c?.field && !seen.has(c.field)) {
+        seen.add(c.field);
+        ordered.push({ field: c.field, header: c.header ?? c.field });
+      }
+    });
+    gridMap.forEach((cfg, f) => {
+      if (!seen.has(f)) {
+        seen.add(f);
+        ordered.push({ field: f, header: cfg?.label ?? f });
+      }
+    });
+    filterCols.forEach(col => {
+      if (!seen.has(col.field)) {
+        seen.add(col.field);
+        ordered.push({ field: col.field, header: col.header });
+      }
+    });
+
+    const rows: UnifiedFieldRow[] = ordered.map(({ field, header }) => {
+      const gridCfg = gridMap.get(field);
+      const spanMatch = (gridCfg?.class ?? 'col-span-6').match(/col-span-(\d+)/);
+      const spanMdMatch = (gridCfg?.class_md ?? 'md:col-span-6').match(/col-span-(\d+)/);
+
+      // Leer fields[field].cols para inicializar la config de columna
+      const rawFields = this.fieldSignal()?.fields ?? {};
+      const rawFieldCfg: any = Array.isArray(rawFields)
+        ? (rawFields as any[]).find((f: any) => (f?.field ?? f?.name) === field)
+        : (rawFields as Record<string, any>)[field];
+      const rawColsCfg = rawFieldCfg?.cols ?? {};
+
+      return {
+        field,
+        header,
+        hasFilter: filterableSet.has(field),
+        inCols: colsMap.has(field),
+        colActive: colsMap.has(field),
+        inGrid: gridIsEmpty ? filterableSet.has(field) : gridMap.has(field),
+        gridActive: gridCfg ? gridCfg.hide !== true : true,
+        gridSpan: spanMatch ? Math.min(12, Math.max(1, Number(spanMatch[1]))) : 6,
+        gridSpanMd: spanMdMatch ? Math.min(12, Math.max(1, Number(spanMdMatch[1]))) : 6,
+        colsCfg: {
+          label: rawColsCfg?.label ?? header,
+          sortable: rawColsCfg?.sortable !== false,
+          locked: rawColsCfg?.locked === true,
+          hideMobile: rawColsCfg?.hide_mobile === true,
+        },
+        fieldHide: rawFieldCfg?.hide === true,
+        fieldRequired: rawFieldCfg?.required === true,
+        fieldReadonly: rawFieldCfg?.readonly === true,
+        fieldPlaceholder: rawFieldCfg?.placeholder ?? '',
+      };
+    });
+
+    this.unifiedRows.set(rows);
+  }
+
   private _loadAllDropdownOptions(cols: any[]): void {
     for (const col of cols) {
       const type = this.getColFilterType(col);
