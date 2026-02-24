@@ -37,12 +37,13 @@
   </ng-template>
   <form [formGroup]="form()[$any(typeDefault)]" *ngIf="form()[$any(typeDefault)]">
 
-    <p-tabs [scrollable]="true" value="0">
+    <!-- tabVisible() -->
+    <p-tabs [scrollable]="true" value="0" (valueChange)="onTabChange($event)">
 
       <p-tablist>
         <p-tab value="0">General</p-tab>
         <p-tab value="1">Clasificadores</p-tab>
-        <!-- <p-tab value="2">Responsable</p-tab> -->
+        <p-tab value="2">Notas</p-tab>
         <p-tab value="3">Auditoría</p-tab>
         <p-tab value="4">Documentos</p-tab>
       </p-tablist>
@@ -83,10 +84,13 @@
           <app-custom-audit [cf]="customField()[typeDefault]" [selected]="selected()" />
         </p-tabpanel>
 
-        <!-- <p-tabpanel value="4">
-          <app-custom-documents [selected]="selected()" [type]="'asset-document'" [app]="'assets/asset-document'"
-            [filter]="'asset'" (newAction)="openNewSecundary('asset-document-asset')" />
-        </p-tabpanel> -->
+        <p-tabpanel value="4">
+          <app-custom-documents [selected]="selected()" [type]="'maintenance-document'"
+            [app]="'assets/maintenance-document'" [filter]="'maintenance'"
+            (newAction)="openNewSecundary({pos:'maintenance-document-maintenance'})" />
+        </p-tabpanel>
+
+
 
       </p-tabpanels>
     </p-tabs>
@@ -96,6 +100,7 @@
   <ng-template #footer>
     <div class="p-dialog-footer">
       <app-custom-button-footer (saveAction)="save({pos: typeDefault, is_file: true})"
+        [config]="configGeneral()[$any(typeDefault)]"
         (saveNotHideAction)="save({pos: typeDefault, hide:false, is_file: true})"
         (resetFormAction)="resetFormDialog()" />
     </div>

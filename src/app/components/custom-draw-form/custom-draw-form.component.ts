@@ -40,8 +40,8 @@ import { CustomButtonCrudComponent } from '../custom-button-crud/custom-button-c
 import { MessageService } from '../services/message.service';
 import { AuthService } from '@/auth/services/auth.service';
 import { Preferences } from '@capacitor/preferences';
-
 import { Pipe, PipeTransform } from '@angular/core';
+
 @Pipe({ name: 'joinOrSelf', standalone: true, pure: true })
 export class JoinOrSelfPipe implements PipeTransform {
 
@@ -77,7 +77,7 @@ export class JoinOrSelfPipe implements PipeTransform {
     CommonModule,
     FormsModule,
     ReactiveFormsModule,
-    //JoinOrSelfPipe,
+    JoinOrSelfPipe,
 
     AutoCompleteModule,
     MultiSelectModule,
@@ -112,7 +112,7 @@ export class JoinOrSelfPipe implements PipeTransform {
   templateUrl: './custom-draw-form.component.html',
   styleUrl: './custom-draw-form.component.scss',
   standalone: true,
-  changeDetection: ChangeDetectionStrategy.OnPush,
+  //changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class CustomDrawFormComponent implements OnDestroy {
 
@@ -175,7 +175,7 @@ export class CustomDrawFormComponent implements OnDestroy {
   optionLabelSignal = signal<any>('label');
   showIconSignal = signal<boolean>(true);
 
-  dropdownOptionsSignal = signal<any>([]);
+  dropdownOptionsSignal = signal<any>({});
 
   // Signal para guardar los separators calculados de emails-chips
   emailSeparatorsSignal = signal<{ [key: string]: string | RegExp }>({ default: /[,;]/ });
@@ -217,16 +217,6 @@ export class CustomDrawFormComponent implements OnDestroy {
           hasData: allData.length > 0,
           hasHistory: historyData.length > 0
         };
-
-        // 🔍 DEBUG: Ver qué datos se están procesando
-        /*console.log('📊 signatureDataSignal procesando:', {
-          fieldName,
-          allDataLength: allData.length,
-          historyLength: historyData.length,
-          hasHistory: historyData.length > 0,
-          allData,
-          historyData
-        });*/
       }
     });
 
@@ -249,7 +239,6 @@ export class CustomDrawFormComponent implements OnDestroy {
       }
       return element.options;
     }
-
 
     //si ya existe datos para ese dropdown no se vuelve a consultar
     if (this.sharedS.data[element.field] && !force) {
@@ -288,7 +277,10 @@ export class CustomDrawFormComponent implements OnDestroy {
 
     const dropdownOptions = /*await*/ this.dataDropdownExists(element, force);
     if (dropdownOptions && !force) {
-      this.dropdownOptionsSignal()[element.field] = dropdownOptions;
+      this.dropdownOptionsSignal.set({
+        ...this.dropdownOptionsSignal(),
+        [element.field]: dropdownOptions
+      });
       return;
     }
 
@@ -298,7 +290,6 @@ export class CustomDrawFormComponent implements OnDestroy {
     const app = this.crudS.appType[element.data_type]?.app;
     const type = this.crudS.appType[element.data_type]?.type;
     if (app && type) {
-
 
       this.messageS.showBlocked(true);
       this.crudS.getObject({ app, type }).subscribe(async (data: any) => {
@@ -320,7 +311,10 @@ export class CustomDrawFormComponent implements OnDestroy {
         }
 
         this.sharedS.drawDropdown[element.field] = dataDropdown;
-        this.dropdownOptionsSignal()[element.field] = dataDropdown;
+        this.dropdownOptionsSignal.set({
+          ...this.dropdownOptionsSignal(),
+          [element.field]: dataDropdown
+        });
         if (!force && this.isMobileCacheEnabled(element)) {
           await this.writeMobileCache(element, dataDropdown);
         }
@@ -931,20 +925,7 @@ export class CustomDrawFormComponent implements OnDestroy {
     const field = object.field; //se obtiene el campo del objeto
     const currentValue = this.formGroupSignal()?.get(field)?.value;
     const formValues = this.formGroupSignal()?.value;
-
-    // Asignar las opciones del dropdown al objeto
-    /*if (this.dropdownOptionsSignal()[field]) {
-      object.choices = this.dropdownOptionsSignal()[field];
-      object.options = this.dropdownOptionsSignal()[field];
-    }*/
-    console.log('inicio onChangeDropdown');
-    const eventValue = event.value; // ID/valor seleccionado del dropdown
-
-    // Asignar las opciones del dropdown al objeto
-    /*if (this.dropdownOptionsSignal()[field]) {
-      object.choices = this.dropdownOptionsSignal()[field];
-      object.options = this.dropdownOptionsSignal()[field];
-    }*/
+    //const eventValue = event.value; // ID/valor seleccionado del dropdown
 
     //asigna el valor del campo object_parent_form_data_X al objeto completo
     if (field.startsWith('object_')) {
@@ -965,7 +946,6 @@ export class CustomDrawFormComponent implements OnDestroy {
           const fieldName = colConfig.field;
 
           if (!fieldName) {
-            console.warn('⚠️ cols_values: campo sin "field" especificado', colConfig);
             return;
           }
 
@@ -982,12 +962,12 @@ export class CustomDrawFormComponent implements OnDestroy {
           }
 
           // Log de campos requeridos faltantes para debugging
-          if (colConfig.required && !foundObject.hasOwnProperty(fieldName) && !colConfig.hasOwnProperty('default')) {
+          /*if (colConfig.required && !foundObject.hasOwnProperty(fieldName) && !colConfig.hasOwnProperty('default')) {
             console.warn(`⚠️ Campo requerido "${fieldName}" no encontrado en objeto y sin valor default`, {
               foundObject,
               colConfig
             });
-          }
+          }*/
         });
 
         currentValueObject = filteredObject;
@@ -1060,7 +1040,7 @@ export class CustomDrawFormComponent implements OnDestroy {
                 const conditionResults = conditions.map((condition: any) => {
                   // VALIDAR: field es OBLIGATORIO
                   if (!condition.field) {
-                    console.error('❌ ERROR: condition.field es obligatorio', { condition, fieldConfig: key });
+                    //console.error('❌ ERROR: condition.field es obligatorio', { condition, fieldConfig: key });
                     return false;
                   }
 
@@ -1450,17 +1430,6 @@ export class CustomDrawFormComponent implements OnDestroy {
                       const optionValue = filterGroup ? option[filterGroup] : option.id;
                       const compareValue = filterGroup ? conditionValue[filterGroup] : conditionValue;
 
-                      /*console.log('🔍 Evaluando filtro:', {
-                        option: option.name,
-                        optionValue,
-                        compareValue,
-                        operator,
-                        filterGroup,
-                        values,
-                        isParentField,
-                        conditionValue
-                      });*/
-
                       switch (operator) {
                         case 'equals':
                           // EQUALS: optionValue debe ser exactamente igual a compareValue
@@ -1573,34 +1542,24 @@ export class CustomDrawFormComponent implements OnDestroy {
                     filteredOptions = [filteredOptions[filteredOptions.length - 1]];
                   }
 
-                  /*console.log('✅ Opciones filtradas para campo ' + key + ':', {
-                    totalOriginal: options.length,
-                    filtradas: filteredOptions.length,
-                    opciones: filteredOptions.map((o: any) => o.name || o.id)
-                  });*/
-
                   // Asignar opciones filtradas
-                  this.dropdownOptionsSignal()[key] = filteredOptions;
+                  this.dropdownOptionsSignal.set({
+                    ...this.dropdownOptionsSignal(),
+                    [key]: filteredOptions
+                  });
                 } else {
                   //console.log('⚠️ Campo ' + key + ' sin filtro activo o inactivo');
                   // Si no hay filtro activo, limpiar opciones
-                  this.dropdownOptionsSignal()[key] = [];
+                  this.dropdownOptionsSignal.set({
+                    ...this.dropdownOptionsSignal(),
+                    [key]: []
+                  });
                 }
 
               } else if (fieldType === 'dynamic') {
                 // DYNAMIC: Cargar datos del servidor
                 const dataType = fieldConfig?.data_type;
                 const filterConfig = fieldConfig?.filter;
-
-                if (dataType && isActive) {
-                  // TODO: Implementar carga dinámica desde servidor
-                  /*console.log('🔄 Dynamic field to load from server:', {
-                    field: key,
-                    dataType,
-                    filterConfig,
-                    currentValue: currentDropdownOption
-                  });*/
-                }
               }
             }
           }
@@ -1608,7 +1567,7 @@ export class CustomDrawFormComponent implements OnDestroy {
       });
     }
 
-    console.log('fin onChangeDropdown');
+    console.log('fin onChangeDropdown', performance.now());
 
 
   }
@@ -1995,9 +1954,15 @@ export class CustomDrawFormComponent implements OnDestroy {
                     filteredOptions = [filteredOptions[filteredOptions.length - 1]];
                   }
 
-                  this.dropdownOptionsSignal()[key] = filteredOptions;
+                  this.dropdownOptionsSignal.set({
+                    ...this.dropdownOptionsSignal(),
+                    [key]: filteredOptions
+                  });
                 } else {
-                  this.dropdownOptionsSignal()[key] = [];
+                  this.dropdownOptionsSignal.set({
+                    ...this.dropdownOptionsSignal(),
+                    [key]: []
+                  });
                 }
               } else if (fieldType === 'dynamic') {
                 const dataType = fieldConfig?.data_type;

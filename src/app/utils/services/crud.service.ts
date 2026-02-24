@@ -189,7 +189,7 @@ export class CRUDService {
     }
   };
 
-  config_cols(module: string) {
+  configCols(module: string) {
     console.log(module,);
     console.log(this.authS.config[module]);
 
@@ -200,12 +200,70 @@ export class CRUDService {
     return this.authS.config[module]['draw'];
   }
 
-  config_general(module: string) {
+  configGeneral(module: string) {
     return this.authS.config[module]['general'];
   }
 
-  fields_form(module: string) {
+  fieldsForm(module: string) {
     return this.authS.config[module]['fields'];
+  }
+
+  /**
+   * Genera el string de parámetros de filtro a partir de un dict de fields.
+   * Recibe el objeto fields (de fieldsForm(pos) en crud.class o fieldSignal()?.fields
+   * en custom-local-settings) y devuelve una cadena tipo
+   * "filter[field]=value&filter[other.icontains]=q".
+   * Solo incluye campos con filter.active=true y default_value no nulo/vacío.
+   * Para FK: extrae el id usando filter.option_value (default 'id').
+   */
+  buildFilterString(fields: Record<string, any>): string {
+    const parts: string[] = [];
+    for (const [fieldName, cfg] of Object.entries(fields)) {
+      const filter = (cfg as any)?.filter ?? {};
+      if (!filter.active) continue;
+      const op: string = filter.default ?? 'exact';
+      const rawValue = filter.default_value;
+      if (rawValue === null || rawValue === undefined) continue;
+      const optVal: string = filter.option_value ?? 'id';
+
+      if (op === 'isnull') {
+        parts.push(`filter[${fieldName}.isnull]=true`);
+        continue;
+      }
+      if (op === 'in') {
+        let list: string;
+        if (Array.isArray(rawValue)) {
+          list = rawValue
+            .map((v: any) => (v !== null && typeof v === 'object' ? String(v[optVal] ?? '') : String(v)))
+            .filter(Boolean).join(',');
+        } else {
+          list = String(rawValue);
+        }
+        if (list) parts.push(`filter[${fieldName}.in]=${encodeURIComponent(list)}`);
+        continue;
+      }
+      if (op === 'range') {
+        // default_value es [v1, v2] para range
+        if (Array.isArray(rawValue) && rawValue.length === 2) {
+          if (rawValue[0]) parts.push(`filter[${fieldName}.after]=${encodeURIComponent(String(rawValue[0]))}`);
+          if (rawValue[1]) parts.push(`filter[${fieldName}.before]=${encodeURIComponent(String(rawValue[1]))}`);
+        }
+        continue;
+      }
+      // exact / icontains / etc.
+      let val: string;
+      if (rawValue !== null && typeof rawValue === 'object' && !Array.isArray(rawValue)) {
+        val = String(rawValue[optVal] ?? '');
+      } else {
+        val = String(rawValue);
+      }
+      if (!val) continue;
+      parts.push(op === 'exact'
+        ? `filter[${fieldName}]=${encodeURIComponent(val)}`
+        : `filter[${fieldName}.${op}]=${encodeURIComponent(val)}`
+      );
+    }
+    return parts.join('&');
   }
 
   /**
@@ -303,7 +361,7 @@ export class CRUDService {
    * @param type Opcional, tipo de recurso a consultar, si no se envia se toma la de this.type
    * @returns retorna los datos
   */
-  get(include: string = '', filter: string = '', sort: string = '', fields: string = '', limit: number = 250,
+  get(include: string = '', filter: string = '', sort: string = '', fields: string = '', limit: number = 0,
     app: string = '', type: string = '') {
 
     const query = this.query(include, filter, sort, fields, limit, type);
@@ -462,10 +520,10 @@ export class CRUDService {
    * @param filter Opcional, filtro para regresar datos,
    * @returns retorna el objeto editado
    */
-  edit({ formData = {}, id, include = '', fields = '', filter = '', type = '',
+  edit({ formData = {}, id = '', include = '', fields = '', filter = '', type = '',
     app = '', url = null, relationships = null }: {
       formData?: any;
-      id: string;
+      id?: string;
       include?: string;
       fields?: string;
       filter?: string;
@@ -476,7 +534,9 @@ export class CRUDService {
     }) {
 
     const query = this.query(include, filter, '', fields, 250, type);
-    const finalUrl = url ? url : `${this.baseUrl(app)}${id}/${query}`;
+
+    const final_slash = id ? '/' : ''; //practicamente es para settings/settings/me ya que lleva id
+    const finalUrl = url ? url : `${this.baseUrl(app)}${id}${final_slash}${query}`;
 
     /*if (files) {
       const headers = new HttpHeaders({ 'Content-Type': 'multipart/form-data' });

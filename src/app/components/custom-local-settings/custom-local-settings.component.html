@@ -1,76 +1,203 @@
-<!--si póngo [visible]="visibleSignal" la dialog no se cierra tengo que gacer en la funcion que se llama al cerrar-->
 <p-dialog [(visible)]="visible" styleClass="width-650px-custom min-height-document-custom"
   header="Configuración del módulo" (onHide)="onHide($event)">
-  <form [formGroup]="formGroup!" *ngIf="formGroup">
-    <div class="flex flex-wrap -mx-1 pt-3">
-      <div class="w-1/2 md:w-1/3 p-fluid">
+
+  <p-accordion [multiple]="true">
+
+    <!-- ══ Panel 1: Columnas visibles ══ -->
+    <p-accordion-panel header="Columnas visibles">
+      <form [formGroup]="formGroup!" *ngIf="formGroup" class="pt-2">
         <p-multiSelect [options]="fieldSignal()?.cols || []" formControlName="columns" placeholder="Campos a mostrar"
-          optionValue="field" optionLabel="header" selectedItemsLabel="{0} columnas seleccionadas"></p-multiSelect>
+          optionValue="field" optionLabel="header" selectedItemsLabel="{0} columnas seleccionadas" styleClass="w-full">
+        </p-multiSelect>
+      </form>
+    </p-accordion-panel>
+
+    <!-- ══ Panel 2: Filtros ══ -->
+    <p-accordion-panel>
+
+      <ng-template pTemplate="header">
+        <div class="flex align-items-center gap-2">
+          <span>Filtros</span>
+          <p-tag *ngIf="activeFilterCount() > 0" [value]="activeFilterCount().toString()" severity="info">
+          </p-tag>
+        </div>
+      </ng-template>
+
+      <!-- Sin columnas -->
+      <div *ngIf="filterableCols().length === 0" class="text-center text-color-secondary py-4">
+        <i class="pi pi-table text-2xl mb-2"></i>
+        <p class="text-sm">No hay columnas disponibles.</p>
       </div>
-    </div>
-  </form>
-  <!-- <div class="p-fluid p-formgrid p-grid">
 
+      <!-- ── Por columna ── -->
+      <div *ngFor="let col of filterableCols(); let last = last"
+        [class.filter-row-inactive]="!getRow(col.field).active">
 
+        <!-- ─ Fila de cabecera ─ -->
+        <div class="filter-row-header flex align-items-center gap-2 flex-wrap">
 
-    <div class="p-field w-full md:w-1/6">
-      <label for="formaPago">Forma de Pago</label>
-      <p-select id="formaPago" [options]="formasPago" optionLabel="label" optionValue="value"></p-select>
-    </div>
+          <!-- Checkbox activo -->
+          <p-checkbox [ngModel]="getRow(col.field).active" (ngModelChange)="toggleFilter(col.field, $event)"
+            [binary]="true" pTooltip="Activar filtro" tooltipPosition="top">
+          </p-checkbox>
 
+          <!-- Etiqueta de columna -->
+          <span class="font-semibold text-sm flex-1 min-w-0 overflow-hidden text-ellipsis whitespace-nowrap"
+            [title]="col.header">{{ col.header }}</span>
 
-    <div class="p-field w-full md:w-1/12">
-      <label for="moneda">Moneda</label>
-      <p-select id="moneda" [options]="monedas" optionLabel="label" optionValue="value"></p-select>
-    </div>
+          <!-- Selector de operador — siempre visible -->
+          <p-select [options]="getOpsOptions(col)" [ngModel]="getRow(col.field).op"
+            (ngModelChange)="setOp(col.field, $event)" [disabled]="!getRow(col.field).active" optionLabel="label"
+            optionValue="value" placeholder="Operador" styleClass="filter-op-select" appendTo="body">
+          </p-select>
 
+          <!-- Botón reset individual (solo cuando activo) -->
+          <p-button *ngIf="getRow(col.field).active" icon="pi pi-times" severity="danger" [text]="true" size="small"
+            pTooltip="Limpiar filtro" tooltipPosition="top" (onClick)="resetFilter(col.field)"
+            styleClass="shrink-0 p-0">
+          </p-button>
 
-    <div class="p-field w-full md:w-1/12">
-      <label for="tipoComprobante">Tipo Comprobante</label>
-      <p-select id="tipoComprobante" [options]="tipoComprobante" optionLabel="label" optionValue="value"></p-select>
-    </div>
+        </div><!-- /filter-row-header -->
 
-    <div class="p-field w-full md:w-1/12">
-      <label for="metodoPago">Método de Pago</label>
-      <p-select id="metodoPago" [options]="metodoPago" optionLabel="label" optionValue="value"></p-select>
-    </div>
+        <!-- ─ Presets de fecha — siempre visibles para datetime ─ -->
+        <div *ngIf="getColFilterType(col) === 'datetime'" class="pl-6 pt-1 pb-1 flex gap-1 flex-wrap">
+          <p-button label="Hoy" severity="secondary" [outlined]="true" size="small"
+            [disabled]="!getRow(col.field).active" (onClick)="applyRelativePreset(col.field, 'day')"></p-button>
+          <p-button label="Semana" severity="secondary" [outlined]="true" size="small"
+            [disabled]="!getRow(col.field).active" (onClick)="applyRelativePreset(col.field, 'week')"></p-button>
+          <p-button label="Mes" severity="secondary" [outlined]="true" size="small"
+            [disabled]="!getRow(col.field).active" (onClick)="applyRelativePreset(col.field, 'month')"></p-button>
+          <p-button label="Año" severity="secondary" [outlined]="true" size="small"
+            [disabled]="!getRow(col.field).active" (onClick)="applyRelativePreset(col.field, 'year')"></p-button>
+        </div>
 
-  </div> -->
+        <!-- ─ Aviso isnull ─ -->
+        <div *ngIf="isNullOp(getRow(col.field).op)" class="pl-6 pb-1 pt-1 text-sm text-color-secondary">
+          Filtra registros donde <strong>{{ col.header }}</strong> no tenga valor.
+        </div>
 
-  <!-- <div class="p-grid">
-    <div class="w-full md:w-1/2">
-      <h4>Emisor</h4>
-      <div class="p-field">
-        <label>RFC</label>
-        <input type="text" pInputText />
+        <!-- ─ Inputs de valor — SIEMPRE VISIBLES ─ -->
+        <div *ngIf="!isNullOp(getRow(col.field).op)" class="pl-6 pt-1 pb-2">
+
+          <!-- == RANGO == -->
+          <ng-container *ngIf="isRangeOp(getRow(col.field).op)">
+            <div class="flex gap-2 align-items-center flex-wrap">
+
+              <ng-container [ngSwitch]="getColFilterType(col)">
+
+                <!-- Numérico rango -->
+                <p-inputNumber *ngSwitchCase="'numeric'" [formControl]="$any(getControl('fv_' + col.field))"
+                  placeholder="Desde" styleClass="w-36" [useGrouping]="false" />
+                <span *ngSwitchCase="'numeric'" class="text-color-secondary text-xs font-bold">→</span>
+                <p-inputNumber *ngSwitchCase="'numeric'" [formControl]="$any(getControl('fv_' + col.field + '_2'))"
+                  placeholder="Hasta" styleClass="w-36" [useGrouping]="false" />
+
+                <!-- Fecha rango -->
+                <p-datepicker *ngSwitchCase="'datetime'" [formControl]="$any(getControl('fv_' + col.field))"
+                  appendTo="body" placeholder="Desde" styleClass="w-40" />
+                <span *ngSwitchCase="'datetime'" class="text-color-secondary text-xs font-bold">→</span>
+                <p-datepicker *ngSwitchCase="'datetime'" [formControl]="$any(getControl('fv_' + col.field + '_2'))"
+                  appendTo="body" placeholder="Hasta" styleClass="w-40" />
+
+              </ng-container>
+
+            </div>
+          </ng-container>
+
+          <!-- == VALOR ÚNICO / EN LISTA == -->
+          <ng-container *ngIf="!isRangeOp(getRow(col.field).op)">
+            <ng-container [ngSwitch]="getColFilterType(col)">
+
+              <!-- ── Texto: chips manuales (op=in) o input simple ── -->
+              <ng-container *ngSwitchCase="'text'">
+                <p-autoComplete *ngIf="isInOp(getRow(col.field).op)" [formControl]="$any(getControl('fv_' + col.field))"
+                  [disabled]="!getRow(col.field).active" [multiple]="true" [typeahead]="false" [addOnBlur]="true"
+                  [addOnTab]="true" placeholder="Escribir y presionar Enter..." styleClass="w-full" />
+                <input *ngIf="!isInOp(getRow(col.field).op)" pInputText
+                  [formControl]="$any(getControl('fv_' + col.field))" [disabled]="!getRow(col.field).active"
+                  placeholder="Buscar..." class="w-full p-inputtext-sm" />
+              </ng-container>
+
+              <!-- ── Numérico ── -->
+              <p-inputNumber *ngSwitchCase="'numeric'" [formControl]="$any(getControl('fv_' + col.field))"
+                [disabled]="!getRow(col.field).active"
+                [placeholder]="isInOp(getRow(col.field).op) ? 'Ej: 1, 5, 10' : 'Valor'" styleClass="w-full"
+                [useGrouping]="false" />
+
+              <!-- ── Fecha ── -->
+              <p-datepicker *ngSwitchCase="'datetime'" [formControl]="$any(getControl('fv_' + col.field))"
+                [disabled]="!getRow(col.field).active" appendTo="body" styleClass="w-full" />
+
+              <!-- ── Booleano ── -->
+              <p-select *ngSwitchCase="'boolean'" [formControl]="$any(getControl('fv_' + col.field))"
+                [disabled]="!getRow(col.field).active" [options]="booleanOptions" optionLabel="name" optionValue="id"
+                [showClear]="true" appendTo="body" styleClass="w-full" />
+
+              <!-- ── FK / relación ── -->
+              <ng-container *ngSwitchCase="'fk'">
+
+                <!-- FK varios elementos (op = in): auto complete con búsqueda remota → chips -->
+                <ng-container *ngIf="isInOp(getRow(col.field).op)">
+                  <p-autoComplete [formControl]="$any(getControl('fv_' + col.field))"
+                    [disabled]="!getRow(col.field).active" [multiple]="true" [suggestions]="getFkSuggestions(col.field)"
+                    (completeMethod)="completeFkMethod($event, col)" [optionLabel]="getOptionLabel(col)" [minLength]="0"
+                    [forceSelection]="true" [addOnBlur]="false" [addOnTab]="false"
+                    placeholder="Escriba {{col.data_type ? 5 : 1}} caract. para buscar..." appendTo="body"
+                    styleClass="w-full" />
+                  <small *ngIf="getFkHint(col.field)" class="text-color-secondary text-xs pl-1">
+                    <i class="pi pi-info-circle mr-1"></i>{{ getFkHint(col.field) }}
+                  </small>
+                </ng-container>
+
+                <!-- FK único (op = exact u otro): auto complete single con búsqueda remota -->
+                <ng-container *ngIf="!isInOp(getRow(col.field).op)">
+                  <p-autoComplete [formControl]="$any(getControl('fv_' + col.field))"
+                    [disabled]="!getRow(col.field).active" [multiple]="false"
+                    [suggestions]="getFkSuggestions(col.field)" (completeMethod)="completeFkMethod($event, col)"
+                    [optionLabel]="getOptionLabel(col)" [minLength]="0" [forceSelection]="true"
+                    placeholder="Escriba {{col.data_type ? 5 : 1}} caract. para buscar..." appendTo="body"
+                    styleClass="w-full" />
+                  <small *ngIf="getFkHint(col.field)" class="text-color-secondary text-xs pl-1">
+                    <i class="pi pi-info-circle mr-1"></i>{{ getFkHint(col.field) }}
+                  </small>
+                </ng-container>
+
+              </ng-container>
+
+            </ng-container>
+          </ng-container>
+
+        </div><!-- /value input -->
+
+        <p-divider *ngIf="!last" styleClass="my-1"></p-divider>
+      </div><!-- /forEach col -->
+
+      <!-- ─ Acciones globales ─ -->
+      <div *ngIf="filterableCols().length > 0"
+        class="flex justify-content-between align-items-center mt-3 gap-2 flex-wrap">
+        <p-button label="Limpiar filtros" icon="pi pi-filter-slash" severity="secondary" [outlined]="true" size="small"
+          (onClick)="resetAllFilters()">
+        </p-button>
+
+        <!-- <small *ngIf="filterUrl()" class="text-color-secondary text-xs break-all filter-url-preview">
+          {{ filterUrl() }}
+        </small> -->
       </div>
-      <div class="p-field">
-        <label>Nombre</label>
-        <input type="text" pInputText />
-      </div>
-      <div class="p-field">
-        <label>Régimen Fiscal</label>
-        <input type="text" pInputText />
-      </div>
-    </div>
-    <div class="w-full md:w-1/2">
-      <h4>Receptor</h4>
-      <div class="p-field">
-        <label>RFC</label>
-        <input type="text" pInputText>
-      </div>
-      <div class="p-field">
-        <label>Nombre</label>
-        <input type="text" pInputText />
-      </div>
-      <div class="p-field w-full md:w-1/12">
-        <label for="usoDelCFDI">Uso del CFDI</label>
-        <p-select id="usoDelCFDI" [options]="usoDelCFDI" optionLabel="label" optionValue="value"></p-select>
-      </div>
-    </div>
-  </div> -->
+
+    </p-accordion-panel>
+
+  </p-accordion>
+
+  <!-- Footer -->
   <ng-template #footer>
-    <p-button label="Guardar" (click)="saveAction.emit()"
-      styleClass="p-button-raised p-button-text p-button-secondary"></p-button>
+    <div class="flex justify-content-between w-full gap-2">
+      <p-button label="Guardar (persistente)" icon="pi pi-cloud-upload" severity="secondary" [outlined]="true"
+        (click)="onSavePersistent()" pTooltip="Guarda la configuración de filtros en el servidor para futuras sesiones"
+        tooltipPosition="top">
+      </p-button>
+      <p-button label="Guardar" icon="pi pi-save" (click)="onSave()" styleClass="p-button-raised">
+      </p-button>
+    </div>
   </ng-template>
+
 </p-dialog>

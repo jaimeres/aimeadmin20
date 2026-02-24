@@ -4,7 +4,7 @@
   <p-inputgroup>
     <p-floatlabel variant="on">
       <p-select [options]="dropdownOptionsSignal()[fieldConfig.field]" [optionValue]="fieldConfig.option_value || 'id'"
-        [optionLabel]="fieldConfig.option_label || 'name'" [placeholder]="fieldConfig.placeholder || '.'"
+        [optionLabel]="fieldConfig.option_label | joinOrSelf" [placeholder]="fieldConfig.placeholder || '.'"
         [editable]="fieldConfig.editable" [formControl]="$any(formGroupSignal()?.get(fieldConfig.field))"
         [scrollHeight]="fieldConfig.scrollHeight || '200px'" (onShow)="onShowDropdownAction.emit($event)"
         [showClear]="fieldConfig.showClear !== undefined ? fieldConfig.showClear : true"
@@ -42,8 +42,8 @@
       [options]="dropdownOptionsSignal()[fieldConfig.field]" (onChange)="onChangeDropdown($event, fieldConfig)"
       [showClear]="true" [optionValue]="fieldConfig.option_value || 'id'"
       [filter]="fieldConfig.filter_local !== undefined ? fieldConfig.filter_local : false"
-      [filterBy]="fieldConfig.filter_by ? fieldConfig.filter_by : null" [optionLabel]="fieldConfig.option_label  "
-      display="chip" styleClass="height-input-custom" />
+      [filterBy]="fieldConfig.filter_by ? fieldConfig.filter_by : null"
+      [optionLabel]="fieldConfig.option_label | joinOrSelf" display="chip" styleClass="height-input-custom" />
 
     <button *ngIf="fieldConfig.reload_icon" type="button" pButton icon="pi pi-replay" class="height-icon-custom"
       (click)="onReloadIconDropdownAction.emit(fieldConfig.field)"></button>
@@ -60,7 +60,6 @@
 
 <!-- TEMPLATE REUTILIZABLE PARA TREE-SELECT -->
 <ng-template #treeSelectTemplate let-fieldConfig="fieldConfig">
-
   <p-floatlabel variant="on">
     <p-treeSelect display="chip" [metaKeySelection]="false" selectionMode="checkbox"
       [options]="dropdownOptionsSignal()[fieldConfig.field]" [pAutoFocus]="fieldConfig.autofocus"
@@ -621,6 +620,15 @@
               <ng-container *ngTemplateOutlet="inputTextTemplate; context: {fieldConfig: card.value}"></ng-container>
             </div>
 
+            <div *ngSwitchCase="'textarea'">
+              <ng-container *ngTemplateOutlet="textareaTemplate; context: {fieldConfig: card.value}"></ng-container>
+            </div>
+
+            <div *ngSwitchCase="'emails-chips'">
+              <ng-container *ngTemplateOutlet="emailsChipsTemplate; context: {fieldConfig: card.value}"></ng-container>
+            </div>
+
+
             <div class="p-inputgroup" *ngSwitchCase="'dropdown'">
               <ng-container *ngTemplateOutlet="dropdownTemplate; context: {fieldConfig: card.value}"></ng-container>
             </div>
@@ -633,25 +641,24 @@
               <ng-container *ngTemplateOutlet="multiSelectTemplate; context: {fieldConfig: card.value}"></ng-container>
             </div>
 
+            <div class="p-inputgroup" *ngSwitchCase="'auto-complete'">
+              <ng-container *ngTemplateOutlet="autoCompleteTemplate; context: {fieldConfig: card.value}"></ng-container>
+            </div>
+
+            <div class="p-inputgroup" *ngSwitchCase="'tree-select'">
+              <ng-container *ngTemplateOutlet="treeSelectTemplate; context: {fieldConfig: card.value}"></ng-container>
+            </div>
+
+
             <div *ngSwitchCase="'toggle-button'">
               <ng-container *ngTemplateOutlet="toggleButtonTemplate; context: {fieldConfig: card.value}"></ng-container>
-            </div>
-
-            <div *ngSwitchCase="'textarea'">
-              <ng-container *ngTemplateOutlet="textareaTemplate; context: {fieldConfig: card.value}"></ng-container>
-            </div>
-
-            <div *ngSwitchCase="'emails-chips'">
-              <ng-container *ngTemplateOutlet="emailsChipsTemplate; context: {fieldConfig: card.value}"></ng-container>
             </div>
 
             <div *ngSwitchCase="'input-number'" class="p-inputgroup">
               <ng-container *ngTemplateOutlet="inputNumberTemplate; context: {fieldConfig: card.value}"></ng-container>
             </div>
 
-            <div class="p-inputgroup" *ngSwitchCase="'tree-select'">
-              <ng-container *ngTemplateOutlet="treeSelectTemplate; context: {fieldConfig: card.value}"></ng-container>
-            </div>
+
 
             <div class="p-inputgroup" *ngSwitchCase="'date'">
               <ng-container *ngTemplateOutlet="dateTemplate; context: {fieldConfig: card.value}"></ng-container>
@@ -661,9 +668,7 @@
               <ng-container *ngTemplateOutlet="timeTemplate; context: {fieldConfig: card.value}"></ng-container>
             </div>
 
-            <div class="p-inputgroup" *ngSwitchCase="'auto-complete'">
-              <ng-container *ngTemplateOutlet="autoCompleteTemplate; context: {fieldConfig: card.value}"></ng-container>
-            </div>
+
 
             <!-- TABLE COMPONENT IN CARD -->
             <div *ngSwitchCase="'table'" class="col-span-12">

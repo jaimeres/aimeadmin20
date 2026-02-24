@@ -22,7 +22,7 @@
           <i class="pi pi-search"></i>
         </p-inputicon>
         <input pInputText type="text" (input)="dt.filterGlobal($event.target.value, 'contains')"
-          placeholder="Buscar...11" />
+          placeholder="Buscar..." />
       </p-iconfield>
     </div>
 
@@ -47,8 +47,10 @@
       <td>
         <button pButton pRipple icon="pi pi-trash" class="p-button-rounded p-button-danger mr-1"
           (click)="deleteDocumentAction.emit(rowData)" *ngIf="rowNode.node.parent"></button>
+
         <button pButton pRipple icon="pi pi-eye" class="p-button-rounded p-button-success mr-1"
           (click)="onShowDocument(rowData.file)" *ngIf="rowNode.node.parent"></button>
+
         <button pButton pRipple icon="pi pi-link" class="p-button-rounded p-button-help"
           (click)="detachDocumentAction.emit(rowData)" *ngIf="rowNode.node.parent"></button>
       </td>
@@ -56,6 +58,6 @@
   </ng-template>
 </p-treeTable>
 
-<p-dialog [(visible)]="documentDialogVisible" styleClass="width-750px-custom min-height-document-custom">
+<p-dialog [(visible)]="documentDialogVisible">
   <iframe *ngIf="blobDocument()" width="100%" height="100%" [src]="blobDocument()"></iframe>
 </p-dialog>

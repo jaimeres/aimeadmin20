@@ -28,6 +28,7 @@
 <p-dialog [(visible)]="formDialogVisible[$any(typeDefault)]" (onHide)="onHide($any(typeDefault))"
   (onShow)="onShow($any(typeDefault))" [styleClass]="styleClassDialog()" [resizable]="true" [draggable]="true"
   modal="true">
+  <!-- [style]="{'contain': 'layout style paint'}" es para mejorrar el dendimiento pero afecta a los componentes anidados -->
 
   <ng-template #header>
     <div class="p-dialog-title">
@@ -79,7 +80,7 @@
 
   <ng-template #footer>
     <div class="p-dialog-footer">
-      <app-custom-button-footer [config]="config_general(typeDefault)"
+      <app-custom-button-footer [config]="configGeneral()[$any(typeDefault)]"
         (saveAction)="save({pos: typeDefault, is_file: true})"
         (saveNotHideAction)="save({pos: typeDefault, hide:false, is_file: true})" (resetFormAction)="resetFormDialog()"
         (cancelAction)="cancel()" />

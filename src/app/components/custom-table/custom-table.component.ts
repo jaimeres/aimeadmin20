@@ -55,7 +55,6 @@ export class CustomTableComponent implements OnChanges {
   @Output() selectionAction = new EventEmitter<any[]>();
   @Output() lazyLoadAction = new EventEmitter<any>();
 
-  //Casi nuca van a cambiar
   rowsSignal = signal<number>(250);
   scrollableSignal = signal<boolean>(true);
   showCurrentPageReportSignal = signal<boolean>(true);
@@ -89,7 +88,6 @@ export class CustomTableComponent implements OnChanges {
       this.selectedSignal.set(changes['selected'].currentValue);
     }
 
-    //casi nuca van a cambiar
     if (changes['rows']) {
       this.rowsSignal.set(changes['rows'].currentValue);
     }

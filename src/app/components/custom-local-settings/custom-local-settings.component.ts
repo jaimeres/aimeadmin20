@@ -1,89 +1,585 @@
 import { CommonModule } from '@angular/common';
-import { Component, EventEmitter, Input, OnChanges, Output, signal, SimpleChanges } from '@angular/core';
-import { FormGroup, FormsModule, ReactiveFormsModule } from '@angular/forms';
+import {
+  Component, EventEmitter, Input, OnChanges, OnDestroy,
+  Output, computed, inject, signal, SimpleChanges
+} from '@angular/core';
+import {
+  FormControl, FormGroup, UntypedFormGroup,
+  FormsModule, ReactiveFormsModule
+} from '@angular/forms';
+
+import { AccordionModule } from 'primeng/accordion';
+import { AutoCompleteModule } from 'primeng/autocomplete';
 import { ButtonModule } from 'primeng/button';
-import { CardModule } from 'primeng/card';
+import { CheckboxModule } from 'primeng/checkbox';
+import { ChipModule } from 'primeng/chip';
+import { DatePickerModule } from 'primeng/datepicker';
 import { DialogModule } from 'primeng/dialog';
+import { DividerModule } from 'primeng/divider';
+import { InputNumberModule } from 'primeng/inputnumber';
+import { InputTextModule } from 'primeng/inputtext';
 import { MultiSelectModule } from 'primeng/multiselect';
 import { SelectModule } from 'primeng/select';
+import { TagModule } from 'primeng/tag';
+import { TooltipModule } from 'primeng/tooltip';
+import { CRUDService } from '../../utils/services/crud.service';
+import { GeneralService } from '../../utils/services/general.service';
+import { MessageService } from '../services/message.service';
+
+// ─── Types ────────────────────────────────────────────────────────────────────
+
+type FilterFieldType = 'text' | 'numeric' | 'datetime' | 'boolean' | 'fk';
+
+export interface FilterRow {
+  active: boolean;
+  op: string;
+}
+
+interface OpOption { label: string; value: string; }
+
+// ─── Constants ────────────────────────────────────────────────────────────────
+
+/** Tipos de campo que no admiten filtros (se omiten del panel) */
+const SKIP_TYPES = new Set(['table', 'button', 'document', 'signature', 'selfie', 'signature-pad']);
+
+/** Mínimo de caracteres para disparar búsqueda remota FK */
+const FK_MIN_CHARS = 5;
+
+/** Mapeo col.type → FilterFieldType */
+function colTypeToFilterType(colType: string): FilterFieldType {
+  switch (colType) {
+    case 'input-text':
+    case 'textarea':
+    case 'emails-chips':
+      return 'text';
+    case 'input-number':
+      return 'numeric';
+    case 'date':
+    case 'time':
+      return 'datetime';
+    case 'toggle-button':
+      return 'boolean';
+    case 'dropdown':
+    case 'dropdown-choice':
+    case 'multi-select':
+    case 'auto-complete':
+      return 'fk';
+    default:
+      return 'text';
+  }
+}
+
+const OP_LABELS: Record<string, string> = {
+  exact: 'Igual a',
+  icontains: 'Contiene',
+  iexact: 'Igual (sin distinción)',
+  contains: 'Contiene (exacto)',
+  in: 'Varios elementos',
+  isnull: 'Es nulo / vacío',
+  gt: 'Mayor que',
+  lt: 'Menor que',
+  gte: 'Mayor o igual',
+  lte: 'Menor o igual',
+  range: 'Rango',
+  year: 'Por año',
+  month: 'Por mes',
+  day: 'Por día',
+};
+
+/** Ops por defecto cuando un campo no tiene col.filter.ops */
+const DEFAULT_OPS: Record<FilterFieldType, string[]> = {
+  text: ['icontains', 'exact', 'iexact', 'in'],
+  numeric: ['exact', 'gt', 'lt', 'gte', 'lte', 'range', 'in', 'isnull'],
+  datetime: ['exact', 'gt', 'lt', 'gte', 'lte', 'range', 'isnull'],
+  boolean: ['exact', 'isnull'],
+  fk: ['exact', 'in', 'isnull'],
+};
+
+// ─── Component ────────────────────────────────────────────────────────────────
 
 @Component({
   selector: 'app-custom-local-settings',
-  imports: [DialogModule, ReactiveFormsModule, FormsModule, CommonModule, SelectModule, MultiSelectModule, ButtonModule, CardModule],
+  standalone: true,
+  imports: [
+    CommonModule,
+    FormsModule,
+    ReactiveFormsModule,
+    AccordionModule,
+    AutoCompleteModule,
+    ButtonModule,
+    CheckboxModule,
+    ChipModule,
+    DatePickerModule,
+    DialogModule,
+    DividerModule,
+    InputNumberModule,
+    InputTextModule,
+    MultiSelectModule,
+    SelectModule,
+    TagModule,
+    TooltipModule,
+  ],
   templateUrl: './custom-local-settings.component.html',
   styleUrl: './custom-local-settings.component.scss',
-  standalone: true
 })
-export class CustomLocalSettingsComponent implements OnChanges {
+export class CustomLocalSettingsComponent implements OnChanges, OnDestroy {
+
+  private crudS = inject(CRUDService);
+  private generalS = inject(GeneralService);
+  private messageS = inject(MessageService);
 
   @Input() visible: boolean = false;
   @Output() visibleAction = new EventEmitter<boolean>();
   @Input() field: any = {};
   @Output() saveAction = new EventEmitter<void>();
   @Input() formGroup: FormGroup | undefined;
+  visibleSignal = signal<boolean>(false);
+  fieldSignal = signal<any>(null);
+  formGroupSignal = signal<FormGroup | undefined>(undefined);
 
+  /** op + active state por columna */
+  filterState = signal<Record<string, FilterRow>>({});
 
-  public visibleSignal = signal<boolean>(false);
-  public fieldSignal = signal<any>(null);
-  public formGroupSignal = signal<FormGroup | undefined>(undefined);
+  /** Opciones cargadas para campos FK: { [colField]: [{id, name}, ...] } */
+  dropdownOptionsSignal = signal<Record<string, any[]>>({});
 
-  ngOnChanges(changes: SimpleChanges) {
+  /** Sugerencias filtradas del autocomplete FK por campo */
+  fkSuggestionsSignal = signal<Record<string, any[]>>({});
 
-    if (changes['visible']) {
-      this.visibleSignal.set(changes['visible'].currentValue);
+  /** Mensaje de ayuda por campo FK (ej: "Escriba al menos 5 caracteres") */
+  fkSearchHintSignal = signal<Record<string, string>>({});
+
+  /** FormGroup con controles fv_{field} y fv_{field}_2 */
+  filterValuesFormGroup = new UntypedFormGroup({});
+
+  // ─── Static data ──────────────────────────────────────────────────────────
+
+  readonly booleanOptions = [
+    { id: 'true', name: 'Sí / Verdadero' },
+    { id: 'false', name: 'No / Falso' },
+  ];
+
+  // ─── Computed ─────────────────────────────────────────────────────────────
+
+  /**
+   * Mapa { fieldName → colType } construido desde fieldSignal().fields.
+   * Soporta tanto array [{field, type}] como dict { fieldName: { type, ... } }.
+   */
+  private _fieldTypeMap = computed<Record<string, string>>(() => {
+    const rawFields = this.fieldSignal()?.fields;
+    const map: Record<string, string> = {};
+    if (!rawFields) return map;
+    if (Array.isArray(rawFields)) {
+      for (const f of rawFields) {
+        const key = f?.field ?? f?.name;
+        if (key && f?.type) map[key] = f.type;
+      }
+    } else {
+      // Dict: la CLAVE es el nombre del campo, el valor contiene type/filter
+      for (const [key, val] of Object.entries(rawFields as Record<string, any>)) {
+        if ((val as any)?.type) map[key] = (val as any).type;
+      }
+    }
+    return map;
+  });
+
+  /**
+   * Columnas filtrables construidas desde fieldSignal().fields (no desde cols).
+   * Itera el dict/array de fields para obtener type y filter de cada campo.
+   * Usa fieldSignal().cols como mapa de headers/labels.
+   */
+  filterableCols = computed<any[]>(() => {
+    const rawFields = this.fieldSignal()?.fields;
+    if (!rawFields) return [];
+
+    // Mapa de labels desde cols[] (campo visible en la tabla)
+    const colsArr: any[] = this.fieldSignal()?.cols ?? [];
+    const labelMap: Record<string, string> = {};
+    for (const c of colsArr) {
+      if (c?.field && c?.header) labelMap[c.field] = c.header;
     }
 
+    // Convertir fields (dict o array) a pares [fieldName, fieldConfig]
+    const entries: [string, any][] = Array.isArray(rawFields)
+      ? rawFields.map((f: any) => [f?.field ?? f?.name, f])
+      : Object.entries(rawFields as Record<string, any>);
+
+    return entries
+      .map(([fieldName, cfg]: [string, any]) => ({
+        field: fieldName,
+        // Header: buscar en cols[], luego en cfg.cols.label, cfg.label, finalmente el propio fieldName
+        header: labelMap[fieldName] ?? cfg?.cols?.label ?? cfg?.label ?? fieldName,
+        type: cfg?.type ?? '',
+        // data_type está en fields[key] directamente, NO dentro de filter
+        data_type: cfg?.data_type ?? '',
+        // filter_by: campo(s) para búsqueda remota, al mismo nivel que filter (no dentro)
+        // Puede ser "name" o "name, last_name" → OR en el servidor
+        filter_by: cfg?.filter_by ?? '',
+        filter: cfg?.filter ?? {},
+      }))
+      .filter((col: any) => {
+        if (!col.field) return false;
+        if (col.filter?.ui === false) return false;
+        return !SKIP_TYPES.has(col.type);
+      });
+  });
+
+  activeFilterCount = computed<number>(() =>
+    Object.values(this.filterState()).filter(r => r.active).length
+  );
+
+  // ─── Lifecycle ─────────────────────────────────────────────────────────────
+
+  ngOnChanges(changes: SimpleChanges): void {
+    if (changes['visible']) this.visibleSignal.set(changes['visible'].currentValue);
     if (changes['field']) {
       this.fieldSignal.set(changes['field'].currentValue);
+      this._initFilterState();
+    }
+    if (changes['formGroup']) this.formGroupSignal.set(changes['formGroup'].currentValue);
+  }
+
+  ngOnDestroy(): void { }
+
+  // ─── Helpers de columna ───────────────────────────────────────────────────
+
+  /** Tipo de filtro derivado del tipo de campo.
+   * col.type ya viene inyectado desde fields en filterableCols().
+   */
+  getColFilterType(col: any): FilterFieldType {
+    const directType: string = col?.type ?? this._fieldTypeMap()[col?.field] ?? 'input-text';
+    return colTypeToFilterType(directType);
+  }
+
+  /** Ops disponibles: de col.filter.ops si existe, sino los por defecto del tipo */
+  getEffectiveOps(col: any): string[] {
+    const rawOps = col?.filter?.ops;
+    // Acepta Array nativo o array-like (proxy de objeto JS)
+    const ops: string[] = Array.isArray(rawOps)
+      ? rawOps
+      : (rawOps && typeof rawOps === 'object' ? Object.values(rawOps) : []) as string[];
+    if (ops.length > 0) return ops;
+    return DEFAULT_OPS[this.getColFilterType(col)] ?? ['exact'];
+  }
+
+  getOpsOptions(col: any): OpOption[] {
+    return this.getEffectiveOps(col).map(op => ({ label: OP_LABELS[op] ?? op, value: op }));
+  }
+
+  isRangeOp(op: string): boolean { return op === 'range'; }
+  isNullOp(op: string): boolean { return op === 'isnull'; }
+  isInOp(op: string): boolean { return op === 'in'; }
+  isBoolOp(op: string): boolean { return op === 'exact'; }
+
+  /** Búsqueda remota para autocomplete FK: consulta al servidor con filter[search]=query */
+  completeFkMethod(event: { query: string }, col: any): void {
+    const q = (event?.query ?? '').trim();
+    const dataType = col?.data_type;
+
+    if (dataType) {
+      // Campo con búsqueda remota — requiere mínimo FK_MIN_CHARS caracteres
+      if (q.length > 0 && q.length < FK_MIN_CHARS) {
+        this.fkSuggestionsSignal.update(s => ({ ...s, [col.field]: [] }));
+        this.fkSearchHintSignal.update(s => ({
+          ...s, [col.field]: `Escriba al menos ${FK_MIN_CHARS} caracteres para buscar`
+        }));
+        return;
+      }
+      // Limpiar hint cuando alcanza el mínimo o query vacío
+      this.fkSearchHintSignal.update(s => ({ ...s, [col.field]: '' }));
+
+      if (q.length === 0) {
+        this.fkSuggestionsSignal.update(s => ({ ...s, [col.field]: [] }));
+        return;
+      }
+
+      const appTypeEntry = (this.crudS.appType as any)[dataType];
+      const app = appTypeEntry?.app;
+      const type = appTypeEntry?.type;
+      if (app && type) {
+        // filter_by está al mismo nivel que filter (no dentro de él)
+        // Puede ser "name" o "name, last_name" → genera filter[name]=q&filter[last_name]=q (OR)
+        const filterByRaw: string = col?.filter_by ?? '';
+        let filter: string;
+        if (filterByRaw) {
+          const filterFields = filterByRaw.split(',').map((f: string) => f.trim()).filter(Boolean);
+          filter = filterFields.map((f: string) => `filter[${f}.icontains]=${encodeURIComponent(q)}`).join('&');
+        } else {
+          filter = `filter[search]=${encodeURIComponent(q)}`;
+        }
+        this.crudS.getObject({ app, type, filter }).subscribe((data: any) => {
+          const options = this.generalS.DJAtoObject({
+            respDJA: data,
+            additionalFieldsIncluded: [],
+            option_label: col.filter?.option_label ?? col.option_label ?? 'name',
+          });
+          this.fkSuggestionsSignal.update(s => ({ ...s, [col.field]: options }));
+        });
+        return;
+      }
     }
 
-    if (changes['formGroup']) {
-      this.formGroupSignal.set(changes['formGroup'].currentValue);
+    // Fallback: filtrar sobre opciones locales ya cargadas (dropdown-choice)
+    this.fkSearchHintSignal.update(s => ({ ...s, [col.field]: '' }));
+    const all = this.dropdownOptionsSignal()[col.field] ?? [];
+    const label = this.getOptionLabel(col);
+    const filtered = q
+      ? all.filter((o: any) => String(o[label] ?? '').toLowerCase().includes(q.toLowerCase()))
+      : [...all];
+    this.fkSuggestionsSignal.update(s => ({ ...s, [col.field]: filtered }));
+  }
+
+  getFkSuggestions(field: string): any[] {
+    return this.fkSuggestionsSignal()[field] ?? [];
+  }
+
+  getFkHint(field: string): string {
+    return this.fkSearchHintSignal()[field] ?? '';
+  }
+
+  /** ¿Mostrar presets de fecha relativa? Si col.filter.relative.enabled o es datetime */
+  hasRelativePresets(col: any): boolean {
+    if (this.getColFilterType(col) !== 'datetime') return false;
+    const row = this.getRow(col.field);
+    return row.active && (col.filter?.relative?.enabled !== false);
+  }
+
+  getRow(field: string): FilterRow {
+    return this.filterState()[field] ?? { active: false, op: 'exact' };
+  }
+
+  /** Retorna el FormControl para un nombre de control */
+  getControl(name: string): FormControl<any> {
+    return (this.filterValuesFormGroup.get(name) ?? new FormControl(null)) as FormControl<any>;
+  }
+
+  /** Opciones cargadas para un campo FK */
+  getDropdownOptions(field: string): any[] {
+    return this.dropdownOptionsSignal()[field] ?? [];
+  }
+
+  /** Etiqueta del option_label configurado */
+  getOptionLabel(col: any): string {
+    const ol = col?.filter?.option_label ?? col?.option_label ?? 'name';
+    return Array.isArray(ol) ? ol[0] : ol;
+  }
+
+  getOptionValue(col: any): string {
+    return col?.filter?.option_value ?? col?.option_value ?? 'id';
+  }
+
+  // ─── User interactions ────────────────────────────────────────────────────
+
+  toggleFilter(field: string, active: boolean): void {
+    const col = this._findCol(field);
+    const op = active
+      ? (col?.filter?.default ?? this.getEffectiveOps(col ?? { field, type: 'input-text' })[0])
+      : this.getRow(field).op;
+    this.filterState.update(st => ({ ...st, [field]: { active, op } }));
+  }
+
+  setOp(field: string, op: string): void {
+    this.filterState.update(st => ({ ...st, [field]: { ...this.getRow(field), op } }));
+    this.filterValuesFormGroup.get(`fv_${field}`)?.setValue(null, { emitEvent: false });
+    this.filterValuesFormGroup.get(`fv_${field}_2`)?.setValue(null, { emitEvent: false });
+  }
+
+  applyRelativePreset(field: string, preset: string): void {
+    const now = new Date();
+    let v1: Date | null = null, v2: Date | null = null;
+    switch (preset) {
+      case 'day': v1 = this._startOf('day', now); v2 = this._endOf('day', now); break;
+      case 'week': v1 = this._startOf('week', now); v2 = this._endOf('week', now); break;
+      case 'month': v1 = this._startOf('month', now); v2 = this._endOf('month', now); break;
+      case 'year': v1 = this._startOf('year', now); v2 = this._endOf('year', now); break;
+    }
+    this.filterState.update(st => ({
+      ...st, [field]: { active: true, op: 'range' },
+    }));
+    this.filterValuesFormGroup.get(`fv_${field}`)?.setValue(v1);
+    this.filterValuesFormGroup.get(`fv_${field}_2`)?.setValue(v2);
+  }
+
+  resetFilter(field: string): void {
+    const col = this._findCol(field);
+    this.filterState.update(st => ({
+      ...st, [field]: { active: false, op: col?.filter?.default ?? this.getEffectiveOps(col ?? {})[0] ?? 'exact' },
+    }));
+    this.filterValuesFormGroup.get(`fv_${field}`)?.setValue(null, { emitEvent: false });
+    this.filterValuesFormGroup.get(`fv_${field}_2`)?.setValue(null, { emitEvent: false });
+  }
+
+  resetAllFilters(): void { this._initFilterState(); }
+
+  // ─── Dialog ───────────────────────────────────────────────────────────────
+
+  onHide(_e: any): void { this.visibleAction.emit(false); }
+
+  onSave(): void {
+    const modifiedField = this._buildModifiedField();
+    // Patch configForm con 'fields' para que saveConfig calcule the filter string
+    // via this.configForm.value?.fields → crudS.buildFilterString(fields)
+    if (!this.formGroupSignal()?.contains('fields')) {
+      this.formGroupSignal()?.addControl('fields', new FormControl(null));
+    }
+    this.formGroupSignal()?.get('fields')?.setValue(modifiedField.fields, { emitEvent: false });
+    this.saveAction.emit();
+  }
+
+  /** Guarda de forma persistente en el servidor los ajustes de filtro de cada campo */
+  onSavePersistent(): void {
+    const modifiedField = this._buildModifiedField();
+    // Patch configForm con 'fields' para que saveConfig calcule the filter string
+    if (!this.formGroupSignal()?.contains('fields')) {
+      this.formGroupSignal()?.addControl('fields', new FormControl(null));
+    }
+    this.formGroupSignal()?.get('fields')?.setValue(modifiedField.fields, { emitEvent: false });
+
+    // Enviar al servidor: payload envuelto en la clave del data-app
+    const appKey = this.fieldSignal()?.app;
+    const payload = appKey ? { [appKey]: modifiedField } : modifiedField;
+    console.log('..............', appKey, modifiedField);
+
+    this.crudS.edit({ formData: payload, app: 'settings/settings/me', type: 'configuration' }).subscribe({
+      next: () => this.messageS.changeMessage('Configuración guardada en el servidor', null, {}, 'success', 'Guardado'),
+      error: () => this.messageS.changeMessage('No se pudo guardar la configuración en el servidor'),
+    });
+
+    this.saveAction.emit();
+  }
+
+  // ─── Private ──────────────────────────────────────────────────────────────
+
+  /**
+   * Construye el objeto field modificado con los filtros activos del usuario.
+   * Devuelve la misma estructura que @Input() field pero con fields actualizado:
+   * cada campo conserva su configuración original y sobreescribe solo
+   * filter.active / filter.default / filter.default_value.
+   * FK: default_value guarda el OBJETO COMPLETO {id, name, ...};
+   * CRUDService.buildFilterString extrae el id cuando genera la cadena URL.
+   */
+  private _buildModifiedField(): any {
+    const rawFields = this.fieldSignal()?.fields ?? {};
+    const fieldsOut: Record<string, any> = {};
+
+    for (const col of this.filterableCols()) {
+      const row = this.getRow(col.field);
+      const val = this.filterValuesFormGroup.get(`fv_${col.field}`)?.value;
+
+      const originalCfg: any = Array.isArray(rawFields)
+        ? (rawFields.find((f: any) => (f?.field ?? f?.name) === col.field) ?? {})
+        : (rawFields[col.field] ?? {});
+
+      fieldsOut[col.field] = {
+        ...originalCfg,
+        filter: {
+          ...(originalCfg?.filter ?? {}),
+          active: row.active,
+          default: row.op,
+          default_value: val ?? null,
+        },
+      };
+    }
+
+    // Retorna el objeto field completo con fields actualizado; el resto de propiedades
+    // (general, fields_prefixes, draw, cols, app) vienen del servidor sin modificar.
+    return { ...(this.fieldSignal() ?? {}), fields: fieldsOut };
+  }
+
+  private _findCol(field: string): any | undefined {
+    // filterableCols() ya tiene type y filter mergeados desde fields
+    return this.filterableCols().find((c: any) => c.field === field);
+  }
+
+  private _initFilterState(): void {
+    const cols: any[] = this.filterableCols();
+    const state: Record<string, FilterRow> = {};
+
+    // Paso 1: preparar controles y cargar valores ANTES de actualizar filterState.
+    // Así p-autoComplete monta ya con el valor correcto y muestra los chips desde el inicio.
+    for (const col of cols) {
+      this._ensureControls(col.field);
+
+      const filter = col?.filter;
+      const isActive = filter?.active === true;
+
+      // Pre-cargar default_value si existe
+      if (isActive && filter?.default_value !== undefined && filter?.default_value !== null) {
+        let preloadValue = filter.default_value;
+        const colFilterType = this.getColFilterType(col);
+        if (colFilterType === 'boolean' && typeof preloadValue === 'boolean') {
+          // p-select boolean usa optionValue string ('true'/'false'), no boolean nativo
+          preloadValue = String(preloadValue);
+        }
+        // FK exact: objeto {id, name}  /  FK in: array de objetos [{id, name}, ...]
+        // p-autoComplete acepta directamente el objeto/array → no hay conversión necesaria.
+        // Se usa emitEvent:true para que p-autoComplete detecte el cambio al montarse.
+        this.filterValuesFormGroup.get(`fv_${col.field}`)?.setValue(preloadValue);
+      } else {
+        // Limpiar control si no hay valor predeterminado
+        this.filterValuesFormGroup.get(`fv_${col.field}`)?.setValue(null, { emitEvent: false });
+        this.filterValuesFormGroup.get(`fv_${col.field}_2`)?.setValue(null, { emitEvent: false });
+      }
+    }
+
+    // Paso 2: construir estado y activar el render (p-autoComplete ya tiene el valor)
+    for (const col of cols) {
+      const filter = col?.filter;
+      const defaultOp = filter?.default ?? this.getEffectiveOps(col)[0] ?? 'exact';
+      state[col.field] = { active: filter?.active === true, op: defaultOp };
+    }
+    this.filterState.set(state);
+
+    // Cargar opciones locales FK (dropdown-choice sin data_type)
+    this._loadAllDropdownOptions(cols);
+  }
+
+  private _ensureControls(field: string): void {
+    if (!this.filterValuesFormGroup.contains(`fv_${field}`))
+      this.filterValuesFormGroup.addControl(`fv_${field}`, new FormControl<any>(null));
+    if (!this.filterValuesFormGroup.contains(`fv_${field}_2`))
+      this.filterValuesFormGroup.addControl(`fv_${field}_2`, new FormControl<any>(null));
+  }
+
+  /** Carga opciones locales para dropdown-choice. Los FK remotos se buscan en completeFkMethod. */
+  private _loadAllDropdownOptions(cols: any[]): void {
+    for (const col of cols) {
+      const type = this.getColFilterType(col);
+      if (type !== 'fk') continue;
+
+      // Solo cargar localmente para dropdown-choice con data_type vacío (opciones fijas)
+      if (col.type === 'dropdown-choice' && !col.data_type) {
+        const localOpts = col.filter?.options ?? col.options ?? [];
+        if (localOpts.length > 0) {
+          this.dropdownOptionsSignal.update(s => ({ ...s, [col.field]: localOpts }));
+          this.fkSuggestionsSignal.update(s => ({ ...s, [col.field]: [...localOpts] }));
+        }
+      }
+      // Los campos con data_type se consultan al servidor en completeFkMethod()
     }
   }
 
-
-  cols(): any[] {
-    // Implementa la lógica para obtener las columnas según sea necesario
-    return [];
+  private _fmt(value: any): string {
+    if (value === null || value === undefined) return '';
+    if (value instanceof Date) return value.toISOString().split('T')[0];
+    return String(value);
   }
 
-  onHide(e: any) {
-    this.visibleAction.emit(false);
+  private _startOf(unit: 'day' | 'week' | 'month' | 'year', d: Date): Date {
+    const r = new Date(d);
+    if (unit === 'day') { r.setHours(0, 0, 0, 0); }
+    if (unit === 'week') { r.setDate(r.getDate() - r.getDay()); r.setHours(0, 0, 0, 0); }
+    if (unit === 'month') { r.setDate(1); r.setHours(0, 0, 0, 0); }
+    if (unit === 'year') { r.setMonth(0, 1); r.setHours(0, 0, 0, 0); }
+    return r;
   }
 
-
-  /*
-  
-  
-    formasPago = [
-      { label: 'Efectivo', value: '01' },
-      { label: 'Cheque', value: '02' },
-      { label: 'Transferencia', value: '03' },
-      { label: 'Por definir', value: '99' }
-    ];
-    monedas = [
-      { label: 'MXN', value: 'MXN' },
-      { label: 'USD', value: 'USD' }
-    ];
-  
-    tipoComprobante = [
-      { label: 'Ingreso', value: 'I' },
-      { label: 'Egreso', value: 'E' },
-      { label: 'Traslado', value: 'T' }
-    ]
-  
-    metodoPago = [
-      { label: 'Pago en una sola exhibición', value: 'PUE' },
-      { label: 'Pago en parcialidades', value: 'PPD' }
-    ];
-  
-    usoDelCFDI = [
-      { label: 'Gastos en general', value: 'G01' },
-      { label: 'Adquisición de mercancías', value: 'G02' },
-      { label: 'Servicios generales', value: 'G03' },
-      { label: 'Por definir', value: 'G99' }
-    ]
-  */
-
+  private _endOf(unit: 'day' | 'week' | 'month' | 'year', d: Date): Date {
+    const r = new Date(d);
+    if (unit === 'day') { r.setHours(23, 59, 59, 999); }
+    if (unit === 'week') { r.setDate(r.getDate() + (6 - r.getDay())); r.setHours(23, 59, 59, 999); }
+    if (unit === 'month') { r.setMonth(r.getMonth() + 1, 0); r.setHours(23, 59, 59, 999); }
+    if (unit === 'year') { r.setMonth(11, 31); r.setHours(23, 59, 59, 999); }
+    return r;
+  }
 }

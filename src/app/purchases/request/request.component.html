@@ -146,7 +146,7 @@
 
   <ng-template #footer>
     <div class="p-dialog-footer">
-      <app-custom-button-footer [config]="config_general(typeDefault)" (saveAction)="save({ pos: typeDefault})"
+      <app-custom-button-footer [config]="configGeneral()[$any(typeDefault)]" (saveAction)="save({ pos: typeDefault})"
         (cancelAction)="cancelRequestDetail()" (saveNotHideAction)="save({hide:false, pos: typeDefault})"
         (resetFormAction)="resetFormDialog()" />
     </div>

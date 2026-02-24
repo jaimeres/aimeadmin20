@@ -319,23 +319,6 @@ export class GeneralService {
     }
   }
 
-  /*timeZone(dateTime, time_zone) {  
-   
-     if (!dateTime) {
-       return '';
-     }
-    const date = new Date(dateTime);
- 
-    return date.toLocaleString('default', {
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
-      hour: '2-digit',
-      minute: '2-digit',
-      second: '2-digit'
-    });
-  }*/
-
   /**
    * Agrega campos en texto a las claves o bool agregandoles de subfijo text, tambien duplica en id agregandolo al nodo attributes
    * @param respDJA Respuesta del servidor en formato dja
@@ -445,7 +428,8 @@ export class GeneralService {
         ...relationship_name,
         relationships: dja.relationships
       };
-      /*const labelFields = Array.isArray(option_label)
+
+      const labelFields = Array.isArray(option_label)
         ? option_label
         : typeof option_label === 'string'
           ? option_label.split(',').map((v) => v.trim()).filter((v) => v.length > 0)
@@ -459,7 +443,7 @@ export class GeneralService {
           .map((val: any) => String(val))
           .join(' ');
         data[labelField] = label;
-      }*/
+      }
       console.log('DJAtoObject:::::::::::::');
 
 
@@ -598,8 +582,30 @@ export class GeneralService {
       });
   }
 
+
+  /**
+ * Indica si el viewport actual cumple con el breakpoint
+ * definido para pantalla móvil usando media query.
+ *
+ * Hace referencia únicamente al tamaño de pantalla.
+ * No detecta tipo de dispositivo.
+ * No detecta sistema operativo.
+ * No detecta entorno nativo.
+ */
+  isMobileScreen() {
+    return window.matchMedia('(max-width: 991px)').matches;
+  }
+
+
   // ***********************ADAPTADO PARA CAPACITOR*********************
-  // Método para detectar si es móvil o web
+  /**
+ * Indica si la aplicación se está ejecutando en plataforma nativa
+ * mediante Capacitor.
+ *
+  * No hace referencia al tamaño de pantalla.
+  * No detecta navegador móvil ni PWA.
+  * Solo detecta entorno nativo (APK/IPA).
+ */
   public isMobile(): boolean {
     return !!(window && (window as any).Capacitor && (window as any).Capacitor.isNativePlatform());
   }

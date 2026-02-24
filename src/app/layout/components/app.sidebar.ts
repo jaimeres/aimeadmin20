@@ -23,7 +23,7 @@ import { AuthService } from '../../auth/services/auth.service';
     <div app-menu-profile #menuProfileStart *ngIf="menuProfilePosition() === 'start'"></div>
     <div #menuContainer class="layout-menu-container">
       <div app-menu></div>
-      Beta 1.0.5
+      <label class="pl-8"> <strong>Beta 1.0.3</strong></label>
     </div>
     
     <div app-menu-profile #menuProfileEnd *ngIf="menuProfilePosition() === 'end'"></div>

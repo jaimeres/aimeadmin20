@@ -129,7 +129,7 @@ export class Vars {
    * numero de registros que retornará la consula
    */
   //protected limit = signal<string[]>([250]); //any[] = [2];
-  limit = signal<{ [key: string]: number }>({ 0: 250 });
+  limit = signal<{ [key: string]: number }>({ 0: 20 });
 
   /**
    * punto inicial de la paginación
@@ -275,53 +275,7 @@ export class Vars {
 
   protected timeZone: { [key: string]: string[] } = {}; // Permite asignar arrays por tipo
   public getTimeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
-  /**
-   * id, name, description
-   */
-  //°°° DEPRECADO
-  protected commonGeneralName: any = null;
 
-  /**
-   * id, code
-   */
-  //°°° DEPRECADO
-  protected commonIdCode: any = [];
-
-  /**
-   * short_name, name2
-   */
-  //°°° DEPRECADO
-  protected commonGeneralName2: any = null;
-
-  /**
-   * is_active__text, is_default__text, sys__text
-   */
-  //°°° DEPRECADO
-  protected commonGeneralBool: any = null;
-
-  /**
-   * is_voidable__text
-   */
-  //°°° DEPRECADO
-  protected commonVoidable: any = null;
-
-  /**
-   * id
-   */
-  //°°° DEPRECADO
-  protected commonId: any = null;
-
-  /**
-   * name
-   */
-  //°°° DEPRECADO
-  protected commonName: any = null;
-
-  /**
-   * created_at, created_by__name, modified_at, modified_by__name, inactivated_at, inactivated_by__name
-   */
-  //°°° DEPRECADO
-  protected commonGeneralCrud: any = null;
 
   /**
    * los campos que se se mostrarán como activos en los registros del sistema, por ejemplo, is_active, is_default
@@ -473,6 +427,9 @@ export class Vars {
    * Almacena los estados iniciales de deshabilitación por posición y campo
    */
   public initialDisabledForm: { [pos: string]: { [fieldName: string]: boolean } } = {};
+
+
+  public configGeneral = signal<any[]>([]);
 
   // no tiene caso la opcion espacio en blanco ya que el usuario puede mover el tamaño
   public drawForm = signal<any>({});

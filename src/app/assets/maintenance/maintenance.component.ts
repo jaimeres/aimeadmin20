@@ -72,6 +72,24 @@ export class MaintenanceComponent extends CRUD implements OnInit {
     ]
 
 
+
+    this.type['maintenance-document-maintenance'] = 'maintenance-document';
+    this.app['maintenance-document-maintenance'] = 'assets/maintenance-document';
+    this.formDialogVisible['maintenance-document-maintenance'] = false;
+    this.singular['maintenance-document-maintenance'] = 'documento';
+    this.plural['maintenance-document-maintenance'] = 'documentos';
+    this.singularIndefiniteArticle['maintenance-document-maintenance'] = 'el documento';
+    this.pluralDefiniteArticle['maintenance-document-maintenance'] = 'los documentos';
+    this.module['maintenance-document-maintenance'] = 'A';
+
+    this.excludeFieldsForm['maintenance-document-maintenance'] = [
+      { field: 'documents', reemplace: false },
+      //°°° falta solucionar el errore para que acepte el array de files
+      { field: 'files', reemplace: false }
+    ];
+
+
+
     this.initCRUD();
 
     /*this.startMenu.set([

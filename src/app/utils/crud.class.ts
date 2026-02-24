@@ -117,6 +117,13 @@ export class CRUD extends Vars /*implements OnInit*/ {
       this.unifyDialog(pos, drawForm?.dialog);
     }
 
+    if (!this.configGeneral()[pos]) {
+      this.configGeneral.set({
+        ... this.configGeneral(),
+        [pos]: this.crudS.configGeneral(pos)
+      });
+    }
+
     const safePos = pos ?? 0; // Crear una variable segura para usar como índice
     this.crudS.type = this.type[safePos];
     this.crudS.app = this.app[safePos];
@@ -140,12 +147,29 @@ export class CRUD extends Vars /*implements OnInit*/ {
       /*const pos_shareable = pos.toString().replace(/-/g, '_');
       this.crudS.registerVisit(pos_shareable);*/
 
+      //busca los parametros del servidor para la paginación dependiendo si es pantalla movil o no, si no existe toma por defecto
+      const isMobileScreen = this.generalS.isMobileScreen();
+      const pagination = this.configGeneral()[safePos]?.pagination || {};
+      const limit = isMobileScreen ? pagination.rows_mobile : pagination.rows;
+      this.limit.set({
+        ...this.limit(),
+        [safePos]: limit || this.limit()[0]
+      });
+
       // no utilizo directamente this.cols() al enviar la columna porque this.fieldConfig() es un objecto de varios valores,
       // y en este caso solo estoy inicializando la propiedad cols de objecto this.fieldConfig()
-      this.fieldConfig.update(cfg => ({ ...cfg, cols: this.cols(), fields: this.crudS.fields_form(pos) }));
+      this.fieldConfig.update(cfg => ({
+        ...cfg, cols: this.cols(),
+        fields: this.crudS.fieldsForm(pos),
+        'app': safePos,
+      }));
       //°°°mismo caso de arriba pero creo que este si puede utlizar this.cols() ya que no se requieres muchos campos o
       //por lo tanto podria no utilizar el objecto
       this.fieldExport.update(exp => ({ ...exp, cols: this.cols() }));
+      // Generar la cadena de filtros a partir de los fields de la posición actual.
+      // Se ejecuta siempre que cambie la posición para que getAll2 use los filtros
+      // persistentes sin necesidad de consultar el servidor.
+      this.filter = this.crudS.buildFilterString(this.crudS.fieldsForm(pos));
       this.iniParam();
     }
     if (this.columns[safePos]) {
@@ -1192,11 +1216,6 @@ export class CRUD extends Vars /*implements OnInit*/ {
     return this.fb.group(formFields);
   }
 
-  config_general(pos: any = null) {
-    pos = pos || this.pos();
-    return this.crudS.config_general(pos);
-  }
-
   generateJSONColumns(jsonFields: any, pos: any = null, cols: any = [], field_prefix = '', header_prefix = '', field_relationship = '') {
     pos = pos || this.pos();
     console.log('cols--------------', cols, typeof cols);
@@ -1204,7 +1223,7 @@ export class CRUD extends Vars /*implements OnInit*/ {
     if (pos === null) return cols; // Retornar cols vacío si pos es null
 
     // La configuración está directamente en configCols, no en configCols.cols
-    const colsConfig = this.crudS.config_cols(pos) || {};
+    const colsConfig = this.crudS.configCols(pos) || {};
     const safePos = pos ?? 0; // Crear una variable segura para usar como índice
 
     for (const field in jsonFields) {
@@ -1459,7 +1478,6 @@ export class CRUD extends Vars /*implements OnInit*/ {
     } else {
       // si ya se consulto al servidor, no se vuelve a consultar
       if (this.optionsFields[safePos]) {
-        //console.log('getAll if');
 
         this.columns[safePos] = this.generateJSONColumns(this.optionsFields[safePos]);
         this.getAll2({ pos: safePos, node, filter, force, sort });
@@ -1469,7 +1487,6 @@ export class CRUD extends Vars /*implements OnInit*/ {
         this.showBlocked();
         this.crudS.options(app).subscribe({
           next: (resp: any) => {
-            //console.log('getAll else');
 
             this.optionsFields[safePos] = resp.data.actions.POST;
             this.columns[safePos] = this.generateJSONColumns(this.optionsFields[safePos]);
@@ -1479,7 +1496,6 @@ export class CRUD extends Vars /*implements OnInit*/ {
         });
       }
     }
-    //console.log('fin getAll');
   }
 
   getAll2(options: getAllOptions = {}) {
@@ -1494,8 +1510,6 @@ export class CRUD extends Vars /*implements OnInit*/ {
 
     this.changePos(safePos); // actualice la posición y los valores correspondientes a la app
     this.showBlocked(); // muestra el bloqueo de la pantalla
-    //|||LO COMENTO PORQUE ESTOA LIMENTA A LOS dropdown Y PUEDE SER QUE NO TRAIGA TODOS LOS CAMPOS NECESARIOS
-    //ADEMAS TAMBIEN AFECHA CUANDO SE AGREGA NUEVAS COLUMNAS EN LA CONFIGURACION
     if (this.itemsCache[safePos]) {
       if (this.itemsCache[safePos].length > 0 && !force) {
         this.items.set(this.itemsCache[safePos]);
@@ -1510,10 +1524,9 @@ export class CRUD extends Vars /*implements OnInit*/ {
     const fields = this.fields[safePos]; // incluir todos los campos para que se muestren en la tabla
 
     filter = filter || this.filter; // por el momento solo ocupo de filter sea se envie por parametro
-    this.limit()[safePos] = this.limit()[safePos] ? this.limit()[safePos] : this.limit()[0]; // si no se envia el limite, se toma el limite por defecto
     this.offset[safePos] = this.offset[safePos] ? this.offset[safePos] : this.offset[0]; // si no se envia el offset, se toma el offset por defecto
 
-    this.crudS.getObject({ include, filter, sort, fields, limit: this.limit()[safePos], offset: this.offset[safePos] }).subscribe({
+    this.crudS.getObject({ include, filter: filter || undefined, sort, fields, limit: this.limit()[safePos], offset: this.offset[safePos] }).subscribe({
       next: (resp: any) => {
         const additionalFieldsAppCols = this.additionalFieldsAppCols[safePos] || [];
         const convertedItems = this.DJAtoObject({ resp, node, additionalFieldsAppCols }); // convierte el formato DJA a un objeto
@@ -1726,7 +1739,7 @@ export class CRUD extends Vars /*implements OnInit*/ {
     const currentGlobalFilterValue = event.globalFilter || null;
     const hasFilters = currentGlobalFilterValue && currentGlobalFilterValue.trim().length > 0;
 
-    console.log('🔍 onLazyLoad - searchRemote:', this.searchRemote, '| hasFilters:', hasFilters, '| filterValue:', currentGlobalFilterValue);
+    //console.log('🔍 onLazyLoad - searchRemote:', this.searchRemote, '| hasFilters:', hasFilters, '| filterValue:', currentGlobalFilterValue);
 
     // ============== LIMPIAR FILTROS (cuando se borra el texto de búsqueda) ==============
     if (this.previousGlobalFilterValue && !hasFilters) {
@@ -1735,11 +1748,11 @@ export class CRUD extends Vars /*implements OnInit*/ {
         this.limit()[pos] = event.rows;
         this.offset[pos] = event.first;
         this.getAll({ pos: pos, filter: '', force: true, sort: this.sort });
-        console.log('🔄 Limpiando filtros REMOTOS - Recargando desde servidor');
+        //console.log('🔄 Limpiando filtros REMOTOS - Recargando desde servidor');
       } else {
         // Búsqueda local: restaurar datos originales de la página
         this.items.set([...this.originalPageItems]);
-        console.log('🔄 Limpiando filtros LOCALES - Restaurando datos originales');
+        //console.log('🔄 Limpiando filtros LOCALES - Restaurando datos originales');
       }
 
       this.previousGlobalFilterValue = currentGlobalFilterValue;
@@ -1761,7 +1774,7 @@ export class CRUD extends Vars /*implements OnInit*/ {
       this.limit()[pos] = event.rows;
       this.offset[pos] = event.first;
 
-      console.log('🌐 Búsqueda remota en servidor:', currentGlobalFilterValue);
+      //console.log('🌐 Búsqueda remota en servidor:', currentGlobalFilterValue);
       this.getAll({ pos: pos, filter: filter, force: true, sort: this.sort });
       this.previousGlobalFilterValue = currentGlobalFilterValue;
       return;
@@ -1774,7 +1787,7 @@ export class CRUD extends Vars /*implements OnInit*/ {
       const sortedItems = this.applyLocalSort(filteredItems, event);
       this.items.set(sortedItems);
 
-      console.log('📊 Búsqueda local en página visible - Items encontrados:', filteredItems.length);
+      //console.log('📊 Búsqueda local en página visible - Items encontrados:', filteredItems.length);
       this.previousGlobalFilterValue = currentGlobalFilterValue;
       return;
     }
@@ -1784,7 +1797,7 @@ export class CRUD extends Vars /*implements OnInit*/ {
     this.limit()[pos] = event.rows;
     this.offset[pos] = event.first;
     this.getAll({ pos: pos, filter: filter, force: true, sort: this.sort });
-    console.log('📄 Paginación normal - recargando página:', { pos, rows: event.rows, first: event.first });
+    //console.log('📄 Paginación normal - recargando página:', { pos, rows: event.rows, first: event.first });
 
     this.previousGlobalFilterValue = currentGlobalFilterValue;
   }
@@ -2263,23 +2276,6 @@ export class CRUD extends Vars /*implements OnInit*/ {
     //console.log('fin resetFormDialog', this.currentForm());
   }
 
-  /**
-   * enciende la badera para abrir el dialog del formulario
-   */
-  showFormDialog(pos: any = null) {
-    pos = pos || this.pos();
-    if (pos === null) return; // Salir si pos es null
-    this.formDialogVisible[pos] = true;
-  }
-
-  /**
-   * apaga la badera para abrir el dialog del formulario
-   */
-  hideFormDialog(pos: any = null) {
-    pos = pos || this.pos();
-    if (pos === null) return; // Salir si pos es null
-    this.formDialogVisible[pos] = false;
-  }
 
   /**
    * Actualiza el registro en los arrays de items y itemsNew
@@ -2466,16 +2462,55 @@ export class CRUD extends Vars /*implements OnInit*/ {
     const formData = data ? data : this.currentForm(safePos).value;
     const include = this.include[safePos];
     const filter = this.filter;
+    //console.log('save if', this.currentForm(safePos).get('maintenance_document_data_documents')?.value, formData)
+
 
     //recorer formData y quitar todos los campos quue tiene la cadena document_
     Object.keys(formData).forEach((key) => {
-      if (key.includes('document_')) {
-        delete formData[key];
+
+      console.log(key, typeof formData[key] === 'object', formData[key] !== null, formData[key]);
+
+      const value = formData[key];
+
+      if (value && typeof value === 'object') {
+        const target = Array.isArray(value) ? value[0] : value;
+
+        if (target && typeof target === 'object' && target.constructor === Object) {
+          const field = (target as any).field;
+
+          // ✅ Borra solo si el key NO es el mismo que el field
+          // (ej: inventory_movement_data_document_final -> se borra)
+          // (ej: inventory_movement_data_documents -> NO se borra)
+          if (field && key && key !== field) {
+            delete formData[key];
+          }
+        }
       }
 
-      if (key.includes('documents_')) {
+
+
+      // revisar si formData[key] es objeto
+      /*if (typeof formData[key] === 'object' && formData[key] !== null) {
+
+        //asignar a consta data el valor de formData[key], pero formData[key] puede ser ub jector con field o un array de objetos con field, por ejemplo en el caso de los classifiers
+        console.log(formData[key], key);
+        const field = Array.isArray(formData[key]) && formData[key].length > 0 ? formData[key][0].field : formData[key].field;
+
+        if (field != key) {
+
+          console.log('111111111', field, key, Array.isArray(formData[key]), formData[key].length > 0, formData[key].field, formData);
+
+          delete formData[key];
+        }
+      }*/
+
+      /*if (key.includes('document_')) {
         delete formData[key];
       }
+ 
+      if (key.includes('documents_')) {
+        delete formData[key];
+      }*/
     });
 
     //console.log('forrmmmmmmmmmmmmmmmmmm', formData);
@@ -2660,11 +2695,10 @@ export class CRUD extends Vars /*implements OnInit*/ {
       this.file(options);
     } else {
 
-      console.log('save else', data, form.get('documents'), this.files64);
 
+      form.get('maintenance_document_data_documents')?.setValue(this.files64);
 
-
-      //form.get('maintenance_document_data_documents')?.setValue(this.files64);
+      console.log('save else', data, form.get('documents'), form.get('maintenance_document_data_documents'), this.files64)
       //form.get('documents')?.setValue(this.files64);
       this.submitForm({ pos, hide, reset, is_file, node, selected, update_item, data, custom_user });
     }
@@ -2805,7 +2839,7 @@ export class CRUD extends Vars /*implements OnInit*/ {
   }
 
   /**
-   * Es llamada cada vez que se cierra un dialogo de una app
+   * Evento que se dispara al cerrar un dialogo de una app
    * @param app app que se va a ocultar
    */
   onHide(app = null) {
@@ -2815,10 +2849,55 @@ export class CRUD extends Vars /*implements OnInit*/ {
   }
 
   /**
-   * Es llamada cada vez que se abre un dialogo de una app, normalmente tiene que inicializar formularios antes de abrirse
+   * Evento que se dispara al mostrar un dialogo de una app, normalmente tiene que inicializar formularios antes de abrirse
    * @param app app que se va a mostrar
    */
-  onShow(app: string = '') { }
+  onShow(app: string = '') {
+
+  }
+
+  // aqui voy debo quitar el documernts 
+  isShowDocumentsTab = signal<any[]>([]);
+  onTabChange(e: any) {
+    console.log('onTabChangeonTabChangeonTabChangeonTabChange', e);
+
+    //const tab = e.originalEvent.target.innerText;
+    //si se pica sobre la pestaña de documentos y si se esta en modo edición, carga los archivos
+    if (e == 4 /*&& !this.isCreate*/) {
+      // deberia existir una variable que le indique al componende de documentos app que se ingreso a la pestaña de documentos
+      //para que sean cargados los documentos en lugar de que se acrguen cada vez que se abre el dialogo
+      this.isShowDocumentsTab.set({
+        ...this.isShowDocumentsTab(),
+        [this.pos()]: true
+      });
+    } else {
+      this.isShowDocumentsTab.set({
+        ...this.isShowDocumentsTab(),
+        [this.pos()]: false
+      });
+    }
+  }
+
+  /**
+   * enciende la badera para abrir el dialog del formulario, no es el evento que se dispara al abrir el dialogo, 
+   * sino que es la función que se debe llamar para abrir el dialogo, 
+    * @param pos Posición de la app en el array, si no se envia valor de la posión actual
+   */
+  showFormDialog(pos: any = null) {
+    pos = pos || this.pos();
+    if (pos === null) return; // Salir si pos es null
+    this.formDialogVisible[pos] = true;
+  }
+
+  /**
+   * apaga la badera para abrir el dialog del formulario
+   */
+  hideFormDialog(pos: any = null) {
+    pos = pos || this.pos();
+    if (pos === null) return; // Salir si pos es null
+    this.formDialogVisible[pos] = false;
+  }
+
 
   /**
    * bloquea la pantalla y muestra un gif de carga.
@@ -2936,8 +3015,10 @@ export class CRUD extends Vars /*implements OnInit*/ {
   }
 
   saveConfig() {
-    const fieldsForm: any[] = this.configForm.value.columns;
-    const missingFields = this.cols().filter((col: any) => !fieldsForm.includes(col.field)).map((col: any) => col.field);
+    const cols: any[] = this.configForm.value?.columns || [];
+    const fields = this.configForm.value?.fields || {};
+
+    const missingFields = this.cols().filter((col: any) => !cols.includes(col.field)).map((col: any) => col.field);
     this.removeColumns.set(missingFields);
 
     const currentPos: any = this.pos() ?? 0;
@@ -2945,9 +3026,7 @@ export class CRUD extends Vars /*implements OnInit*/ {
       this.itemsRemove[currentPos] = missingFields;
     }
 
-    const filtersQuery = this.configForm.value.filters_query || '';
-    this.filter = filtersQuery;
-
+    this.filter = this.crudS.buildFilterString(fields);
     this.iniParam();
     this.getAll({ pos: currentPos, force: true });
 
@@ -3286,14 +3365,6 @@ export class CRUD extends Vars /*implements OnInit*/ {
       });
   }
 
-  onTabChange(e: any) {
-    const tab = e.originalEvent.target.innerText;
-    //si se pica sobre la pestaña de documentos y si se esta en modo edición, carga los archivos
-    if (tab === 'Documentos' && !this.isCreate) {
-      // deberia existir una variable que le indique al componende de documentos app que se ingreso a la pestaña de documentos
-      //para que sean cargados los documentos en lugar de que se acrguen cada vez que se abre el dialogo
-    }
-  }
 
   /**
    * filtra los estados dependientes de la app y el id del registro seleccionado, asigna los estados al menu de iniciar,
@@ -3572,7 +3643,7 @@ export class CRUD extends Vars /*implements OnInit*/ {
       eventValue: e?.event?.value,
       hasObject: !!e?.object
     });
-    
+
     const field = e?.field;
     const id = e?.event.value;
     /*const object = e?.object;
@@ -3608,7 +3679,7 @@ export class CRUD extends Vars /*implements OnInit*/ {
     } else {
       console.log('No tiene campo oculto asociado:', object);
     }*/
-    
+
     const endTime = performance.now();
     const duration = endTime - startTime;
     const endTimestamp = new Date().toISOString();
@@ -3653,7 +3724,7 @@ export class CRUD extends Vars /*implements OnInit*/ {
         console.log(`Campo oculto ${hiddenFieldName} actualizado con:`, selectedObject);
       }
     }
-    
+
     const endTime = performance.now();
     const duration = endTime - startTime;
     const endTimestamp = new Date().toISOString();
@@ -3903,7 +3974,7 @@ export class CRUD extends Vars /*implements OnInit*/ {
       node: node,
       additionalFieldsAppCols: additionalFieldsAppCols,
       //los capos para las configuraciones
-      fields: this.crudS.fields_form(safePos)
+      fields: this.crudS.fieldsForm(safePos)
     });
   }
 }
