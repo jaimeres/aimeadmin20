@@ -15,9 +15,8 @@
     (lazyLoadAction)="onLazyLoad({event:$event})" [rows]="limit()[pos()]" [totalRecords]="totalRecords()[pos()]"
     [filterDelayTable]="filterDelayTable()" />
 </div>
-
 <app-custom-local-settings [visible]="localSettingsDialogVisible" [field]="fieldConfig()" [formGroup]="configForm"
-  (saveAction)="saveConfig()" (visibleAction)="onLocalSettingsDialogVisible($event)" />
+  (saveAction)="saveConfig()" (visibleAction)="onLocalSettingsDialogVisible($event)" /> 
 
 <app-custom-import [visible]="importDialogVisible" (visibleAction)="onImportDialogVisible($event)"
   (saveAction)="onImportSave($event)" />
@@ -25,7 +24,8 @@
 <app-custom-actions-selection [visible]="actionsSelectionDialogVisible" (visibleChange)="onVisibleChange($event)" />
 
 <p-dialog [(visible)]="formDialogVisible[$any(typeDefault)]" (onHide)="onHide($any(typeDefault))"
-  (onShow)="onShow($any(typeDefault))" [styleClass]="styleClassDialog()" modal="true">
+  (onShow)="onShow($any(typeDefault))" [styleClass]="styleClassDialog()" modal="true"
+  [style]="{'contain': 'layout style paint'}">
 
   <ng-template #header>
     <div class="p-dialog-title">

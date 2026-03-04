@@ -10,6 +10,7 @@ import { MessageService } from '../../components/services/message.service';
 import { Router } from '@angular/router';
 import { GeneralService } from '../../utils/services/general.service';
 import { BiometricAuthService } from './biometric-auth.service';
+import { FormCacheService } from '../../utils/services/form-cache.service';
 import { Preferences } from '@capacitor/preferences';
 import { App } from '@capacitor/app';
 
@@ -45,7 +46,7 @@ export class AuthService {
   readonly username = computed(() => this._user()?.username ?? null);
   readonly userImage = computed(() => this._user()?.image ?? null);
 
-  constructor(private http: HttpClient, private cookieS: CookieService, private messageS: MessageService, private router: Router, private generalS: GeneralService, public biometricAuthS: BiometricAuthService) {
+  constructor(private http: HttpClient, private cookieS: CookieService, private messageS: MessageService, private router: Router, private generalS: GeneralService, public biometricAuthS: BiometricAuthService, private formCacheS: FormCacheService) {
     // Cargar tokens y usuario al inicializar (solo importante para móviles)
     this._storageReady = this.loadTokensFromStorage();
 
@@ -150,6 +151,11 @@ export class AuthService {
     this.setLoggedin(false);
     return this.http.post(`${this._base_url}/auth/logout/`, data).pipe(
       tap(async (resp: any) => {
+        // Limpiar todos los cachés de formulario del usuario antes de cerrar sesión
+        try {
+          const userId = String(this.userId() ?? this.username() ?? 'anonymous');
+          await this.formCacheS.clearAllForUser(userId);
+        } catch { /* silencioso */ }
         await this.clearTokensFromStorage();
         this.cookieS.delete('refresh');
         this.cookieS.delete('user');
@@ -161,6 +167,11 @@ export class AuthService {
         this.redirectMP();
       }),
       catchError(async (err) => {
+        // Limpiar cachés de formulario incluso si el logout fañó en el servidor
+        try {
+          const userId = String(this.userId() ?? this.username() ?? 'anonymous');
+          await this.formCacheS.clearAllForUser(userId);
+        } catch { /* silencioso */ }
         await this.clearTokensFromStorage();
         this.cookieS.delete('refresh');
         this.cookieS.delete('user');
@@ -180,11 +191,16 @@ export class AuthService {
   * @returns Observable que emite un valor bool.
   */
   tokenValidate(): Observable<boolean> {
-    //console.log('tokenValidate');
+    //console.log('tokenValidate---------------------------------------------------------------------------');
 
     // Crear la función async que maneje device_id
     const performTokenValidate = async () => {
       await this._storageReady;
+
+      //si el token de acceso el valido no necesita refrescar el token
+      //if (this.getTimeUntilTokenExpiration > 20) {
+      //  return of(true);
+      //}
 
       if (!this.refresh) {
         this.messageS.showLoginDialog();
@@ -224,12 +240,12 @@ export class AuthService {
           if (!this._config || Object.keys(this._config).length === 0) {
             return this.http.get(`${this._base_url}/settings/settings/me/`).pipe(
               tap((config: any) => {
-                console.log('refresh', config);
+                //console.log('refresh', config);
                 this.config = config; // Asignar la configuración
               }),
               map(() => true), // Retornar true para indicar éxito
               catchError((configError) => {
-                console.warn('Warning: Could not load configuration after refresh:', configError);
+                //console.warn('Warning: Could not load configuration after refresh:', configError);
                 // No fallar el refresh si la configuración falla, solo advertir
                 return of(true);
               })

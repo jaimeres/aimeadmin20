@@ -599,7 +599,7 @@ export class GeneralService {
 
   // ***********************ADAPTADO PARA CAPACITOR*********************
   /**
- * Indica si la aplicación se está ejecutando en plataforma nativa
+ * Estricto. Indica si la aplicación se está ejecutando en plataforma nativa
  * mediante Capacitor.
  *
   * No hace referencia al tamaño de pantalla.
@@ -633,13 +633,19 @@ export class GeneralService {
 
   // ***********************NUEVO MÉTODO*********************
   // Método público para obtener device_id solo en móviles
+  private _deviceId: string | null = null; // Cache para device_id
   public async getDeviceId(): Promise<string | null> {
     if (this.isMobile()) {
+      if (this._deviceId) {
+        return this._deviceId;
+      }
       try {
         const info = await Device.getId();
-        return info.identifier || null;
+        this._deviceId = info.identifier || null;
+        return this._deviceId;
+
       } catch (error) {
-        console.error('Error obteniendo device_id:', error);
+        //console.error('Error obteniendo device_id:', error);
         return null;
       }
     }

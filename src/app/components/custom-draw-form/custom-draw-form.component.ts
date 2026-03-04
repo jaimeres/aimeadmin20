@@ -2,6 +2,7 @@ import { CommonModule, KeyValue } from '@angular/common';
 import { FormControl, FormGroup, FormsModule, ReactiveFormsModule, FormArray, Validators, FormBuilder } from '@angular/forms';
 import { Component, ChangeDetectionStrategy, ElementRef, EventEmitter, inject, Input, Output, signal, computed, SimpleChanges, ViewChild, OnDestroy } from '@angular/core';
 import { Subscription } from 'rxjs';
+import { debounceTime } from 'rxjs/operators';
 // ************************ADAPTADO PARA CAPACITOR*********************
 import { Camera, CameraResultType, CameraSource } from '@capacitor/camera';
 // Scanner de códigos de barras para Capacitor
@@ -40,6 +41,7 @@ import { CustomButtonCrudComponent } from '../custom-button-crud/custom-button-c
 import { MessageService } from '../services/message.service';
 import { AuthService } from '@/auth/services/auth.service';
 import { Preferences } from '@capacitor/preferences';
+import { FormCacheConfig, FormCacheService } from '@/utils/services/form-cache.service';
 import { Pipe, PipeTransform } from '@angular/core';
 
 @Pipe({ name: 'joinOrSelf', standalone: true, pure: true })
@@ -112,7 +114,7 @@ export class JoinOrSelfPipe implements PipeTransform {
   templateUrl: './custom-draw-form.component.html',
   styleUrl: './custom-draw-form.component.scss',
   standalone: true,
-  //changeDetection: ChangeDetectionStrategy.OnPush,
+  changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class CustomDrawFormComponent implements OnDestroy {
 
@@ -125,41 +127,42 @@ export class CustomDrawFormComponent implements OnDestroy {
   private generalS: GeneralService = inject(GeneralService); // funciones generales
   private fb: FormBuilder = inject(FormBuilder);
   private authS: AuthService = inject(AuthService);
+  private formCacheS: FormCacheService = inject(FormCacheService);
 
   // Suscripción para detectar cambios en el formulario
   private formSubscription?: Subscription;
   private formStatusSubscription?: Subscription;
+  /** Suscripción para el autoguardado de caché */
+  private cacheAutoSaveSub?: Subscription;
   private wasDirty: boolean = false;
+
+  /** Clave activa de caché para el formulario actual */
+  private currentCacheKey: string | null = null;
+  /** Config de caché del drawForm para la plataforma actual */
+  private currentCacheConfig: FormCacheConfig | null = null;
 
   @Input() formGroup!: FormGroup;
   @Input() drawForm: any;
-  @Input() app: any;
+  @Input() type: any;
   @Input() tabPanel!: string;
-  //@Input() customField: any;
+  @Input() isCreate: boolean = true;
   @Input() optionLabel: any = 'label';
   @Input() showIcon: boolean = true;
 
   @Output() onChangeDropdownAction = new EventEmitter<any>();
   @Output() onShowDropdownAction = new EventEmitter<any>();
   @Output() onSelectAutoCompleteAction = new EventEmitter<any>();
-
   @Output() onNewIconDropdownAction = new EventEmitter<any>();
   @Output() onReloadIconDropdownAction = new EventEmitter<any>();
   @Output() onClosableIconDropdownAction = new EventEmitter<any>();
   @Output() onChangeToggleAction = new EventEmitter<any>();
   @Output() onNewIconAction = new EventEmitter<any>();
   @Output() onScanCodeAction = new EventEmitter<any>();
-
   @Output() onKeydownEnterAction = new EventEmitter<any>();
   @Output() onKeydownTabAction = new EventEmitter<any>();
-
   @Output() filesAction = new EventEmitter<any[]>();
   @Output() files64Action = new EventEmitter<any[]>();
-
-  // Button output
   @Output() onButtonClickAction = new EventEmitter<any>();
-
-  // Table outputs
   @Output() onTableRowSelect = new EventEmitter<any>();
   @Output() onTableRowUnselect = new EventEmitter<any>();
   @Output() onTableAddRow = new EventEmitter<any>();
@@ -169,11 +172,15 @@ export class CustomDrawFormComponent implements OnDestroy {
 
   formGroupSignal = signal<FormGroup | null>(null);
   drawFormSignal = signal<any>(null);
-  appSignal = signal<string>('');
+  typeSignal = signal<string>('');
   tabPanelSignal = signal<string>('');
   //customFieldSignal = signal<any>(null);
   optionLabelSignal = signal<any>('label');
   showIconSignal = signal<boolean>(true);
+  isCreateSignal = signal<boolean>(true);
+
+  /** Indica que el formulario fue restaurado desde un borrador en caché (solo en creaciones) */
+  readonly isCacheRestored = signal<boolean>(false);
 
   dropdownOptionsSignal = signal<any>({});
 
@@ -369,6 +376,13 @@ export class CustomDrawFormComponent implements OnDestroy {
         return null;
       }
 
+      // Descartar si la versión de la app ha cambiado (estructura del dropdown puede haber variado)
+      const appVersion = await this.formCacheS.getAppVersion();
+      if (parsed.version && parsed.version !== appVersion) {
+        await Preferences.remove({ key });
+        return null;
+      }
+
       if (Date.now() - savedAt > ttlMs) {
         await Preferences.remove({ key });
         return null;
@@ -394,6 +408,7 @@ export class CustomDrawFormComponent implements OnDestroy {
         key,
         value: JSON.stringify({
           savedAt: Date.now(),
+          version: await this.formCacheS.getAppVersion(),
           data
         })
       });
@@ -448,13 +463,6 @@ export class CustomDrawFormComponent implements OnDestroy {
     const separator = element?.option_label_separator ?? ' ';
     const labelFields = this.parseOptionLabel(element?.option_label);
     if (labelFields.length === 0) return;
-
-    /*console.log('🧩 applyOptionLabelToOptions', {
-      labelField,
-      labelFields,
-      separator,
-      sample: options?.[0]
-    });*/
 
     for (const opt of options) {
       const label = labelFields
@@ -668,9 +676,6 @@ export class CustomDrawFormComponent implements OnDestroy {
 
   ngOnChanges(changes: SimpleChanges) {
 
-    console.log('cambios----------------------');
-
-
     if (changes['formGroup']) {
       const previousValue = changes['formGroup'].previousValue;
       const currentValue = changes['formGroup'].currentValue;
@@ -690,6 +695,11 @@ export class CustomDrawFormComponent implements OnDestroy {
         setTimeout(() => {
           this.clearAllSignatureCanvases();
           this.clearAllMediaFiles();
+          // Si initFormAutoCache() ya terminó y restauró archivos desde caché,
+          // reconstruir files64Signal porque clearAllMediaFiles() los acaba de borrar
+          if (this.isCacheRestored()) {
+            this.restoreFiles64FromCache(currentValue);
+          }
         }, 300);
       }
 
@@ -703,17 +713,10 @@ export class CustomDrawFormComponent implements OnDestroy {
           const isPristine = currentValue.pristine;
           const isDirty = currentValue.dirty;
 
-          /*console.log('📊 Estado del formulario:', {
-            pristine: isPristine,
-            dirty: isDirty,
-            wasDirty: this.wasDirty,
-            hasMultimedia: this.hasMultimediaFiles()
-          });*/
-
           // Detectar reset: el formulario estaba dirty y ahora es pristine
           if (this.wasDirty && isPristine) {
             //console.log('🔄 Reset detectado (dirty -> pristine) - limpiando multimedia, firmas y reseteando stepper');
-            setTimeout(() => {
+            setTimeout(async () => {
               if (this.hasMultimediaFiles()) {
                 this.clearAllMediaFiles();
                 this.clearAllSignatureCanvases();
@@ -725,6 +728,13 @@ export class CustomDrawFormComponent implements OnDestroy {
                 this.setCurrentStep(initialStep);
                 //console.log(`📍 Stepper reseteado al step inicial: ${initialStep}`);
               }
+              // Limpiar caché de formulario al resetear (incluye luego de guardar en servidor)
+              await this.clearFormCache();
+              // Re-inicializar el sistema de caché para el próximo uso:
+              // Si el padre reutiliza la misma instancia de FormGroup (sin cambiar la referencia),
+              // ngOnChanges no dispara, así que reiniciamos aquí para que el autoguardado
+              // quede activo en la siguiente apertura del formulario.
+              this.initFormAutoCache();
             }, 50);
           }
 
@@ -753,8 +763,8 @@ export class CustomDrawFormComponent implements OnDestroy {
         //console.log('📍 Sin stepper - mostrando toda la multimedia');
       }
     }
-    if (changes['app']) {
-      this.appSignal.set(changes['app'].currentValue);
+    if (changes['type']) {
+      this.typeSignal.set(changes['type'].currentValue);
     }
     if (changes['tabPanel']) {
       this.tabPanelSignal.set(changes['tabPanel'].currentValue);
@@ -769,10 +779,19 @@ export class CustomDrawFormComponent implements OnDestroy {
       this.showIconSignal.set(changes['showIcon'].currentValue);
     }
 
+    if (changes['formGroup'] || changes['drawForm'] || changes['type'] || /*changes['tabPanel'] ||*/ changes['isCreate']) {
+      this.initFormAutoCache();
+    }
+
+    if (changes['isCreate']) {
+      this.isCreateSignal.set(changes['isCreate'].currentValue);
+    }
+
   }
 
   /**
-   * Limpia las suscripciones cuando el componente se destruye
+   * Limpia las suscripciones cuando el componente se destruye.
+   * El caché NO se borra aquí: los datos persisten para recuperación futura.
    */
   ngOnDestroy(): void {
     //console.log('🧹 Limpiando suscripciones del componente');
@@ -782,6 +801,165 @@ export class CustomDrawFormComponent implements OnDestroy {
     if (this.formStatusSubscription) {
       this.formStatusSubscription.unsubscribe();
     }
+    if (this.cacheAutoSaveSub) {
+      this.cacheAutoSaveSub.unsubscribe();
+    }
+  }
+
+  // ─────────────────────────────────────────────────
+  // Caché automático de formulario
+  // ─────────────────────────────────────────────────
+
+  /**
+   * Inicializa el sistema de caché para el formulario actual.
+   * Lee la config `cache` del drawForm, decide si aplica para el
+   * dispositivo / modo actual, restaura datos del borrador si existen
+   * y se suscribe a valueChanges para autoguardar.
+   */
+  private async initFormAutoCache(): Promise<void> {
+    const formGroup = this.formGroupSignal();
+    const drawForm = this.drawFormSignal();
+    // Usar el @Input directo como fallback porque typeSignal solo se actualiza
+    // cuando 'app' aparece en changes, y puede no coincidir con el ciclo actual
+    const type = this.typeSignal() || this.type;
+
+    // Limpiar suscripción de autoguardado anterior
+    if (this.cacheAutoSaveSub) {
+      this.cacheAutoSaveSub.unsubscribe();
+      this.cacheAutoSaveSub = undefined;
+    }
+
+    if (!formGroup || !drawForm) {
+      return;
+    }
+
+    // Escanear los campos del drawForm para obtener cuáles tienen caché habilitado
+    const cacheConfig = this.formCacheS.getCacheConfig(drawForm);
+    if (!cacheConfig) {
+      return;
+    }
+
+    // Seleccionar qué campos aplican según el modo actual
+    const cacheableFields = this.isCreateSignal()
+      ? cacheConfig.creationFields
+      : cacheConfig.editionFields;
+
+    if (cacheableFields.length === 0) {
+      return;
+    }
+
+    // Construir clave única por usuario + app + tabPanel
+    const key = this.formCacheS.getKey(
+      this.getCacheUserKey(),
+      type || 'default',
+      this.tabPanelSignal() || /*this.tabPanel ||*/ 'default'
+    );
+
+    console.log('[FormCache] cache key:', key);
+
+    this.currentCacheKey = key;
+    this.currentCacheConfig = cacheConfig;
+
+    // ── Restaurar borrador si existe ────────────────
+    if (this.isCreateSignal()) {
+      const cached = await this.formCacheS.load(key);
+      if (cached) {
+        formGroup.patchValue(cached, { emitEvent: false });
+        formGroup.markAsDirty();
+        this.wasDirty = true;
+        this.isCacheRestored.set(true);
+        // files64Signal no se restaura con patchValue (es solo memoria);
+        // reconstruirlo a partir de los valores de tipo archivo del formulario
+        this.restoreFiles64FromCache(formGroup);
+      }
+    }
+
+    // ── Autoguardado con debounce — solo campos permitidos ───────────
+    this.cacheAutoSaveSub = formGroup.valueChanges
+      .pipe(debounceTime(1500))
+      .subscribe((value) => {
+        if (!this.currentCacheKey || !this.currentCacheConfig) return;
+        // Filtrar solo los campos que tienen caché habilitado para evitar guardar datos sensibles
+        const fields = this.isCreateSignal()
+          ? this.currentCacheConfig.creationFields
+          : this.currentCacheConfig.editionFields;
+        const filtered: any = {};
+        for (const f of fields) {
+          if (f in value) filtered[f] = value[f];
+          // Para dropdowns de tipo object_X, también persiste el campo derivado X
+          // (objeto completo establecido por onChangeDropdown via setValue)
+          //esto ya no es necesario ya que  el patchValue lo debe agregaer
+          //if (f.startsWith('object_')) {
+          //  const derived = f.replace('object_', '');
+          //  if (derived in value) filtered[derived] = value[derived];
+          //}
+        }
+        console.log('[FormCache] autoSave triggered, fields:', fields, this.currentCacheKey, filtered, this.currentCacheConfig);
+        this.formCacheS.save(this.currentCacheKey, filtered, this.currentCacheConfig);
+      });
+
+    console.log('[FormCache] ✅ autoSave subscription active, key:', key);
+  }
+
+  /**
+   * Reconstruye files64Signal a partir de los valores del formulario restaurados
+   * desde caché. Necesario porque appendFile guarda el archivo en dos lugares:
+   * el FormControl (persistido en caché) y files64Signal (solo en memoria).
+   * Al restaurar con patchValue solo se recupera el form; este método sincroniza
+   * files64Signal para que las imágenes/videos vuelvan a mostrarse en el template.
+   */
+  private restoreFiles64FromCache(formGroup: FormGroup): void {
+    // patchValue ya restauró todos los FormControls (documents, object_, etc.).
+    // Aquí solo reconstruimos files64Signal (memoria) desde lo que ya está en el form.
+    // NO llamamos appendFile: eso volvería a hacer setValue y acumularía en cada llamada.
+    const seen = new Set<string>(); // dedup por base64: field y key tienen los mismos fileObjects
+    const restoredFiles: any[] = [];
+
+    Object.keys(formGroup.controls).forEach(controlName => {
+      const value = formGroup.get(controlName)?.value;
+      if (!value) return;
+
+      const items: any[] = Array.isArray(value) ? value : [value];
+      for (const item of items) {
+        if (
+          item &&
+          typeof item === 'object' &&
+          typeof item.file === 'string' &&
+          (item.type === 'image' || item.type === 'video') &&
+          //esto es exclusivo para cuando se agrega documentos por separado por ejemplo campos_inicial, campo_final
+          //esa seria la clave, pero el field seria documents
+          controlName === item.field //
+        ) {
+          //const dedupKey = item.file.slice(0, 60);
+          //if (seen.has(dedupKey)) continue;
+          //seen.add(dedupKey);
+          restoredFiles.push(item);
+        }
+      }
+    });
+
+    this.files64Signal.set(restoredFiles);
+    this.files64Action.emit(restoredFiles);
+  }
+
+  /**
+   * Elimina el borrador en caché y apaga el indicador de recuperación.
+   * La clave permanece activa para seguir autoguardando nuevas entradas.
+   */
+  private async clearFormCache(): Promise<void> {
+    if (this.currentCacheKey) {
+      await this.formCacheS.clear(this.currentCacheKey);
+    }
+    this.isCacheRestored.set(false);
+  }
+
+  /**
+   * Descarta el borrador y limpia el formulario.
+   * Llamado desde el botón "Descartar borrador" en el template.
+   */
+  async discardCacheData(): Promise<void> {
+    await this.clearFormCache();
+    this.formGroupSignal()?.reset();
   }
 
   /**
@@ -805,8 +983,6 @@ export class CustomDrawFormComponent implements OnDestroy {
 
     const formGroup = this.formGroupSignal();
     if (!formGroup) return false;
-
-    //console.log(`🔍 Validando campos del step ${stepNumber}`);
 
     // Obtener todos los campos del step
     const stepFields = Object.values(step.fields);
@@ -960,14 +1136,6 @@ export class CustomDrawFormComponent implements OnDestroy {
             // Si el campo no existe en foundObject pero tiene default, usar el default
             filteredObject[fieldName] = colConfig.default;
           }
-
-          // Log de campos requeridos faltantes para debugging
-          /*if (colConfig.required && !foundObject.hasOwnProperty(fieldName) && !colConfig.hasOwnProperty('default')) {
-            console.warn(`⚠️ Campo requerido "${fieldName}" no encontrado en objeto y sin valor default`, {
-              foundObject,
-              colConfig
-            });
-          }*/
         });
 
         currentValueObject = filteredObject;
@@ -1028,19 +1196,10 @@ export class CustomDrawFormComponent implements OnDestroy {
                 const logic = activateConfig.logic || 'AND';
                 const action = activateConfig.action || 'inactive'; // inactive/active
 
-                /*console.log('🔓 Evaluando activación para campo:', {
-                  field: key,
-                  fieldType,
-                  conditions,
-                  logic,
-                  action
-                });*/
-
                 // Evaluar cada condición
                 const conditionResults = conditions.map((condition: any) => {
                   // VALIDAR: field es OBLIGATORIO
                   if (!condition.field) {
-                    //console.error('❌ ERROR: condition.field es obligatorio', { condition, fieldConfig: key });
                     return false;
                   }
 
@@ -1078,16 +1237,6 @@ export class CustomDrawFormComponent implements OnDestroy {
 
                   // Obtener el valor a comparar según filter_group
                   const compareValue = filterGroup ? conditionValue[filterGroup] : conditionValue;
-
-                  /*console.log('🔍 Evaluando condición de activación:', {
-                    conditionField,
-                    isParentField,
-                    conditionValue,
-                    compareValue,
-                    operator,
-                    values,
-                    filterGroup
-                  });*/
 
                   // Evaluar según operador
                   let result = false;
@@ -1153,13 +1302,13 @@ export class CustomDrawFormComponent implements OnDestroy {
                           result = compareValue >= inicio && compareValue <= fin;
                         }
                       } else {
-                        console.error(`❌ ERROR: Operador 'range' requiere EXACTAMENTE 2 valores [inicio, fin]. Recibidos: ${values.length}`, values);
+                        //console.error(`❌ ERROR: Operador 'range' requiere EXACTAMENTE 2 valores [inicio, fin]. Recibidos: ${values.length}`, values);
                         result = false;
                       }
                       break;
 
                     default:
-                      console.warn('⚠️ Operador desconocido:', operator);
+                      //console.warn('⚠️ Operador desconocido:', operator);
                       result = false;
                   }
 
@@ -1225,18 +1374,11 @@ export class CustomDrawFormComponent implements OnDestroy {
                   });
                   // No aplicar ninguna validación si no hay action explícito
                 } else {
-                  /*console.log('📋 Evaluando required para campo:', {
-                    field: key,
-                    fieldType,
-                    conditions,
-                    logic,
-                    action
-                  });*/
 
                   // Evaluar cada condición (misma lógica que activate)
                   const conditionResults = conditions.map((condition: any) => {
                     if (!condition.field) {
-                      console.error('❌ ERROR: condition.field es obligatorio en requested', { condition, fieldConfig: key });
+                      //console.error('❌ ERROR: condition.field es obligatorio en requested', { condition, fieldConfig: key });
                       return false;
                     }
 
@@ -1566,10 +1708,6 @@ export class CustomDrawFormComponent implements OnDestroy {
         }
       });
     }
-
-    console.log('fin onChangeDropdown', performance.now());
-
-
   }
 
   /**
@@ -2260,7 +2398,6 @@ export class CustomDrawFormComponent implements OnDestroy {
         if (control) {
           control.setValue(valueToSet);
           control.markAsDirty();
-          //console.log(`📁 Valor establecido en FormControl field "${payload.field}":`, valueToSet);
         }
       }
 
@@ -2273,7 +2410,6 @@ export class CustomDrawFormComponent implements OnDestroy {
         if (keyControl) {
           keyControl.setValue(valueToSet);
           keyControl.markAsDirty();
-          //console.log(`📁 Valor establecido en FormControl key "${currentKey}":`, valueToSet);
         }
       }
     }
@@ -2302,7 +2438,10 @@ export class CustomDrawFormComponent implements OnDestroy {
 
       if (this.videoDevices.length === 0) {
         this.videoDevices = await this.getMediaDevices();
-        if (this.videoDevices.length === 0) throw new Error('No se encontraron cámaras disponibles.');
+        if (this.videoDevices.length === 0) {
+          this.messageS.changeMessage('No se encontraron cámaras disponibles');
+          return;
+        }
 
         let backCamera = this.videoDevices.find(d => (d.label || '').toLowerCase().includes('back'))
           || this.videoDevices.find(d => (d.label || '').toLowerCase().includes('rear'))
@@ -2334,11 +2473,11 @@ export class CustomDrawFormComponent implements OnDestroy {
       this.previewCameraDialogVisible = true;
     } catch (error: any) {
       if (error?.name === 'OverconstrainedError') {
-        console.error('No se pudo satisfacer las restricciones de video:', error);
+        this.messageS.changeMessage('No se pudo satisfacer las restricciones de video:', error);
       } else if (error?.name === 'NotAllowedError' || error?.name === 'SecurityError') {
-        console.error('Permiso denegado para acceder a la cámara:', error);
+        this.messageS.changeMessage('Permiso denegado para acceder a la cámara:', error);
       } else {
-        console.error('Error al acceder a la cámara:', error);
+        this.messageS.changeMessage('Error al acceder a la cámara:', error);
       }
     }
   }
@@ -2366,10 +2505,10 @@ export class CustomDrawFormComponent implements OnDestroy {
 
           this.previewCameraDialogVisible = false;
         } catch (error) {
-          console.error('Error al capturar imagen con Capacitor:', error);
+          this.messageS.changeMessage('Error al capturar imagen.');
         }
       } else {
-        console.warn('Grabación de video no soportada con Capacitor Camera por defecto.');
+        this.messageS.changeMessage('Grabación de video no soportada.');
       }
       return;
     }
@@ -2474,7 +2613,7 @@ export class CustomDrawFormComponent implements OnDestroy {
 
       // Verificar que el archivo pertenece al step actual
       if (currentStep !== null && fileToRemove.step !== currentStep) {
-        console.warn(`⚠️ No se puede eliminar archivo de otro step. Step actual: ${currentStep}, Step del archivo: ${fileToRemove.step}`);
+        //console.warn(`⚠️ No se puede eliminar archivo de otro step. Step actual: ${currentStep}, Step del archivo: ${fileToRemove.step}`);
         return;
       }
 
@@ -2486,7 +2625,7 @@ export class CustomDrawFormComponent implements OnDestroy {
       );
 
       if (realIndex === -1) {
-        console.warn('⚠️ No se encontró el archivo para eliminar');
+        //console.warn('⚠️ No se encontró el archivo para eliminar');
         return;
       }
 
@@ -2517,7 +2656,6 @@ export class CustomDrawFormComponent implements OnDestroy {
           if (control) {
             control.setValue(valueToSet);
             control.markAsDirty();
-            //console.log(`📁 Valor actualizado en FormControl field "${fileToRemove.field}":`, valueToSet);
           }
         }
 
@@ -2536,7 +2674,6 @@ export class CustomDrawFormComponent implements OnDestroy {
           if (keyControl) {
             keyControl.setValue(valueToSet);
             keyControl.markAsDirty();
-            //console.log(`📁 Valor actualizado en FormControl key "${fileToRemove.key}":`, valueToSet);
           }
         }
       }

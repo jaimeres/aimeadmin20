@@ -8,4 +8,6 @@ export const environment = {
   base_url: 'http://127.0.0.1:8000/v1',
   mk: 'localhost',
   erp: 'localhost',
+  /** Versión de la app. Cambiar aqui invalida todos los cachés automáticamente. */
+  appVersion: '1.0.3',
 };

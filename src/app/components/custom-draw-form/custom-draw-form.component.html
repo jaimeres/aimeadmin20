@@ -65,7 +65,7 @@
       [options]="dropdownOptionsSignal()[fieldConfig.field]" [pAutoFocus]="fieldConfig.autofocus"
       [formControl]="$any(formGroupSignal()?.get(fieldConfig.field))" key="id" [appendTo]="'body'" [showClear]="true"
       (onClear)="clearTreeSelect(fieldConfig.field)" (onChangeAction)="onChangeDropdown($event, fieldConfig)"
-      styleClass="height-input-custom"
+      styleClass="height-input-custom" class="height-input-custom"
       [filter]="fieldConfig.filter_local !== undefined ? fieldConfig.filter_local : false"
       [filterBy]="fieldConfig.filter_by ? fieldConfig.filter_by : null" />
 
@@ -601,6 +601,20 @@
     [pAutoFocus]="fieldConfig?.autofocus || false" [disabled]="fieldConfig?.disabled || false">
   </p-splitbutton>
 </ng-template>
+
+<!-- ================================================= -->
+<!-- INDICADOR: formulario recuperado desde borrador   -->
+<!-- Visible solo en modo creación cuando hay datos    -->
+<!-- en caché pendientes de guardar en el servidor     -->
+<!-- ================================================= -->
+<div *ngIf="isCacheRestored() && isCreateSignal()" class="col-span-12 flex items-center gap-2 mb-2 px-3 py-2
+         bg-yellow-50 border border-yellow-300 rounded-lg text-yellow-800 text-sm">
+  <i class="pi pi-history text-yellow-500"></i>
+  <span class="font-medium flex-1">Formulario recuperado desde un borrador guardado automáticamente.</span>
+  <button pButton type="button" icon="pi pi-trash" class="p-button-text p-button-sm p-button-warning ml-auto"
+    style="height: 26px; width: 26px;" pTooltip="Descartar borrador y limpiar formulario" (click)="discardCacheData()">
+  </button>
+</div>
 
 <div *ngIf="drawFormSignal()['grid']" class="grid grid-cols-12 gap-2 "> <!-- pt-3 -->
   <div *ngFor="let entry of drawFormSignal()['grid'] | keyvalue : keyComparator;"

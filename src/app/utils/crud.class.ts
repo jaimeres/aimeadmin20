@@ -102,6 +102,7 @@ export class CRUD extends Vars /*implements OnInit*/ {
   }
 
   styleClassDialog = signal<string>('width-650px-custom min-height-550px-custom');
+  //hideDialogMobile = signal<boolean>(this.generalS.isMobileScreen());
 
   /**
    * Identifica si se campio de app e inicializa los valores correnpondientes
@@ -155,6 +156,8 @@ export class CRUD extends Vars /*implements OnInit*/ {
         ...this.limit(),
         [safePos]: limit || this.limit()[0]
       });
+
+      //this.hideDialogMobile.set(this.generalS.isMobileScreen() && this.drawForm()[pos]?.dialog?.hide_mobile);
 
       // no utilizo directamente this.cols() al enviar la columna porque this.fieldConfig() es un objecto de varios valores,
       // y en este caso solo estoy inicializando la propiedad cols de objecto this.fieldConfig()
@@ -1434,7 +1437,7 @@ export class CRUD extends Vars /*implements OnInit*/ {
         this.formTempo[pos] = this.generateJSONform(this.optionsFields[pos]);
         this.form.set(this.formTempo);
 
-        if (this.isCreate) {
+        if (this.isCreate()) {
           this.classifierLevelsDropdown();
         }
       } else {
@@ -1452,7 +1455,7 @@ export class CRUD extends Vars /*implements OnInit*/ {
       }
     } else {
       this.form.set(this.formTempo);
-      if (this.isCreate) {
+      if (this.isCreate()) {
         this.classifierLevelsDropdown();
       }
     }
@@ -1968,8 +1971,8 @@ export class CRUD extends Vars /*implements OnInit*/ {
       }
     }
 
-    // es indispensable que vaya antes de createF orm porque createF orm utiliza el valor de isCreate para inicializar el form
-    this.isCreate = true;
+    // es indispensable que vaya antes de createF orm porque createF orm utiliza el valor de is Create para inicializar el form
+    this.isCreate.set(true);
     //llama a changePos para que se inicialicen los valores correspondientes a la app,
     //dado que crear tiene un menu para crear los elementos, a diferencia de edit o delete
 
@@ -2177,8 +2180,8 @@ export class CRUD extends Vars /*implements OnInit*/ {
     const pos: any = this.pos() ?? 0;
     if (pos === null) return; // Salir si pos es null
 
-    // es indispensable que vaya antes de createF orm porque createF orm utiliza el valor de isCreate para inicializar el form
-    this.isCreate = false;
+    // es indispensable que vaya antes de createF orm porque createF orm utiliza el valor de is Create para inicializar el form
+    this.isCreate.set(false);
     //crear o inicializa el form
     this.createForm(pos);
     this.getDetailEdit(this.selected()[0].id);
@@ -2194,7 +2197,7 @@ export class CRUD extends Vars /*implements OnInit*/ {
   editSecundary(pos: any): void {
     // Edit no recibe la app porque solo is un boton para todas las apps
 
-    // es indispensable que vaya antes de createF orm porque createF orm utiliza el valor de isCreate para inicializar el form
+    // es indispensable que vaya antes de createF orm porque createF orm utiliza el valor de is Create para inicializar el form
     this.isCreateSecundary = false;
     //crear o inicializa el form
     if (!this.formTempo[pos]) {
@@ -2515,7 +2518,7 @@ export class CRUD extends Vars /*implements OnInit*/ {
 
     //console.log('forrmmmmmmmmmmmmmmmmmm', formData);
     //revisar porque la primer seleccion del archivo se envia vacio de asset-document
-    if (this.isCreate) {
+    if (this.isCreate()) {
       this.crudS.saveObject({ formData, include, filter /*, files*/ }).subscribe({
         next: (resp: any) => {
           const temp = [...this.items()];
@@ -2576,7 +2579,7 @@ export class CRUD extends Vars /*implements OnInit*/ {
           } else {
             // si en la edición no se cierra el dialogo, se cambia la bandera a true para que cuando permita guardar
             // si se ponen nuevos datos ya que el boton se llama guardar y nuevo
-            this.isCreate = true;
+            this.isCreate.set(true);
           }
 
           if (reset) {
@@ -2843,7 +2846,7 @@ export class CRUD extends Vars /*implements OnInit*/ {
    * @param app app que se va a ocultar
    */
   onHide(app = null) {
-    this.isCreate = false;
+    this.isCreate.set(false);
     this.files = [];
     this.files64 = [];
   }
@@ -3113,7 +3116,7 @@ export class CRUD extends Vars /*implements OnInit*/ {
     this.enableForm();
 
     // si se va a editar restablce la selección y verifica si el elemento es del sistema para bloquear los campos que no son del sitema
-    if (!this.isCreate) {
+    if (!this.isCreate()) {
       this.selected.set([]);
       this.selected()[0] = data;
       //inhabilita los campos del form cuando son del sistema, a excepción del array activate_sys
@@ -3205,7 +3208,7 @@ export class CRUD extends Vars /*implements OnInit*/ {
 
     let classifiers = (this.classifiersGen() as any)[currentPos][classifier_type][level];
 
-    if (this.isCreate) {
+    if (this.isCreate()) {
       (this.auxFormClassifiers as any)['formControlName'][i] = i;
       // si es creación, se limpian los clasificadores de los niveles superiores
       if (level > 1) {
@@ -3526,7 +3529,7 @@ export class CRUD extends Vars /*implements OnInit*/ {
   onImportSave(data: any) {
     const pos = this.pos();
 
-    this.isCreate = true; // para que no se muestre el boton de editar
+    this.isCreate.set(true); // para que no se muestre el boton de editar
     data.forEach((data: any) => {
       this.resetFormDialog({ selected: data.attributes });
       this.save({ pos: pos ?? '0' }); //data:data?.attributes

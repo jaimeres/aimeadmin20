@@ -34,7 +34,7 @@ export class MessageService {
    * @param life (toast) --15000-- tiempo de vida del mensaje en milisegundos.
    */
   changeMessage(msg: string = 'No fue posible ejecutar la solicitud', err = null, customFields = {}, severity = 'error', summary = 'Error', swal = false, life = 15000) {
-    //console.log('Mensaje cambiado:', { msg, err, customFields, severity, summary, swal, life });
+    console.log('Mensaje cambiado:', { msg, err, customFields, severity, summary, swal, life });
 
     this.messageSource.next({ msg: msg, err: err, nameEsp: customFields, severity: severity, summary: summary, swal: swal, life: life });
     // Actualizamos el mensaje actual

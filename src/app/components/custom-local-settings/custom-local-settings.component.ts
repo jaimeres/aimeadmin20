@@ -274,8 +274,8 @@ export class CustomLocalSettingsComponent implements OnChanges, OnDestroy {
     if (changes['visible']) this.visibleSignal.set(changes['visible'].currentValue);
     if (changes['field']) {
       this.fieldSignal.set(changes['field'].currentValue);
-      this._initFilterState();
-      this._initUnifiedRows();
+      //this._initFilterState();
+      //this._initUnifiedRows();
     }
     if (changes['formGroup']) this.formGroupSignal.set(changes['formGroup'].currentValue);
   }

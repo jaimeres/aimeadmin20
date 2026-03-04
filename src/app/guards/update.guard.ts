@@ -26,7 +26,6 @@ export class UpdateGuard implements CanActivate {
 
     // Verificar si hay actualización crítica pendiente
     if (this.updateManager.hasCriticalUpdate()) {
-      console.log('🚫 Navegación bloqueada: actualización crítica pendiente');
 
       // Mostrar el diálogo de actualización si no está visible
       this.updateManager.showUpdateDialog();

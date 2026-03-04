@@ -1,27 +1,3 @@
-// Per-column header row
-.filter-row-header {
-  padding: 0.35rem 0;
-  gap: 0.4rem;
-  flex-wrap: wrap;
-}
-
-// Small toggle
-:host ::ng-deep .toggle-sm {
-  height: 2rem;
-  min-width: 3.5rem;
-  font-size: 0.75rem;
-  padding: 0 0.4rem;
-}
-
-// Type select (compact)
-:host ::ng-deep .filter-type-select {
-  min-width: 128px;
-
-  .p-select-label {
-    font-size: 0.78rem;
-  }
-}
-
 // Op select (compact) — legacy class kept for backward compat
 :host ::ng-deep .filter-op-select {
   width: auto !important;
@@ -30,20 +6,6 @@
 
   .p-select-label {
     font-size: 0.78rem;
-  }
-}
-
-// URL preview box
-.filter-url-preview {
-  background: var(--surface-100, #f5f5f5);
-  border: 1px solid var(--surface-300, #ddd);
-  border-radius: 6px;
-  word-break: break-all;
-
-  code {
-    font-family: monospace;
-    font-size: 0.74rem;
-    color: var(--text-color-secondary);
   }
 }
 
@@ -76,19 +38,6 @@
 
 .uf-row-inactive {
   opacity: 0.6;
-}
-
-.uf-no-filter-spacer {
-  display: inline-block;
-  width: 1.25rem;
-  flex-shrink: 0;
-}
-
-:host ::ng-deep .uf-badge-toggle {
-  .p-togglebutton {
-    padding: 0.2rem 0.4rem !important;
-    min-width: unset !important;
-  }
 }
 
 // ── Compact icon-only toggle (single row) ──────────────────────────────────────
@@ -163,16 +112,6 @@
   padding: 0 0.25rem;
 }
 
-// Visual separator between config and filter icons
-.uf-sep {
-  display: inline-block;
-  width: 1px;
-  height: 1.5rem;
-  background: var(--surface-300, #ddd);
-  flex-shrink: 0;
-  align-self: center;
-}
-
 // ── Preview dialog grid ────────────────────────────────────────────────────────
 
 :host ::ng-deep .preview-dialog {
@@ -220,11 +159,6 @@
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.22);
   border-radius: 6px;
   background: var(--surface-card);
-}
-
-.preview-cell-active {
-  background: var(--surface-100);
-  border-color: var(--primary-400, #60a5fa);
 }
 
 .preview-cell-inactive {
@@ -277,29 +211,6 @@
   }
 }
 
-.col-order-row,
-.grid-order-row {
-  transition: box-shadow 0.15s;
-
-  &.cdk-drag-animating {
-    transition: transform 250ms cubic-bezier(0, 0, 0.2, 1);
-  }
-}
-
-.cdk-drag-preview {
-
-  &.col-order-row,
-  &.grid-order-row {
-    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.18);
-    border-radius: 6px;
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    padding: 0.5rem;
-    background: var(--surface-card);
-  }
-}
-
 .col-order-placeholder {
   background: var(--primary-100, #e0f2ff);
   border: 2px dashed var(--primary-400, #60a5fa);
@@ -320,10 +231,6 @@
   font-size: 0.7rem;
   font-weight: bold;
   flex-shrink: 0;
-}
-
-.grid-order-inactive {
-  opacity: 0.5;
 }
 
 // Mini span preview bars

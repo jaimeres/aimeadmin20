@@ -38,7 +38,7 @@ export class Vars {
   /**
    * indica si se crea o actualiza el registro, true para crear false para actualizar
    */
-  public isCreate = false;
+  public isCreate = signal<boolean>(false);
 
   /**
    * formulario para el crud, contiene el form de la app ACTUAL

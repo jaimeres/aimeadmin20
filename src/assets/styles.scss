@@ -206,7 +206,7 @@ p-dialog .p-button-icon-only.p-button-rounded {
 
 
 .table-fit-Custom {
-  height: calc(100vh - 100px) !important;
+  height: calc(100dvh - 100px) !important;
 }
 
 
@@ -464,7 +464,7 @@ body.scanner-active::after {
   --header-h: 4.1rem;
   --vv-top: 0px;
   --vv-bottom: 0px;
-  --vv-h: 100vh;
+  --vv-h: 100dvh;
   --safe-top: env(safe-area-inset-top, 0px);
   --safe-bottom: env(safe-area-inset-bottom, 0px);
   --top-inset: max(var(--vv-top), var(--safe-top));
@@ -1010,7 +1010,7 @@ p-speeddial.crud-speeddial .p-speeddial-list>li>button:focus-visible {
   flex-direction: column;
 
   /* CLAVE: NO restes header aquí porque ya está en padding-top */
-  height: calc(var(--vv-h, 100vh) - var(--bottom-inset)) !important;
+  height: calc(var(--vv-h, 100dvh) - var(--bottom-inset)) !important;
 
   overflow: hidden !important;
   /* evita que el wrapper sea el scroll */

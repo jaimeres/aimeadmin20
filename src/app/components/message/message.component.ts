@@ -83,8 +83,9 @@ export class MessageComponent implements OnInit {
             } else {
               // si la respuesta falla tratará de buscar msg.err?.statusText e imprimirá ese error, en caso contrario una cadena generíca
               const errors = msg.err?.statusText;
-              if (errors) {
-                this.print_errors.push(errors);
+              const message = msg.err?.error?.message;
+              if (errors || message) {
+                this.print_errors.push(`${errors} ${message}`);
               } else {
                 this.print_errors.push('Hay un error desconocido.');
               }

@@ -1,12 +1,13 @@
-import { Component } from '@angular/core';
+import { Component, inject } from '@angular/core';
 import { MonthlyComparisonWidget } from '@/pages/dashboard/analytics/components/monthlycomparisonwidget';
 import { InsightsWidget } from '@/pages/dashboard/analytics/components/insightswidget';
-import { StatsWidget } from '@/pages/dashboard/analytics/components/statswidget';
-import { StoresWidget } from '@/pages/dashboard/analytics/components/storeswidget';
-import { TopSearchesWidget } from '@/pages/dashboard/analytics/components/topsearcheswidget';
-import { AnalyticsTableWidget } from '@/pages/dashboard/analytics/components/analyticstablewidget';
-import { ExpensesWidget } from '@/pages/dashboard/analytics/components/expenseswidget';
-import { RatingsWidget } from '@/pages/dashboard/analytics/components/ratingswidget';
+//import { StatsWidget } from '@/pages/dashboard/analytics/components/statswidget';
+//import { StoresWidget } from '@/pages/dashboard/analytics/components/storeswidget';
+//import { TopSearchesWidget } from '@/pages/dashboard/analytics/components/topsearcheswidget';
+//import { AnalyticsTableWidget } from '@/pages/dashboard/analytics/components/analyticstablewidget';
+//import { ExpensesWidget } from '@/pages/dashboard/analytics/components/expenseswidget';
+//import { RatingsWidget } from '@/pages/dashboard/analytics/components/ratingswidget';
+import { MessageService } from '../../../components/services/message.service';
 
 @Component({
   selector: 'app-dashboard-analytics',
@@ -38,4 +39,11 @@ import { RatingsWidget } from '@/pages/dashboard/analytics/components/ratingswid
     </div>-->
   </div>`
 })
-export class DashboardAnalytics { }
+export class DashboardAnalytics {
+
+  private messageS: MessageService = inject(MessageService); // para mostrar mensajes
+
+  constructor() {
+    this.messageS.showBlocked(false);
+  }
+}

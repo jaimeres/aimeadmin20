@@ -19,7 +19,6 @@
 <app-custom-local-settings [visible]="localSettingsDialogVisible" [field]="fieldConfig()" [formGroup]="configForm"
   (saveAction)="saveConfig()" (visibleAction)="onLocalSettingsDialogVisible($event)" />
 
-
 <app-custom-import [visible]="importDialogVisible" (visibleAction)="onImportDialogVisible($event)"
   (saveAction)="onImportSave($event)" />
 
@@ -27,7 +26,7 @@
 
 <p-dialog [(visible)]="formDialogVisible[$any(typeDefault)]" (onHide)="onHide($any(typeDefault))"
   (onShow)="onShow($any(typeDefault))" [styleClass]="styleClassDialog()" [resizable]="true" [draggable]="true"
-  modal="true">
+  modal="true" [style]="{'contain': 'layout style paint'}">
   <!-- [style]="{'contain': 'layout style paint'}" es para mejorrar el dendimiento pero afecta a los componentes anidados -->
 
   <ng-template #header>
@@ -54,13 +53,8 @@
 
         <p-tabpanel value="0">
           <app-custom-draw-form *ngIf="form()[$any(typeDefault)] && drawForm()[typeDefault]"
-            [drawForm]="drawForm()[typeDefault]['general']" [formGroup]="form()[$any(typeDefault)]"
-            (onSelectAutoCompleteAction)="onSelectAutoComplete($event)"
-            (onChangeDropdownAction)="onChangeDropdown($event)" (onNewIconDropdownAction)="onNewIconDropdown($event)"
-            (onReloadIconDropdownAction)="onReloadIconDropdown($event)" (onChangeToggleAction)="onChangeToggle($event)"
-            (onKeydownEnterAction)="onKeydownEnter($event)"
-            (onClosableIconDropdownAction)="onClosableIconDropdown($event)" (files64Action)="onFiles64($event)"
-            (filesAction)="onFiles($event)" />
+            [drawForm]="drawForm()[typeDefault]['general']" [formGroup]="form()[$any(typeDefault)]" [type]="typeDefault"
+            [isCreate]="isCreate()" />
         </p-tabpanel>
 
         <!-- <p-tabpanel header="Responsable" value="1"> </p-tabpanel> -->
@@ -84,8 +78,6 @@
         (saveAction)="save({pos: typeDefault, is_file: true})"
         (saveNotHideAction)="save({pos: typeDefault, hide:false, is_file: true})" (resetFormAction)="resetFormDialog()"
         (cancelAction)="cancel()" />
-
-
     </div>
   </ng-template>
 

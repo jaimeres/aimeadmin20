@@ -1,9 +1,10 @@
-import { Component, computed, ElementRef, inject, OnDestroy, ViewChild } from '@angular/core';
+import { Component, computed, ElementRef, inject, OnDestroy, OnInit, signal, ViewChild } from '@angular/core';
 import { AppMenu } from './app.menu';
 import { AppMenuProfile } from '@/layout/components/app.menuprofile';
 import { CommonModule } from '@angular/common';
 import { LayoutService } from '@/layout/service/layout.service';
 import { AuthService } from '../../auth/services/auth.service';
+import { Preferences } from '@capacitor/preferences';
 
 @Component({
   selector: '[app-sidebar]',
@@ -23,17 +24,30 @@ import { AuthService } from '../../auth/services/auth.service';
     <div app-menu-profile #menuProfileStart *ngIf="menuProfilePosition() === 'start'"></div>
     <div #menuContainer class="layout-menu-container">
       <div app-menu></div>
-      <label class="pl-8"> <strong>Beta 1.0.3</strong></label>
+      <label class="pl-8"> <strong>Beta 1.0.4</strong></label>
+      <div *ngIf="deviceIdSuffix()" class="pl-8" style="font-size: 0.7rem; color: #94a3b8;">
+        ID: {{deviceIdSuffix()}}
+      </div>
     </div>
     
     <div app-menu-profile #menuProfileEnd *ngIf="menuProfilePosition() === 'end'"></div>
   </div>`
 })
-export class AppSidebar implements OnDestroy {
+export class AppSidebar implements OnDestroy, OnInit {
   el = inject(ElementRef);
 
   layoutService = inject(LayoutService);
   authS = inject(AuthService);
+
+  /** Últimos 12 caracteres del client_device_id; null si aún no existe en Preferences */
+  deviceIdSuffix = signal<string | null>(null);
+
+  async ngOnInit() {
+    const { value } = await Preferences.get({ key: 'client_device_id' });
+    if (value) {
+      this.deviceIdSuffix.set(value.slice(-12));
+    }
+  }
 
   @ViewChild(AppMenu) appMenu!: AppMenu;
 
