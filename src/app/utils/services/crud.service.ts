@@ -186,6 +186,13 @@ export class CRUDService {
       "type": "classifier-level",
       "name": "Niveles de Clasificador",
       "icon": "pi pi-sitemap"
+    },
+    "responsible": {
+      "app": "responsibles/responsible",
+      "type": "responsible",
+      "name": "Responsables",
+      "icon": "pi pi-user-check"
+
     }
   };
 

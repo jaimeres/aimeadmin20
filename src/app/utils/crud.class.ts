@@ -9,12 +9,6 @@ import {
 } from './types/crud.types';
 import { Vars } from './vars.class';
 
-/**
- * clase base para la operaciones crud y otros datos
- */
-/*@Injectable({
-  providedIn: 'root'
-})*/
 export class CRUD extends Vars /*implements OnInit*/ {
   // cada vez que cambian los customField se actualiza
   public customField = computed(() => this.crudS.customField());
@@ -30,12 +24,14 @@ export class CRUD extends Vars /*implements OnInit*/ {
     const urlParams = new URLSearchParams(this.router.url.split('?')[1] || '');
     const posFromUrl = urlParams.get('pos');
     const finalPos = posFromUrl || pos;
+    console.log('en el constructor antes de llamar a change Pos', posFromUrl, pos);
     this.changePos(finalPos);
     this.commonSettings();
   }
 
   /**
-   * Inicializa la carga de datos
+   * Inicializa la carga de datos (esto se ejecuta depues del constructor, por lo tanto, hay funciones que se ejcutan antes,
+   * como ini Param)
    * @param options filtros iniciale de la consulta
    */
   initCRUD(options: { node?: boolean; filter?: string } = {}): void {
@@ -44,6 +40,8 @@ export class CRUD extends Vars /*implements OnInit*/ {
     const filter = options.filter ?? '';
 
     this.getAll({ pos: this.pos(), node, filter }); // carga los elementos al inicio
+    console.log('1 initCRUD selected Columns');
+
     this.configForm = this.fb.group({
       columns: [this.selectedColumns().map((column: any) => column.field), [Validators.required]],
       filters: this.fb.group({}),
@@ -79,6 +77,7 @@ export class CRUD extends Vars /*implements OnInit*/ {
 
     // si no envia nada, toma los seleccionados
     const selectedColumns = arr.length > 0 ? arr : this.selectedColumns();
+    console.log('2 ini Param selected Columns', selectedColumns);
     //quita __name de los campos que no son relaciones, ya que el servidor no existe el campo __name
 
     selectedColumns.forEach((obj) => {
@@ -173,10 +172,12 @@ export class CRUD extends Vars /*implements OnInit*/ {
       // Se ejecuta siempre que cambie la posición para que getAll2 use los filtros
       // persistentes sin necesidad de consultar el servidor.
       this.filter = this.crudS.buildFilterString(this.crudS.fieldsForm(pos));
+      console.log('antes de ini Param  de changePos');
+
       this.iniParam();
     }
     if (this.columns[safePos]) {
-      //aveces cuanso se llama a changePos todavia no hay this.columns[pos], si ese es el caso
+      //aveces cuanso se llama a change Pos todavia no hay this.columns[pos], si ese es el caso
       //no actualiza tthis.posBefore para que en la nueva llamada que ya aya columnas, se actualice
       this.posBefore = pos;
     }
@@ -1245,31 +1246,32 @@ export class CRUD extends Vars /*implements OnInit*/ {
         }
 
         // llama recursivamente si el campo tiene hijos
-        const joinModelFields = field; //+ '__name'
-        if ((fieldObj.children && fieldObj.relationship_type != 'ManyToMany') || this.searchByKeyObject(joinModelFields, this.additionalFieldsAppCols[pos])) {
-
-          // si se definieron prefijos y sufijos para los campos, se agregan
-          if (this.additionalFieldsAppCols[pos][joinModelFields]) {
-            //en la relación se agrega el campo del nombre,
-            /* cols.push({
-                             field: field_prefix + field + '__name',
-                             header: this.customField()[pos][field + '_name'] + ' ' + header_prefix, sortable: true
-                         });*/
-            //elimino name porque se reemplaza por la relación, por ejemplo en lugar de
-            //mostra el id de la relacion, muestro el nombre
-            //°°°aqui deberia implementar 'default_field': 'name', hay un ejemplo en
-            //additionalFieldsAppCols de producto
-            //delete fieldObj.children?.name;
-            const chil = this.additionalFieldsAppCols[pos][joinModelFields];
-            // el campo del prefijo es el campo que trae el children
-            const column_field_prefix = field + '_';
-            const column_header_prefix = chil.column_header_prefix ? chil.column_header_prefix + ' ' : '';
-
-            this.generateJSONColumns(fieldObj.children, pos, cols, column_field_prefix, column_header_prefix, field + '_');
-          }
-          //el campo que trae el children se ignora
-          continue;
-        }
+        //|||practicamente es para productos
+        /* const joinModelFields = field; //+ '__name'
+         if ((fieldObj.children && fieldObj.relationship_type != 'ManyToMany') || this.searchByKeyObject(joinModelFields, this.additionalFieldsAppCols[pos])) {
+ 
+           // si se definieron prefijos y sufijos para los campos, se agregan
+           if (this.additionalFieldsAppCols[pos][joinModelFields]) {
+             //en la relación se agrega el campo del nombre,
+             //cols.push({
+             //    field: field_prefix + field + '__name',
+             //    header: this.customField()[pos][field + '_name'] + ' ' + header_prefix, sortable: true
+             //});
+             //elimino name porque se reemplaza por la relación, por ejemplo en lugar de
+             //mostra el id de la relacion, muestro el nombre
+             //°°°aqui deberia implementar 'default_field': 'name', hay un ejemplo en
+             //additionalFieldsAppCols de producto
+             //delete fieldObj.children?.name;
+             const chil = this.additionalFieldsAppCols[pos][joinModelFields];
+             // el campo del prefijo es el campo que trae el children
+             const column_field_prefix = field + '_';
+             const column_header_prefix = chil.column_header_prefix ? chil.column_header_prefix + ' ' : '';
+ 
+             this.generateJSONColumns(fieldObj.children, pos, cols, column_field_prefix, column_header_prefix, field + '_');
+           }
+           //el campo que trae el children se ignora
+           continue;
+         }*/
 
         // Crear el objeto columna base
         let columnObj: any = {};
@@ -1510,6 +1512,7 @@ export class CRUD extends Vars /*implements OnInit*/ {
     //hay un error entre la carga de los elementos y la carga de los elementos con node
     // el detalle es que muestra un parpadeo en la tabla cuando se recarga sobre la misma app
     //this.items.set([]);
+    console.log('llama a change pos');
 
     this.changePos(safePos); // actualice la posición y los valores correspondientes a la app
     this.showBlocked(); // muestra el bloqueo de la pantalla
@@ -1656,7 +1659,7 @@ export class CRUD extends Vars /*implements OnInit*/ {
       data = data.filter((item) => {
         // Variable para indicar si se encontró una coincidencia en alguna columna
         let isMatch = false;
-
+        console.log('3 selected Columns');
         this.selectedColumns().forEach((col) => {
           let fieldValue = item[col.field];
           switch (matchMode) {
@@ -1887,8 +1890,8 @@ export class CRUD extends Vars /*implements OnInit*/ {
     //para este caso solo ocupo los include los fiends no porque quiero que se consulten todos los campos, para
     //poder mostarlos en el form
 
-    // no llama a changePos porque no es necesario, la edición ocurre sobre la app actual y ademas
-    //iniParam debe incluir tolas la relaciones
+    // no llama a change Pos porque no es necesario, la edición ocurre sobre la app actual y ademas
+    //ini Param debe incluir tolas la relaciones
     this.iniParam(this.cols()); //se inicializa el include y el fields para que se muestren todos los campos en el form
     this.showBlocked();
 
@@ -1973,7 +1976,7 @@ export class CRUD extends Vars /*implements OnInit*/ {
 
     // es indispensable que vaya antes de createF orm porque createF orm utiliza el valor de is Create para inicializar el form
     this.isCreate.set(true);
-    //llama a changePos para que se inicialicen los valores correspondientes a la app,
+    //llama a change Pos para que se inicialicen los valores correspondientes a la app,
     //dado que crear tiene un menu para crear los elementos, a diferencia de edit o delete
 
     //////////////////////////
@@ -2101,7 +2104,7 @@ export class CRUD extends Vars /*implements OnInit*/ {
     const pos: any = options.pos;
     const parent_id = options?.parent_id;
     //this.selectedSecundary.set(this.selected());
-    // dado que no voy a llamar a changePos para que la app principal no cambie,
+    // dado que no voy a llamar a change Pos para que la app principal no cambie,
     // tengo que inicializar los valores correspondientes a la app secundaria
     this.isCreateSecundary = true;
     const parentSelect = this.selected()[0];
@@ -3011,7 +3014,8 @@ export class CRUD extends Vars /*implements OnInit*/ {
     this.localSettingsDialogVisible = true;
     //inicializa el select de las columnas visibles de cada app cuando se abre la configuración local,
     //tambien puedo poner una funcion que se ejecute cuando se dispare el evento de mostrar la pantalla de configuracion local
-    //this.configForm.controls['columns'].setValue(this.selectedColumns().map(column => column.field));
+    //this.configForm.controls['columns'].setValue(this.selected Columns().map(column => column.field));
+    console.log('4 selected Columns');
     this.configForm.patchValue({
       columns: this.selectedColumns().map((column) => column.field)
     });
@@ -3042,7 +3046,7 @@ export class CRUD extends Vars /*implements OnInit*/ {
    * inicializa el select de las columnas visibles de cada app cuando se abre la configuración local
    */
   /*onShowConfig() {
-      this.configForm.controls['columns'].setValue(this.selectedColumns().map(column => column.field));
+      this.configForm.controls['columns'].setValue(this.selected Columns().map(column => column.field));
     }*/
 
   onFiles64(event: any[]) {

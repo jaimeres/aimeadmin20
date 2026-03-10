@@ -16,7 +16,7 @@
     [filterDelayTable]="filterDelayTable()" />
 </div>
 <app-custom-local-settings [visible]="localSettingsDialogVisible" [field]="fieldConfig()" [formGroup]="configForm"
-  (saveAction)="saveConfig()" (visibleAction)="onLocalSettingsDialogVisible($event)" /> 
+  (saveAction)="saveConfig()" (visibleAction)="onLocalSettingsDialogVisible($event)" />
 
 <app-custom-import [visible]="importDialogVisible" (visibleAction)="onImportDialogVisible($event)"
   (saveAction)="onImportSave($event)" />

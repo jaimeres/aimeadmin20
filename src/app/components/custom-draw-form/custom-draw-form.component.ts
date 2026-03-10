@@ -54,18 +54,27 @@ export class JoinOrSelfPipe implements PipeTransform {
    * - Si es string simple, lo retorna tal cual.
    */
   transform(value: unknown, sep = ''): string {
-    if (Array.isArray(value)) return value.join(sep);
+
+    if (Array.isArray(value)) {
+      return value.join(sep);
+    }
 
     if (typeof value === 'string') {
-      const trimmed = value.trim();
-      if (trimmed.includes(',')) {
-        return trimmed
-          .split(',')
-          .map((v) => v.trim())
-          .filter((v) => v.length > 0)
-          .join(sep);
+      const parts = value.split(','); // split funciona igual si no hay coma
+
+      if (parts.length === 1) {
+        const trimmed = parts[0].trim();
+        return trimmed || 'name';
       }
-      return trimmed || 'name';
+
+      const cleaned: string[] = [];
+
+      for (const p of parts) {
+        const t = p.trim();
+        if (t) cleaned.push(t);
+      }
+
+      return cleaned.join(sep);
     }
 
     return 'name';
@@ -290,7 +299,6 @@ export class CustomDrawFormComponent implements OnDestroy {
       });
       return;
     }
-
     //si no existe datos para ese dropdown se consulta al servidor,
     // en lugar de poner la app y el type en cada campo de json que genera el draw se pone una referencia
     // a un objeto que tiene la app y el type para evitar que esta info se guarde en el servidor y se pueda inyectar en el componente
@@ -304,7 +312,9 @@ export class CustomDrawFormComponent implements OnDestroy {
         let dataDropdown = this.generalS.DJAtoObject({
           respDJA: data,
           additionalFieldsIncluded: [],
-          option_label: element?.option_label || []
+          //como este camo es para llenar los drow se envia la configuracion del campo
+          "fields": { [element.field]: element }
+          //option_label: element?.option_label || ''
         });
 
         // Verificamos si al menos un objeto tiene un 'module' diferente de null,
@@ -887,7 +897,7 @@ export class CustomDrawFormComponent implements OnDestroy {
         for (const f of fields) {
           if (f in value) filtered[f] = value[f];
           // Para dropdowns de tipo object_X, también persiste el campo derivado X
-          // (objeto completo establecido por onChangeDropdown via setValue)
+          // (objeto completo establecido por on ChangeDropdown via setValue)
           //esto ya no es necesario ya que  el patchValue lo debe agregaer
           //if (f.startsWith('object_')) {
           //  const derived = f.replace('object_', '');
@@ -1111,7 +1121,7 @@ export class CustomDrawFormComponent implements OnDestroy {
 
       // Si existe cols_values y es un array válido, filtrar el objeto, sino usar el objeto completo
       // cols_values ahora es un array de objetos: [{field: 'id', required: true, default: null}, ...]
-
+      //°°°falta required aunque no creo que deba llevalor
       let currentValueObject = foundObject;
 
       if (foundObject && object?.cols_values && Array.isArray(object.cols_values) && object.cols_values.length > 0) {
@@ -1140,10 +1150,6 @@ export class CustomDrawFormComponent implements OnDestroy {
 
         currentValueObject = filteredObject;
       }
-
-
-      //CHECAR EL TEMA DEL MODULO PARA QUE FILTRE SEGUN NECESIDAD
-      // error el e servidor
 
       //siempre se envia id y hay type, porque se asume que es una relacion y puede ser que se ocupe si no es 
       // no incia con parent_form_data_, form_data_ 
@@ -1712,7 +1718,7 @@ export class CustomDrawFormComponent implements OnDestroy {
 
   /**
    * Emite un evento cuando se selecciona un elemento en el autocomplete
-   * Aplica las mismas validaciones que onChangeDropdown
+   * Aplica las mismas validaciones que on ChangeDropdown
    * @param event evento del autocomplete
    * @param config configuración del campo
    */
@@ -1734,7 +1740,7 @@ export class CustomDrawFormComponent implements OnDestroy {
 
     this.onSelectAutoCompleteAction.emit(changeInfo);
 
-    // Aplicar las mismas validaciones que onChangeDropdown
+    // Aplicar las mismas validaciones que on ChangeDropdown
     const children = config.children || {};
     const fields = children?.fields || {};
 
@@ -1746,7 +1752,7 @@ export class CustomDrawFormComponent implements OnDestroy {
         currentDropdownOption = this.searchByValueObject(currentValue, dropdownOptions, 'id', false)[0];
       }
 
-      // Procesar cada tipo de campo: static, dynamic, derived (misma lógica que onChangeDropdown)
+      // Procesar cada tipo de campo: static, dynamic, derived (misma lógica que on ChangeDropdown)
       ['static', 'dynamic', 'derived'].forEach(fieldType => {
         if (fields[fieldType]) {
           for (const key in fields[fieldType]) {

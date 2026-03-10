@@ -1,4 +1,4 @@
-import { Component, OnInit, signal } from '@angular/core';
+import { Component, OnInit, signal, ChangeDetectionStrategy } from '@angular/core';
 import { PRIME_MODULES } from '../../shared/primeng.index';
 import { LOCAL_BASE } from '../../shared/components.index';
 import { CommonModule } from '@angular/common';
@@ -16,7 +16,8 @@ import { WarehouseMovementService } from '../services/warehouse-movement.service
   templateUrl: './warehouse-movement.component.html',
   styleUrl: './warehouse-movement.component.scss',
   standalone: true,
-  providers: [ConfirmationService]
+  providers: [ConfirmationService],
+  changeDetection: ChangeDetectionStrategy.OnPush
 })
 export class WarehouseMovementComponent extends CRUD implements OnInit {
 

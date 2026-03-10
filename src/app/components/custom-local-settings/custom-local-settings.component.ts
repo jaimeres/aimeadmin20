@@ -1,7 +1,8 @@
 import { CommonModule } from '@angular/common';
 import {
   Component, EventEmitter, Input, OnChanges, OnDestroy,
-  Output, computed, inject, signal, SimpleChanges
+  Output, computed, inject, signal, SimpleChanges,
+  ChangeDetectionStrategy
 } from '@angular/core';
 import {
   FormControl, FormGroup, UntypedFormGroup,
@@ -155,6 +156,8 @@ const DEFAULT_OPS: Record<FilterFieldType, string[]> = {
   ],
   templateUrl: './custom-local-settings.component.html',
   styleUrl: './custom-local-settings.component.scss',
+  changeDetection: ChangeDetectionStrategy.OnPush,
+
 })
 export class CustomLocalSettingsComponent implements OnChanges, OnDestroy {
 
@@ -274,8 +277,8 @@ export class CustomLocalSettingsComponent implements OnChanges, OnDestroy {
     if (changes['visible']) this.visibleSignal.set(changes['visible'].currentValue);
     if (changes['field']) {
       this.fieldSignal.set(changes['field'].currentValue);
-      //this._initFilterState();
-      //this._initUnifiedRows();
+      this._initFilterState();
+      this._initUnifiedRows();
     }
     if (changes['formGroup']) this.formGroupSignal.set(changes['formGroup'].currentValue);
   }
@@ -352,7 +355,10 @@ export class CustomLocalSettingsComponent implements OnChanges, OnDestroy {
           const options = this.generalS.DJAtoObject({
             respDJA: data,
             additionalFieldsIncluded: [],
-            option_label: col.filter?.option_label ?? col.option_label ?? 'name',
+            fields: {
+              [col.field]: {}
+            },
+            //option_label: col.filter?.option_label ?? col.option_label ?? 'name',
           });
           this.fkSuggestionsSignal.update(s => ({ ...s, [col.field]: options }));
         });

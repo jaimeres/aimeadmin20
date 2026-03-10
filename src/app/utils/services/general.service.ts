@@ -346,8 +346,7 @@ export class GeneralService {
       timeZone = [],
       node = false,
       additionalFieldsAppCols = [],
-      fields = [],
-      option_label = []
+      fields = {}
     }: {
       respDJA: any;
       additionalFieldsIncluded?: any;
@@ -357,9 +356,7 @@ export class GeneralService {
       timeZone?: any[];
       node?: boolean;
       additionalFieldsAppCols?: any[];
-      fields?: any[];
-      //viene por separado  proqwue normalmente es para carga de combos
-      option_label?: any[] | string;
+      fields?: any;
     }) {
     let included = respDJA?.included;
     let dataDJA = respDJA?.data;
@@ -368,6 +365,8 @@ export class GeneralService {
     if (!dataDJA) {
       return [];
     }
+
+    console.log(fields, respDJA);
 
     // typeof identifica a un array y un objecto como un objecto, por eso si typeof dice que es un objeto y isArray dice que no es array,
     //entonces es un objeto
@@ -381,11 +380,54 @@ export class GeneralService {
       is_object = true; // lo utilizo para retornar un objeto en lugar de un array
     }
 
+    const labelFields: any = [];
+    //logica para crear las claves  comninando option_label, separando la logica de tree y los demas campos
+    // hace referencia en label como clave para los tree y un campo especial para los demas campos, 
+    // esto es por que en el caso de tree-select el campo que se muestra es label y no se pueden combinar varios campos para mostrar 
+    // como label, mientras que en los demas campos si se pueden combinar varios campos para mostrar como label, por ejemplo, name y 
+    // username, entonces se combinan y se guardan en una clave con el nombre de los campos combinados, por ejemplo, name_username
+    for (const key in fields) {
+      const field = fields[key];
+
+      if (!field || !field.option_label) {
+        continue;
+      }
+
+      const optionLabel = String(field.option_label).trim();
+      const isTreeSelect = field.type === 'tree-select';
+
+      if (!isTreeSelect && (optionLabel === 'name' || optionLabel === 'display_name')) {
+        continue;
+      }
+
+      if (isTreeSelect && optionLabel === 'label') {
+        continue;
+      }
+
+      const optionLabelJoin = optionLabel
+        .split(',')
+        .map((v) => v.trim())
+        .filter((v) => v.length > 0);
+
+      if (!optionLabelJoin.length) {
+        continue;
+      }
+
+      labelFields.push({
+        field: key,
+        option_label: optionLabel,
+        type: field.type,
+        option_label_join: optionLabelJoin,
+        label_field_key: field.type === 'tree-select' ? 'label' : optionLabelJoin.join('')
+      });
+    }
+
     const resp = dataDJA.map((dja: any) => {
       /*lo hago para que el id de los campos relacionados esté dentro del array general, principalmente para que cuando se resetee a un form, 
       se pueda asignar directamente, aquí hay un tema dja se queja si el id de los campos relacionados no está dentro del array relationships,
       y se envía directamente dentro del objeto attributes, PERO, si tambien lo envío dentro del objeto relationships lo toma como el bueno y ya no se queja,
       por lo tanto, lo envío en ambos lados*/
+
       let relationship: any = [];
       let relationship_name: any = [];
       for (const relationshipName in dja.relationships) {
@@ -429,23 +471,45 @@ export class GeneralService {
         relationships: dja.relationships
       };
 
-      const labelFields = Array.isArray(option_label)
-        ? option_label
-        : typeof option_label === 'string'
-          ? option_label.split(',').map((v) => v.trim()).filter((v) => v.length > 0)
-          : [];
+      for (let i = 0; i < labelFields.length; i++) {
+        const rule = labelFields[i];
 
-      if (labelFields.length > 0) {
-        const labelField = labelFields.join('');
-        const label = labelFields
-          .map((key: string) => data[key])
-          .filter((val: any) => val !== undefined && val !== null && String(val).trim() !== '')
-          .map((val: any) => String(val))
-          .join(' ');
-        data[labelField] = label;
+        if (!rule || !rule.option_label_join || !rule.option_label_join.length) {
+          continue;
+        }
+
+        const keys = rule.option_label_join;
+        const labelFieldKey = rule.label_field_key;
+
+        // Para tree-select siempre debe existir data['label']
+        if (rule.type === 'tree-select') {
+          const firstKey = keys[0];
+          const baseVal = data[firstKey];
+          data['label'] = baseVal == null ? '' : String(baseVal).trim();
+        }
+
+        const parts: string[] = [];
+
+        for (let k = 0; k < keys.length; k++) {
+          const key = keys[k];
+          const val = data[key];
+
+          if (val === undefined || val === null) {
+            continue;
+          }
+
+          const s = String(val).trim();
+          if (!s) {
+            continue;
+          }
+
+          parts.push(s);
+        }
+
+        if (parts.length) {
+          data[labelFieldKey] = parts.join(' ');
+        }
       }
-      console.log('DJAtoObject:::::::::::::');
-
 
       data.created_at = this.timeZone(dja.attributes?.created_at);
       data.modified_at = this.timeZone(dja.attributes?.modified_at);
