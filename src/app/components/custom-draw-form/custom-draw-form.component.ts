@@ -184,8 +184,8 @@ export class CustomDrawFormComponent implements OnDestroy {
   typeSignal = signal<string>('');
   tabPanelSignal = signal<string>('');
   //customFieldSignal = signal<any>(null);
-  optionLabelSignal = signal<any>('label');
-  showIconSignal = signal<boolean>(true);
+  //optionLabelSignal = signal<any>('label');
+  //showIconSignal = signal<boolean>(true);
   isCreateSignal = signal<boolean>(true);
 
   /** Indica que el formulario fue restaurado desde un borrador en caché (solo en creaciones) */
@@ -240,6 +240,12 @@ export class CustomDrawFormComponent implements OnDestroy {
     return signatureData;
   });
 
+  /** Genera la clave namespaced por tipo para sharedS.data y sharedS.drawDropdown. */
+  private _sharedKey(field: string): string {
+    const prefix = this.typeSignal() || (this as any).type || '';
+    return prefix ? `${prefix}:${field}` : field;
+  }
+
   /**
    * Verifica si ya existen opciones en caché para un dropdown.
    * Además valida que el campo calculado de `option_label` exista.
@@ -257,27 +263,29 @@ export class CustomDrawFormComponent implements OnDestroy {
     }
 
     //si ya existe datos para ese dropdown no se vuelve a consultar
-    if (this.sharedS.data[element.field] && !force) {
-      if (optionLabelField && !this.hasOptionLabelField(this.sharedS.data[element.field], optionLabelField)) {
+    const _dataKey = this._sharedKey(element.field);
+    if (this.sharedS.data[_dataKey] && !force) {
+      if (optionLabelField && !this.hasOptionLabelField(this.sharedS.data[_dataKey], optionLabelField)) {
         return false;
       }
-      return this.sharedS.data[element.field];
+      return this.sharedS.data[_dataKey];
     }
 
     //si ya existe datos para ese dropdown no se vuelve a consultar, va depsues de la validación de generalS.data,
     // porque seguramente trae los datos mas actualizados, por ejemplo cuando se agregan  o eliminan elementos
-    if (this.sharedS.drawDropdown[element.field] && !force) {
-      if (optionLabelField && !this.hasOptionLabelField(this.sharedS.drawDropdown[element.field], optionLabelField)) {
+    const _ddKey = this._sharedKey(element.field);
+    if (this.sharedS.drawDropdown[_ddKey] && !force) {
+      if (optionLabelField && !this.hasOptionLabelField(this.sharedS.drawDropdown[_ddKey], optionLabelField)) {
         return false;
       }
-      return this.sharedS.drawDropdown[element.field];
+      return this.sharedS.drawDropdown[_ddKey];
     }
 
     // Cache persistente solo para móviles usando Preferences
     /*if (!force && this.isMobileCacheEnabled(element)) {
       const cached = await this.readMobileCache(element, optionLabelField);
       if (cached) {
-        this.sharedS.drawDropdown[element.field] = cached;
+        this.sharedS.drawDropdown[this._sharedKey(element.field)] = cached;
         return cached;
       }
     }*/
@@ -311,7 +319,6 @@ export class CustomDrawFormComponent implements OnDestroy {
         //let dataDropdown = data.data.map((item: any) => {
         let dataDropdown = this.generalS.DJAtoObject({
           respDJA: data,
-          additionalFieldsIncluded: [],
           //como este camo es para llenar los drow se envia la configuracion del campo
           "fields": { [element.field]: element }
           //option_label: element?.option_label || ''
@@ -327,7 +334,7 @@ export class CustomDrawFormComponent implements OnDestroy {
           dataDropdown = dataDropdown.filter((item: any) => item.module === 'MA');
         }
 
-        this.sharedS.drawDropdown[element.field] = dataDropdown;
+        this.sharedS.drawDropdown[this._sharedKey(element.field)] = dataDropdown;
         this.dropdownOptionsSignal.set({
           ...this.dropdownOptionsSignal(),
           [element.field]: dataDropdown
@@ -782,12 +789,12 @@ export class CustomDrawFormComponent implements OnDestroy {
     /*if (changes['customField']) {
       this.customFieldSignal.set(changes['customField'].currentValue);
     }*/
-    if (changes['optionLabel']) {
+    /*if (changes['optionLabel']) {
       this.optionLabelSignal.set(changes['optionLabel'].currentValue);
-    }
-    if (changes['showIcon']) {
-      this.showIconSignal.set(changes['showIcon'].currentValue);
-    }
+    }*/
+    //if (changes['showIcon']) {
+    //  this.showIconSignal.set(changes['showIcon'].currentValue);
+    //}
 
     if (changes['formGroup'] || changes['drawForm'] || changes['type'] || /*changes['tabPanel'] ||*/ changes['isCreate']) {
       this.initFormAutoCache();
@@ -904,7 +911,6 @@ export class CustomDrawFormComponent implements OnDestroy {
           //  if (derived in value) filtered[derived] = value[derived];
           //}
         }
-        console.log('[FormCache] autoSave triggered, fields:', fields, this.currentCacheKey, filtered, this.currentCacheConfig);
         this.formCacheS.save(this.currentCacheKey, filtered, this.currentCacheConfig);
       });
 
@@ -1118,7 +1124,7 @@ export class CustomDrawFormComponent implements OnDestroy {
       const newField = field.replace('object_', '');
       const foundObject = this.dropdownOptionsSignal()[field]?.
         find((item: any) => item.id === currentValue || item.value === currentValue);
-
+      alert()
       // Si existe cols_values y es un array válido, filtrar el objeto, sino usar el objeto completo
       // cols_values ahora es un array de objetos: [{field: 'id', required: true, default: null}, ...]
       //°°°falta required aunque no creo que deba llevalor
@@ -1542,7 +1548,7 @@ export class CustomDrawFormComponent implements OnDestroy {
                     const conditionResults = conditions.map((condition: any) => {
                       // VALIDAR: field es OBLIGATORIO
                       if (!condition.field) {
-                        console.error('❌ ERROR: condition.field es obligatorio en filter', { condition, fieldConfig: key });
+                        //console.error('❌ ERROR: condition.field es obligatorio en filter', { condition, fieldConfig: key });
                         return false;
                       }
 
@@ -1670,7 +1676,6 @@ export class CustomDrawFormComponent implements OnDestroy {
                           }
 
                         default:
-                          console.warn('⚠️ Operador desconocido en filter:', operator);
                           return false;
                       }
                     });

@@ -74,14 +74,22 @@ export class CRUD extends Vars /*implements OnInit*/ {
     let include: string = '';
     // siempre debe incluir sys, para que en la edición se pueda saber si es un elemento del sistema
     let fields: string = 'sys,status,tasks,';
+    const posIndex = this.pos() || 0; // Asegurarse de que posIndex tenga un valor válido
 
     // si no envia nada, toma los seleccionados
     const selectedColumns = arr.length > 0 ? arr : this.selectedColumns();
-    console.log('2 ini Param selected Columns', selectedColumns);
-    //quita __name de los campos que no son relaciones, ya que el servidor no existe el campo __name
+
+    const fields_prefixes = this.drawForm()[posIndex]?.fields_prefixes || {};
 
     selectedColumns.forEach((obj) => {
+
+      //debe saltarse el valor si el campo inicial igual que cualquieda de los valores de array fields_prefixes
+      if (fields_prefixes && Object.values(fields_prefixes).some((prefix: any) => obj.field.startsWith(prefix))) {
+        return;
+      }
+
       //estrategicamente va al inicio
+      //|||esta primera parte tambiene sta pensada para los productos
       if (obj.field.includes('_data__name')) {
         const dividedField = obj.field.split('_data__name')[0]; // Obtenemos la primera parte dividida
         include += dividedField + ',';
@@ -96,8 +104,8 @@ export class CRUD extends Vars /*implements OnInit*/ {
       }
     });
 
-    this.fields[this.pos()] = include + fields.slice(0, -1);
-    this.include[this.pos()] = include.slice(0, -1);
+    this.fields[posIndex] = include + fields.slice(0, -1);
+    this.include[posIndex] = include.slice(0, -1);
   }
 
   styleClassDialog = signal<string>('width-650px-custom min-height-550px-custom');
@@ -1069,7 +1077,6 @@ export class CRUD extends Vars /*implements OnInit*/ {
     // en estricta teoria es lo mismo ya que esa configuracion de aplica en el servidor al generar el options
     // aqui no aplica la logica de field/clave del campo de la configuracion, en particular para documents
 
-
     //pos = pos ?? this.pos(); // Asegurar que pos no sea null
     pos = (pos !== null && pos !== undefined && pos !== "") ? pos : this.pos();
     const posIndex = pos as string; // Cast explícito a string
@@ -1166,7 +1173,7 @@ export class CRUD extends Vars /*implements OnInit*/ {
           //para que los ceros no se muestren como null
           val = fieldObj.initial !== undefined && fieldObj.initial !== null ? fieldObj.initial : null;
         } else if (fieldObj.type == 'Choice') {
-          (this.sharedS as any).data[field_prefix + field] = fieldObj?.choices || null;
+          (this.sharedS as any).data[posIndex + ':' + field_prefix + field] = fieldObj?.choices || null;
           val = fieldObj.initial || '';
         } else if (fieldObj.type == 'GenericField') {
           val = fieldObj.initial || null;
@@ -1183,10 +1190,10 @@ export class CRUD extends Vars /*implements OnInit*/ {
           //como se hace en addFieldsByPrefix
 
           if (fieldObj?.choices) {
-            (this.sharedS as any).data[field_prefix + field] = fieldObj?.choices;
+            (this.sharedS as any).data[posIndex + ':' + field_prefix + field] = fieldObj?.choices;
           } else if (fieldObj?.child) {
             if (fieldObj.child?.type == 'Choice') {
-              (this.sharedS as any).data[field_prefix + field] = fieldObj?.child?.choices;
+              (this.sharedS as any).data[posIndex + ':' + field_prefix + field] = fieldObj?.child?.choices;
             }
           }
           if (fieldObj.initial && typeof fieldObj.initial == 'object') {
@@ -1333,13 +1340,6 @@ export class CRUD extends Vars /*implements OnInit*/ {
             const orderValue = parseInt(fieldConfig.order, 10);
             columnObj._order = orderValue;
           }
-
-          /*if (colsConfig[field]?.fields) {
-
-            console.log('202020202020', colsConfig[field], colsConfig[field]?.fields);
-
-            this.generateJSONColumns(colsConfig[field]?.fields, pos, cols)
-          }*/
         }
 
         cols.push(columnObj);
@@ -1902,7 +1902,7 @@ export class CRUD extends Vars /*implements OnInit*/ {
         const additionalFieldsAppCols = this.additionalFieldsAppCols[pos] || [];
         const data = this.DJAtoObject({ resp, additionalFieldsAppCols });
 
-        //console.log('000*****', data);
+        console.log('000*****', additionalFieldsAppCols, data);
 
 
         //obtener los campos classifers del formulario form()
@@ -2250,18 +2250,32 @@ export class CRUD extends Vars /*implements OnInit*/ {
     this.files64 = [];
 
     if (selected) {
-      // agrega un objecto con id, key y label a los componentes multi, menos a los classifiers
-      // se agrega key porque treeSelect lo necesita
+      // Convierte a {key, id, label} SOLO los campos tree-select (PrimeNG lo requiere).
+      // Los campos multi-select deben quedar como array de IDs simples para que
+      // PrimeNG pueda hacer la comparación optionValue='id' → chip label correcto.
+      const draw = this.drawForm()[pos];
+      const treeSelectFields = new Set<string>();
+      if (draw) {
+        const walkDraw = (node: any) => {
+          if (!node || typeof node !== 'object') return;
+          if (node.type === 'tree-select' && node.field) treeSelectFields.add(node.field);
+          for (const child of Object.values(node)) {
+            if (child && typeof child === 'object') walkDraw(child);
+          }
+        };
+        walkDraw(draw);
+      }
+
       for (const [key, value] of Object.entries(selected)) {
-        if (key != 'classifiers' && key != 'included' && Array.isArray(value) && value.length > 0) {
-          const included = selected.included || [];
-          for (let i = 0; i < value.length; i++) {
-            const element = value[i];
-            for (let j = 0; j < included.length; j++) {
-              const el = included[j];
-              if (el.id === element) {
-                selected[key][i] = { key: el.id, id: el.id, label: el.attributes.name };
-              }
+        if (key === 'classifiers' || key === 'included' || !Array.isArray(value) || value.length === 0) continue;
+        if (!treeSelectFields.has(key)) continue; // solo tree-select necesita {key, id, label}
+        const included = selected.included || [];
+        for (let i = 0; i < value.length; i++) {
+          const element = value[i];
+          for (let j = 0; j < included.length; j++) {
+            const el = included[j];
+            if (el.id === element) {
+              selected[key][i] = { key: el.id, id: el.id, label: el.attributes.name };
             }
           }
         }
@@ -3708,18 +3722,13 @@ export class CRUD extends Vars /*implements OnInit*/ {
   onChangeToggle(e: any) { }
 
   onNewIconDropdown(e: any) {
-    const timestamp = new Date().toISOString();
-    console.log(`➕ [${timestamp}] CRUD onNewIconDropdown`, { field: e });
   }
 
   onSelectAutoComplete(e: any) {
     const startTime = performance.now();
-    const timestamp = new Date().toISOString();
     const field = e?.field;
     const selectedObject = e?.event; // En autocomplete, el event es el objeto seleccionado
     const object = e?.object;
-
-    console.log(`🔍 [${timestamp}] CRUD onSelectAutoComplete INICIO`, { field, hasObject: !!selectedObject });
 
     // Verificar si el campo tiene un campo oculto asociado para objetos
     if (object?._hidden_object_field) {
@@ -3731,14 +3740,6 @@ export class CRUD extends Vars /*implements OnInit*/ {
         console.log(`Campo oculto ${hiddenFieldName} actualizado con:`, selectedObject);
       }
     }
-
-    const endTime = performance.now();
-    const duration = endTime - startTime;
-    const endTimestamp = new Date().toISOString();
-    console.log(`✅ [${endTimestamp}] CRUD onSelectAutoComplete FIN`, {
-      field,
-      durationMs: duration.toFixed(2)
-    });
   }
 
   configDialog() { }
@@ -3756,8 +3757,6 @@ export class CRUD extends Vars /*implements OnInit*/ {
     // ============================================
     if (config.fields_reset_form && typeof config.fields_reset_form === 'object') {
       if (formGroup) {
-        console.log('🔄 [CRUD] Reseteando campos específicos del formulario:', config.fields_reset_form);
-
 
         // Iterar sobre las propiedades del objeto fields_reset_form
         Object.keys(config.fields_reset_form).forEach((fieldName: string) => {

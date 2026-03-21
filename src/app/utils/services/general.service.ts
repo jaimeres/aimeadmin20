@@ -252,7 +252,7 @@ export class GeneralService {
    * @param additionalFieldsIncluded Campos adicionales que se deben agregar de la relacion incluida, si no se envia,
    * @returns El nombre si encuentra el id, si no, retorna un string vacio
    */
-  search_include(included: any[], id: string, relationshipName: string, additionalFieldsIncluded: any, return_attributes = false, fields: any = []) {
+  /*search_include(included: any[], id: string, relationshipName: string, additionalFieldsIncluded: any, return_attributes = false, fields: any = []) {
     const relationship_name: any = [];
 
     for (const item of included) {
@@ -260,14 +260,20 @@ export class GeneralService {
         if (return_attributes) {
           return item.attributes;
         }
-        let value = item.attributes?.username || item.attributes?.name;
-        //si no existe name lo busco
-        const blocked = ['name', 'username'];
-        if (!value && !blocked.includes(relationshipName)) {
+        let value: string;
+        // Usar option_label de fields si existe y no es el default (name/display_name)
+        const _fieldDef = fields[relationshipName];
+        const _optLabel = _fieldDef?.option_label ? String(_fieldDef.option_label).trim() : null;
 
-          const alternate_label = fields[relationshipName]?.option_label
-          //quitar temporal
-          value = this.timeZone(item.attributes[alternate_label]);
+        if (_optLabel && _optLabel !== 'name' && _optLabel !== 'display_name') {
+          const _join = _optLabel.split(',').map((v: string) => v.trim()).filter((v: string) => v);
+          value = _join.map((f: string) => {
+            const v = item.attributes[f];
+            return v != null ? String(v).trim() : '';
+          }).filter((s: string) => s).join(' ');
+        } else {
+          // Fallback: username o name
+          value = item.attributes?.username || item.attributes?.name || '';
         }
 
         relationship_name[relationshipName + '__name'] = value;
@@ -282,7 +288,7 @@ export class GeneralService {
       }
     }
     return relationship_name;
-  }
+  }*/
 
 
   // genera ua función llamada timeZone que reciba un paramtero y los convierta a la zona horaria local
@@ -320,21 +326,39 @@ export class GeneralService {
   }
 
   /**
-   * Agrega campos en texto a las claves o bool agregandoles de subfijo text, tambien duplica en id agregandolo al nodo attributes
-   * @param respDJA Respuesta del servidor en formato dja
-   * @param additionalFieldsIncluded Campos adicionales que se deben agregar de la relacion incluida, si no se envia,
-   *   solo retorna nombre_de_campo_incluido__name, si quiero que regrese otro valor, por ejeplo, level, tengo que enviar
-   *   [{ original_field: 'level', renamed_fields: 'level'}], notese que en valo lo regresara en level, por, renamed_fields: 'level',
-   *   original_field debe existir en el included que retorna el servidor
-   * @param customField nombre de campos personalizados, la clave es el campo en ingles que envía el servidor
-   * @param fieldsBool Campos con valor booleano que convierte a texto en base al valor bool
-   * @param moreFields Toma el id y agrega un campo nombre del campo __text, y lo convierte en texto
-   * Debe ser un array que contienes arrays donde debe venir el nombre del campo y el array de valores [[nombre_del_campo,{id:1, name:'Nombre'}],[]]
-   * @returns
-   */
-  /**
-   * Convierte respuesta DJA a objetos planos.
-   * Ahora acepta `option_label` como array o string separado por comas.
+   * Convierte la respuesta JSON:API (DJA) a un array de objetos planos listos para
+   * usar en tabla y formulario.
+   *
+   * ## Lógica de claves para relaciones (dja.relationships)
+   * Por cada relación se escribe:
+   *   - `data[rel]`            -> id (FK) o array de ids (M2M)
+   *   - `data[rel + '__name']` -> texto de visualización para la tabla (todos los tipos)
+   *   - `data['label']`        -> solo para tree-select (clave nativa de PrimeNG treeSelect)
+   *
+   * ## Clave de display según tipo de campo
+   * - FK (no array): `rel__name` = valor compuesto de `included` según `option_label`.
+   *   Sin regla -> `username || name`.
+   * - M2M (array):
+   *   - `cols.multiple.active === true` (explícito) -> nombres concatenados con
+   *     `cols.multiple.separator` (default `,`).
+   *   - Caso contrario -> `cols.multiple.msg_more` con `{e}` como placeholder de conteo
+   *     (default `"{e} elemento(s)"`); si solo hay uno muestra su nombre.
+   * - tree-select: escribe también `data['label']` para los chips de PrimeNG.
+   *
+   * ## Clave combinada (option_label con varios campos)
+   * `option_label: "name,id"` -> clave `"nameid"` (join sin separador).
+   * Equivalente al pipe `joinOrSelf` del formulario: ambas capas quedan armonizadas.
+   *
+   * ## Campos NO relación (loop final)
+   * Los tipos FK (`dropdown`, `multi-select`, `tree-select`, `auto-complete`) se saltan
+   * para no contaminar data si el campo no vino en `dja.relationships`.
+   *
+   * @param respDJA    Respuesta JSON:API del servidor
+   * @param fields     Config de campos del módulo (fieldsForm)
+   * @param customField  Mapa nombre->texto para campos personalizados
+   * @param fieldsBool   Campos booleanos que se convierten a texto
+   * @param moreFields   Campos con choices: [[nombre, [{value, display_name}]]]
+   * @returns Array de objetos planos (o el primer elemento si la respuesta era un objeto)
    */
   DJAtoObject(
     {
@@ -366,8 +390,6 @@ export class GeneralService {
       return [];
     }
 
-    console.log(fields, respDJA);
-
     // typeof identifica a un array y un objecto como un objecto, por eso si typeof dice que es un objeto y isArray dice que no es array,
     //entonces es un objeto
     if (typeof dataDJA === 'object' && !Array.isArray(dataDJA)) {
@@ -381,46 +403,32 @@ export class GeneralService {
     }
 
     const labelFields: any = [];
-    //logica para crear las claves  comninando option_label, separando la logica de tree y los demas campos
-    // hace referencia en label como clave para los tree y un campo especial para los demas campos, 
-    // esto es por que en el caso de tree-select el campo que se muestra es label y no se pueden combinar varios campos para mostrar 
-    // como label, mientras que en los demas campos si se pueden combinar varios campos para mostrar como label, por ejemplo, name y 
-    // username, entonces se combinan y se guardan en una clave con el nombre de los campos combinados, por ejemplo, name_username
+    //console.log('[DJA] fields recibidos:', fields);
     for (const key in fields) {
       const field = fields[key];
-
-      if (!field || !field.option_label) {
-        continue;
-      }
+      if (!field || !field.option_label) continue;
 
       const optionLabel = String(field.option_label).trim();
       const isTreeSelect = field.type === 'tree-select';
+      const isMultiSelect = field.type === 'multi-select';
 
-      if (!isTreeSelect && (optionLabel === 'name' || optionLabel === 'display_name')) {
-        continue;
-      }
+      // Para tree-select, 'label' se maneja nativamente; para campos simples (no multi),
+      // 'name'/'display_name' usan el fallback directo sin necesidad de regla
+      if (isTreeSelect && optionLabel === 'label') continue;
+      if (!isTreeSelect && !isMultiSelect && (optionLabel === 'name' || optionLabel === 'display_name')) continue;
 
-      if (isTreeSelect && optionLabel === 'label') {
-        continue;
-      }
-
-      const optionLabelJoin = optionLabel
-        .split(',')
-        .map((v) => v.trim())
-        .filter((v) => v.length > 0);
-
-      if (!optionLabelJoin.length) {
-        continue;
-      }
+      const optionLabelJoin = optionLabel.split(',').map(v => v.trim()).filter(v => v.length > 0);
+      if (!optionLabelJoin.length) continue;
 
       labelFields.push({
         field: key,
         option_label: optionLabel,
         type: field.type,
         option_label_join: optionLabelJoin,
-        label_field_key: field.type === 'tree-select' ? 'label' : optionLabelJoin.join('')
+        label_field_key: isTreeSelect ? 'label' : optionLabelJoin.join('')
       });
     }
+    //console.log('[DJA] labelFields construidos:', labelFields);
 
     const resp = dataDJA.map((dja: any) => {
       /*lo hago para que el id de los campos relacionados esté dentro del array general, principalmente para que cuando se resetee a un form, 
@@ -428,107 +436,115 @@ export class GeneralService {
       y se envía directamente dentro del objeto attributes, PERO, si tambien lo envío dentro del objeto relationships lo toma como el bueno y ya no se queja,
       por lo tanto, lo envío en ambos lados*/
 
-      let relationship: any = [];
-      let relationship_name: any = [];
-      for (const relationshipName in dja.relationships) {
-        const item = dja.relationships[relationshipName].data;
-        const IsArray = Array.isArray(dja.relationships[relationshipName].data);
+      // Copia mutable por iteración: los campos de relaciones se eliminan para no procesarse dos veces
+      const localLabelFields = [...labelFields];
 
-        if (IsArray) {
-          //para los m2m
-          relationship_name[relationshipName + '__array'] = item;
-          relationship_name[relationshipName + '__name'] = item.length > 0 ? item.length + ' elemento(s)' : '';
-          relationship[relationshipName] = item.map((item: any) => item.id);
-
-        } else {
-          const id = item?.id;
-          relationship[relationshipName] = id;
-          const additional: any = relationshipName + '_data';
-
-          if (additionalFieldsAppCols[additional]) {
-            const additional_fields = this.search_include(included, id, relationshipName, null, true, fields);
-
-            //cocatenarle a los campos del objecto additional_fields la variabnle additional + '_'
-            for (const field in additional_fields) {
-              dja.attributes[additional + '_' + field] = additional_fields[field];
-            }
-
-            // relaciona los id con los nombres, por default solo relaciona con el nombre, si se envia additionalFieldsIncluded,
-            // se agregan con los campos enviados
-          } else if (id && included) {
-            const r = this.search_include(included, id, relationshipName, additionalFieldsIncluded, false, fields);
-            relationship_name = { ...relationship_name, ...r };
-          }
-        }
-      }
-
-      let data = {
+      // Construye data con atributos base; las relaciones se agregan incrementalmente en el loop
+      let data: any = {
         id: dja.id,
         type_type: dja.type, // para que esté dentro del array, repito el nombre para que no vaya a chocar con el nombre de un campos
         ...dja.attributes,
-        ...relationship,
-        ...relationship_name,
         relationships: dja.relationships
       };
 
-      for (let i = 0; i < labelFields.length; i++) {
-        const rule = labelFields[i];
+      for (const relationshipName in dja.relationships) {
+        const item = dja.relationships[relationshipName].data;
+        const IsArray = Array.isArray(item);
 
-        if (!rule || !rule.option_label_join || !rule.option_label_join.length) {
-          continue;
-        }
+        // Busca y elimina la regla por nombre de campo (sin distinción de isArray)
+        const lfIdx = localLabelFields.findIndex((r: any) => r.field === relationshipName);
+        const lfRule = lfIdx !== -1 ? localLabelFields.splice(lfIdx, 1)[0] : null;
 
-        const keys = rule.option_label_join;
-        const labelFieldKey = rule.label_field_key;
+        if (IsArray) {
+          // M2M: guarda array de ids y array completo
+          data[relationshipName] = item.map((itm: any) => itm.id);
+          data[relationshipName + '__array'] = item;
 
-        // Para tree-select siempre debe existir data['label']
-        if (rule.type === 'tree-select') {
-          const firstKey = keys[0];
-          const baseVal = data[firstKey];
-          data['label'] = baseVal == null ? '' : String(baseVal).trim();
-        }
+          if (relationshipName === 'depends_on') continue;
+          console.log('-----------------------', relationshipName, data[relationshipName]);
 
-        const parts: string[] = [];
 
-        for (let k = 0; k < keys.length; k++) {
-          const key = keys[k];
-          const val = data[key];
+          if (included && item.length > 0) {
+            const multipleConfig = fields[relationshipName]?.cols?.multiple;
+            const isTreeSel = lfRule?.type === 'tree-select' || fields[relationshipName]?.type === 'tree-select';
+            //console.log(`[DJA] M2M "${relationshipName}": items=${item.length} | active=`, multipleConfig?.active, '| lfRule=', lfRule?.label_field_key, '| cols.multiple=', multipleConfig);
 
-          if (val === undefined || val === null) {
-            continue;
+            let displayValue: string;
+            if (lfRule && multipleConfig?.active === true) {
+              // cols.multiple.active explicitamente true -> mostrar nombres concatenados
+              const separator: string = multipleConfig.separator ?? ',';
+              const displays: string[] = item.map((itm: any) => {
+                const inc = (included as any[]).find((i: any) => i.id == itm.id);
+                if (!inc) return '';
+                const temp: any = {};
+                this._applyLabelField(temp, lfRule, { id: inc.id, ...inc.attributes });
+                return temp[lfRule.label_field_key] ?? '';
+              }).filter((s: string) => s);
+              displayValue = displays.join(separator);
+            } else {
+              // Sin active=true -> conteo usando msg_more o nombre si es uno
+              const msgTemplate: string = multipleConfig?.msg_more ?? '{e} elemento(s)';
+              if (item.length === 1) {
+                const inc = (included as any[]).find((i: any) => i.id == item[0].id);
+                displayValue = inc?.attributes?.username || inc?.attributes?.name || '1 elemento';
+              } else {
+                displayValue = msgTemplate.replace('{e}', String(item.length));
+              }
+            }
+
+            // tree-select usa 'label' como clave nativa; los demas usan rel__name
+            data[relationshipName + '__name'] = displayValue;
+            if (isTreeSel) data['label'] = displayValue;
           }
 
-          const s = String(val).trim();
-          if (!s) {
-            continue;
+        } else {
+          // FK: guarda el id plano
+          const id = item?.id;
+          data[relationshipName] = id;
+
+          if (id && included) {
+            const inc = (included as any[]).find((i: any) => i.id == id);
+            if (inc?.attributes) {
+              const isTreeSel = lfRule?.type === 'tree-select' || fields[relationshipName]?.type === 'tree-select';
+              let displayValue: string;
+              if (lfRule) {
+                const temp: any = {};
+                this._applyLabelField(temp, lfRule, { id: inc.id, ...inc.attributes });
+                displayValue = temp[lfRule.label_field_key] ?? '';
+              } else {
+                displayValue = inc.attributes.username || inc.attributes.name || '';
+              }
+              // tree-select usa 'label' como clave nativa; los demas usan rel__name
+              data[relationshipName + '__name'] = displayValue;
+              if (isTreeSel) data['label'] = displayValue;
+            }
           }
-
-          parts.push(s);
-        }
-
-        if (parts.length) {
-          data[labelFieldKey] = parts.join(' ');
         }
       }
+
+      // Aplica las reglas de label que quedaron sin consumir del loop de relaciones.
+      // Esto ocurre cuando el objeto que se procesa ES el objeto de opciones de un
+      // dropdown/tree-select: sus campos no son relaciones de sí mismo, por lo que
+      // el splice del loop de arriba no los eliminó. _applyLabelField lee los atributos
+      // propios del objeto (data) y construye la clave combinada (ej. "namelast_name").
+      // Nota: no hay riesgo de doble procesado porque las relaciones reales del objeto
+      // principal ya fueron extraídas con splice y no están en localLabelFields.
+      for (const rule of localLabelFields) {
+        this._applyLabelField(data, rule);
+      }
+
 
       data.created_at = this.timeZone(dja.attributes?.created_at);
       data.modified_at = this.timeZone(dja.attributes?.modified_at);
       data.inactivated_at = this.timeZone(dja.attributes?.inactivated_at);
 
       timeZone.forEach((field) => {
-
         data[field + '__text'] = this.timeZone(dja.attributes[field]);
         //solo si dja.attributes[field] no es nulo
         data[field] = dja.attributes[field] ? new Date(dja.attributes[field]) : null;
       });
 
-      /*fieldsBool.forEach((field) => {
 
-          if(!dja.attributes[field.field]) continue
-
-          // Dependioendo de valor de campo carga el valor para el verdadero o falso, en los datos mostrados al usuario se llama __text        
-          data[field.field + '__text'] = dja.attributes[field.field] ? customField[field.field + '_true'] : customField[field.field + '_false'];
-      });*/
       // Cambiamos fieldsBool.forEach(...) por un bucle for para poder usar 'continue'
       if (!dja || !dja.attributes) {
         // Si 'dja' o 'dja.attributes' no existe, salimos temprano
@@ -567,7 +583,6 @@ export class GeneralService {
           }
         }
       });
-      //console.log({ data: data, leaf: false, parent: null });
 
       if (node) {
         return { data: data, leaf: false, parent: null }; //
@@ -575,9 +590,6 @@ export class GeneralService {
 
       return data;
     });
-    /* } else {
-       return []
-     }*/
 
     if (is_object) {
       resp[0].included = included;
@@ -588,44 +600,49 @@ export class GeneralService {
     return resp;
   }
 
-  //°°° ELIMINAR CUANDO YA QUE ESTA EN LA CLASE PADRE CRUD
+
   /**
-   * Genero el objeto para el menú de más opciones, lo hago muy completo porque quiero que la llamada sea sencilla ya que lo utilizarán todos los componentes
-   * @param component --component-- Es una clave de array, sola para separar el menú, preferentemente poner el nombre del componente
-   * @param ref this del componrnte
-   * @param concat Si requiere agregar texto a la leyenda Importar y Exportar repectivamente, sólo para las 2 primeras opciones
-   * @param additionalElements agrega elementos adicionales al menú, si no envía nada, retornará
-   * @returns un array para tipo MenuItem para crear el menú de más opciones
+   * Construye el texto de visualización compuesto según `option_label_join` y lo escribe en `data[label_field_key]`.
+   *
+   * - `source` (opcional): objeto del que se leen los valores.
+   *   - Para FK/M2M: pasar `{ id: inc.id, ...inc.attributes }` para leer atributos del objeto relacionado.
+   *     Esto permite que `option_label` pueda incluir `'id'` (nivel raiz de JSON:API) ademas de atributos.
+   *   - Para campos propios del objeto: omitir `source`; los valores se leen de `data`.
+   *
+   * - `label_field_key`:
+   *   - tree-select -> `'label'` (clave que hardcodea PrimeNG treeSelect; NUNCA concatenar campos)
+   *   - otros        -> `optionLabelJoin.join('')` p.ej. `"nameid"` para `option_label: "name,id"`.
+   *     Esto es equivalente al resultado del pipe `joinOrSelf` en los templates,
+   *     por lo que ambas capas quedan armonizadas.
+   *
+   * - Para tree-select, ademas de escribir en `label_field_key` (`'label'`),
+   *   garantiza que `data['label']` contenga el primer campo de `option_label_join`.
    */
-  /*commonSettings(component: string = 'component', ref, concat: string[] = [], additionalElements: string[] = []): MenuItem[] {
- 
-    //°°°HCER PRUEBAS SI ES NECESARIO SEPARAR EN ARRAY component YA QUE CADA CADA VEZ QUE SE CARGUE UN NUEVO COMPONENTE EL ANTERIOR SE DESTRUYE Y TENDRIA LA VENTAJA DE NO 
-    //ELIMINIMAR EXPLICITAMENTE EN LA CLAVE DEL ARRAY CADA VEZ QUE SALGO DEL COMPONENTE
-    this.items[component] = [
-      {
-        label: 0 in concat ? 'Importar ' + concat[0] : 'Importar',
-        command: () => ref.import()
-      },
-      {
-        label: 1 in concat ? 'Exportar ' + concat[1] : 'Exportar',
-        command: () => ref.export()
-      }
-    ];
- 
-    for (let element of additionalElements) {
-      this.items[component].push({ label: element })
+  private _applyLabelField(data: any, rule: any, source?: any): void {
+    if (!rule || !rule.option_label_join || !rule.option_label_join.length) return;
+
+    const src = source ?? data;  // lee del relacionado si se pasa, si no del objeto principal
+    const keys: string[] = rule.option_label_join;
+    const labelFieldKey: string = rule.label_field_key;
+
+
+    if (rule.type === 'tree-select') {
+      const baseVal = src[keys[0]];
+      data['label'] = baseVal == null ? '' : String(baseVal).trim();
     }
-    this.items[component].push(
-      { separator: true },
-      {
-        label: 'Configuración del módulo',
-        command: () => ref.localSettings()
-      },
-      { label: 'Ir a configuración', routerLink: ['/setup'] }
-    );
- 
-    return this.items[component];
-  }*/
+
+    const parts: string[] = [];
+    for (const key of keys) {
+      let val = src[key];
+      if (val === undefined || val === null) val = '';
+      parts.push(String(val).trim());
+    }
+
+    if (parts.length) {
+      data[labelFieldKey] = parts.join(' ');
+    }
+    //console.log('--------------------', keys, labelFieldKey, parts.length, data[labelFieldKey], data,);
+  }
 
   // Llama esto una vez desde cualquier componente (por ejemplo, al hacer submit)
   // ***********************ADAPTADO PARA CAPACITOR*********************
@@ -640,7 +657,7 @@ export class GeneralService {
         this.initialized = true;
       })
       .catch((err) => {
-        console.error('Error al obtener ubicación con Capacitor:', err);
+        //console.error('Error al obtener ubicación con Capacitor:', err);
         // Fallback a geolocation nativa si Capacitor falla
         this.tryNativeGeolocation();
       });

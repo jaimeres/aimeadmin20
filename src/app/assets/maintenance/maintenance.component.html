@@ -52,13 +52,7 @@
 
         <p-tabpanel value="0">
           <app-custom-draw-form *ngIf="form()[$any(typeDefault)] && drawForm()[typeDefault]"
-            [drawForm]="drawForm()[typeDefault]['general']" [formGroup]="form()[$any(typeDefault)]"
-            (onSelectAutoCompleteAction)="onSelectAutoComplete($event)"
-            (onChangeDropdownAction)="onChangeDropdown($event)" (onNewIconDropdownAction)="onNewIconDropdown($event)"
-            (onReloadIconDropdownAction)="onReloadIconDropdown($event)" (onChangeToggleAction)="onChangeToggle($event)"
-            (onKeydownEnterAction)="onKeydownEnter($event)"
-            (onClosableIconDropdownAction)="onClosableIconDropdown($event)" (files64Action)="onFiles64($event)"
-            (filesAction)="onFiles($event)" />
+            [drawForm]="drawForm()[typeDefault]['general']" [formGroup]="form()[$any(typeDefault)]" />
         </p-tabpanel>
 
         <p-tabpanel header="Clasificadores" value="1">

@@ -43,7 +43,8 @@
       [showClear]="true" [optionValue]="fieldConfig.option_value || 'id'"
       [filter]="fieldConfig.filter_local !== undefined ? fieldConfig.filter_local : false"
       [filterBy]="fieldConfig.filter_by ? fieldConfig.filter_by : null"
-      [optionLabel]="fieldConfig.option_label | joinOrSelf" display="chip" styleClass="height-input-custom" />
+      [optionLabel]="fieldConfig.option_label | joinOrSelf" display="chip" styleClass="height-input-custom"
+      [appendTo]="'body'" />
 
     <button *ngIf="fieldConfig.reload_icon" type="button" pButton icon="pi pi-replay" class="height-icon-custom"
       (click)="onReloadIconDropdownAction.emit(fieldConfig.field)"></button>
@@ -549,7 +550,7 @@
 <ng-template #dateTemplate let-fieldConfig="fieldConfig">
   <p-floatlabel variant="on">
     <p-datepicker [formControl]="$any(formGroupSignal()?.get(fieldConfig.field))" styleClass="height-input-custom"
-      [appendTo]="'body'" [showIcon]="showIconSignal()" (onFocus)="removeFocus($event)" />
+      [appendTo]="'body'" [showIcon]="fieldConfig.show_icon" (onFocus)="removeFocus($event)" />
     <label [for]="fieldConfig.field">
       {{ fieldConfig?.label }}
     </label>
@@ -560,7 +561,7 @@
 <ng-template #timeTemplate let-fieldConfig="fieldConfig">
   <p-floatlabel variant="on">
     <p-datepicker [formControl]="$any(formGroupSignal()?.get(fieldConfig.field))" [iconDisplay]="'input'"
-      [showIcon]="showIconSignal()" styleClass="height-input-custom" [timeOnly]="true" [appendTo]="'body'">
+      [showIcon]="fieldConfig.show_icon" styleClass="height-input-custom" [timeOnly]="true" [appendTo]="'body'">
       <ng-template #inputicon let-clickCallBack="clickCallBack">
         <i class="pi pi-user pointer-events-none" (click)="clickCallBack($event)"></i>
       </ng-template>

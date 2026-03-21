@@ -5,7 +5,6 @@ import { MessageService } from '@/components/services/message.service';
 import { CRUDService } from './services/crud.service';
 import { GeneralService } from './services/general.service';
 import { SharedDynamicDataService } from './services/shared-dynamic-data.service';
-import { Router } from '@angular/router';
 
 /**
   Contiene las declaraciones y las importaciones de curd 
@@ -611,13 +610,6 @@ export class Vars {
             option_label: 'display_name',
             hide: false,
             autofocus: false
-            /*"options": [
-                            { "value": "T", "display_name": "Todos" },
-                            { "value": "C", "display_name": "Solo de compra" },
-                            { "value": "V", "display_name": "Solo de venta" },
-                            { "value": "CV", "display_name": "Compra y venta" },
-                            { "value": "I", "display_name": "Uso interno" },
-                        ]*/
           },
 
           3: {

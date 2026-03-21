@@ -67,15 +67,6 @@ export class AssetComponent extends CRUD implements OnInit {
     },
     'general': {
       'grid': {
-        /*0: {
-          "class": "col-12",
-          "class_md": "md:col-12",
-          "field": "supplier",
-          "type": "dropdown",
-          "hide": false,
-          "autofocus": false,
-          "data_type": "supplier",
-        },*/
         1: {
           "class": "col-12",
           "class_md": "md:col-12",

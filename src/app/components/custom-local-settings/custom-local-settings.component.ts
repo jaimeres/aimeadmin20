@@ -354,7 +354,6 @@ export class CustomLocalSettingsComponent implements OnChanges, OnDestroy {
         this.crudS.getObject({ app, type, filter }).subscribe((data: any) => {
           const options = this.generalS.DJAtoObject({
             respDJA: data,
-            additionalFieldsIncluded: [],
             fields: {
               [col.field]: {}
             },

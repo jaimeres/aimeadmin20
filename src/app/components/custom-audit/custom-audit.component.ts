@@ -53,7 +53,6 @@ export class CustomAuditComponent {
 
         this.items.set(this.generalS.DJAtoObject({
           respDJA: resp,
-          additionalFieldsIncluded: [],
           customField: [],
           fieldsBool: [],
           moreFields: [],
