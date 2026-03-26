@@ -226,51 +226,82 @@ export class CRUDService {
   buildFilterString(fields: Record<string, any>): string {
     const parts: string[] = [];
     for (const [fieldName, cfg] of Object.entries(fields)) {
-      const filter = (cfg as any)?.filter ?? {};
-      if (!filter.active) continue;
-      const op: string = filter.default ?? 'exact';
-      const rawValue = filter.default_value;
-      if (rawValue === null || rawValue === undefined) continue;
-      const optVal: string = filter.option_value ?? 'id';
-
-      if (op === 'isnull') {
-        parts.push(`filter[${fieldName}.isnull]=true`);
-        continue;
-      }
-      if (op === 'in') {
-        let list: string;
-        if (Array.isArray(rawValue)) {
-          list = rawValue
-            .map((v: any) => (v !== null && typeof v === 'object' ? String(v[optVal] ?? '') : String(v)))
-            .filter(Boolean).join(',');
-        } else {
-          list = String(rawValue);
-        }
-        if (list) parts.push(`filter[${fieldName}.in]=${encodeURIComponent(list)}`);
-        continue;
-      }
-      if (op === 'range') {
-        // default_value es [v1, v2] para range
-        if (Array.isArray(rawValue) && rawValue.length === 2) {
-          if (rawValue[0]) parts.push(`filter[${fieldName}.after]=${encodeURIComponent(String(rawValue[0]))}`);
-          if (rawValue[1]) parts.push(`filter[${fieldName}.before]=${encodeURIComponent(String(rawValue[1]))}`);
-        }
-        continue;
-      }
-      // exact / icontains / etc.
-      let val: string;
-      if (rawValue !== null && typeof rawValue === 'object' && !Array.isArray(rawValue)) {
-        val = String(rawValue[optVal] ?? '');
-      } else {
-        val = String(rawValue);
-      }
-      if (!val) continue;
-      parts.push(op === 'exact'
-        ? `filter[${fieldName}]=${encodeURIComponent(val)}`
-        : `filter[${fieldName}.${op}]=${encodeURIComponent(val)}`
-      );
+      const filter = (cfg as any)?.cols?.filter ?? {};
+      this._appendFilterParts(parts, fieldName, filter);
     }
     return parts.join('&');
+  }
+
+  /**
+   * Genera el string de filtro desde data_type.filter (dropdowns).
+   * Escenario 2: el filtro viene como { fieldName: { active, ops, default, default_value } }
+   * directamente, sin el wrapper cols.
+   * Ignora la clave especial 'logic'.
+   */
+  buildDropdownFilterString(filterConfig: Record<string, any>): string {
+    if (!filterConfig || typeof filterConfig !== 'object') return '';
+    const parts: string[] = [];
+    for (const [fieldName, cfg] of Object.entries(filterConfig)) {
+      if (fieldName === 'logic') continue;
+      this._appendFilterParts(parts, fieldName, cfg);
+    }
+    return parts.join('&');
+  }
+
+  /**
+   * Lógica compartida: dado un filter object {active, default, default_value, ops, option_value},
+   * genera los fragmentos de query string correspondientes.
+   * Si el fieldName contiene '_data_' (nomenclatura de relación, ej: provider_data_name),
+   * se convierte a notación de punto para JSON:API (provider.name).
+   */
+  private _appendFilterParts(parts: string[], fieldName: string, filter: any): void {
+    if (!filter?.active) return;
+    const op: string = filter.default ?? 'exact';
+    const rawValue = filter.default_value;
+    if (rawValue === null || rawValue === undefined) return;
+    const optVal: string = filter.option_value ?? 'id';
+
+    // Convertir nomenclatura de relación: relacion_data_campo → relacion.campo
+    const filterKey = fieldName.includes('_data_')
+      ? fieldName.replace(/_data_/g, '__')
+      : fieldName;
+
+    if (op === 'isnull') {
+      parts.push(`filter[${filterKey}.isnull]=true`);
+      return;
+    }
+    if (op === 'in') {
+      let list: string;
+      if (Array.isArray(rawValue)) {
+        list = rawValue
+          .map((v: any) => (v !== null && typeof v === 'object' ? String(v[optVal] ?? '') : String(v)))
+          .filter(Boolean).join(',');
+      } else {
+        list = String(rawValue);
+      }
+      if (list) parts.push(`filter[${filterKey}.in]=${encodeURIComponent(list)}`);
+      return;
+    }
+    if (op === 'range') {
+      // default_value es [v1, v2] para range
+      if (Array.isArray(rawValue) && rawValue.length === 2) {
+        if (rawValue[0]) parts.push(`filter[${filterKey}.after]=${encodeURIComponent(String(rawValue[0]))}`);
+        if (rawValue[1]) parts.push(`filter[${filterKey}.before]=${encodeURIComponent(String(rawValue[1]))}`);
+      }
+      return;
+    }
+    // exact / icontains / etc.
+    let val: string;
+    if (rawValue !== null && typeof rawValue === 'object' && !Array.isArray(rawValue)) {
+      val = String(rawValue[optVal] ?? '');
+    } else {
+      val = String(rawValue);
+    }
+    if (!val) return;
+    parts.push(op === 'exact'
+      ? `filter[${filterKey}]=${encodeURIComponent(val)}`
+      : `filter[${filterKey}.${op}]=${encodeURIComponent(val)}`
+    );
   }
 
   /**
@@ -302,6 +333,23 @@ export class CRUDService {
   }
 
   /**
+   * Convierte nomenclatura de relación en sort/ordering:
+   * "-provider_data_name,created_at" → "-provider.name,created_at"
+   * Respeta el prefijo '-' de orden descendente.
+   */
+  normalizeSortFields(sort: string): string {
+    if (!sort) return sort;
+    return sort.split(',').map(f => {
+      f = f.trim();
+      if (!f) return f;
+      const desc = f.startsWith('-');
+      const field = desc ? f.substring(1) : f;
+      const normalized = field.includes('_data_') ? field.replace(/_data_/g, '__') : field;
+      return desc ? `-${normalized}` : normalized;
+    }).filter(Boolean).join(',');
+  }
+
+  /**
    * Prepara la cadena de parametros para la consulta.
    * @param include Opcional, incluir relaciones, los valores se separan por coma
    * @param filter Optional, filtro para regresar datos, los valores en envias en crudo, por ejemplo, filter[country]=MX
@@ -321,7 +369,8 @@ export class CRUDService {
     // como puede haber varios filtros de diferentes tablas, se envia el paramtro en crudi por ejempo, 
     // filter[classifier_level.classifier_type]=9
     query += filter ? `&${filter}` : '';
-    query += sort ? `&sort=${sort}` : '';
+    const normalizedSort = this.normalizeSortFields(sort);
+    query += normalizedSort ? `&sort=${normalizedSort}` : '';
     query += fields ? `&fields[${type ? type : this.type}]=${fields}` : '';
     query += limit ? `&page[limit]=${limit}` : '';
     query += offset ? `&page[offset]=${offset}` : '';

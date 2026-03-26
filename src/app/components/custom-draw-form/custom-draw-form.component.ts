@@ -240,6 +240,11 @@ export class CustomDrawFormComponent implements OnDestroy {
     return signatureData;
   });
 
+  /** Construye el query string de filtro desde data_type.filter. */
+  private _buildDropdownFilter(filterConfig: { [key: string]: any } | undefined): string {
+    return this.crudS.buildDropdownFilterString(filterConfig ?? {});
+  }
+
   /** Genera la clave namespaced por tipo para sharedS.data y sharedS.drawDropdown. */
   private _sharedKey(field: string): string {
     const prefix = this.typeSignal() || (this as any).type || '';
@@ -254,12 +259,12 @@ export class CustomDrawFormComponent implements OnDestroy {
     const optionLabelField = this.getOptionLabelField(element);
     // si tiene opciones no se consulta al servidor    
     //aqui voy estoy revisando porque option no se inicializa con los dartos del choice y como se parseMarkerlos dropdawn en sabe al modulo
-    //no lleva force ya que no consulta al servidor
-    if (element.options && Array.isArray(element.options) && element.options.length > 0) {
+    //no lleva force ya que no consulta al servidor //inicia cambio data_type
+    if (element?.data_type?.options && Array.isArray(element.data_type.options) && element.data_type.options.length > 0) {
       if (optionLabelField) {
-        this.applyOptionLabelToOptions(element.options, element, optionLabelField);
+        this.applyOptionLabelToOptions(element.data_type.options, element, optionLabelField);
       }
-      return element.options;
+      return element.data_type.options;
     }
 
     //si ya existe datos para ese dropdown no se vuelve a consultar
@@ -310,12 +315,15 @@ export class CustomDrawFormComponent implements OnDestroy {
     //si no existe datos para ese dropdown se consulta al servidor,
     // en lugar de poner la app y el type en cada campo de json que genera el draw se pone una referencia
     // a un objeto que tiene la app y el type para evitar que esta info se guarde en el servidor y se pueda inyectar en el componente
-    const app = this.crudS.appType[element.data_type]?.app;
-    const type = this.crudS.appType[element.data_type]?.type;
+    const app = this.crudS.appType[element.data_type?.type]?.app;
+    const type = this.crudS.appType[element.data_type?.type]?.type;
     if (app && type) {
+      const filter = this._buildDropdownFilter(element.data_type?.filter);
+      const sort = element.data_type?.ordering || '';
+      const limit = element.data_type?.limit || 0;
 
       this.messageS.showBlocked(true);
-      this.crudS.getObject({ app, type }).subscribe(async (data: any) => {
+      this.crudS.getObject({ app, type, filter, sort, limit }).subscribe(async (data: any) => {
         //let dataDropdown = data.data.map((item: any) => {
         let dataDropdown = this.generalS.DJAtoObject({
           respDJA: data,
@@ -367,8 +375,8 @@ export class CustomDrawFormComponent implements OnDestroy {
    * Genera la llave de cache móvil para un dropdown por usuario.
    */
   private getMobileCacheKey(element: any): string {
-    const app = this.crudS.appType[element?.data_type]?.app || 'app';
-    const type = this.crudS.appType[element?.data_type]?.type || 'type';
+    const app = this.crudS.appType[element?.data_type?.type]?.app || 'app';
+    const type = this.crudS.appType[element?.data_type?.type]?.type || 'type';
     const field = element?.field || 'field';
     const userKey = this.getCacheUserKey();
     return `dropdownCache:${userKey}:${app}:${type}:${field}`;
@@ -1071,8 +1079,8 @@ export class CustomDrawFormComponent implements OnDestroy {
     //    }
     //}
     const additionalFieldsIncluded = entry.fields_included_relationships;
-    const app = this.crudS.appType[entry.data_type]?.app;
-    const type = this.crudS.appType[entry.data_type]?.type;
+    const app = this.crudS.appType[entry.data_type?.type]?.app;
+    const type = this.crudS.appType[entry.data_type?.type]?.type;
 
     this.crudS.getObject({ app, type, filter, include }).subscribe((data: any) => {
       data = this.generalS.DJAtoObject({
@@ -1532,7 +1540,7 @@ export class CustomDrawFormComponent implements OnDestroy {
               } else if (fieldType === 'static') {
                 // STATIC: Filtrar opciones hardcodeadas
                 // Opciones ahora están a la altura de filter (fuera)
-                const options = fieldConfig?.options || [];
+                const options = fieldConfig?.data_type?.options || [];
                 const filterConfig = fieldConfig?.filter;
 
                 if (filterConfig?.active && isActive) {
@@ -1548,7 +1556,6 @@ export class CustomDrawFormComponent implements OnDestroy {
                     const conditionResults = conditions.map((condition: any) => {
                       // VALIDAR: field es OBLIGATORIO
                       if (!condition.field) {
-                        //console.error('❌ ERROR: condition.field es obligatorio en filter', { condition, fieldConfig: key });
                         return false;
                       }
 
@@ -1711,8 +1718,8 @@ export class CustomDrawFormComponent implements OnDestroy {
 
               } else if (fieldType === 'dynamic') {
                 // DYNAMIC: Cargar datos del servidor
-                const dataType = fieldConfig?.data_type;
-                const filterConfig = fieldConfig?.filter;
+                const dataType = fieldConfig?.data_type?.type;
+                const filterConfig = fieldConfig?.data_type?.filter;
               }
             }
           }
@@ -2004,7 +2011,7 @@ export class CustomDrawFormComponent implements OnDestroy {
                   }
                 }
               } else if (fieldType === 'static') {
-                const options = fieldConfig?.options || [];
+                const options = fieldConfig?.data_type?.options || [];
                 const filterConfig = fieldConfig?.filter;
 
                 if (filterConfig?.active && isActive) {
@@ -2114,8 +2121,8 @@ export class CustomDrawFormComponent implements OnDestroy {
                   });
                 }
               } else if (fieldType === 'dynamic') {
-                const dataType = fieldConfig?.data_type;
-                const filterConfig = fieldConfig?.filter;
+                const dataType = fieldConfig?.data_type?.type;
+                const filterConfig = fieldConfig?.data_type?.filter;
 
                 if (dataType && isActive) {
                   /*console.log('🔄 Dynamic field to load from server:', {

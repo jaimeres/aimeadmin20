@@ -185,7 +185,7 @@
               [multiple]="true" [suggestions]="getFkSuggestions(col.field)"
               (completeMethod)="completeFkMethod($event, col)" [optionLabel]="getOptionLabel(col)" [minLength]="0"
               [forceSelection]="true" [addOnBlur]="false" [addOnTab]="false"
-              placeholder="Escriba {{ col.data_type ? 5 : 1 }} caract. para buscar..." appendTo="body"
+              placeholder="Escriba {{ col.data_type?.type ? 5 : 1 }} caract. para buscar..." appendTo="body"
               styleClass="w-full" />
             <small *ngIf="getFkHint(col.field)" class="text-color-secondary text-xs pl-1">
               <i class="pi pi-info-circle mr-1"></i>{{ getFkHint(col.field) }}

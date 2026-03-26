@@ -582,7 +582,7 @@
     fieldConfig.description?.label }}
   </div>
   <p-selectButton styleClass="height-input-custom" [formControl]="$any(formGroupSignal()?.get(fieldConfig.field))"
-    [options]="fieldConfig.options" [optionLabel]="fieldConfig.option_label || 'name'"
+    [options]="fieldConfig?.data_type?.options || []" [optionLabel]="fieldConfig.option_label || 'name'"
     [optionValue]="fieldConfig.option_value || 'id'" class="w-full" />
 </ng-template>
 

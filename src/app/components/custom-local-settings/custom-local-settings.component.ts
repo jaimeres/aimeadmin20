@@ -254,11 +254,11 @@ export class CustomLocalSettingsComponent implements OnChanges, OnDestroy {
         header: labelMap[fieldName] ?? cfg?.cols?.label ?? cfg?.label ?? fieldName,
         type: cfg?.type ?? '',
         // data_type está en fields[key] directamente, NO dentro de filter
-        data_type: cfg?.data_type ?? '',
-        // filter_by: campo(s) para búsqueda remota, al mismo nivel que filter (no dentro)
+        data_type: cfg?.data_type?.type ?? '',
+        // filter_by: campo(s) para búsqueda remota, en cols.filter.by
         // Puede ser "name" o "name, last_name" → OR en el servidor
-        filter_by: cfg?.filter_by ?? '',
-        filter: cfg?.filter ?? {},
+        filter_by: cfg?.cols?.filter?.by ?? cfg?.filter_by ?? '',
+        filter: cfg?.cols?.filter ?? {},
       }))
       .filter((col: any) => {
         if (!col.field) return false;
@@ -318,7 +318,7 @@ export class CustomLocalSettingsComponent implements OnChanges, OnDestroy {
   /** Búsqueda remota para autocomplete FK: consulta al servidor con filter[search]=query */
   completeFkMethod(event: { query: string }, col: any): void {
     const q = (event?.query ?? '').trim();
-    const dataType = col?.data_type;
+    const dataType = col?.data_type?.type;
 
     if (dataType) {
       // Campo con búsqueda remota — requiere mínimo FK_MIN_CHARS caracteres
@@ -571,11 +571,14 @@ export class CustomLocalSettingsComponent implements OnChanges, OnDestroy {
       const val = this.filterValuesFormGroup.get(`fv_${col.field}`)?.value;
       fieldsOut[col.field] = {
         ...(fieldsOut[col.field] ?? {}),
-        filter: {
-          ...((fieldsOut[col.field] ?? {})?.filter ?? {}),
-          active: row.active,
-          default: row.op,
-          default_value: val ?? null,
+        cols: {
+          ...((fieldsOut[col.field] ?? {})?.cols ?? {}),
+          filter: {
+            ...((fieldsOut[col.field] ?? {})?.cols?.filter ?? {}),
+            active: row.active,
+            default: row.op,
+            default_value: val ?? null,
+          },
         },
       };
     }
@@ -691,7 +694,7 @@ export class CustomLocalSettingsComponent implements OnChanges, OnDestroy {
     }
     this.filterState.set(state);
 
-    // Cargar opciones locales FK (dropdown-choice sin data_type)
+    // Cargar opciones locales FK (dropdown-choice sin data_ type)
     this._loadAllDropdownOptions(cols);
   }
 
@@ -789,15 +792,15 @@ export class CustomLocalSettingsComponent implements OnChanges, OnDestroy {
       const type = this.getColFilterType(col);
       if (type !== 'fk') continue;
 
-      // Solo cargar localmente para dropdown-choice con data_type vacío (opciones fijas)
-      if (col.type === 'dropdown-choice' && !col.data_type) {
-        const localOpts = col.filter?.options ?? col.options ?? [];
+      // Solo cargar localmente para dropdown-choice con data_ type vacío (opciones fijas)
+      if (col.type === 'dropdown-choice' && !col.data_type?.type) {
+        const localOpts = /*col.filter?.options ??*/ col?.data_type?.options ?? [];
         if (localOpts.length > 0) {
           this.dropdownOptionsSignal.update(s => ({ ...s, [col.field]: localOpts }));
           this.fkSuggestionsSignal.update(s => ({ ...s, [col.field]: [...localOpts] }));
         }
       }
-      // Los campos con data_type se consultan al servidor en completeFkMethod()
+      // Los campos con data_ type se consultan al servidor en completeFkMethod()
     }
   }
 
