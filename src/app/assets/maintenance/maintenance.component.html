@@ -52,7 +52,8 @@
 
         <p-tabpanel value="0">
           <app-custom-draw-form *ngIf="form()[$any(typeDefault)] && drawForm()[typeDefault]"
-            [drawForm]="drawForm()[typeDefault]['general']" [formGroup]="form()[$any(typeDefault)]" />
+            [drawForm]="drawForm()[typeDefault]['general']" [formGroup]="form()[$any(typeDefault)]"
+            [isCreate]="isCreate()" />
         </p-tabpanel>
 
         <p-tabpanel header="Clasificadores" value="1">

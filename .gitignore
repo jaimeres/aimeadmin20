@@ -22,6 +22,14 @@ out-tsc
 android/**/build/
 android/.gradle/
 android/local.properties
+
+#############################
+# Android signing (CRÍTICO)
+#############################
+*.keystore
+*.jks
+android/keystore.properties
+
 # Capacitor copied web assets (optional – uncomment if you do not want to version them)
 # android/app/src/main/assets/public/
 

@@ -36,7 +36,7 @@ print_success() {
 }
 
 # Paso 1: Build Web de Producción
-print_step "1/5 Generando build de producción Angular"
+print_step "1/6 Generando build de producción Angular"
 npm run build -- --configuration=production
 
 if [ $? -eq 0 ]; then
@@ -49,7 +49,7 @@ fi
 echo ""
 
 # Paso 2: Sincronizar con Capacitor
-print_step "2/5 Sincronizando con Capacitor Android"
+print_step "2/6 Sincronizando con Capacitor Android"
 npx cap sync android
 
 if [ $? -eq 0 ]; then
@@ -62,7 +62,7 @@ fi
 echo ""
 
 # Paso 3: Registrar plugin nativo de biometría
-print_step "3/5 Registrando plugin nativo de biometría"
+print_step "3/6 Registrando plugin nativo de biometría"
 node scripts/register-plugin.js
 
 if [ $? -eq 0 ]; then
@@ -75,7 +75,7 @@ fi
 echo ""
 
 # Paso 4: Build Android Debug
-print_step "4/5 Generando APK de Debug"
+print_step "4/6 Generando APK de Debug"
 cd android
 ./gradlew clean assembleDebug
 
@@ -90,8 +90,8 @@ fi
 
 echo ""
 
-# Paso 5: Build Android Release
-print_step "5/5 Generando APK de Release"
+# Paso 5: Build Android Release (APK firmado)
+print_step "5/6 Generando APK de Release (firmado)"
 cd android
 ./gradlew assembleRelease
 
@@ -100,6 +100,22 @@ if [ $? -eq 0 ]; then
     cd ..
 else
     print_error "Error al generar APK Release"
+    cd ..
+    exit 1
+fi
+
+echo ""
+
+# Paso 6: Build Android Bundle (AAB para Play Store)
+print_step "6/6 Generando AAB para Play Store"
+cd android
+./gradlew bundleRelease
+
+if [ $? -eq 0 ]; then
+    print_success "AAB Release generado"
+    cd ..
+else
+    print_error "Error al generar AAB Release"
     cd ..
     exit 1
 fi
@@ -117,8 +133,11 @@ echo ""
 echo "  📱 APK Debug:"
 echo "     android/app/build/outputs/apk/debug/app-debug.apk"
 echo ""
-echo "  📱 APK Release:"
-echo "     android/app/build/outputs/apk/release/app-release-unsigned.apk"
+echo "  📱 APK Release (firmado):"
+echo "     android/app/build/outputs/apk/release/app-release.apk"
+echo ""
+echo "  📦 AAB Play Store (firmado):"
+echo "     android/app/build/outputs/bundle/release/app-release.aab"
 echo ""
 echo "🔌 Plugins nativos incluidos:"
 echo "   ✓ SQLite (encriptado)"
@@ -128,8 +147,6 @@ echo "   ✓ Device Info"
 echo "   ✓ Preferences"
 echo "   ✓ Browser"
 echo "   ✓ Biometric Auth (custom)"
-echo ""
-print_warning "El APK de Release está sin firmar. Para firmar, ver BUILD_GUIDE.md"
 echo ""
 print_success "¡Listo para instalar y testear!"
 echo ""

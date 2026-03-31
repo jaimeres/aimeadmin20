@@ -4,32 +4,40 @@ const fs = require('fs');
 const path = require('path');
 
 const PLUGINS_FILE = path.join(__dirname, '..', 'android', 'app', 'src', 'main', 'assets', 'capacitor.plugins.json');
-const DEVICE_ATTEST_PLUGIN = {
-  "pkg": "device-attest-plugin",
-  "classpath": "com.jukai.security.DeviceAttestPlugin"
-};
+const CUSTOM_PLUGINS = [
+  {
+    "pkg": "device-attest-plugin",
+    "classpath": "com.jukai.security.DeviceAttestPlugin"
+  },
+  {
+    "pkg": "safe-camera-plugin",
+    "classpath": "com.jukai.jukai.SafeCameraPlugin"
+  }
+];
 
-console.log('🔧 Registrando plugin DeviceAttestPlugin...');
+console.log('🔧 Registrando plugins personalizados...');
 
 try {
   // Leer el archivo de plugins
   const pluginsData = fs.readFileSync(PLUGINS_FILE, 'utf8');
   const plugins = JSON.parse(pluginsData);
 
-  // Verificar si el plugin ya está registrado
-  const isRegistered = plugins.some(plugin => plugin.classpath === DEVICE_ATTEST_PLUGIN.classpath);
+  let added = 0;
+  for (const custom of CUSTOM_PLUGINS) {
+    const isRegistered = plugins.some(plugin => plugin.classpath === custom.classpath);
+    if (!isRegistered) {
+      plugins.push(custom);
+      console.log(`✅ Plugin ${custom.pkg} registrado exitosamente`);
+      added++;
+    } else {
+      console.log(`ℹ️  Plugin ${custom.pkg} ya está registrado`);
+    }
+  }
 
-  if (!isRegistered) {
-    // Agregar nuestro plugin
-    plugins.push(DEVICE_ATTEST_PLUGIN);
-
-    // Guardar el archivo actualizado
+  if (added > 0) {
     fs.writeFileSync(PLUGINS_FILE, JSON.stringify(plugins, null, '\t'));
-    console.log('✅ Plugin DeviceAttestPlugin registrado exitosamente');
-  } else {
-    console.log('ℹ️  Plugin DeviceAttestPlugin ya está registrado');
   }
 } catch (error) {
-  console.error('❌ Error registrando plugin:', error.message);
+  console.error('❌ Error registrando plugins:', error.message);
   process.exit(1);
 }

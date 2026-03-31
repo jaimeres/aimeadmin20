@@ -5,6 +5,8 @@ import { CommonModule } from '@angular/common';
 import { LayoutService } from '@/layout/service/layout.service';
 import { AuthService } from '../../auth/services/auth.service';
 import { Preferences } from '@capacitor/preferences';
+import { Share } from '@capacitor/share';
+import { GeneralService } from '../../utils/services/general.service';
 
 @Component({
   selector: '[app-sidebar]',
@@ -24,9 +26,18 @@ import { Preferences } from '@capacitor/preferences';
     <div app-menu-profile #menuProfileStart *ngIf="menuProfilePosition() === 'start'"></div>
     <div #menuContainer class="layout-menu-container">
       <div app-menu></div>
-      <label class="pl-8"> <strong>Beta 1.0.4</strong></label>
+      <label class="pl-8"> <strong>Beta 1.0.5</strong></label>
       <div *ngIf="deviceIdSuffix()" class="pl-8" style="font-size: 0.7rem; color: #94a3b8;">
         ID: {{deviceIdSuffix()}}
+      </div>
+      <div *ngIf="showShareLogBtn()" class="pl-8 pt-2">
+        <button type="button"
+          (click)="shareRestartLog()"
+          [disabled]="sharingLog()"
+          style="font-size: 0.7rem; background: none; border: 1px solid #94a3b8; border-radius: 4px; color: #64748b; padding: 2px 8px; cursor: pointer;">
+          <i class="pi pi-share-alt" style="font-size: 0.7rem; margin-right: 4px;"></i>
+          {{ sharingLog() ? 'Enviando...' : 'Compartir Log' }}
+        </button>
       </div>
     </div>
     
@@ -38,15 +49,23 @@ export class AppSidebar implements OnDestroy, OnInit {
 
   layoutService = inject(LayoutService);
   authS = inject(AuthService);
+  private generalS = inject(GeneralService);
 
   /** Últimos 12 caracteres del client_device_id; null si aún no existe en Preferences */
   deviceIdSuffix = signal<string | null>(null);
+
+  /** Solo mostrar el botón en móvil nativo */
+  showShareLogBtn = signal(false);
+
+  /** Indicador de que se está compartiendo */
+  sharingLog = signal(false);
 
   async ngOnInit() {
     const { value } = await Preferences.get({ key: 'client_device_id' });
     if (value) {
       this.deviceIdSuffix.set(value.slice(-12));
     }
+    this.showShareLogBtn.set(this.generalS.isMobile());
   }
 
   @ViewChild(AppMenu) appMenu!: AppMenu;
@@ -91,6 +110,54 @@ export class AppSidebar implements OnDestroy, OnInit {
 
   anchor() {
     this.layoutService.layoutState.update((val) => ({ ...val, anchored: !val.anchored }));
+  }
+
+  /** Recupera el log de reinicios del WebView y lo comparte vía Share nativo */
+  async shareRestartLog(): Promise<void> {
+    this.sharingLog.set(true);
+    try {
+      const LOG_KEY = 'webview_restart_log';
+      const { value } = await Preferences.get({ key: LOG_KEY });
+      const logs: any[] = value ? JSON.parse(value) : [];
+
+      if (logs.length === 0) {
+        // Sin log, compartir mensaje vacío
+        await Share.share({
+          title: 'WebView Restart Log',
+          text: 'No hay registros de reinicio del WebView.',
+          dialogTitle: 'Compartir Log'
+        });
+        return;
+      }
+
+      // Formatear legiblemente
+      const deviceId = this.deviceIdSuffix() || 'unknown';
+      const header = `=== WebView Restart Log ===\nDevice: ...${deviceId}\nFecha: ${new Date().toISOString()}\nEntradas: ${logs.length}\n${'='.repeat(30)}\n\n`;
+
+      const body = logs.map((entry: any, i: number) => {
+        const lines = [`#${i + 1} [${entry.type}] ${entry.timestamp}`];
+        if (entry.type === 'webview_probable_restart') {
+          lines.push(`  Boot anterior: ${entry.previousBoot}`);
+          lines.push(`  Tiempo desde último boot: ${entry.elapsedMs}ms`);
+        } else if (entry.type === 'app_restored_result') {
+          lines.push(`  Plugin: ${entry.pluginId}.${entry.methodName}`);
+          lines.push(`  Success: ${entry.success}`);
+          if (entry.error) lines.push(`  Error: ${entry.error}`);
+          lines.push(`  Data: ${entry.hasData}`);
+        } else if (entry.type === 'webview_boot') {
+          lines.push(`  URL: ${entry.url}`);
+        }
+        return lines.join('\n');
+      }).join('\n\n');
+
+      await Share.share({
+        title: 'WebView Restart Log',
+        text: header + body,
+        dialogTitle: 'Compartir Log de Reinicios'
+      });
+    } finally {
+      this.sharingLog.set(false);
+    }
   }
 
   ngOnDestroy() {

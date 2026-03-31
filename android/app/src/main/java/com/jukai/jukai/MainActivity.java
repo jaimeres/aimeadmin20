@@ -11,5 +11,6 @@ public class MainActivity extends BridgeActivity {
         
         // Register custom plugins
         registerPlugin(DeviceAttestPlugin.class);
+        registerPlugin(SafeCameraPlugin.class);
     }
 }
