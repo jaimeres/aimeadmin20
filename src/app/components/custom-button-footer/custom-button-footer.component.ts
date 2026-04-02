@@ -33,7 +33,7 @@ export class CustomButtonFooterComponent {
   public buttonConfig = signal({
     save: {
       hide: false,
-      label: 'Guardar y cerrar..',
+      label: 'Guardar y cerrar',
       icon: '',
       severity: 'secondary' as 'secondary' | 'success' | 'info' | 'warn' | 'danger' | 'help' | 'contrast' | null | undefined
     },
@@ -56,14 +56,14 @@ export class CustomButtonFooterComponent {
       severity: 'warn' as 'secondary' | 'success' | 'info' | 'warn' | 'danger' | 'help' | 'contrast' | null | undefined
     },
     help: {
-      hide: false,
+      hide: true,
       label: 'Ayuda',
       icon: 'pi pi-question-circle',
       severity: 'help' as 'secondary' | 'success' | 'info' | 'warn' | 'danger' | 'help' | 'contrast' | null | undefined,
       url: ''
     },
     help_video: {
-      hide: false,
+      hide: true,
       label: 'Video',
       icon: 'pi pi-youtube',
       severity: 'danger' as 'secondary' | 'success' | 'info' | 'warn' | 'danger' | 'help' | 'contrast' | null | undefined,

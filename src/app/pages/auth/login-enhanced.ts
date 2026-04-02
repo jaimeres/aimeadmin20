@@ -197,7 +197,8 @@ export class LoginEnhanced implements OnInit {
         const currentUser = this.authS.user() as any;
         if (currentUser?.erp?.is_active_ERP) {
           this.cookieS.delete('configuration');
-          this.router.navigateByUrl('/');
+          const lastUrl = localStorage.getItem('lastModuleUrl') || '/';
+          this.router.navigateByUrl(lastUrl.startsWith('/auth') ? '/' : lastUrl);
         } else {
           this.authS.redirectMP();
         }
@@ -235,7 +236,8 @@ export class LoginEnhanced implements OnInit {
         // Navegación normal
         if (resp.erp.is_active_ERP) {
           this.cookieS.delete('configuration');
-          this.router.navigateByUrl('/');
+          const lastUrl = localStorage.getItem('lastModuleUrl') || '/';
+          this.router.navigateByUrl(lastUrl.startsWith('/auth') ? '/' : lastUrl);
         } else {
           this.authS.redirectMP();
         }

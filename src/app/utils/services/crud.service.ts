@@ -1,6 +1,6 @@
 import { HttpClient } from '@angular/common/http';
 import { inject, Injectable, signal } from '@angular/core';
-import { map, Observable } from 'rxjs';
+import { map, Observable, Subject } from 'rxjs';
 import { ConfigService } from 'src/app/auth/services/config.service';
 import { GeneralService } from 'src/app/utils/services/general.service';
 import { environment } from 'src/environments/environment';
@@ -15,6 +15,9 @@ export class CRUDService {
   public type: string = '';
   public app: string = '';
   public relationships: any[] = [];
+
+  /** Notifica al breadcrumb que lastVisited cambió (desde changePos) */
+  public lastVisitedChanged$ = new Subject<void>();
 
   /**
    * Indica si el recurso contiene archivos.
@@ -181,18 +184,71 @@ export class CRUDService {
       "name": "Tipos de Movimiento",
       "icon": "pi pi-arrows-alt"
     },
-    "classifier-level": {
-      "app": "classifiers/classifier-level",
-      "type": "classifier-level",
-      "name": "Niveles de Clasificador",
-      "icon": "pi pi-sitemap"
-    },
     "responsible": {
       "app": "responsibles/responsible",
       "type": "responsible",
       "name": "Responsables",
       "icon": "pi pi-user-check"
-
+    },
+    "inventory_movement_detail": {
+      "app": "inventories/inventory-movement-detail",
+      "type": "inventory-movement-detail",
+      "name": "Movimientos de almacén",
+      "icon": "pi pi-arrow-right-arrow-left"
+    },
+    "responsible_user_rule": {
+      "app": "responsibles/responsible-user-rule",
+      "type": "responsible-user-rule",
+      "name": "Regla de responsable",
+      "icon": "pi pi-user-check"
+    },
+    "alternate_equivalent": {
+      "app": "products/alternate-equivalent",
+      "type": "alternate-equivalent",
+      "name": "Alternos/Equivalentes",
+      "icon": "pi pi-sync"
+    },
+    "product_variation": {
+      "app": "products/product-variation",
+      "type": "product-variation",
+      "name": "Variaciones de Producto",
+      "icon": "pi pi-list"
+    },
+    "web_product": {
+      "app": "products/web-product",
+      "type": "web-product",
+      "name": "Producto Web",
+      "icon": "pi pi-globe"
+    },
+    "app_classifier_type": {
+      "app": "classifiers/app-classifier-type",
+      "type": "app-classifier-type",
+      "name": "Tipo de Clasificador",
+      "icon": "pi pi-tags"
+    },
+    "classifier_level": {
+      "app": "classifiers/classifier-level",
+      "type": "classifier-level",
+      "name": "Niveles de Clasificador",
+      "icon": "pi pi-sitemap"
+    },
+    "task": {
+      "app": "tasks/task",
+      "type": "task",
+      "name": "Tareas",
+      "icon": "pi pi-check-square"
+    },
+    "task_detail": {
+      "app": "tasks/task-detail",
+      "type": "task-detail",
+      "name": "Detalle de Tarea",
+      "icon": "pi pi-check-square"
+    },
+    "request_detail": {
+      "app": "purchases/request-detail",
+      "type": "request-detail",
+      "name": "Detalle de Solicitud",
+      "icon": "pi pi-file-edit"
     }
   };
 

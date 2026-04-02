@@ -1,4 +1,5 @@
 import { computed, signal, effect, inject } from '@angular/core';
+import { Location } from '@angular/common';
 import { AbstractControl, FormArray, FormControl, FormGroup, ValidationErrors, ValidatorFn, Validators } from '@angular/forms';
 import { Router } from '@angular/router';
 import { MenuItem, TreeNode } from 'primeng/api';
@@ -16,6 +17,10 @@ export class CRUD extends Vars /*implements OnInit*/ {
 
   // Inyección directa del Router
   protected router = inject(Router);
+  private _location = inject(Location);
+
+  /** pos leído de la URL que aún no estaba configurado en this.app al momento del constructor */
+  private _pendingUrlPos: string | null = null;
 
   constructor(protected override crudS: CRUDService, pos = '') {
     super(crudS);
@@ -23,9 +28,18 @@ export class CRUD extends Vars /*implements OnInit*/ {
     // Obtener pos de la URL si existe, si no usar el del constructor
     const urlParams = new URLSearchParams(this.router.url.split('?')[1] || '');
     const posFromUrl = urlParams.get('pos');
-    const finalPos = posFromUrl || pos;
-    console.log('en el constructor antes de llamar a change Pos', posFromUrl, pos);
-    this.changePos(finalPos);
+
+    // Solo usar el pos de la URL si la posición ya está configurada en this.app
+    // (las apps se configuran en ngOnInit de cada componente, que corre DESPUÉS del constructor)
+    if (posFromUrl && this.app[posFromUrl]) {
+      this.changePos(posFromUrl);
+    } else {
+      // Guardar como pendiente para que initCRUD lo resuelva cuando this.app ya tenga la config
+      if (posFromUrl && posFromUrl !== pos) {
+        this._pendingUrlPos = posFromUrl;
+      }
+      this.changePos(pos);
+    }
     this.commonSettings();
   }
 
@@ -36,11 +50,31 @@ export class CRUD extends Vars /*implements OnInit*/ {
    */
   initCRUD(options: { node?: boolean; filter?: string } = {}): void {
 
+    // Resolver pos pendiente de la URL (el constructor lo guardó porque this.app aún no estaba listo)
+    if (this._pendingUrlPos && this.app[this._pendingUrlPos]) {
+      this.changePos(this._pendingUrlPos);
+      this._pendingUrlPos = null;
+    }
+
     const node = options.node ?? false;
     const filter = options.filter ?? '';
 
-    this.getAll({ pos: this.pos(), node, filter }); // carga los elementos al inicio
-    console.log('1 initCRUD selected Columns');
+    // Verificar configuración de carga automática desde configGeneral
+    const pos = this.pos() as any;
+    const loadConfig = this.configGeneral()[pos]?.load;
+    const isMobile = this.generalS.isMobileScreen();
+    let shouldLoad = false;
+    if (loadConfig) {
+      shouldLoad = isMobile ? !!loadConfig.load_on_start_mobile : !!loadConfig.load_on_start;
+    }
+    //console.log(`[initCRUD] pos="${pos}" | isMobile=${isMobile} | loadConfig=`, loadConfig, `| shouldLoad=${shouldLoad}`);
+    if (shouldLoad) {
+      this.getAll({ pos, node, filter }); // carga los elementos al inicio
+    } else {
+      this.showBlocked(false); // asegurar que no quede bloqueado si la autocarga no está activa
+      this.messageS.changeMessage('Autocarga deshabilitada, cargue manualmente en el botón de actualizar.', null, {}, 'info');
+    }
+    //console.log('1 initCRUD selected Columns');
 
     this.configForm = this.fb.group({
       columns: [this.selectedColumns().map((column: any) => column.field), [Validators.required]],
@@ -138,12 +172,30 @@ export class CRUD extends Vars /*implements OnInit*/ {
 
     if (this.posBefore != pos) {
 
-      // Actualizar la URL con el parámetro pos
-      if (this.router && pos) {
-        const currentUrl = this.router.url;
+      // Actualizar la URL silenciosamente (sin disparar NavigationEnd)
+      // Esto evita que el breadcrumb/menu reaccionen a cambios internos de pestaña
+      if (this.router && pos && !this._pendingUrlPos) {
+        // Usar _location.path() porque replaceState no actualiza router.url
+        const currentUrl = this._location.path() || this.router.url;
         const urlWithoutParams = currentUrl.split('?')[0];
         const newUrl = `${urlWithoutParams}?pos=${pos}`;
-        this.router.navigateByUrl(newUrl);
+        this._location.replaceState(newUrl);
+
+        // Guardar como último módulo visitado
+        try { localStorage.setItem('lastModuleUrl', newUrl); } catch (_) { }
+
+        // Guardar icono en historial de breadcrumb y notificar
+        const posKey = pos.replace(/-/g, '_');
+        const appTypeObj = (this.crudS.appType as any)[posKey] || (this.crudS.appType as any)[pos];
+        if (appTypeObj) {
+          let history = JSON.parse(localStorage.getItem('lastVisited') || '[]');
+          const entry = { icon: appTypeObj.icon, url: newUrl, name: appTypeObj.name };
+          history = history.filter((h: any) => h.url !== entry.url);
+          history.unshift(entry);
+          if (history.length > 5) history = history.slice(0, 5);
+          localStorage.setItem('lastVisited', JSON.stringify(history));
+          this.crudS.lastVisitedChanged$.next();
+        }
       }
 
       this.removeColumns.set(this.itemsRemove[safePos] || this.itemsRemove[0]);
@@ -1497,6 +1549,10 @@ export class CRUD extends Vars /*implements OnInit*/ {
             this.columns[safePos] = this.generateJSONColumns(this.optionsFields[safePos]);
             this.showBlocked(false);
             this.getAll2({ pos: safePos, node, filter, force, sort });
+          },
+          error: (err: any) => {
+            this.showBlocked(false);
+            this.messageS.changeMessage(`Hay un error al cargar la configuración de ${this.pluralDefiniteArticle[safePos] || this.pluralDefiniteArticle[0]}.`, err, this.customField()[safePos]);
           }
         });
       }
@@ -1602,6 +1658,10 @@ export class CRUD extends Vars /*implements OnInit*/ {
           this.columnsSecundary()[safePos] = this.columns[safePos];
           this.showBlocked(false);
           this.getAll2Secundary({ pos: safePos, node, filter, force, sort, fields, include, app, type });
+        },
+        error: (err: any) => {
+          this.showBlocked(false);
+          this.messageS.changeMessage(`Hay un error al cargar la configuración de ${this.pluralDefiniteArticle[safePos] || this.pluralDefiniteArticle[0]}.`, err, this.customField()[safePos]);
         }
       });
     }

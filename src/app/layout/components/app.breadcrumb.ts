@@ -1,5 +1,6 @@
 import { Component } from '@angular/core';
 import { CRUDService } from 'src/app/utils/services/crud.service';
+import { GeneralService } from 'src/app/utils/services/general.service';
 import { ActivatedRouteSnapshot, NavigationEnd, Router, RouterModule } from '@angular/router';
 import { BehaviorSubject } from 'rxjs';
 import { filter } from 'rxjs/operators';
@@ -123,31 +124,56 @@ export class AppBreadcrumb {
   readonly breadcrumbs$ = this._breadcrumbs$.asObservable();
 
   public lastVisited: Array<{ icon: string; url: string; name: string }> = [];
-  constructor(public router: Router, private crudService: CRUDService) {
+  constructor(public router: Router, private crudService: CRUDService, private generalS: GeneralService) {
     this.loadLastVisited();
+
+    // Cuando changePos actualiza lastVisited en localStorage, recargar iconos y label
+    this.crudService.lastVisitedChanged$.subscribe(() => {
+      this.loadLastVisited();
+      this.refreshBreadcrumbLabel();
+    });
+
     this.router.events.pipe(filter((event) => event instanceof NavigationEnd)).subscribe((event: any) => {
-      const root = this.router.routerState.snapshot.root;
       const breadcrumbs: Breadcrumb[] = [];
+      const root = this.router.routerState.snapshot.root;
       this.addBreadcrumb(root, [], breadcrumbs);
 
-      // Extraer el parámetro 'pos' del query string
+      // Leer pos del URL (aplica en recargas y navegación por iconos de breadcrumb)
       const urlSearchParams = new URLSearchParams(event.url.split('?')[1] || '');
-      let posParam = urlSearchParams.get('pos');
+      const posParam = urlSearchParams.get('pos');
       if (posParam) {
         const key = posParam.replace(/-/g, '_');
         const appTypeObj = this.crudService.appType[key as keyof typeof this.crudService.appType];
         if (appTypeObj && breadcrumbs.length > 0) {
           breadcrumbs[breadcrumbs.length - 1].label += ` / ${appTypeObj.name}`;
-          this.saveLastVisited({
-            icon: appTypeObj.icon,
-            url: event.url,
-            name: appTypeObj.name
-          });
         }
       }
 
       this._breadcrumbs$.next(breadcrumbs);
+      // Recargar iconos por si changePos ya escribió antes del NavigationEnd
+      this.loadLastVisited();
     });
+  }
+
+  /** Reconstruye el label del breadcrumb leyendo el pos actual de la URL (Location) */
+  private refreshBreadcrumbLabel() {
+    const root = this.router.routerState.snapshot.root;
+    const breadcrumbs: Breadcrumb[] = [];
+    this.addBreadcrumb(root, [], breadcrumbs);
+
+    // Location ya tiene la URL actualizada por replaceState
+    const currentUrl = this.router.url; // angular no la actualiza con replaceState, usar location
+    // Usar window.location para obtener la URL real del navegador
+    const urlSearchParams = new URLSearchParams(window.location.search);
+    const posParam = urlSearchParams.get('pos');
+    if (posParam) {
+      const key = posParam.replace(/-/g, '_');
+      const appTypeObj = this.crudService.appType[key as keyof typeof this.crudService.appType];
+      if (appTypeObj && breadcrumbs.length > 0) {
+        breadcrumbs[breadcrumbs.length - 1].label += ` / ${appTypeObj.name}`;
+      }
+    }
+    this._breadcrumbs$.next(breadcrumbs);
   }
 
   private saveLastVisited(item: { icon: string; url: string; name: string }) {
@@ -156,11 +182,16 @@ export class AppBreadcrumb {
     history.unshift(item);
     if (history.length > 5) history = history.slice(0, 5);
     localStorage.setItem('lastVisited', JSON.stringify(history));
-    this.lastVisited = history;
+    // Mostrar 3 en móvil, 5 en desktop
+    const max = this.generalS.isMobileScreen() ? 3 : 5;
+    this.lastVisited = history.slice(0, max);
   }
 
   private loadLastVisited() {
-    this.lastVisited = JSON.parse(localStorage.getItem('lastVisited') || '[]');
+    const all: Array<{ icon: string; url: string; name: string }> = JSON.parse(localStorage.getItem('lastVisited') || '[]');
+    // En pantallas pequeñas mostrar solo los últimos 3, en desktop los 5
+    const max = this.generalS.isMobileScreen() ? 3 : 5;
+    this.lastVisited = all.slice(0, max);
   }
 
   isProductList(): boolean {

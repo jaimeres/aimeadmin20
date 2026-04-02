@@ -114,7 +114,9 @@ export class Login {
       next: (resp: any) => {
         if (resp.erp.is_active_ERP) {
           this.cookieS.delete('configuration');
-          this.router.navigateByUrl('/');
+          // Restaurar el último módulo visitado o ir al inicio
+          const lastUrl = localStorage.getItem('lastModuleUrl') || '/';
+          this.router.navigateByUrl(lastUrl.startsWith('/auth') ? '/' : lastUrl);
         } else {
           this.authS.redirectMP();
         }
