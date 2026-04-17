@@ -422,10 +422,18 @@ export class Vars {
    */
   public statusGlobal = signal<any[]>([]);
 
+
+  tasksModule = signal<any>({});
+
   /**
    * Almacena los estados iniciales de deshabilitación por posición y campo
    */
   public initialDisabledForm: { [pos: string]: { [fieldName: string]: boolean } } = {};
+
+  /**
+   * Almacena los valores para separarar los componentes hijos
+   */
+  public showComponentSignal = signal<any[]>([]);
 
 
   public configGeneral = signal<any[]>([]);

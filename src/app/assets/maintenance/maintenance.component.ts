@@ -7,7 +7,7 @@ import { TagModule } from 'primeng/tag';
 import { PRIME_MODULES } from '../../shared/primeng.index';
 import { LOCAL_BASE } from '../../shared/components.index';
 import { SelectModule } from 'primeng/select';
-import { RequestComponent } from '../../purchases/request/request.component';
+import { TaskModuleLoaderComponent } from '../../components/task-module-loader/task-module-loader.component';
 
 @Component({
   selector: 'app-maintenance',
@@ -15,7 +15,7 @@ import { RequestComponent } from '../../purchases/request/request.component';
     CommonModule,
     SelectModule,
     TagModule,
-    RequestComponent,
+    TaskModuleLoaderComponent,
     ...PRIME_MODULES,
     ...LOCAL_BASE,
   ],
@@ -91,20 +91,6 @@ export class MaintenanceComponent extends CRUD implements OnInit {
 
 
     this.initCRUD();
-
-    /*this.startMenu.set([
-      {
-        label: 'Cargando...',
-        //command: () => this.setStatus(null)
-      }
-    ]);*/
-  }
-
-  /**
- * se llama cuando el componente hijo avisa que el dialogo fue cerrado
- */
-  closeDialogRequest() {
-    this.tasks_module = {};
   }
 
   public installation = false;

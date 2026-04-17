@@ -461,7 +461,7 @@ export class GeneralService {
           data[relationshipName + '__array'] = item;
 
           if (relationshipName === 'depends_on') continue;
-          console.log('-----------------------', relationshipName, data[relationshipName]);
+          //console.log('-----------------------', relationshipName, data[relationshipName]);
 
 
           if (included && item.length > 0) {

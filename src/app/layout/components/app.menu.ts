@@ -40,6 +40,15 @@ export class AppMenu {
       ]
     },
 
+    {
+      items: [
+        {
+          label: 'Social',
+          routerLink: ['/dashboards/analytics']
+        }
+      ]
+    },
+
     /* 
       {
         items: [
@@ -50,59 +59,10 @@ export class AppMenu {
         ]
       },
 
-      {
-        label: 'Compras',
-        items: [
-          {
-            label: 'Compras',
-            items: [
-              { label: 'Solicitudes', routerLink: ['/purchases/request'] },
-              { label: 'Pedidos', routerLink: ['/purchases/orders'] },
-            ]
-          },
-        ]
-      },
-      {
-        label: 'Catálogos',
-        items: [
-          {
-            label: 'Catálogos',
-            items: [
-              { label: 'Productos', routerLink: ['/catalogues/product'] },
-              { label: 'Monedas', routerLink: ['/catalogues/currency'] },
-              { label: 'Clasificadores', routerLink: ['/catalogues/classifier'] },
-              { label: 'Impuestos', routerLink: ['/catalogues/tax'] },
-              {
-                label: 'Empresas',
-                items: [
-                  { label: 'Grupos', routerLink: ['/catalogues/company?pos=group'] },
-                  { label: 'Empresas', routerLink: ['/catalogues/company'] },
-                  { label: 'Sucursales', routerLink: ['/catalogues/company?pos=subsidiary'] },
-                  { label: 'Almacenes', routerLink: ['/catalogues/company?pos=warehouse'] },
-                  { label: 'Secciones', routerLink: ['/catalogues/company?pos=section'] },
-                  { label: 'Anaqueles', routerLink: ['/catalogues/company?pos=rack'] },
-                  { label: 'Ubicaciones', routerLink: ['/catalogues/company?pos=slots'] },
 
-                ]
-              },
-            ]
-          }
-        ]
-      },
+
       
-        {
-        label: 'Marketplace',
-        items: [
-          {
-            label: 'Marketplace',
-            items: [
-              { label: 'Productos', routerLink: ['/ecommerce/product-list'] },
-              { label: 'Carrito', routerLink: ['/ecommerce/shopping-cart'] },
-              { label: 'Historial', routerLink: ['/ecommerce/order-history'] },
-            ]
-          }
-        ]
-      },
+       
     
     
     */
@@ -115,10 +75,15 @@ export class AppMenu {
           items: [
             { label: 'Bombas/utilitarios', routerLink: ['/assets/asset'] },
             { label: 'Mantenimiento', routerLink: ['/assets/maintenance'] },
+
+            { label: 'Herramientas y refacciones', routerLink: ['/assets/list'] },
+            { label: 'Ubicaciones', routerLink: ['/assets/list'] },
+            { label: 'Reponsivas y resguardos', routerLink: ['/assets/list'] },
           ]
         },
       ]
     },
+
     {
       label: 'Diesel',
       items: [
@@ -130,15 +95,147 @@ export class AppMenu {
         }
       ]
     },
+
+
     {
-      label: 'Tareas y flujos',
+      label: 'Compras',
       items: [
         {
-          label: 'Tareas y flujos',
+          label: 'Compras',
           items: [
-            { label: 'Tareas y flujos', routerLink: ['/tasks/task'] },
+            { label: 'Solicitudes', routerLink: ['/purchases/request'] },
+            { label: 'Pedidos', routerLink: ['/purchases/orders'] },
+
+            { label: 'Ofertas y precios', routerLink: ['/purchases/purchase'] },
+            { label: 'Subastas', routerLink: ['/purchases/auction'] },
+            { label: 'Remisiones', routerLink: ['/purchases/delivery-note'] },
+            { label: 'Facturas', routerLink: ['/purchases/bill'] },
+            { label: 'Facturas factura directa', routerLink: ['/purchases/direct-invoice'] },
+            { label: 'Pagar', routerLink: ['/purchases/pay'] },
+
+          ]
+        },
+      ]
+    },
+
+
+    {
+      label: 'RRHH',
+      items: [
+        {
+          label: 'RRHH',
+          items: [
+            { label: 'Trabajadores', routerLink: ['/human-resources/employee'] },
+            { label: 'Reclutamiento', routerLink: ['/human-resources/purchase'] },
+            { label: 'Asistencia', routerLink: ['/human-resources/list'] },
+            { label: 'Cursos y evaluaciones', routerLink: ['/human-resources/list'] },
+            { label: 'Vacantes', routerLink: ['/human-resources/vacant'] },
+            { label: 'Organigrama', routerLink: ['/human-resources/list'] },
+          ]
+        },
+      ]
+    },
+    {
+      label: 'Viáticos',
+      items: [
+
+        {
+          label: 'Viáticos',
+          items: [
+            { label: 'Gastos', routerLink: ['/purchase/purchase'] },
+            { label: 'Banco', routerLink: ['/purchase/purchase'] },
+            { label: 'Comprobar', routerLink: ['/purchase/purchase'] },
+            { label: 'Solicitar', routerLink: ['/purchase/purchase'] },
+            { label: 'Reembolsar', routerLink: ['/purchase/purchase'] },
+            { label: 'Hoteles', routerLink: ['/purchase/purchase'] },
+            { label: 'Transportes', routerLink: ['/purchase/purchase'] },
+            { label: 'Vuelos', routerLink: ['/purchase/purchase'] },
+          ]
+        }
+      ]
+    },
+
+
+
+    {
+      label: 'Catálogos',
+      items: [
+        {
+          label: 'Catálogos',
+          items: [
+            { label: 'Productos', routerLink: ['/catalogues/product'] },
+            { label: 'Monedas', routerLink: ['/catalogues/currency'] },
+            { label: 'Clasificadores', routerLink: ['/catalogues/classifier'] },
+            { label: 'Impuestos', routerLink: ['/catalogues/tax'] },
+            {
+              label: 'Empresas',
+              items: [
+                { label: 'Grupos', routerLink: ['/catalogues/company?pos=group'] },
+                { label: 'Empresas', routerLink: ['/catalogues/company'] },
+                { label: 'Sucursales', routerLink: ['/catalogues/company?pos=subsidiary'] },
+                { label: 'Almacenes', routerLink: ['/catalogues/company?pos=warehouse'] },
+                { label: 'Secciones', routerLink: ['/catalogues/company?pos=section'] },
+                { label: 'Anaqueles', routerLink: ['/catalogues/company?pos=rack'] },
+                { label: 'Ubicaciones', routerLink: ['/catalogues/company?pos=slots'] },
+
+              ]
+            },
+          ]
+        }
+      ]
+    },
+
+
+    {
+      label: 'Marketplace',
+      items: [
+        {
+          label: 'Marketplace',
+          items: [
+            { label: 'Productos', routerLink: ['/ecommerce/product-list'] },
+            { label: 'Carrito', routerLink: ['/ecommerce/shopping-cart'] },
+            { label: 'Historial', routerLink: ['/ecommerce/order-history'] },
+          ]
+        }
+      ]
+    },
+
+    {
+      label: 'Tareas y automatizaciones',
+      items: [
+
+        {
+          label: 'Tareas y automatizaciones',
+          items: [
+            {
+              label: 'Tareas', routerLink: ['/tasks/task']
+            },
+            {
+              label: 'Formularios', routerLink: ['/tasks/workflow']
+            }
           ]
         }]
+    },
+
+
+
+
+    {
+      label: 'Soporte y contacto',
+      items: [
+
+        {
+          label: 'Soporte y contacto', routerLink: ['/human-resources1'],
+          items: [
+            { label: 'Internos', routerLink: ['/purchase/list'] },
+            { label: 'Clientes', /*icon: 'pi pi-fw pi-plus',*/ routerLink: ['/purchase/purchase'] },
+            { label: 'Proveedores', routerLink: ['/purchase/list'] },
+            { label: 'Avisos', routerLink: ['/purchase/list'] },
+            { label: 'Alertas', routerLink: ['/purchase/list'] },
+          ]
+        }
+
+      ]
     },
 
     /*

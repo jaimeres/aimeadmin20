@@ -1,6 +1,6 @@
 import { Component, ElementRef, EventEmitter, inject, Input, OnInit, Output, Renderer2, signal, SimpleChanges, ViewChild } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { FormBuilder, FormGroup } from '@angular/forms';
+import { FormGroup } from '@angular/forms';
 import { TableModule } from 'primeng/table';
 import { TagModule } from 'primeng/tag';
 import { PurchaseService } from '../services/purchase.service';
@@ -34,15 +34,6 @@ export class RequestComponent extends CRUD implements OnInit {
    * Muestra u oculta partes del componente
    */
   @Input() showComponent: any = null;
-  public showComponentSignal = signal<any>({
-    'local': true,
-    'create': false,
-    'read': false,
-    'update': false,
-    'delete': false,
-    'field': {
-    }
-  });
 
   /**
    * Emite el cierre del dialogo al componente padre
@@ -51,37 +42,13 @@ export class RequestComponent extends CRUD implements OnInit {
 
   public products = signal<any[]>([]);
   public stock = signal<any[]>([]);
-  private fbLoc: FormBuilder = inject(FormBuilder);
   private search_name = signal<string>('');
 
   constructor(crudS: PurchaseService,) {
     super(crudS, 'request-detail');
   }
 
-  ngOnChanges(changes: SimpleChanges) {
-    this.showComponentSignal()['local'] = false;
-    console.log('----...--..-.-.-', changes);
 
-
-    if (changes['showComponent'] && changes['showComponent'].currentValue) {
-      // Verifica si el valor actual de showComponent es válido
-      const currentValue = changes['showComponent'].currentValue;
-
-      if (currentValue['create']) {
-        this.openNew(); // Aquí se realiza la lógica para crear
-        this.showComponentSignal()['create'] = true;
-      } else if (currentValue['update']) {
-        this.showComponentSignal()['update'] = true;
-        this.edit();
-      } else if (currentValue['delete']) {
-        this.showComponentSignal()['delete'] = true;
-        this.delete();
-      } else if (currentValue['read']) {
-        this.showComponentSignal()['read'] = true;
-        this.getAll();
-      }
-    }
-  }
 
   ngOnInit() {
 
@@ -89,6 +56,13 @@ export class RequestComponent extends CRUD implements OnInit {
     this.typeDefault = 'request-detail';
     this.app[this.typeDefault] = 'purchases/request-detail';
     this.module[this.typeDefault] = 'CO';
+
+    // request-detail no siempre soporta is_active como filtro de listado.
+    // Si viene activo por configuración global, provoca 400 en el backend.
+    const requestFields = this.crudS.fieldsForm(this.typeDefault);
+    if (requestFields?.is_active?.cols?.filter) {
+      requestFields.is_active.cols.filter.active = false;
+    }
 
 
     /*this.relationships[this.typeDefault] = [
@@ -160,11 +134,8 @@ export class RequestComponent extends CRUD implements OnInit {
     //////////////////////////////////////////////////////////////////////
     /*const option_label = this.searchFieldDrawForm('search_name', 'request-detail');
     this.search_name.set(option_label.option_label);*/
-
-
     this.initCRUD();
   }
-
 
   ppDialogVisible = false;
   scDialogVisible = false;

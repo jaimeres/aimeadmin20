@@ -51,7 +51,6 @@
     [disabled]="disable()" pTooltip="Eliminar" tooltipPosition="bottom" [style]="{'height': '32px'}"
     class="hide-sm-custom"></button>
 
-
   <button *ngIf="showStartSignal() && !startMenuSignal()?.length" pButton pRipple icon="pi pi-bolt" severity="success"
     (click)="startAction.emit()" [disabled]="disable()" pTooltip="Iniciar" tooltipPosition="bottom"
     [style]="{'height': '32px'}" class="start-button-mobile-position"></button>

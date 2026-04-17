@@ -1,5 +1,4 @@
 <p-confirmdialog />
-
 <div style="position: absolute; z-index: 2;">
   <app-custom-button-crud (deleteAction)="delete()" (editAction)="edit()"
     (refreshAction)="getAll({ force: true, pos: pos() })" (newAction)="openNew({pos:pos()})"
@@ -103,5 +102,6 @@
 
 </p-dialog>
 
-<app-request *ngIf="tasks_module['RE']" [showComponent]="tasks_module['RE']" (closeDialog)="closeDialogRequest()">
-</app-request>
+
+<app-task-module-loader *ngIf="tasksModule()" [tasksModule]="tasksModule()" (closeDialog)="closeTaskModule()">
+</app-task-module-loader>

@@ -1,4 +1,4 @@
-import { computed, signal, effect, inject } from '@angular/core';
+import { computed, signal, inject, OnChanges, SimpleChanges, Injectable, Directive } from '@angular/core';
 import { Location } from '@angular/common';
 import { AbstractControl, FormArray, FormControl, FormGroup, ValidationErrors, ValidatorFn, Validators } from '@angular/forms';
 import { Router } from '@angular/router';
@@ -10,7 +10,8 @@ import {
 } from './types/crud.types';
 import { Vars } from './vars.class';
 
-export class CRUD extends Vars /*implements OnInit*/ {
+@Directive()
+export class CRUD extends Vars implements OnChanges  /*implements OnInit*/ {
   // cada vez que cambian los customField se actualiza
   public customField = computed(() => this.crudS.customField());
   // calcula el estilo del dialogo, cada vez que hay un cambio de aplicacion
@@ -41,6 +42,114 @@ export class CRUD extends Vars /*implements OnInit*/ {
       this.changePos(pos);
     }
     this.commonSettings();
+    this.showComponentLocal(pos);
+  }
+
+  ngOnChanges(changes: SimpleChanges) {
+    this.showComponentLocal('request-detail', changes);
+  }
+
+  private shouldLoadOnStart(pos: any): boolean {
+    const loadConfig = this.configGeneral()[pos]?.load;
+    if (!loadConfig) return false;
+
+    const isMobile = this.generalS.isMobileScreen();
+    return isMobile ? !!loadConfig.load_on_start_mobile : !!loadConfig.load_on_start;
+  }
+
+  private syncColumnsState(pos: any): void {
+    const safePos = pos ?? 0;
+    this.removeColumns.set(this.itemsRemove[safePos] || this.itemsRemove[0]);
+    this.cols.set((this.columns[safePos] || []) as any);
+
+    this.fieldConfig.update(cfg => ({
+      ...cfg,
+      cols: this.cols(),
+      fields: this.crudS.fieldsForm(pos),
+      app: safePos,
+    }));
+    this.fieldExport.update(exp => ({ ...exp, cols: this.cols() }));
+  }
+
+  showComponentLocal(pos: string, changes: any = {}) {
+    this.showComponentSignal.update(value => ({
+      ...value,
+      [pos]: {
+        local: true,
+        create: false,
+        read: false,
+        update: false,
+        delete: false,
+        field: {}
+      }
+    }));
+
+    const currentValue = changes?.showComponent?.currentValue;
+    if (!currentValue) return;
+
+    // Cuando el componente se crea dinámicamente, ngOnChanges puede ejecutarse
+    // antes de ngOnInit. En ese momento this.app[pos] aún no existe y termina
+    // llamando OPTIONS a /undefined/. Reintentamos en microtarea cuando la app
+    // ya esté inicializada.
+    if (!this.app[pos]) {
+      Promise.resolve().then(() => {
+        if (this.app[pos]) {
+          this.showComponentLocal(pos, { showComponent: { currentValue } });
+        }
+      });
+      return;
+    }
+
+    //actulizar this.showComponentSignal para cambiar local por false
+    this.showComponentSignal.update(value => ({
+      ...value,
+      [pos]: {
+        ...value[pos as any],
+        local: false
+      }
+    }));
+
+    if (currentValue.create) {
+      this.showComponentSignal.update(value => ({
+        ...value,
+        [pos]: {
+          ...value[pos as any],
+          local: false,
+          create: true
+        }
+      }));
+      this.openNew({ pos });
+    } /*else if (currentValue.update) {
+    this.showComponentSignal.update(value => ({
+      ...value,
+      [pos]: {
+        ...value[pos],
+        local: false,
+        update: true
+      }
+    }));
+    this.edit(pos);
+  }*/ else if (currentValue.delete) {
+      this.showComponentSignal.update(value => ({
+        ...value,
+        [pos]: {
+          ...value[pos as any],
+          local: false,
+          delete: true
+        }
+      }));
+      this.delete(pos);
+    } else if (currentValue.read) {
+      this.showComponentSignal.update(value => ({
+        ...value,
+        [pos]: {
+          ...value[pos as any],
+          local: false,
+          read: true
+        }
+      }));
+      this.getAll({ pos });
+    }
   }
 
   /**
@@ -61,12 +170,7 @@ export class CRUD extends Vars /*implements OnInit*/ {
 
     // Verificar configuración de carga automática desde configGeneral
     const pos = this.pos() as any;
-    const loadConfig = this.configGeneral()[pos]?.load;
-    const isMobile = this.generalS.isMobileScreen();
-    let shouldLoad = false;
-    if (loadConfig) {
-      shouldLoad = isMobile ? !!loadConfig.load_on_start_mobile : !!loadConfig.load_on_start;
-    }
+    const shouldLoad = this.shouldLoadOnStart(pos);
     //console.log(`[initCRUD] pos="${pos}" | isMobile=${isMobile} | loadConfig=`, loadConfig, `| shouldLoad=${shouldLoad}`);
     if (shouldLoad) {
       this.getAll({ pos, node, filter }); // carga los elementos al inicio
@@ -198,8 +302,7 @@ export class CRUD extends Vars /*implements OnInit*/ {
         }
       }
 
-      this.removeColumns.set(this.itemsRemove[safePos] || this.itemsRemove[0]);
-      this.cols.set((this.columns[safePos] || []) as any);
+      this.syncColumnsState(pos);
 
       // Asegurar que dialogSizeClass devuelve un string válido
       const dialogClass = this.dialogSizeClass(this.drawForm()[pos]);
@@ -218,16 +321,6 @@ export class CRUD extends Vars /*implements OnInit*/ {
 
       //this.hideDialogMobile.set(this.generalS.isMobileScreen() && this.drawForm()[pos]?.dialog?.hide_mobile);
 
-      // no utilizo directamente this.cols() al enviar la columna porque this.fieldConfig() es un objecto de varios valores,
-      // y en este caso solo estoy inicializando la propiedad cols de objecto this.fieldConfig()
-      this.fieldConfig.update(cfg => ({
-        ...cfg, cols: this.cols(),
-        fields: this.crudS.fieldsForm(pos),
-        'app': safePos,
-      }));
-      //°°°mismo caso de arriba pero creo que este si puede utlizar this.cols() ya que no se requieres muchos campos o
-      //por lo tanto podria no utilizar el objecto
-      this.fieldExport.update(exp => ({ ...exp, cols: this.cols() }));
       // Generar la cadena de filtros a partir de los fields de la posición actual.
       // Se ejecuta siempre que cambie la posición para que getAll2 use los filtros
       // persistentes sin necesidad de consultar el servidor.
@@ -1488,6 +1581,10 @@ export class CRUD extends Vars /*implements OnInit*/ {
     if (!this.formTempo[pos]) {
       // si ya se consulto al servidor, no se vuelve a consultar
       if (this.optionsFields[pos]) {
+        if (!this.columns[pos]) {
+          this.columns[pos] = this.generateJSONColumns(this.optionsFields[pos], pos);
+          this.syncColumnsState(pos);
+        }
         this.formTempo[pos] = this.generateJSONform(this.optionsFields[pos]);
         this.form.set(this.formTempo);
 
@@ -1500,6 +1597,10 @@ export class CRUD extends Vars /*implements OnInit*/ {
         this.crudS.options(this.app[pos]).subscribe({
           next: (resp: any) => {
             this.optionsFields[pos] = resp.data.actions.POST;
+            if (!this.columns[pos]) {
+              this.columns[pos] = this.generateJSONColumns(this.optionsFields[pos], pos);
+              this.syncColumnsState(pos);
+            }
             this.formTempo[pos] = this.generateJSONform(this.optionsFields[pos]);
             this.form.set(this.formTempo);
             this.showFormDialog(pos);
@@ -2012,9 +2113,18 @@ export class CRUD extends Vars /*implements OnInit*/ {
     // si no se han cargado los elementos, llama getAll() para cargarlos, si ya se cargaron los elementos,
     //muestro los que estan en momeria de la app correspondiente
 
+    // Debe ejecutarse antes para asegurar configGeneral() y this.app de la posición actual.
+    this.changePos(pos);
+
     if (!this.itemsCache[pos]) {
-      const force = true;
-      this.getAll({ pos, node, force, filter });
+      const shouldLoad = this.shouldLoadOnStart(pos);
+      if (shouldLoad) {
+        const force = true;
+        this.getAll({ pos, node, force, filter });
+      } else {
+        // Sin autocarga: tabla vacía y solo estructura vía OPTIONS (createForm).
+        this.items.set([]);
+      }
     } else {
       // Aplica filtros si existe un query string tipo "filter[is_alternate]=false"
       if (filter) {
@@ -2038,9 +2148,6 @@ export class CRUD extends Vars /*implements OnInit*/ {
     this.isCreate.set(true);
     //llama a change Pos para que se inicialicen los valores correspondientes a la app,
     //dado que crear tiene un menu para crear los elementos, a diferencia de edit o delete
-
-    //////////////////////////
-    this.changePos(pos);
 
     //crea el form
     this.createForm(pos);
@@ -2753,9 +2860,7 @@ export class CRUD extends Vars /*implements OnInit*/ {
    */
   save(options: saveOptions = {}) {
     const { pos, hide = true, reset = true, is_file = false, node = false, selected = null, update_item = true, data = null, custom_user = null } = options;
-
     const safePos = pos as any; // Type assertion para índices de array
-
     const form = this.currentForm(safePos);
 
     // Validar que el formulario existe antes de proceder
@@ -2774,7 +2879,6 @@ export class CRUD extends Vars /*implements OnInit*/ {
     if (this.files.length > 0) {
       this.file(options);
     } else {
-
 
       form.get('maintenance_document_data_documents')?.setValue(this.files64);
 
@@ -3139,6 +3243,7 @@ export class CRUD extends Vars /*implements OnInit*/ {
     const ids_task = this.selected()[0]?.tasks;
     //if (ids_task) {
     const id = this.selected()[0]?.status;
+
     this.getStatus({ module: this.module[this.pos()], id, ids_task });
     //}
   }
@@ -3472,12 +3577,6 @@ export class CRUD extends Vars /*implements OnInit*/ {
       }
     }
 
-    // status.push({ separator: true });
-    // status.push(
-    //     { label: 'Diagnosticar', command: () => this.diagnosis() },
-    //     { label: 'Solicitar refacciones', command: () => this.request() },
-    //     { label: 'Instalar refacciones', command: () => this.getInstallation() },
-    // );
     this.startMenu.set(status);
   }
 
@@ -3527,6 +3626,7 @@ export class CRUD extends Vars /*implements OnInit*/ {
     const type = this.type[safePos];
     const app = this.app[safePos];
     const relationships = [{ field: 'status', type: 'status', id: status }];
+
     this.crudS.edit({ id, app, type, relationships, include: this.include[safePos] }).subscribe({
       next: (resp: any) => {
         this.updateRecord(resp, id, pos);
@@ -3539,9 +3639,18 @@ export class CRUD extends Vars /*implements OnInit*/ {
     });
   }
 
-  tasks_module: any = {};
+
+
+  /*get hasTaskModule(): boolean {
+    return Object.keys(this.tasksModule).length > 0;
+  }*/
+
   runTask(options: any = {}) {
-    this.tasks_module = options;
+    this.tasksModule.set(options);
+  }
+
+  closeTaskModule() {
+    this.tasksModule.set({});
   }
 
   taskModule(data: any, module: string, ids_task: []) {
@@ -3569,7 +3678,6 @@ export class CRUD extends Vars /*implements OnInit*/ {
         }
       }
     }
-
     return task;
   }
 
