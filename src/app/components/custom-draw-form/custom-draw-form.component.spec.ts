@@ -10,7 +10,7 @@ describe('CustomDrawFormComponent', () => {
     await TestBed.configureTestingModule({
       imports: [CustomDrawFormComponent]
     })
-    .compileComponents();
+      .compileComponents();
 
     fixture = TestBed.createComponent(CustomDrawFormComponent);
     component = fixture.componentInstance;

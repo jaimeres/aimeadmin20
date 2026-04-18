@@ -55,8 +55,9 @@ export class MaintenanceComponent extends CRUD implements OnInit {
     this.typeDefault = 'maintenance';
     this.app[this.typeDefault] = 'assets/maintenance';
     this.module[this.typeDefault] = 'MA';
-    this.timeZone[this.typeDefault] = ['start_date', 'end_date', 'scheduled_date', 'required_date', 'expiration_date'];
 
+
+    this.timeZone[this.typeDefault] = ['start_date', 'end_date', 'scheduled_date', 'required_date', 'expiration_date'];
     //es estatus no se debe enviar en la edicion
     this.excludeFieldsForm[this.typeDefault] = [
       { field: 'status', },];

@@ -1,0 +1,133 @@
+<div app-topbar class="social-topbar layout-topbar-blue"></div>
+
+<section class="social-shell" [ngClass]="shellClasses()">
+  <aside *ngIf="showAdvertisingPanel()" class="social-column social-column--ads-left">
+    <p-card *ngFor="let ad of adsLeft" class="social-ad-card">
+      <span class="social-ad-label">{{ ad.title }}</span>
+      <h3>{{ ad.subtitle }}</h3>
+      <p>{{ ad.copy }}</p>
+      <button pButton type="button" [label]="ad.cta" [text]="true"></button>
+    </p-card>
+  </aside>
+
+  <main class="social-main">
+    <header class="social-hero">
+      <p-tag value="Red social interna" severity="contrast"></p-tag>
+      <h1>Publicaciones, avisos y coordinación diaria en un feed central para toda la empresa.</h1>
+      <p>
+        La topbar permanece fija con datos reales de usuario y avisos. Los costados quedan reservados para publicidad,
+        mientras el centro conserva un ancho fijo para lectura cómoda y publicación rápida.
+      </p>
+
+      <div class="hero-chips">
+        <p-chip *ngFor="let chip of heroChips" [label]="chip"></p-chip>
+      </div>
+
+      <div class="social-toolbar">
+        <div class="toolbar-group toolbar-group--filters">
+          <button *ngFor="let item of getMenu()" pButton type="button" [label]="item.label || ''"
+            [outlined]="activeFilter() !== item.id" (click)="runMenuCommand(item)"></button>
+        </div>
+
+        <div class="toolbar-group toolbar-group--actions">
+          <button pButton type="button" icon="pi pi-arrow-left" severity="secondary" [outlined]="true"
+            [label]="returnButtonLabel()" (click)="goBackToSystem()"></button>
+          <button *ngFor="let item of openNewMenu()" pButton type="button" [label]="item.label || ''"
+            [icon]="item.icon || ''" (click)="runMenuCommand(item)"></button>
+        </div>
+      </div>
+    </header>
+
+    <p-card class="composer-card" header="Compartir actualización"
+      subheader="Escribe un aviso, una novedad o una coordinación breve para tu equipo">
+      <textarea #composer pInputTextarea rows="4" [ngModel]="draft()" (ngModelChange)="draft.set($event)"
+        placeholder="Ejemplo: mañana inicia inventario en almacén norte y el corte de compras será a las 16:00."></textarea>
+
+      <div class="composer-actions">
+        <span>Se publicará con el filtro actual y se mostrará primero en el centro del feed.</span>
+        <button pButton type="button" icon="pi pi-send" label="Publicar" (click)="publishPost()"></button>
+      </div>
+    </p-card>
+
+    <section class="stories-panel">
+      <p-card header="Historias activas" subheader="Pequeños pulsos del día entre áreas">
+        <div class="story-list">
+          <article *ngFor="let story of stories" class="story-item">
+            <p-avatar [label]="story.name.charAt(0)" shape="circle"></p-avatar>
+            <div>
+              <strong>{{ story.name }}</strong>
+              <span>{{ story.role }}</span>
+            </div>
+            <p-tag [value]="story.status" [severity]="story.severity"></p-tag>
+          </article>
+        </div>
+      </p-card>
+    </section>
+
+    <article *ngFor="let post of visiblePosts(); trackBy: trackByPost" class="feed-card">
+      <p-card>
+        <div class="post-header">
+          <div class="post-author">
+            <p-avatar [label]="post.author.charAt(0)" shape="circle" size="large"></p-avatar>
+            <div>
+              <h2>{{ post.title }}</h2>
+              <p>{{ post.author }} · {{ post.role }} · {{ post.time }}</p>
+            </div>
+          </div>
+
+          <p-tag [value]="post.audience === 'teams' ? 'Equipos' : 'Siguiendo'"
+            [severity]="post.audience === 'teams' ? 'info' : 'success'"></p-tag>
+        </div>
+
+        <p class="post-body">{{ post.body }}</p>
+
+        <div class="post-visual" [style.--post-accent]="post.accent">
+          <span>{{ post.imageLabel }}</span>
+        </div>
+
+        <div class="post-tags">
+          <p-chip *ngFor="let tag of post.tags" [label]="tag"></p-chip>
+        </div>
+
+        <p-divider></p-divider>
+
+        <div class="post-footer">
+          <span><i class="pi pi-heart"></i> {{ post.likes }}</span>
+          <span><i class="pi pi-comments"></i> {{ post.comments }}</span>
+          <span><i class="pi pi-share-alt"></i> {{ post.shares }}</span>
+        </div>
+      </p-card>
+    </article>
+  </main>
+
+  <aside *ngIf="showSecondaryPanel()" class="social-column social-column--right">
+    <p-card class="settings-card" header="Configuración rápida" subheader="Solo visible en pantallas grandes">
+      <div class="settings-list">
+        <article *ngFor="let setting of settings">
+          <div>
+            <strong>{{ setting.label }}</strong>
+            <p>{{ setting.description }}</p>
+          </div>
+          <p-tag [value]="setting.state" severity="contrast"></p-tag>
+        </article>
+      </div>
+    </p-card>
+
+    <p-card header="Tendencias" subheader="Lo que más se está comentando">
+      <div class="trend-list">
+        <article *ngFor="let trend of trends">
+          <strong>#{{ trend.label }}</strong>
+          <span>{{ trend.mentions }}</span>
+          <p-tag [value]="trend.mentions" [severity]="trend.severity"></p-tag>
+        </article>
+      </div>
+    </p-card>
+
+    <p-card *ngFor="let ad of adsRight" class="social-ad-card">
+      <span class="social-ad-label">{{ ad.title }}</span>
+      <h3>{{ ad.subtitle }}</h3>
+      <p>{{ ad.copy }}</p>
+      <button pButton type="button" [label]="ad.cta" [text]="true"></button>
+    </p-card>
+  </aside>
+</section>

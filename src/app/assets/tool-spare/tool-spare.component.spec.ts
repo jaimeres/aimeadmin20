@@ -10,7 +10,7 @@ describe('ToolSpareComponent', () => {
     await TestBed.configureTestingModule({
       imports: [ToolSpareComponent]
     })
-    .compileComponents();
+      .compileComponents();
 
     fixture = TestBed.createComponent(ToolSpareComponent);
     component = fixture.componentInstance;

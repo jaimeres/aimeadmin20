@@ -12,6 +12,8 @@ import { Vars } from './vars.class';
 
 @Directive()
 export class CRUD extends Vars implements OnChanges  /*implements OnInit*/ {
+  public readonly crudPage = this;
+
   // cada vez que cambian los customField se actualiza
   public customField = computed(() => this.crudS.customField());
   // calcula el estilo del dialogo, cada vez que hay un cambio de aplicacion
@@ -171,12 +173,15 @@ export class CRUD extends Vars implements OnChanges  /*implements OnInit*/ {
     // Verificar configuración de carga automática desde configGeneral
     const pos = this.pos() as any;
     const shouldLoad = this.shouldLoadOnStart(pos);
+    const silentLoadMessage = !!this.configGeneral()[pos]?.load?.silent;
     //console.log(`[initCRUD] pos="${pos}" | isMobile=${isMobile} | loadConfig=`, loadConfig, `| shouldLoad=${shouldLoad}`);
     if (shouldLoad) {
       this.getAll({ pos, node, filter }); // carga los elementos al inicio
-    } else {
+    } else if (!silentLoadMessage) {
       this.showBlocked(false); // asegurar que no quede bloqueado si la autocarga no está activa
       this.messageS.changeMessage('Autocarga deshabilitada, cargue manualmente en el botón de actualizar.', null, {}, 'info');
+    } else {
+      this.showBlocked(false);
     }
     //console.log('1 initCRUD selected Columns');
 
@@ -3111,7 +3116,7 @@ export class CRUD extends Vars implements OnChanges  /*implements OnInit*/ {
     * @param additionalElements agrega elementos adicionales al menú, si no envía nada, retornará 
     * @returns un array para tipo MenuItem para crear el menú de más opciones
     */
-  commonSettings(concat: string[] = [], additionalElements: any[][] = []) {
+  commonSettings(concat: string[] | null = [], additionalElements: any[][] = []) {
     // para inpedir que se creen los menus se debe enviar null
     if (concat == null) {
       this.moreOptions.set([]);

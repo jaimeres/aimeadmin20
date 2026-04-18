@@ -10,7 +10,7 @@ describe('ClassifierComponent', () => {
     await TestBed.configureTestingModule({
       imports: [ClassifierComponent]
     })
-    .compileComponents();
+      .compileComponents();
 
     fixture = TestBed.createComponent(ClassifierComponent);
     component = fixture.componentInstance;

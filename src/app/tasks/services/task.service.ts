@@ -1,5 +1,6 @@
 import { Injectable } from '@angular/core';
 import { CRUDService } from 'src/app/utils/services/crud.service';
+import { buildPlaceholderCustomFields, ensurePlaceholderCrudConfigs } from '../../utils/placeholder-crud-config';
 
 @Injectable({
   providedIn: 'root'
@@ -7,14 +8,19 @@ import { CRUDService } from 'src/app/utils/services/crud.service';
 
 export class TaskService extends CRUDService {
 
+  private readonly placeholderModules = ['task-workflow'];
+
   constructor() {
     super();
+
+    ensurePlaceholderCrudConfigs(this.authS.config, this.placeholderModules);
 
 
     //console.log('takssssssssssssss', this.authS.config);
     this.customField.set({
       'task': this.authS.config['task']['cols'],
       'task-detail': this.authS.config['task-detail']['cols'],
+      ...buildPlaceholderCustomFields(this.authS.config, this.placeholderModules)
     });
 
 

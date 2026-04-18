@@ -10,7 +10,7 @@ describe('OrganizationChartComponent', () => {
     await TestBed.configureTestingModule({
       imports: [OrganizationChartComponent]
     })
-    .compileComponents();
+      .compileComponents();
 
     fixture = TestBed.createComponent(OrganizationChartComponent);
     component = fixture.componentInstance;

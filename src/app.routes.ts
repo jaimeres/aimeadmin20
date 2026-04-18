@@ -97,9 +97,38 @@ export const appRoutes: Routes = [
         data: { breadcrumb: 'Test Biométrico' },
         loadComponent: () => import('./app/pages/biometric-test/biometric-test.component').then(c => c.BiometricTestComponent)
       },*/
+
+      {
+        path: 'hr',
+        data: { breadcrumb: 'Organigrama' },
+        canActivate: [appCanActivateGuardChild],
+        loadChildren: () => import('./app/hr/hr.routes').then(m => m.HR_ROUTES)
+      },
+      {
+        path: 'travel-expenses',
+        data: { breadcrumb: 'Viáticos' },
+        canActivate: [appCanActivateGuardChild],
+        loadChildren: () => import('./app/travel-expenses/travel-expenses.routes').then(m => m.TRAVEL_EXPENSES_ROUTES)
+      },
+      {
+        path: 'support-contact',
+        data: { breadcrumb: 'Soporte y contacto' },
+        canActivate: [appCanActivateGuardChild],
+        loadChildren: () => import('./app/support-contact/support-contact.routes').then(m => m.SUPPORT_CONTACT_ROUTES)
+      },
+
+
+
+
     ]
   },
+  {
+    path: 'social',
+    data: { breadcrumb: 'Social' },
+    loadChildren: () => import('@/social/social.routes').then(m => m.SOCIAL_ROUTES)
+  },
   { path: 'auth', loadChildren: () => import('@/pages/auth/auth.routes') },
+
   {
     path: 'landing',
     loadComponent: () => import('@/pages/landing/landing').then((c) => c.Landing)
@@ -108,5 +137,6 @@ export const appRoutes: Routes = [
     path: 'notfound',
     loadComponent: () => import('@/pages/notfound/notfound').then((c) => c.Notfound)
   },
-  { path: '**', redirectTo: '/notfound' }
+  { path: '**', redirectTo: '/notfound' },
+
 ];

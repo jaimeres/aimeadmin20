@@ -10,7 +10,7 @@ describe('CustomLocalSettingsComponent', () => {
     await TestBed.configureTestingModule({
       imports: [CustomLocalSettingsComponent]
     })
-    .compileComponents();
+      .compileComponents();
 
     fixture = TestBed.createComponent(CustomLocalSettingsComponent);
     component = fixture.componentInstance;

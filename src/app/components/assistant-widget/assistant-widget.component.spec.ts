@@ -10,7 +10,7 @@ describe('AssistantWidgetComponent', () => {
     await TestBed.configureTestingModule({
       imports: [AssistantWidgetComponent]
     })
-    .compileComponents();
+      .compileComponents();
 
     fixture = TestBed.createComponent(AssistantWidgetComponent);
     component = fixture.componentInstance;

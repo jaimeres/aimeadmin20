@@ -11,6 +11,11 @@ export default [
         loadComponent: () => import('./task/task.component').then(m => m.TaskComponent),
         data: { breadcrumb: 'Tareas' }
       },
+      {
+        path: 'workflow',
+        loadComponent: () => import('./workflow/workflow.component').then(m => m.WorkflowComponent),
+        data: { breadcrumb: 'Formularios' }
+      },
       // Redirección por defecto
       {
         path: '',

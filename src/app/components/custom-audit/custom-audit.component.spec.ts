@@ -10,7 +10,7 @@ describe('CustomAuditComponent', () => {
     await TestBed.configureTestingModule({
       imports: [CustomAuditComponent]
     })
-    .compileComponents();
+      .compileComponents();
 
     fixture = TestBed.createComponent(CustomAuditComponent);
     component = fixture.componentInstance;

@@ -10,7 +10,7 @@ describe('CustomDocumentsComponent', () => {
     await TestBed.configureTestingModule({
       imports: [CustomDocumentsComponent]
     })
-    .compileComponents();
+      .compileComponents();
 
     fixture = TestBed.createComponent(CustomDocumentsComponent);
     component = fixture.componentInstance;
