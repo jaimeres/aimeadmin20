@@ -1,0 +1,55 @@
+<section class="eval-detail">
+
+  <header class="page-head">
+    <a class="back" [routerLink]="['/academy/evaluations']"><i class="pi pi-arrow-left"></i> Evaluaciones</a>
+    <div class="titles">
+      <h1>{{ title }}</h1>
+      <p class="sub">{{ course }}</p>
+    </div>
+    <div class="timer" [class.danger]="remaining() < 120">
+      <i class="pi pi-clock"></i> {{ formattedTime }}
+    </div>
+  </header>
+
+  <div class="progress-row">
+    <p-progressBar [value]="progress"></p-progressBar>
+    <span>{{ answered }} de {{ questions.length }} contestadas</span>
+  </div>
+
+  <ng-container *ngIf="!submitted(); else resultTpl">
+    <article class="question-card">
+      <p class="index">Pregunta {{ current() + 1 }} / {{ questions.length }}</p>
+      <h2>{{ questions[current()].text }}</h2>
+      <div class="options">
+        <label class="option" *ngFor="let o of questions[current()].options">
+          <p-radioButton [name]="'q' + questions[current()].id" [value]="o.value"
+            [(ngModel)]="answers[questions[current()].id]" />
+          <span>{{ o.label }}</span>
+        </label>
+      </div>
+      <div class="nav">
+        <button pButton icon="pi pi-chevron-left" label="Anterior" severity="secondary" [disabled]="current() === 0"
+          (click)="prev()"></button>
+        <button *ngIf="current() < questions.length - 1" pButton icon="pi pi-chevron-right" iconPos="right"
+          label="Siguiente" (click)="next()"></button>
+        <button *ngIf="current() === questions.length - 1" pButton icon="pi pi-check" label="Enviar examen"
+          severity="success" (click)="submit()"></button>
+      </div>
+    </article>
+  </ng-container>
+
+  <ng-template #resultTpl>
+    <article class="result-card">
+      <i class="pi" [class.pi-check-circle]="score() >= 70" [class.pi-times-circle]="score() < 70"></i>
+      <h2>{{ score() >= 70 ? '¡Felicidades!' : 'Sigue practicando' }}</h2>
+      <p class="big-score">{{ score() }}%</p>
+      <p class="sub">Obtuviste {{ score() }} puntos de 100. {{ score() >= 70 ? 'Has aprobado la evaluación.' : 'Debes
+        obtener al menos 70% para aprobar.' }}</p>
+      <div class="actions">
+        <button pButton label="Volver a evaluaciones" icon="pi pi-arrow-left"
+          [routerLink]="['/academy/evaluations']"></button>
+      </div>
+    </article>
+  </ng-template>
+
+</section>

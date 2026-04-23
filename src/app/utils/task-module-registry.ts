@@ -13,4 +13,7 @@ export type TaskModuleEntry = () => Promise<Type<any>>;
 export const TASK_MODULE_REGISTRY: Record<string, TaskModuleEntry> = {
   'RE': () => import('../purchases/request/request.component').then(m => m.RequestComponent),
   'GR': () => import('../catalogues/company/company.component').then(m => m.CompanyComponent),
+  //WarehouseMovementComponent
+  'EP': () => import('../warehouses/warehouse-movement/warehouse-movement.component').then(m => m.WarehouseMovementComponent),
+
 };

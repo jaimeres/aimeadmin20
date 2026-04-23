@@ -30,19 +30,9 @@ export const TRAVEL_EXPENSES_ROUTES: Routes = [
         data: { breadcrumb: 'Reembolsar' }
       },
       {
-        path: 'hotels',
-        loadComponent: () => import('./hotels/hotels.component').then(m => m.HotelsComponent),
-        data: { breadcrumb: 'Hoteles' }
-      },
-      {
-        path: 'transport',
-        loadComponent: () => import('./transport/transport.component').then(m => m.TransportComponent),
-        data: { breadcrumb: 'Transportes' }
-      },
-      {
-        path: 'flights',
-        loadComponent: () => import('./flights/flights.component').then(m => m.FlightsComponent),
-        data: { breadcrumb: 'Vuelos' }
+        path: 'trips',
+        loadComponent: () => import('./trips/trips.component').then(m => m.TripsComponent),
+        data: { breadcrumb: 'Viajes' }
       },
       {
         path: '',

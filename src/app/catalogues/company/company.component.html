@@ -1,10 +1,8 @@
-<p-confirmdialog />
-
 <div style="position: absolute; z-index: 2;">
   <app-custom-button-crud (deleteAction)="delete()" (editAction)="edit()"
     (refreshAction)="getAll({ force: true, pos: pos() })" (newAction)="openNew({pos:pos()})"
-    [moreOptions]="moreOptions()" [getMenu]="getMenu()" [selected]="selected()" [startMenu]="startMenu()"
-    (startAction)="setStatus('I')" [openNewMenu]="openNewMenu()" />
+    [moreOptions]="moreOptions()" [getMenu]="getMenu()" [openNewMenu]="openNewMenu()" [selected]="selected()"
+    [startMenu]="startMenu()" (startAction)="setStatus($event)" />
 </div>
 
 <div class="table-fit-Custom">
@@ -23,3 +21,502 @@
   (saveAction)="onImportSave($event)" />
 
 <app-custom-actions-selection [visible]="actionsSelectionDialogVisible" (visibleChange)="onVisibleChange($event)" />
+
+<p-dialog [(visible)]="formDialogVisible[$any(typeDefault)]" (onHide)="onHide($any(typeDefault))"
+  (onShow)="onShow($any(typeDefault))" [styleClass]="styleClassDialog()" modal="true"
+  [style]="{'contain': 'layout style paint'}">
+
+  <ng-template #header>
+    <div class="p-dialog-title">
+      <span class="p-dialog-title-text">{{headerDialog()}}</span>
+      <button type="button" class="p-dialog-titlebar-icon p-link" (click)="configDialog()">
+        <i class="pi pi-spin pi-cog p-dialog-icon"></i>
+      </button>
+    </div>
+  </ng-template>
+  <form [formGroup]="form()[$any(typeDefault)]" *ngIf="form()[$any(typeDefault)]">
+    <!-- [value]="tabVisible()"  -->
+    <p-tabs [scrollable]="true" value="0" (valueChange)="onTabChange($event)">
+
+      <p-tablist>
+        <p-tab value="0">General</p-tab>
+        <p-tab value="1">Clasificadores</p-tab>
+        <p-tab value="2">Notas</p-tab>
+        <p-tab value="3">Auditoría</p-tab>
+        <p-tab value="4">Documentos</p-tab>
+        <p-tab value="5">Documentos personales</p-tab>
+      </p-tablist>
+
+      <p-tabpanels>
+
+        <p-tabpanel value="0">
+          <app-custom-draw-form *ngIf="form()[$any(typeDefault)] && drawForm()[typeDefault]"
+            [drawForm]="drawForm()[typeDefault]['general']" [formGroup]="form()[$any(typeDefault)]"
+            [isCreate]="isCreate()" />
+        </p-tabpanel>
+
+        <p-tabpanel header="Clasificadores" value="1">
+          <div formArrayName="classifiers" class="pt-3">
+            <div class="p-fluid grid separator-form-small pl-2"
+              *ngFor="let level of classifierLevelsGen()[$any(pos())];  let i = index">
+              <div class="field col-12 md:col-6">
+                <span class="p-float-label">
+                  <p-select styleClass="height-input-custom"
+                    [options]="classifierTypeByLevel(level.classifier_type + 'p',level.level + 'p', i)" optionValue="id"
+                    optionLabel="name" [formControlName]="funAuxFormClassifiers('formControlName',i)"
+                    (onChange)="loadClassifiers($event, level, i)" placeholder="." [showClear]="true">
+                  </p-select>
+                  <label for="dropdown">{{level.name | slice:0:29}}</label>
+                </span>
+              </div>
+            </div>
+          </div>
+        </p-tabpanel>
+
+        <p-tabpanel value="3">
+          <app-custom-audit [cf]="customField()[typeDefault]" [selected]="selected()" />
+        </p-tabpanel>
+
+
+      </p-tabpanels>
+    </p-tabs>
+
+  </form>
+
+  <ng-template #footer>
+    <div class="p-dialog-footer">
+      <app-custom-button-footer (saveAction)="save({pos: typeDefault, is_file: true})"
+        [config]="configGeneral()[$any(typeDefault)]"
+        (saveNotHideAction)="save({pos: typeDefault, hide:false, is_file: true})"
+        (resetFormAction)="resetFormDialog()" />
+    </div>
+  </ng-template>
+
+</p-dialog>
+
+<p-dialog [(visible)]="formDialogVisible[$any('company')]" (onHide)="onHide($any('company'))"
+  (onShow)="onShow($any('company'))" [styleClass]="styleClassDialog()" modal="true"
+  [style]="{'contain': 'layout style paint'}">
+
+  <ng-template #header>
+    <div class="p-dialog-title">
+      <span class="p-dialog-title-text">{{headerDialog()}}</span>
+      <button type="button" class="p-dialog-titlebar-icon p-link" (click)="configDialog()">
+        <i class="pi pi-spin pi-cog p-dialog-icon"></i>
+      </button>
+    </div>
+  </ng-template>
+  <form [formGroup]="form()[$any('company')]" *ngIf="form()[$any('company')]">
+    <!-- [value]="tabVisible()"  -->
+    <p-tabs [scrollable]="true" value="0" (valueChange)="onTabChange($event)">
+
+      <p-tablist>
+        <p-tab value="0">General</p-tab>
+        <p-tab value="1">Clasificadores</p-tab>
+        <p-tab value="2">Notas</p-tab>
+        <p-tab value="3">Auditoría</p-tab>
+        <p-tab value="4">Documentos</p-tab>
+      </p-tablist>
+
+      <p-tabpanels>
+
+        <p-tabpanel value="0">
+          <app-custom-draw-form *ngIf="form()[$any('company')] && drawForm()['company']"
+            [drawForm]="drawForm()['company']['general']" [formGroup]="form()[$any('company')]"
+            [isCreate]="isCreate()" />
+        </p-tabpanel>
+
+        <p-tabpanel header="Clasificadores" value="1">
+          <div formArrayName="classifiers" class="pt-3">
+            <div class="p-fluid grid separator-form-small pl-2"
+              *ngFor="let level of classifierLevelsGen()[$any(pos())];  let i = index">
+              <div class="field col-12 md:col-6">
+                <span class="p-float-label">
+                  <p-select styleClass="height-input-custom"
+                    [options]="classifierTypeByLevel(level.classifier_type + 'p',level.level + 'p', i)" optionValue="id"
+                    optionLabel="name" [formControlName]="funAuxFormClassifiers('formControlName',i)"
+                    (onChange)="loadClassifiers($event, level, i)" placeholder="." [showClear]="true">
+                  </p-select>
+                  <label for="dropdown">{{level.name | slice:0:29}}</label>
+                </span>
+              </div>
+            </div>
+          </div>
+        </p-tabpanel>
+
+        <p-tabpanel value="3">
+          <app-custom-audit [cf]="customField()['company']" [selected]="selected()" />
+        </p-tabpanel>
+
+
+      </p-tabpanels>
+    </p-tabs>
+
+  </form>
+
+  <ng-template #footer>
+    <div class="p-dialog-footer">
+      <app-custom-button-footer (saveAction)="save({pos: 'company', is_file: true})"
+        [config]="configGeneral()[$any('company')]"
+        (saveNotHideAction)="save({pos: 'company', hide:false, is_file: true})" (resetFormAction)="resetFormDialog()" />
+    </div>
+  </ng-template>
+
+</p-dialog>
+
+<p-dialog [(visible)]="formDialogVisible[$any('subsidiary')]" (onHide)="onHide($any('subsidiary'))"
+  (onShow)="onShow($any('subsidiary'))" [styleClass]="styleClassDialog()" modal="true"
+  [style]="{'contain': 'layout style paint'}">
+
+  <ng-template #header>
+    <div class="p-dialog-title">
+      <span class="p-dialog-title-text">{{headerDialog()}}</span>
+      <button type="button" class="p-dialog-titlebar-icon p-link" (click)="configDialog()">
+        <i class="pi pi-spin pi-cog p-dialog-icon"></i>
+      </button>
+    </div>
+  </ng-template>
+  <form [formGroup]="form()[$any('subsidiary')]" *ngIf="form()[$any('subsidiary')]">
+    <!-- [value]="tabVisible()"  -->
+    <p-tabs [scrollable]="true" value="0" (valueChange)="onTabChange($event)">
+
+      <p-tablist>
+        <p-tab value="0">General</p-tab>
+        <p-tab value="1">Clasificadores</p-tab>
+        <p-tab value="2">Notas</p-tab>
+        <p-tab value="3">Auditoría</p-tab>
+        <p-tab value="4">Documentos</p-tab>
+      </p-tablist>
+
+      <p-tabpanels>
+
+        <p-tabpanel value="0">
+          <app-custom-draw-form *ngIf="form()[$any('subsidiary')] && drawForm()['subsidiary']"
+            [drawForm]="drawForm()['subsidiary']['general']" [formGroup]="form()[$any('subsidiary')]"
+            [isCreate]="isCreate()" />
+        </p-tabpanel>
+
+        <p-tabpanel header="Clasificadores" value="1">
+          <div formArrayName="classifiers" class="pt-3">
+            <div class="p-fluid grid separator-form-small pl-2"
+              *ngFor="let level of classifierLevelsGen()[$any(pos())];  let i = index">
+              <div class="field col-12 md:col-6">
+                <span class="p-float-label">
+                  <p-select styleClass="height-input-custom"
+                    [options]="classifierTypeByLevel(level.classifier_type + 'p',level.level + 'p', i)" optionValue="id"
+                    optionLabel="name" [formControlName]="funAuxFormClassifiers('formControlName',i)"
+                    (onChange)="loadClassifiers($event, level, i)" placeholder="." [showClear]="true">
+                  </p-select>
+                  <label for="dropdown">{{level.name | slice:0:29}}</label>
+                </span>
+              </div>
+            </div>
+          </div>
+        </p-tabpanel>
+
+        <p-tabpanel value="3">
+          <app-custom-audit [cf]="customField()['subsidiary']" [selected]="selected()" />
+        </p-tabpanel>
+
+
+      </p-tabpanels>
+    </p-tabs>
+
+  </form>
+
+  <ng-template #footer>
+    <div class="p-dialog-footer">
+      <app-custom-button-footer (saveAction)="save({pos: 'subsidiary', is_file: true})"
+        [config]="configGeneral()[$any('subsidiary')]"
+        (saveNotHideAction)="save({pos: 'subsidiary', hide:false, is_file: true})"
+        (resetFormAction)="resetFormDialog()" />
+    </div>
+  </ng-template>
+
+</p-dialog>
+
+
+<p-dialog [(visible)]="formDialogVisible[$any('warehouse')]" (onHide)="onHide($any('warehouse'))"
+  (onShow)="onShow($any('warehouse'))" [styleClass]="styleClassDialog()" modal="true"
+  [style]="{'contain': 'layout style paint'}">
+
+  <ng-template #header>
+    <div class="p-dialog-title">
+      <span class="p-dialog-title-text">{{headerDialog()}}</span>
+      <button type="button" class="p-dialog-titlebar-icon p-link" (click)="configDialog()">
+        <i class="pi pi-spin pi-cog p-dialog-icon"></i>
+      </button>
+    </div>
+  </ng-template>
+  <form [formGroup]="form()[$any('warehouse')]" *ngIf="form()[$any('warehouse')]">
+    <!-- [value]="tabVisible()"  -->
+    <p-tabs [scrollable]="true" value="0" (valueChange)="onTabChange($event)">
+
+      <p-tablist>
+        <p-tab value="0">General</p-tab>
+        <p-tab value="1">Clasificadores</p-tab>
+        <p-tab value="2">Notas</p-tab>
+        <p-tab value="3">Auditoría</p-tab>
+        <p-tab value="4">Documentos</p-tab>
+      </p-tablist>
+
+      <p-tabpanels>
+
+        <p-tabpanel value="0">
+          <app-custom-draw-form *ngIf="form()[$any('warehouse')] && drawForm()['warehouse']"
+            [drawForm]="drawForm()['warehouse']['general']" [formGroup]="form()[$any('warehouse')]"
+            [isCreate]="isCreate()" />
+        </p-tabpanel>
+
+        <p-tabpanel header="Clasificadores" value="1">
+          <div formArrayName="classifiers" class="pt-3">
+            <div class="p-fluid grid separator-form-small pl-2"
+              *ngFor="let level of classifierLevelsGen()[$any(pos())];  let i = index">
+              <div class="field col-12 md:col-6">
+                <span class="p-float-label">
+                  <p-select styleClass="height-input-custom"
+                    [options]="classifierTypeByLevel(level.classifier_type + 'p',level.level + 'p', i)" optionValue="id"
+                    optionLabel="name" [formControlName]="funAuxFormClassifiers('formControlName',i)"
+                    (onChange)="loadClassifiers($event, level, i)" placeholder="." [showClear]="true">
+                  </p-select>
+                  <label for="dropdown">{{level.name | slice:0:29}}</label>
+                </span>
+              </div>
+            </div>
+          </div>
+        </p-tabpanel>
+
+        <p-tabpanel value="3">
+          <app-custom-audit [cf]="customField()['warehouse']" [selected]="selected()" />
+        </p-tabpanel>
+
+
+      </p-tabpanels>
+    </p-tabs>
+
+  </form>
+
+  <ng-template #footer>
+    <div class="p-dialog-footer">
+      <app-custom-button-footer (saveAction)="save({pos: 'warehouse', is_file: true})"
+        [config]="configGeneral()[$any('warehouse')]"
+        (saveNotHideAction)="save({pos: 'warehouse', hide:false, is_file: true})"
+        (resetFormAction)="resetFormDialog()" />
+    </div>
+  </ng-template>
+
+</p-dialog>
+
+
+<p-dialog [(visible)]="formDialogVisible[$any('section')]" (onHide)="onHide($any('section'))"
+  (onShow)="onShow($any('section'))" [styleClass]="styleClassDialog()" modal="true"
+  [style]="{'contain': 'layout style paint'}">
+
+  <ng-template #header>
+    <div class="p-dialog-title">
+      <span class="p-dialog-title-text">{{headerDialog()}}</span>
+      <button type="button" class="p-dialog-titlebar-icon p-link" (click)="configDialog()">
+        <i class="pi pi-spin pi-cog p-dialog-icon"></i>
+      </button>
+    </div>
+  </ng-template>
+  <form [formGroup]="form()[$any('section')]" *ngIf="form()[$any('section')]">
+    <!-- [value]="tabVisible()"  -->
+    <p-tabs [scrollable]="true" value="0" (valueChange)="onTabChange($event)">
+
+      <p-tablist>
+        <p-tab value="0">General</p-tab>
+        <p-tab value="1">Clasificadores</p-tab>
+        <p-tab value="2">Notas</p-tab>
+        <p-tab value="3">Auditoría</p-tab>
+        <p-tab value="4">Documentos</p-tab>
+      </p-tablist>
+
+      <p-tabpanels>
+
+        <p-tabpanel value="0">
+          <app-custom-draw-form *ngIf="form()[$any('section')] && drawForm()['section']"
+            [drawForm]="drawForm()['section']['general']" [formGroup]="form()[$any('section')]"
+            [isCreate]="isCreate()" />
+        </p-tabpanel>
+
+        <p-tabpanel header="Clasificadores" value="1">
+          <div formArrayName="classifiers" class="pt-3">
+            <div class="p-fluid grid separator-form-small pl-2"
+              *ngFor="let level of classifierLevelsGen()[$any(pos())];  let i = index">
+              <div class="field col-12 md:col-6">
+                <span class="p-float-label">
+                  <p-select styleClass="height-input-custom"
+                    [options]="classifierTypeByLevel(level.classifier_type + 'p',level.level + 'p', i)" optionValue="id"
+                    optionLabel="name" [formControlName]="funAuxFormClassifiers('formControlName',i)"
+                    (onChange)="loadClassifiers($event, level, i)" placeholder="." [showClear]="true">
+                  </p-select>
+                  <label for="dropdown">{{level.name | slice:0:29}}</label>
+                </span>
+              </div>
+            </div>
+          </div>
+        </p-tabpanel>
+
+        <p-tabpanel value="3">
+          <app-custom-audit [cf]="customField()['section']" [selected]="selected()" />
+        </p-tabpanel>
+
+
+      </p-tabpanels>
+    </p-tabs>
+
+  </form>
+
+  <ng-template #footer>
+    <div class="p-dialog-footer">
+      <app-custom-button-footer (saveAction)="save({pos: 'section', is_file: true})"
+        [config]="configGeneral()[$any('section')]"
+        (saveNotHideAction)="save({pos: 'section', hide:false, is_file: true})" (resetFormAction)="resetFormDialog()" />
+    </div>
+  </ng-template>
+
+</p-dialog>
+
+
+<p-dialog [(visible)]="formDialogVisible[$any('rack')]" (onHide)="onHide($any('rack'))" (onShow)="onShow($any('rack'))"
+  [styleClass]="styleClassDialog()" modal="true" [style]="{'contain': 'layout style paint'}">
+
+  <ng-template #header>
+    <div class="p-dialog-title">
+      <span class="p-dialog-title-text">{{headerDialog()}}</span>
+      <button type="button" class="p-dialog-titlebar-icon p-link" (click)="configDialog()">
+        <i class="pi pi-spin pi-cog p-dialog-icon"></i>
+      </button>
+    </div>
+  </ng-template>
+  <form [formGroup]="form()[$any('rack')]" *ngIf="form()[$any('rack')]">
+    <!-- [value]="tabVisible()"  -->
+    <p-tabs [scrollable]="true" value="0" (valueChange)="onTabChange($event)">
+
+      <p-tablist>
+        <p-tab value="0">General</p-tab>
+        <p-tab value="1">Clasificadores</p-tab>
+        <p-tab value="2">Notas</p-tab>
+        <p-tab value="3">Auditoría</p-tab>
+        <p-tab value="4">Documentos</p-tab>
+      </p-tablist>
+
+      <p-tabpanels>
+
+        <p-tabpanel value="0">
+          <app-custom-draw-form *ngIf="form()[$any('rack')] && drawForm()['rack']"
+            [drawForm]="drawForm()['rack']['general']" [formGroup]="form()[$any('rack')]" [isCreate]="isCreate()" />
+        </p-tabpanel>
+
+        <p-tabpanel header="Clasificadores" value="1">
+          <div formArrayName="classifiers" class="pt-3">
+            <div class="p-fluid grid separator-form-small pl-2"
+              *ngFor="let level of classifierLevelsGen()[$any(pos())];  let i = index">
+              <div class="field col-12 md:col-6">
+                <span class="p-float-label">
+                  <p-select styleClass="height-input-custom"
+                    [options]="classifierTypeByLevel(level.classifier_type + 'p',level.level + 'p', i)" optionValue="id"
+                    optionLabel="name" [formControlName]="funAuxFormClassifiers('formControlName',i)"
+                    (onChange)="loadClassifiers($event, level, i)" placeholder="." [showClear]="true">
+                  </p-select>
+                  <label for="dropdown">{{level.name | slice:0:29}}</label>
+                </span>
+              </div>
+            </div>
+          </div>
+        </p-tabpanel>
+
+        <p-tabpanel value="3">
+          <app-custom-audit [cf]="customField()['rack']" [selected]="selected()" />
+        </p-tabpanel>
+
+
+      </p-tabpanels>
+    </p-tabs>
+
+  </form>
+
+  <ng-template #footer>
+    <div class="p-dialog-footer">
+      <app-custom-button-footer (saveAction)="save({pos: 'rack', is_file: true})"
+        [config]="configGeneral()[$any('rack')]" (saveNotHideAction)="save({pos: 'rack', hide:false, is_file: true})"
+        (resetFormAction)="resetFormDialog()" />
+    </div>
+  </ng-template>
+
+</p-dialog>
+
+
+<p-dialog [(visible)]="formDialogVisible[$any('slot')]" (onHide)="onHide($any('slot'))" (onShow)="onShow($any('slot'))"
+  [styleClass]="styleClassDialog()" modal="true" [style]="{'contain': 'layout style paint'}">
+
+  <ng-template #header>
+    <div class="p-dialog-title">
+      <span class="p-dialog-title-text">{{headerDialog()}}</span>
+      <button type="button" class="p-dialog-titlebar-icon p-link" (click)="configDialog()">
+        <i class="pi pi-spin pi-cog p-dialog-icon"></i>
+      </button>
+    </div>
+  </ng-template>
+  <form [formGroup]="form()[$any('slot')]" *ngIf="form()[$any('slot')]">
+    <!-- [value]="tabVisible()"  -->
+    <p-tabs [scrollable]="true" value="0" (valueChange)="onTabChange($event)">
+
+      <p-tablist>
+        <p-tab value="0">General</p-tab>
+        <p-tab value="1">Clasificadores</p-tab>
+        <p-tab value="2">Notas</p-tab>
+        <p-tab value="3">Auditoría</p-tab>
+        <p-tab value="4">Documentos</p-tab>
+      </p-tablist>
+
+      <p-tabpanels>
+
+        <p-tabpanel value="0">
+          <app-custom-draw-form *ngIf="form()[$any('slot')] && drawForm()['slot']"
+            [drawForm]="drawForm()['slot']['general']" [formGroup]="form()[$any('slot')]" [isCreate]="isCreate()" />
+        </p-tabpanel>
+
+        <p-tabpanel header="Clasificadores" value="1">
+          <div formArrayName="classifiers" class="pt-3">
+            <div class="p-fluid grid separator-form-small pl-2"
+              *ngFor="let level of classifierLevelsGen()[$any(pos())];  let i = index">
+              <div class="field col-12 md:col-6">
+                <span class="p-float-label">
+                  <p-select styleClass="height-input-custom"
+                    [options]="classifierTypeByLevel(level.classifier_type + 'p',level.level + 'p', i)" optionValue="id"
+                    optionLabel="name" [formControlName]="funAuxFormClassifiers('formControlName',i)"
+                    (onChange)="loadClassifiers($event, level, i)" placeholder="." [showClear]="true">
+                  </p-select>
+                  <label for="dropdown">{{level.name | slice:0:29}}</label>
+                </span>
+              </div>
+            </div>
+          </div>
+        </p-tabpanel>
+
+        <p-tabpanel value="3">
+          <app-custom-audit [cf]="customField()['slot']" [selected]="selected()" />
+        </p-tabpanel>
+
+
+      </p-tabpanels>
+    </p-tabs>
+
+  </form>
+
+  <ng-template #footer>
+    <div class="p-dialog-footer">
+      <app-custom-button-footer (saveAction)="save({pos: 'slot', is_file: true})"
+        [config]="configGeneral()[$any('slot')]" (saveNotHideAction)="save({pos: 'slot', hide:false, is_file: true})"
+        (resetFormAction)="resetFormDialog()" />
+    </div>
+  </ng-template>
+
+</p-dialog>
+
+
+
+<app-task-module-loader *ngIf="tasksModule()" [tasksModule]="tasksModule()" (closeDialog)="closeTaskModule()">
+</app-task-module-loader>

@@ -1,13 +1,15 @@
 <p-confirmdialog />
-
-<div style="position: absolute; z-index: 2;" *ngIf="showComponentSignal()[$any('request-detail')]?.read">
+---------------------------------------{{showComponentSignal()[$any('inventory-movement-detail')] | json}}
+<div style="position: absolute; z-index: 2;"
+  *ngIf="showComponentSignal()[$any('request-detail')]?.local || showComponentSignal()[$any('request-detail')]?.read">
   <app-custom-button-crud (deleteAction)="delete()" (editAction)="edit()"
     (refreshAction)="getAll({ force: true, pos: pos() })" (newAction)="openNew({pos:pos()})"
     [moreOptions]="moreOptions()" [getMenu]="getMenu()" [selected]="selected()" [startMenu]="startMenu()"
     (startAction)="setStatus('I')" [openNewMenu]="openNewMenu()" />
 </div>
 
-<div class="table-fit-Custom" *ngIf="showComponentSignal()[$any('request-detail')]?.read">
+<div class="table-fit-Custom"
+  *ngIf="showComponentSignal()[$any('request-detail')]?.local || showComponentSignal()[$any('request-detail')]?.read">
   <app-custom-table class="table-fit-Custom" [value]="items()" [columns]="selectedColumns()" [selected]="selected()"
     (selectionAction)="onSelection($event)" (rowDoubleClick)="onRowDoubleClick($event)"
     [exportDialogVisible]="exportDialogVisible" [field]="fieldExport()"
@@ -49,9 +51,10 @@
       <p-tabpanels>
         <p-tabpanel header="General" value="0">
 
-          <p-table *ngIf="showComponentSignal()[$any('request-detail')]?.create" #dt [value]="products()"
-            [columns]="columnsExist" dataKey="id" [scrollable]="true" scrollHeight="flex" styleClass="p-datatable-sm"
-            [reorderableColumns]="true" [tableStyle]="{'min-width': '60rem'}">
+          <p-table
+            *ngIf="showComponentSignal()[$any('request-detail')]?.local || showComponentSignal()[$any('request-detail')]?.create"
+            #dt [value]="products()" [columns]="columnsExist" dataKey="id" [scrollable]="true" scrollHeight="flex"
+            styleClass="p-datatable-sm" [reorderableColumns]="true" [tableStyle]="{'min-width': '60rem'}">
 
             <ng-template #caption style="padding: 0px !important;">
 
@@ -145,4 +148,13 @@
     </div>
   </ng-template>
 
+</p-dialog>
+
+
+<p-dialog [(visible)]="tempActionDialogVisible" [modal]="false" [draggable]="true" [resizable]="false"
+  [style]="{ width: '320px' }" header="Acción temporal">
+  <div style="display: flex; flex-direction: column; gap: 8px;">
+    <strong>Seleccionaste:</strong>
+    <span>{{ tempActionLabel }}</span>
+  </div>
 </p-dialog>

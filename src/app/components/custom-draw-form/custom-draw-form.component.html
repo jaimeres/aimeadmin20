@@ -603,6 +603,49 @@
   </p-splitbutton>
 </ng-template>
 
+<!-- =============================================================== -->
+<!-- TEMPLATE REUTILIZABLE PARA TYPE 'file'                           -->
+<!-- Solo renderiza el control de accion (splitbutton).                -->
+<!-- Las miniaturas y la barra de busqueda se renderizan en el area   -->
+<!-- global de preview al final del formulario (ver bloques           -->
+<!-- nonSignatureFilesSignal mas abajo) para evitar duplicar          -->
+<!-- imagenes y mantener una sola zona de archivos.                   -->
+<!-- =============================================================== -->
+<ng-template #fileTemplate let-fieldConfig="fieldConfig">
+  <p-splitbutton *ngIf="getFileMenuItems(fieldConfig).length > 0" styleClass="height-input-custom w-full sb-full"
+    [label]="fieldConfig?.label" [model]="getFileMenuItems(fieldConfig)" [pAutoFocus]="fieldConfig?.autofocus || false"
+    [disabled]="fieldConfig?.disabled || false" (onClick)="fileMenuPrimary(fieldConfig)">
+  </p-splitbutton>
+</ng-template>
+
+<!-- =============================================================== -->
+<!-- Barras de busqueda para cada field type='file' del drawForm.    -->
+<!-- Se dibujan en la parte superior del area global de preview.     -->
+<!-- =============================================================== -->
+<ng-template #fileSearchBarsTemplate>
+  <div *ngIf="fileSearchFields().length > 0" class="flex flex-col gap-2 mb-3">
+    <p-autoComplete *ngFor="let f of fileSearchFields()" [(ngModel)]="fileSearchModel[f.field]"
+      [ngModelOptions]="{standalone: true}" [suggestions]="fileSearchResults[f.field] || []"
+      (completeMethod)="onFileSearchComplete($event, f)" (onSelect)="onFileSearchSelect($event, f)"
+      [forceSelection]="true" optionLabel="name"
+      [placeholder]="'Buscar ' + (f.label || 'archivo') + ' existente (min. 5 caracteres)...'" styleClass="w-full"
+      [minLength]="5">
+      <ng-template let-item pTemplate="item">
+        <div class="flex items-center gap-2">
+          <!-- MINIATURA: URL devuelta tal cual. No siempre es imagen (pdf, etc.) -->
+          <!-- Si la carga de miniaturas impacta al servidor, comentar el <img>. -->
+          <img *ngIf="item.thumb" [src]="item.thumb" alt="" width="28" height="28"
+            style="object-fit: cover; border-radius: 4px;" onerror="this.style.display='none'" />
+          <span>{{ item.name }}</span>
+        </div>
+      </ng-template>
+    </p-autoComplete>
+  </div>
+</ng-template>
+
+
+
+
 <!-- ================================================= -->
 <!-- INDICADOR: formulario recuperado desde borrador   -->
 <!-- Visible solo en modo creación cuando hay datos    -->
@@ -698,6 +741,10 @@
               <ng-container *ngTemplateOutlet="documentTemplate; context: {fieldConfig: card.value}"></ng-container>
             </div>
 
+            <div *ngSwitchCase="'file'" class="w-full">
+              <ng-container *ngTemplateOutlet="fileTemplate; context: {fieldConfig: card.value}"></ng-container>
+            </div>
+
             <!-- SIGNATURE COMPONENT IN CARD -->
             <div *ngSwitchCase="'signature'" class="w-full">
               <ng-container
@@ -774,6 +821,10 @@
 
       <div *ngSwitchCase="'document'" class="w-full">
         <ng-container *ngTemplateOutlet="documentTemplate; context: {fieldConfig: entry.value}"></ng-container>
+      </div>
+
+      <div *ngSwitchCase="'file'" class="w-full">
+        <ng-container *ngTemplateOutlet="fileTemplate; context: {fieldConfig: entry.value}"></ng-container>
       </div>
 
       <div *ngSwitchCase="'button'">
@@ -878,6 +929,10 @@
                 <ng-container *ngTemplateOutlet="documentTemplate; context: {fieldConfig: card.value}"></ng-container>
               </div>
 
+              <div *ngSwitchCase="'file'" class="w-full">
+                <ng-container *ngTemplateOutlet="fileTemplate; context: {fieldConfig: card.value}"></ng-container>
+              </div>
+
               <!-- SIGNATURE COMPONENT IN FIELDSET -->
               <div *ngSwitchCase="'signature'" class="w-full">
                 <ng-container
@@ -919,6 +974,10 @@
                     *ngTemplateOutlet="documentTemplate; context: {fieldConfig: field.value}"></ng-container>
                 </div>
 
+                <div *ngSwitchCase="'file'" class="w-full">
+                  <ng-container *ngTemplateOutlet="fileTemplate; context: {fieldConfig: field.value}"></ng-container>
+                </div>
+
                 <div *ngSwitchCase="'input-text'">
                   <ng-container
                     *ngTemplateOutlet="inputTextTemplate; context: {fieldConfig: field.value}"></ng-container>
@@ -951,9 +1010,12 @@
     </p-step-panels>
   </p-stepper>
 
-  <div style="overflow: auto; height: 200px; padding-top: 10px; " *ngIf="nonSignatureFilesSignal().length > 0">
+  <div style="overflow: auto; padding-top: 10px;"
+    *ngIf="nonSignatureFilesSignal().length > 0 || fileSearchFields().length > 0">
 
-    <div class="flex flex-wrap gap-4">
+    <ng-container *ngTemplateOutlet="fileSearchBarsTemplate"></ng-container>
+
+    <div class="flex flex-wrap gap-4" *ngIf="nonSignatureFilesSignal().length > 0">
       <div *ngFor="let file of nonSignatureFilesSignal(); let i = index" class="relative">
         <p-image *ngIf="file.type=='image'" [src]="file.file" alt="Imagen capturada" width="140"
           [preview]="true">...</p-image>
@@ -973,10 +1035,12 @@
 </div>
 
 
-<div class="w-full" style="overflow: auto; height: 200px; padding-top: 10px;"
-  *ngIf="nonSignatureFilesSignal().length > 0 && drawFormSignal()['grid']">
+<div class="w-full" style="overflow: auto; padding-top: 10px;"
+  *ngIf="(nonSignatureFilesSignal().length > 0 || fileSearchFields().length > 0) && drawFormSignal()['grid']">
 
-  <div class="flex flex-wrap gap-4">
+  <ng-container *ngTemplateOutlet="fileSearchBarsTemplate"></ng-container>
+
+  <div class="flex flex-wrap gap-4" *ngIf="nonSignatureFilesSignal().length > 0">
     <div *ngFor="let file of nonSignatureFilesSignal(); let i = index" class="relative">
       <p-image *ngIf="file.type=='image'" [src]="file.file" alt="Imagen capturada" width="140"
         [preview]="true">...</p-image>

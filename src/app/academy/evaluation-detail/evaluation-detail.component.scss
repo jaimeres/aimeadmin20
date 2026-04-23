@@ -1,0 +1,148 @@
+:host {
+  display: block;
+}
+
+.eval-detail {
+  padding: 1.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  max-width: 820px;
+  margin: 0 auto;
+}
+
+.page-head {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 1rem;
+
+  .back {
+    color: var(--primary-color, #6366f1);
+    text-decoration: none;
+    font-size: .9rem;
+  }
+
+  .titles h1 {
+    margin: 0 0 .15rem;
+    font-size: 1.25rem;
+  }
+
+  .titles .sub {
+    margin: 0;
+    color: var(--text-color-secondary, #64748b);
+    font-size: .85rem;
+  }
+
+  .timer {
+    display: inline-flex;
+    gap: .35rem;
+    align-items: center;
+    padding: .45rem .9rem;
+    border-radius: 999px;
+    background: var(--surface-100, #f1f5f9);
+    font-weight: 600;
+
+    &.danger {
+      background: #fee2e2;
+      color: #b91c1c;
+    }
+  }
+}
+
+.progress-row {
+  display: flex;
+  flex-direction: column;
+  gap: .35rem;
+
+  span {
+    font-size: .8rem;
+    color: var(--text-color-secondary, #64748b);
+  }
+}
+
+.question-card,
+.result-card {
+  background: var(--surface-0, #fff);
+  border: 1px solid var(--surface-200, #e2e8f0);
+  border-radius: 14px;
+  padding: 1.5rem 1.75rem;
+}
+
+.question-card {
+  .index {
+    margin: 0 0 .5rem;
+    color: var(--text-color-secondary, #64748b);
+    font-size: .8rem;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+  }
+
+  h2 {
+    margin: 0 0 1.25rem;
+    font-size: 1.1rem;
+  }
+
+  .options {
+    display: flex;
+    flex-direction: column;
+    gap: .5rem;
+    margin-bottom: 1.5rem;
+
+    .option {
+      display: flex;
+      align-items: center;
+      gap: .75rem;
+      padding: .75rem 1rem;
+      border: 1px solid var(--surface-200, #e2e8f0);
+      border-radius: 10px;
+      cursor: pointer;
+
+      &:hover {
+        background: var(--surface-100, #f1f5f9);
+      }
+    }
+  }
+
+  .nav {
+    display: flex;
+    justify-content: space-between;
+    gap: .5rem;
+    flex-wrap: wrap;
+  }
+}
+
+.result-card {
+  text-align: center;
+
+  i {
+    font-size: 3rem;
+    color: var(--primary-color, #6366f1);
+    margin-bottom: .5rem;
+  }
+
+  i.pi-times-circle {
+    color: #dc2626;
+  }
+
+  h2 {
+    margin: 0 0 .5rem;
+  }
+
+  .big-score {
+    font-size: 3rem;
+    font-weight: 700;
+    margin: .5rem 0;
+  }
+
+  .sub {
+    color: var(--text-color-secondary, #64748b);
+    margin: 0 0 1.25rem;
+  }
+
+  .actions {
+    display: flex;
+    gap: .5rem;
+    justify-content: center;
+  }
+}

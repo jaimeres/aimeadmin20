@@ -12,22 +12,8 @@ export const HR_ROUTES: Routes = [
     loadComponent: () => import('./organization-chart/organization-chart.component').then(m => m.OrganizationChartComponent)
   },
   {
-    path: 'employee',
-    redirectTo: 'employees',
-    pathMatch: 'full'
-  },
-  {
     path: 'employees',
     loadComponent: () => import('./employee/employee.component').then(m => m.EmployeeComponent)
-  },
-  {
-    path: 'academy',
-    redirectTo: 'courses-evaluations',
-    pathMatch: 'full'
-  },
-  {
-    path: 'courses-evaluations',
-    loadComponent: () => import('./academy/academy.component').then(m => m.AcademyComponent)
   },
   {
     path: 'attendance',
@@ -36,6 +22,18 @@ export const HR_ROUTES: Routes = [
   {
     path: 'recruitment',
     loadComponent: () => import('./recruitment/recruitment.component').then(m => m.RecruitmentComponent)
+  },
+  {
+    path: 'job-title',
+    loadComponent: () => import('./job-title/job-title.component').then(m => m.JobTitleComponent)
+  },
+  {
+    path: 'work-schedule',
+    loadComponent: () => import('./work-schedule/work-schedule.component').then(m => m.WorkScheduleComponent)
+  },
+  {
+    path: 'contract',
+    loadComponent: () => import('./contract/contract.component').then(m => m.ContractComponent)
   }
 
 ];

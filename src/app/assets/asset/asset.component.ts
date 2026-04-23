@@ -26,7 +26,6 @@ import { MenuItem } from 'primeng/api';
 })
 export class AssetComponent extends CRUD implements OnInit {
 
-
   override openNewMenu = signal<MenuItem[]>([{
     label: 'Activo',
     command: () => this.openNew({ pos: 'asset' })
@@ -80,26 +79,6 @@ export class AssetComponent extends CRUD implements OnInit {
 
   });
 
-  colsAccessorySignal = signal<any>([
-    //{ field: 'id', header: 'Identificador', sortable: true },
-    { field: 'name', header: 'Nombre', sortable: true },
-    { field: 'asset__name', header: 'Activo', sortable: true },
-    { field: 'persons__name', header: 'Personas', sortable: true },
-    { field: 'quantity', header: 'Cantidad', sortable: true },
-    { field: 'description', header: 'Descripción', sortable: true },
-    { field: 'is_active__text', header: 'Situación', sortable: true },
-    { field: 'start_date', header: 'Inicio', sortable: true },
-    { field: 'end_date', header: 'Fin', sortable: true },
-    { field: 'inactivated_by__name', header: 'Inactivado por', sortable: true },
-    { field: 'created_by__name', header: 'Creado por', sortable: true },
-    { field: 'modified_by__name', header: 'Modificado por', sortable: true },
-  ]);
-
-  valAccessorySignal = signal<any>([
-    { id: 1, name: 'Tubo 3mm', is_active: true, start_date: '2021-01-01', end_date: '2021-12-31', persons__name: 'Juan Perez', quantity: 150 },
-    { id: 2, name: 'Herramienta', is_active: true, asset__name: 'CAJA DE HERRAMIENTAS ', persons__name: 'Varios', quantity: 2 }
-
-  ]);
 
   public assets = signal<any[]>([]); //los activos
   public fileTypes = signal<any[]>([]); //los tipos de documentos
@@ -130,31 +109,16 @@ export class AssetComponent extends CRUD implements OnInit {
 
     this.type['asset-type'] = 'asset-type';
     this.app['asset-type'] = 'assets/asset-type';
-    //this.formDialogVisible['asset-type'] = false;
-    this.singular['asset-type'] = 'tipo de activo';
-    this.plural['asset-type'] = 'tipos de activos';
-    this.singularIndefiniteArticle['asset-type'] = 'el tipo de activo';
-    this.pluralDefiniteArticle['sset-type'] = 'los tipos de activos';
-    this.module['capacity-type'] = 'A';
+    this.module['asset-type'] = 'A';
 
     //this.resetForm['asset-type'] = { name: '', description: '', is_active: true, }; //todos estas en el array por defecto
     this.type['capacity-type'] = 'capacity-type';
     this.app['capacity-type'] = 'assets/capacity-type';
-    this.formDialogVisible['capacity-type'] = false;
-    this.singular['capacity-type'] = 'tipo de capacidad';
-    this.plural['capacity-type'] = 'tipos de capacidades';
-    this.singularIndefiniteArticle['capacity-type'] = 'el tipo de capacidad';
-    this.pluralDefiniteArticle['capacity-type'] = 'los tipos de capacidades';
     this.module['capacity-type'] = 'A';
 
     this.type['asset-document'] = 'asset-document';
     this.app['asset-document'] = 'assets/asset-document';
-    this.singular['asset-document'] = 'documento';
-    this.plural['asset-document'] = 'documentos';
-    this.singularIndefiniteArticle['asset-document'] = 'el documento';
-    this.pluralDefiniteArticle['asset-document'] = 'los documentos';
     this.module['asset-document'] = 'A';
-    this.excludeFieldsCols['asset-document'] = [{ field: 'documents' }];
     this.excludeFieldsForm['asset-document'] = [
       { field: 'status', },
     ];
@@ -162,11 +126,6 @@ export class AssetComponent extends CRUD implements OnInit {
     //-----------------------------
     this.type['asset-document-asset'] = 'asset-document';
     this.app['asset-document-asset'] = 'assets/asset-document';
-    this.formDialogVisible['asset-document-asset'] = false;
-    this.singular['asset-document-asset'] = 'documento';
-    this.plural['asset-document-asset'] = 'documentos';
-    this.singularIndefiniteArticle['asset-document-asset'] = 'el documento';
-    this.pluralDefiniteArticle['asset-document-asset'] = 'los documentos';
     this.module['asset-document-asset'] = 'A';
 
     this.excludeFieldsForm['asset-document-asset'] = [
@@ -177,17 +136,13 @@ export class AssetComponent extends CRUD implements OnInit {
 
     //------------------------------------------------------
     this.type['accessory'] = 'accessory';
-    this.app['asset-document-asset'] = 'assets/accessory';
-    this.formDialogVisible['accessory'] = false;
-    this.singular['accessory'] = 'accesorio';
-    this.plural['accessory'] = 'accesorios';
-    this.singularIndefiniteArticle['accessory'] = 'el accesorio';
-    this.pluralDefiniteArticle['accessory'] = 'los accesorios';
+    this.app['accessory'] = 'assets/accessory';
     this.module['accessory'] = 'A';
 
     this.initCRUD();
   }
 
+  //especia para el componenet no se debe osayu para otrso componentes
   onSelectFile(event: any) {
 
     //°°°solo falta cuando se modifican el campo files
@@ -198,6 +153,8 @@ export class AssetComponent extends CRUD implements OnInit {
       form.get('documents')?.setErrors(null);
     }
   }
+
+
 
 }
 

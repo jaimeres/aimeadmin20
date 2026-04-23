@@ -1,0 +1,47 @@
+<section class="courses-page">
+
+  <header class="page-head">
+    <div>
+      <h1>Catálogo de cursos</h1>
+      <p class="sub">Explora nuestra biblioteca de capacitaciones y elige la próxima.</p>
+    </div>
+    <a class="back" [routerLink]="['/academy/home']"><i class="pi pi-arrow-left"></i> Academia</a>
+  </header>
+
+  <div class="filters">
+    <span class="p-input-icon-left search">
+      <i class="pi pi-search"></i>
+      <input pInputText [(ngModel)]="query" placeholder="Buscar curso o instructor..." />
+    </span>
+    <p-select [options]="categoryOptions" [(ngModel)]="category" placeholder="Categoría" optionLabel="label"
+      optionValue="value" [showClear]="false" />
+    <p-select [options]="levelOptions" [(ngModel)]="level" placeholder="Nivel" optionLabel="label" optionValue="value"
+      [showClear]="false" />
+  </div>
+
+  <div class="grid">
+    <article class="card" *ngFor="let c of filtered" [routerLink]="['/academy/courses', c.id]">
+      <div class="cover">{{ c.cover }}</div>
+      <div class="body">
+        <div class="tags">
+          <p-tag [value]="c.category" severity="info" />
+          <p-tag [value]="c.level" severity="secondary" />
+        </div>
+        <h3>{{ c.title }}</h3>
+        <p class="instructor">{{ c.instructor }}</p>
+        <div class="meta">
+          <span><i class="pi pi-clock"></i> {{ c.duration }}</span>
+          <span><i class="pi pi-users"></i> {{ c.students }}</span>
+          <span><i class="pi pi-star-fill"></i> {{ c.rating }}</span>
+        </div>
+      </div>
+      <button pButton label="Ver curso" icon="pi pi-arrow-right" iconPos="right"></button>
+    </article>
+
+    <div class="empty" *ngIf="!filtered.length">
+      <i class="pi pi-inbox"></i>
+      <p>No encontramos cursos con esos filtros.</p>
+    </div>
+  </div>
+
+</section>

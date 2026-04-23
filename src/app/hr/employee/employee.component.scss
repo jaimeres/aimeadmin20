@@ -1,0 +1,33 @@
+:host ::ng-deep .copy-url-container {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  max-width: 800px;
+}
+
+:host ::ng-deep .url-box {
+  flex: 1;
+  padding: 10px 12px;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  background: #f8fafc;
+  font-size: 14px;
+  color: #0f172a;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+:host ::ng-deep .copy-btn {
+  padding: 10px 14px;
+  border: none;
+  border-radius: 8px;
+  background: #2563eb;
+  color: white;
+  cursor: pointer;
+  font-size: 14px;
+}
+
+:host ::ng-deep .copy-btn:hover {
+  opacity: 0.9;
+}

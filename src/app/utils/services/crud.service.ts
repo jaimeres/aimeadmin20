@@ -124,6 +124,12 @@ export class CRUDService {
       "name": "Tipos de Archivo",
       "icon": "pi pi-file"
     },
+    "file": {
+      "app": "files/file",
+      "type": "file",
+      "name": "Archivos",
+      "icon": "pi pi-file"
+    },
     "asset": {
       "app": "assets/asset",
       "type": "asset",
@@ -670,6 +676,31 @@ export class CRUDService {
     })).pipe(
       map((resp: any) => resp)
     );
+  }
+
+  /**
+   * Sube un archivo al endpoint de archivos (por defecto files/file) como
+   * multipart/form-data. Reutilizable para cualquier campo type=file con
+   * modo server_upload. La app se resuelve via appType[key].app.
+   */
+  uploadFile({ file, name = '', name_sent = '', time_zone = '', appKey = 'file', extraFields = {} }: {
+    file: Blob;
+    name?: string;
+    name_sent?: string;
+    time_zone?: string;
+    appKey?: string;
+    extraFields?: { [k: string]: string };
+  }) {
+    const app = (this.appType as any)[appKey]?.app || 'files/file';
+    const fd = new FormData();
+    fd.append('file', file, name || 'file');
+    fd.append('name', name || 'file');
+    fd.append('name_sent', name_sent || '');
+    fd.append('time_zone', time_zone || Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC');
+    fd.append('form_data', '{}');
+    fd.append('form_fields', '{}');
+    for (const k in extraFields) fd.append(k, extraFields[k]);
+    return this.http.post(`${this._base_url}/${app}/`, fd);
   }
 
   /**

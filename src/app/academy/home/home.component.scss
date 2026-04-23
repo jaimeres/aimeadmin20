@@ -1,0 +1,232 @@
+:host {
+  display: block;
+}
+
+.academy-home {
+  padding: 1.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.hero {
+  border-radius: 18px;
+  padding: 2rem 2.25rem;
+  color: #fff;
+  background: linear-gradient(135deg, #4338ca 0%, #6366f1 55%, #22d3ee 100%);
+  display: flex;
+  justify-content: space-between;
+  gap: 2rem;
+  flex-wrap: wrap;
+
+  .hero-copy {
+    max-width: 620px;
+  }
+
+  .eyebrow {
+    text-transform: uppercase;
+    letter-spacing: .12em;
+    font-size: .75rem;
+    opacity: .85;
+    margin: 0 0 .35rem;
+  }
+
+  h1 {
+    font-size: clamp(1.6rem, 3vw, 2.4rem);
+    margin: 0 0 .5rem;
+    font-weight: 700;
+  }
+
+  .sub {
+    margin: 0 0 1rem;
+    opacity: .9;
+    max-width: 560px;
+  }
+
+  .hero-actions {
+    display: flex;
+    gap: .5rem;
+    flex-wrap: wrap;
+  }
+
+  .hero-stats {
+    display: grid;
+    grid-template-columns: repeat(2, auto);
+    gap: 1rem 2rem;
+    align-self: center;
+
+    div {
+      display: flex;
+      flex-direction: column;
+    }
+
+    strong {
+      font-size: 1.6rem;
+      font-weight: 700;
+    }
+
+    span {
+      opacity: .85;
+      font-size: .8rem;
+      text-transform: uppercase;
+      letter-spacing: .08em;
+    }
+  }
+}
+
+.block-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: .85rem;
+
+  h2 {
+    margin: 0;
+    font-size: 1.1rem;
+  }
+
+  a {
+    color: var(--primary-color, #6366f1);
+    text-decoration: none;
+    font-size: .9rem;
+  }
+}
+
+.categories {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: .75rem;
+
+  .cat-card {
+    display: flex;
+    gap: .75rem;
+    align-items: center;
+    padding: .85rem 1rem;
+    background: var(--surface-0, #fff);
+    border: 1px solid var(--surface-200, #e2e8f0);
+    border-radius: 12px;
+    text-decoration: none;
+    color: inherit;
+    transition: transform .15s, box-shadow .15s;
+
+    &:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 8px 20px rgba(15, 23, 42, .08);
+    }
+
+    .cat-icon {
+      font-size: 1.75rem;
+    }
+
+    .cat-body h3 {
+      margin: 0;
+      font-size: .95rem;
+    }
+
+    .cat-body p {
+      margin: 0;
+      color: var(--text-color-secondary, #64748b);
+      font-size: .8rem;
+    }
+  }
+}
+
+.course-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 1rem;
+
+  .course-card {
+    background: var(--surface-0, #fff);
+    border: 1px solid var(--surface-200, #e2e8f0);
+    border-radius: 14px;
+    overflow: hidden;
+    cursor: pointer;
+    transition: transform .15s, box-shadow .15s;
+
+    &:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 10px 24px rgba(15, 23, 42, .08);
+    }
+
+    .cover {
+      font-size: 3rem;
+      background: var(--surface-100, #f1f5f9);
+      padding: 1.25rem;
+      text-align: center;
+      position: relative;
+
+      p-tag {
+        position: absolute;
+        top: .5rem;
+        right: .5rem;
+      }
+    }
+
+    .body {
+      padding: .9rem 1rem;
+    }
+
+    h3 {
+      margin: 0 0 .25rem;
+      font-size: 1rem;
+    }
+
+    .instructor {
+      margin: 0;
+      color: var(--text-color-secondary, #64748b);
+      font-size: .85rem;
+    }
+
+    .meta {
+      display: flex;
+      gap: .75rem;
+      margin-top: .5rem;
+      color: var(--text-color-secondary, #64748b);
+      font-size: .8rem;
+
+      i {
+        margin-right: .25rem;
+      }
+    }
+  }
+}
+
+.progress-list {
+  display: flex;
+  flex-direction: column;
+  gap: .6rem;
+
+  .progress-card {
+    display: grid;
+    grid-template-columns: 64px 1fr auto;
+    gap: 1rem;
+    align-items: center;
+    padding: .75rem 1rem;
+    background: var(--surface-0, #fff);
+    border: 1px solid var(--surface-200, #e2e8f0);
+    border-radius: 12px;
+    cursor: pointer;
+
+    .cover {
+      font-size: 2rem;
+      text-align: center;
+    }
+
+    .body h3 {
+      margin: 0 0 .25rem;
+      font-size: .95rem;
+    }
+
+    .instructor {
+      margin: 0 0 .5rem;
+      color: var(--text-color-secondary, #64748b);
+      font-size: .8rem;
+    }
+
+    .progress-text {
+      font-size: .75rem;
+      color: var(--text-color-secondary, #64748b);
+    }
+  }
+}

@@ -1,0 +1,154 @@
+:host ::ng-deep .note-dialog {
+  border: none;
+  overflow: visible !important;
+  box-shadow: 2px 4px 10px rgba(0, 0, 0, 0.2);
+}
+
+:host ::ng-deep .note-dialog .p-dialog-header {
+  display: flex;
+  height: 6px;
+  padding: 0 !important;
+  background: #d8d8d8;
+  border: none;
+  cursor: move;
+}
+
+:host ::ng-deep .note-dialog .p-dialog-title,
+:host ::ng-deep .note-dialog .p-dialog-header-icons {
+  display: none !important;
+}
+
+:host ::ng-deep .note-dialog .p-dialog-content {
+  padding: 0 !important;
+  background: #fff3a0;
+  overflow: visible !important;
+  height: 200px !important;
+}
+
+.note-container {
+  width: 100%;
+  height: 200px;
+  background: #fff3a0;
+  font-family: 'Segoe UI', sans-serif;
+}
+
+:host ::ng-deep .note-editor {
+  display: flex !important;
+  flex-direction: column;
+  height: 100%;
+  border: none !important;
+  background: #fff3a0 !important;
+}
+
+:host ::ng-deep .note-editor .ql-toolbar {
+  padding: 0 2px !important;
+  background: #ffe066;
+  border: none !important;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.12);
+}
+
+:host ::ng-deep .note-toolbar-inner {
+  display: flex;
+  align-items: center;
+  width: 100%;
+}
+
+:host ::ng-deep .note-tools.ql-formats {
+  display: flex !important;
+  flex-wrap: wrap !important;
+  align-items: center;
+  gap: 1px;
+  margin: 0 !important;
+  width: 100%;
+}
+
+:host ::ng-deep .note-editor .ql-toolbar button {
+  width: 18px;
+  height: 18px;
+  margin: 0 !important;
+  padding: 0 !important;
+}
+
+:host ::ng-deep .note-editor .ql-toolbar button svg {
+  width: 14px;
+  height: 14px;
+}
+
+.note-action-btn {
+  width: 18px;
+  height: 18px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #444;
+}
+
+.note-action-new {
+  margin-left: auto;
+  font-size: 14px;
+}
+
+.note-action-close {
+  font-size: 12px;
+}
+
+.note-action-btn:hover {
+  background: rgba(0, 0, 0, 0.08);
+}
+
+:host ::ng-deep .note-editor .ql-toolbar .ql-picker {
+  position: relative;
+  display: inline-flex !important;
+  align-items: center;
+  height: 18px;
+  margin: 0 !important;
+}
+
+:host ::ng-deep .note-editor .ql-toolbar .ql-picker-label {
+  display: inline-flex !important;
+  align-items: center;
+  height: 18px;
+  padding: 0 14px 0 4px !important;
+  border: none !important;
+  background: transparent !important;
+  font-size: 12px;
+}
+
+:host ::ng-deep .note-editor .ql-container {
+  flex: 1 1 auto;
+  border: none !important;
+  background: #fff3a0 !important;
+}
+
+:host ::ng-deep .note-editor .ql-editor {
+  height: 100%;
+  overflow-y: auto !important;
+  padding: 0 !important;
+  background: #fff3a0 !important;
+  font-size: 14px;
+  line-height: 1.35;
+}
+
+:host ::ng-deep .note-editor .ql-editor.ql-blank::before {
+  left: 6px;
+  top: 6px;
+  color: rgba(0, 0, 0, 0.45);
+  font-style: normal;
+}
+
+:host ::ng-deep .note-editor .ql-editor::-webkit-scrollbar {
+  width: 6px;
+}
+
+:host ::ng-deep .note-editor .ql-editor::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.22);
+  border-radius: 8px;
+}
+
+:host ::ng-deep .note-editor .ql-editor::-webkit-scrollbar-track {
+  background: transparent;
+}

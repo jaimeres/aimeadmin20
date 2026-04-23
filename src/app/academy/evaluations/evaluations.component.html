@@ -1,0 +1,41 @@
+<section class="evaluations-page">
+
+  <header class="page-head">
+    <div>
+      <h1>Evaluaciones</h1>
+      <p class="sub">Revisa tus exámenes, quíces y pruebas pendientes.</p>
+    </div>
+    <a class="back" [routerLink]="['/academy/home']"><i class="pi pi-arrow-left"></i> Academia</a>
+  </header>
+
+  <p-table [value]="evaluations" styleClass="p-datatable-sm" [paginator]="true" [rows]="10">
+    <ng-template pTemplate="header">
+      <tr>
+        <th>Evaluación</th>
+        <th>Curso</th>
+        <th>Preguntas</th>
+        <th>Duración</th>
+        <th>Fecha límite</th>
+        <th>Estado</th>
+        <th>Calificación</th>
+        <th></th>
+      </tr>
+    </ng-template>
+    <ng-template pTemplate="body" let-e>
+      <tr>
+        <td><strong>{{ e.title }}</strong></td>
+        <td>{{ e.course }}</td>
+        <td>{{ e.questions }}</td>
+        <td>{{ e.duration }}</td>
+        <td>{{ e.due }}</td>
+        <td><p-tag [value]="e.status" [severity]="severity(e.status)" /></td>
+        <td>{{ e.score ? e.score + '%' : '—' }}</td>
+        <td>
+          <button pButton size="small" label="Abrir" icon="pi pi-arrow-right" iconPos="right"
+            [routerLink]="['/academy/evaluations', e.id]"></button>
+        </td>
+      </tr>
+    </ng-template>
+  </p-table>
+
+</section>

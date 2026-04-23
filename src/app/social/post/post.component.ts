@@ -57,6 +57,12 @@ interface AjusteRapido {
   state: string;
 }
 
+interface Celebracion {
+  name: string;
+  role: string;
+  date: string;
+}
+
 interface RutaSistema {
   url: string;
   name: string;
@@ -216,6 +222,15 @@ export class PostComponent extends CRUD implements OnInit {
       description: 'Concentrado automático con publicaciones clave al finalizar la jornada.',
       state: '18:00 h'
     }
+  ];
+  readonly birthdays: Celebracion[] = [
+    { name: 'María López', role: 'Capital humano', date: 'Hoy' },
+    { name: 'Carlos Reyes', role: 'Mantenimiento', date: 'Mañana' },
+    { name: 'Ana Torres', role: 'Compras', date: 'En 3 días' },
+  ];
+  readonly promotions: Celebracion[] = [
+    { name: 'Jorge Medina', role: 'Coordinador de operaciones', date: 'Nuevo cargo' },
+    { name: 'Lucía Paredes', role: 'Líder de compras', date: 'Ascenso' },
   ];
   readonly posts = signal<PublicacionSocial[]>([
     {

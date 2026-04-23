@@ -7,6 +7,8 @@ import { CustomLocalSettingsComponent } from '../components/custom-local-setting
 import { CustomTableComponent } from '../components/custom-table/custom-table.component';
 import { CustomAuditComponent } from '../components/custom-audit/custom-audit.component';
 import { CustomDocumentsComponent } from '../components/custom-documents/custom-documents.component';
+import { TaskModuleLoaderComponent } from '../components/task-module-loader/task-module-loader.component';
+import { PopupComponent } from '../tasks/popup/popup.component';
 
 export const LOCAL_BASE = [
   CustomDrawFormComponent,
@@ -17,5 +19,7 @@ export const LOCAL_BASE = [
   CustomButtonCrudComponent,
   CustomTableComponent,
   CustomAuditComponent,
-  CustomDocumentsComponent
+  CustomDocumentsComponent,
+  TaskModuleLoaderComponent,
+  PopupComponent
 ];

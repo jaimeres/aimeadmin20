@@ -1,4 +1,4 @@
-import { Component, OnInit, signal, ChangeDetectionStrategy } from '@angular/core';
+import { ChangeDetectionStrategy, Component, EventEmitter, Input, OnInit, Output, signal } from '@angular/core';
 import { PRIME_MODULES } from '../../shared/primeng.index';
 import { LOCAL_BASE } from '../../shared/components.index';
 import { CommonModule } from '@angular/common';
@@ -20,6 +20,9 @@ import { WarehouseMovementService } from '../services/warehouse-movement.service
   changeDetection: ChangeDetectionStrategy.OnPush
 })
 export class WarehouseMovementComponent extends CRUD implements OnInit {
+
+  @Input() showComponent: any = null;
+  @Output() closeDialog = new EventEmitter<void>();
 
   public override openNewMenu = signal<MenuItem[]>([{
     label: 'Movimientos de almacén',
@@ -58,6 +61,11 @@ export class WarehouseMovementComponent extends CRUD implements OnInit {
     this.initCRUD();
 
 
+  }
+
+  override onHide(app: any = null) {
+    super.onHide(app);
+    this.closeDialog.emit();
   }
 
 

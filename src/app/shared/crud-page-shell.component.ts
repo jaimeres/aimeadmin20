@@ -2,13 +2,47 @@ import { Component, Input } from '@angular/core';
 import { SelectModule } from 'primeng/select';
 import { LOCAL_BASE } from './components.index';
 import { PRIME_MODULES } from './primeng.index';
+import { TaskModuleLoaderComponent } from '../components/task-module-loader/task-module-loader.component';
+
+/**
+ * Configuración de tabs adicionales para el dialog.
+ * Los tabs General (0), Clasificadores (1), y Auditoría (3) siempre están presentes.
+ * Se pueden agregar tabs opcionales con esta interfaz.
+ */
+export interface ShellTabConfig {
+  /** Nombre del tab que se muestra */
+  label: string;
+  /** Valor numérico del tab (usar 2, 4, 5, etc. — 0, 1, 3 están reservados) */
+  value: number;
+  /** Tipo de contenido del tab */
+  type: 'documents' | 'notes';
+  /** Configuración específica para documents */
+  documents?: {
+    type: string;        // ej: 'maintenance-document'
+    app: string;         // ej: 'assets/maintenance-document'
+    filter: string;      // ej: 'maintenance'
+    newPos: string;      // ej: 'maintenance-document-maintenance'
+  };
+}
+
+/**
+ * Configuración del save del footer.
+ */
+export interface ShellSaveConfig {
+  /** true cuando el save maneja archivos (is_file: true) */
+  is_file?: boolean;
+}
 
 @Component({
   selector: 'app-crud-page-shell',
   standalone: true,
-  imports: [SelectModule, ...PRIME_MODULES, ...LOCAL_BASE],
+  imports: [SelectModule, TaskModuleLoaderComponent, ...PRIME_MODULES, ...LOCAL_BASE],
   template: `
-    <div style="position: absolute; z-index: 2;">
+    <p-confirmdialog />
+
+    <!-- Botones CRUD: visibles siempre en modo local, o controlados por showComponentSignal cuando es hijo -->
+    <div style="position: absolute; z-index: 2;"
+      *ngIf="!showComponentPos || crud.showComponentSignal()[$any(showComponentPos)]?.local || crud.showComponentSignal()[$any(showComponentPos)]?.read">
       <app-custom-button-crud
         (deleteAction)="crud.delete()"
         (editAction)="crud.edit()"
@@ -19,10 +53,12 @@ import { PRIME_MODULES } from './primeng.index';
         [openNewMenu]="crud.openNewMenu()"
         [selected]="crud.selected()"
         [startMenu]="crud.startMenu()"
+        (startAction)="crud.setStatus($event)"
       />
     </div>
 
-    <div class="table-fit-Custom">
+    <div class="table-fit-Custom"
+      *ngIf="!showComponentPos || crud.showComponentSignal()[$any(showComponentPos)]?.local || crud.showComponentSignal()[$any(showComponentPos)]?.read">
       <app-custom-table
         class="table-fit-Custom"
         [value]="crud.items()"
@@ -77,10 +113,11 @@ import { PRIME_MODULES } from './primeng.index';
       </ng-template>
 
       <form [formGroup]="crud.form()[$any(crud.typeDefault)]" *ngIf="crud.form()[$any(crud.typeDefault)]">
-        <p-tabs [scrollable]="true" [value]="crud.tabVisible()">
+        <p-tabs [scrollable]="true" [value]="crud.tabVisible()" (valueChange)="crud.onTabChange($event)">
           <p-tablist>
             <p-tab [value]="0">General</p-tab>
             <p-tab [value]="1">Clasificadores</p-tab>
+            <p-tab *ngFor="let tab of tabs" [value]="tab.value">{{ tab.label }}</p-tab>
             <p-tab [value]="3">Auditoría</p-tab>
           </p-tablist>
 
@@ -90,6 +127,7 @@ import { PRIME_MODULES } from './primeng.index';
                 *ngIf="crud.form()[$any(crud.typeDefault)] && crud.drawForm()[crud.typeDefault]?.['general']"
                 [drawForm]="crud.drawForm()[crud.typeDefault]['general']"
                 [formGroup]="crud.form()[$any(crud.typeDefault)]"
+                [isCreate]="crud.isCreate()"
                 (onSelectAutoCompleteAction)="crud.onSelectAutoComplete($event)"
                 (onChangeDropdownAction)="crud.onChangeDropdown($event)"
                 (onNewIconDropdownAction)="crud.onNewIconDropdown($event)"
@@ -128,6 +166,19 @@ import { PRIME_MODULES } from './primeng.index';
               </div>
             </p-tabpanel>
 
+            <!-- Tabs dinámicos -->
+            <ng-container *ngFor="let tab of tabs">
+              <p-tabpanel [value]="tab.value" *ngIf="tab.type === 'documents' && tab.documents">
+                <app-custom-documents
+                  [selected]="crud.selected()"
+                  [type]="tab.documents.type"
+                  [app]="tab.documents.app"
+                  [filter]="tab.documents.filter"
+                  (newAction)="crud.openNewSecundary({ pos: tab.documents.newPos })"
+                />
+              </p-tabpanel>
+            </ng-container>
+
             <p-tabpanel [value]="3">
               <app-custom-audit [cf]="crud.customField()[crud.typeDefault]" [selected]="crud.selected()" />
             </p-tabpanel>
@@ -138,15 +189,36 @@ import { PRIME_MODULES } from './primeng.index';
       <ng-template #footer>
         <div class="p-dialog-footer">
           <app-custom-button-footer
-            (saveAction)="crud.save({ pos: crud.typeDefault })"
-            (saveNotHideAction)="crud.save({ pos: crud.typeDefault, hide: false })"
+            [config]="crud.configGeneral()[$any(crud.typeDefault)]"
+            (saveAction)="crud.save({ pos: crud.typeDefault, is_file: saveConfig.is_file || false })"
+            (saveNotHideAction)="crud.save({ pos: crud.typeDefault, hide: false, is_file: saveConfig.is_file || false })"
             (resetFormAction)="crud.resetFormDialog()"
           />
         </div>
       </ng-template>
     </p-dialog>
+
+    <!-- Carga perezosa de módulos de tareas -->
+    <app-task-module-loader
+      *ngIf="crud.tasksModule()"
+      [tasksModule]="crud.tasksModule()"
+      (closeDialog)="crud.closeTaskModule()"
+    />
   `
 })
 export class CrudPageShellComponent {
   @Input({ required: true }) crud!: any;
+
+  /** Tabs adicionales al dialog (documents, notes, etc.) */
+  @Input() tabs: ShellTabConfig[] = [];
+
+  /** Configuración del save (is_file, etc.) */
+  @Input() saveConfig: ShellSaveConfig = {};
+
+  /**
+   * Pos del showComponentSignal para controlar visibilidad cuando el componente
+   * es cargado como hijo via app-task-module-loader. Si no se define, se renderiza
+   * siempre (modo local/standalone).
+   */
+  @Input() showComponentPos: string = '';
 }

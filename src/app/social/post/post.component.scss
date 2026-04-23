@@ -1,63 +1,117 @@
 :host {
   display: block;
-  min-height: 100vh;
+  height: 100vh;
   background: linear-gradient(180deg, #f8fafc, #eef2ff 55%, #fff7ed);
-  overflow-x: hidden;
+  overflow: hidden;
 }
 
 .social-shell {
   display: grid;
   grid-template-columns: minmax(0, 760px);
   justify-content: center;
-  align-items: start;
+  align-items: stretch;
   gap: 1.5rem;
   max-width: 1700px;
   margin: 0 auto;
-  padding: calc(var(--header-h, 4rem) + var(--top-inset, 0px) + 1rem) 1rem 2rem;
+  padding: calc(var(--header-h, 4rem) + var(--top-inset, 0px) + 1rem) 1rem 1rem;
   box-sizing: border-box;
+  height: 100vh;
+  overflow: hidden;
 }
 
 .social-shell--ads {
-  grid-template-columns: minmax(220px, 280px) minmax(0, 760px);
+  grid-template-columns: minmax(240px, 300px) minmax(0, 760px);
 }
 
 .social-shell--full {
-  grid-template-columns: minmax(220px, 280px) minmax(0, 760px) minmax(240px, 320px);
-}
-
-.social-main,
-.social-column,
-.social-hero,
-.story-list,
-.trend-list,
-.settings-list {
-  display: grid;
+  grid-template-columns: minmax(240px, 300px) minmax(0, 760px) minmax(260px, 340px);
 }
 
 .social-main {
+  display: flex;
+  flex-direction: column;
   gap: 1.25rem;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding-right: 0.25rem;
+  scrollbar-gutter: stable;
 }
 
 .social-column {
+  display: flex;
+  flex-direction: column;
   gap: 1rem;
-  position: sticky;
-  top: calc(var(--header-h, 4rem) + var(--top-inset, 0px) + 1rem);
-  align-self: start;
+  overflow-y: auto;
+  overflow-x: hidden;
+  height: 100%;
+  padding-right: 0.25rem;
+  scrollbar-gutter: stable;
+}
+
+.welcome-banner {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: center;
+  gap: 1.25rem;
+  padding: 1.4rem 1.6rem;
+  border-radius: 1.6rem;
+  background: linear-gradient(135deg, #0f172a 0%, #1e3a8a 55%, #2563eb 100%);
+  color: #f8fafc;
+  box-shadow: 0 20px 45px -25px rgba(15, 23, 42, 0.6);
+  border: 1px solid rgba(148, 163, 184, 0.2);
+}
+
+.welcome-logo {
+  width: 72px;
+  height: 72px;
+  object-fit: contain;
+  padding: 0.45rem;
+  background: rgba(255, 255, 255, 0.92);
+  border-radius: 1.1rem;
+  box-shadow: 0 10px 25px -15px rgba(15, 23, 42, 0.8);
+}
+
+.welcome-text {
+  display: grid;
+  gap: 0.25rem;
+}
+
+.welcome-kicker {
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  font-size: 0.72rem;
+  color: rgba(226, 232, 240, 0.85);
+  font-weight: 600;
+}
+
+.welcome-text h1 {
+  margin: 0;
+  font-size: clamp(1.5rem, 2.2vw, 2rem);
+  line-height: 1.1;
+  color: #fff;
+}
+
+.welcome-text p {
+  margin: 0;
+  color: rgba(226, 232, 240, 0.9);
+  line-height: 1.45;
 }
 
 .social-hero {
+  display: grid;
   gap: 1rem;
-  padding: 1.5rem;
-  border-radius: 1.6rem;
-  border: 1px solid rgba(148, 163, 184, 0.18);
-  background: rgba(255, 255, 255, 0.88);
+  padding: 1.4rem;
+  border-radius: 1.4rem;
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  background: rgba(255, 255, 255, 0.92);
+  box-shadow: 0 8px 24px -18px rgba(15, 23, 42, 0.35);
 }
 
-.social-hero h1 {
+.social-hero h2 {
   margin: 0;
   color: #0f172a;
-  font-size: clamp(2.1rem, 3.2vw, 3.4rem);
-  line-height: 0.98;
+  font-size: clamp(1.4rem, 2vw, 1.8rem);
+  line-height: 1.15;
 }
 
 .social-hero p,
@@ -76,8 +130,50 @@
 .post-tags {
   display: flex;
   flex-wrap: wrap;
+  gap: 0.65rem;
+}
+
+.celebration-card {
+  border-radius: 1.25rem;
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  overflow: hidden;
+}
+
+.celebration-card--birthday :host ::ng-deep .p-card-header,
+.celebration-card--birthday ::ng-deep .p-card-title {
+  color: #b45309;
+}
+
+.celebration-card--promotion ::ng-deep .p-card-title {
+  color: #047857;
+}
+
+.celebration-list {
+  display: grid;
   gap: 0.75rem;
 }
+
+.celebration-list article {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 0.85rem;
+  padding: 0.75rem;
+  border-radius: 1rem;
+  background: rgba(248, 250, 252, 0.95);
+  border: 1px solid rgba(148, 163, 184, 0.22);
+}
+
+.celebration-list strong {
+  color: #0f172a;
+  display: block;
+}
+
+.celebration-list span {
+  color: #475569;
+  font-size: 0.82rem;
+}
+
 
 .social-toolbar,
 .composer-actions,
@@ -170,14 +266,7 @@
 }
 
 .social-ad-label {
-  display: inline-flex;
-  padding: 0.25rem 0.55rem;
-  border-radius: 999px;
-  background: rgba(15, 23, 42, 0.08);
-  color: #0f172a;
-  font-size: 0.75rem;
-  font-weight: 700;
-  text-transform: uppercase;
+  display: none;
 }
 
 .social-ad-card h3 {
@@ -202,8 +291,27 @@
 }
 
 @media (max-width: 640px) {
+  :host {
+    height: auto;
+    overflow: visible;
+  }
+
   .social-shell {
     padding-inline: 0.75rem;
+    height: auto;
+    overflow: visible;
+  }
+
+  .social-main,
+  .social-column {
+    overflow: visible;
+    height: auto;
+  }
+
+  .welcome-banner {
+    grid-template-columns: 1fr;
+    text-align: center;
+    justify-items: center;
   }
 
   .social-hero {

@@ -29,6 +29,8 @@ export class TaskModuleLoaderComponent implements OnChanges, OnDestroy {
   private closeSubscription: Subscription | null = null;
 
   ngOnChanges(changes: SimpleChanges) {
+    console.log('TaskModuleLoaderComponent', changes['tasksModule']);
+
     if (changes['tasksModule']) {
       this.loadComponent();
     }

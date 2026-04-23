@@ -1,0 +1,79 @@
+<section class="academy-home">
+
+  <header class="hero">
+    <div class="hero-copy">
+      <p class="eyebrow">Academia</p>
+      <h1>Aprende, evoluciona, evaluácate.</h1>
+      <p class="sub">Plataforma de capacitación interna con cursos, rutas de aprendizaje y evaluaciones para tu equipo.
+      </p>
+      <div class="hero-actions">
+        <button pButton icon="pi pi-book" label="Ver cursos" [routerLink]="['/academy/courses']"></button>
+        <button pButton icon="pi pi-check-square" label="Evaluaciones" severity="secondary"
+          [routerLink]="['/academy/evaluations']"></button>
+      </div>
+    </div>
+    <div class="hero-stats">
+      <div><strong>{{ stats.totalCourses }}</strong><span>cursos</span></div>
+      <div><strong>{{ stats.completed }}</strong><span>completados</span></div>
+      <div><strong>{{ stats.hoursLearned }}</strong><span>horas</span></div>
+      <div><strong>{{ stats.certificates }}</strong><span>certificados</span></div>
+    </div>
+  </header>
+
+  <section class="block">
+    <div class="block-head">
+      <h2>Categorías</h2>
+    </div>
+    <div class="categories">
+      <a class="cat-card" *ngFor="let c of categories" [routerLink]="['/academy/courses']">
+        <div class="cat-icon">{{ c.icon }}</div>
+        <div class="cat-body">
+          <h3>{{ c.name }}</h3>
+          <p>{{ c.courses }} cursos</p>
+        </div>
+      </a>
+    </div>
+  </section>
+
+  <section class="block">
+    <div class="block-head">
+      <h2>Cursos destacados</h2>
+      <a [routerLink]="['/academy/courses']">Ver todos</a>
+    </div>
+    <div class="course-grid">
+      <article class="course-card" *ngFor="let c of featured" [routerLink]="['/academy/courses', c.id]">
+        <div class="cover">{{ c.cover }}
+          <p-tag *ngIf="c.tag" [value]="c.tag" severity="info" />
+        </div>
+        <div class="body">
+          <h3>{{ c.title }}</h3>
+          <p class="instructor">{{ c.instructor }}</p>
+          <div class="meta">
+            <span><i class="pi pi-clock"></i> {{ c.duration }}</span>
+            <span><i class="pi pi-chart-bar"></i> {{ c.level }}</span>
+            <span><i class="pi pi-star-fill"></i> {{ c.rating }}</span>
+          </div>
+        </div>
+      </article>
+    </div>
+  </section>
+
+  <section class="block">
+    <div class="block-head">
+      <h2>Continuar aprendiendo</h2>
+    </div>
+    <div class="progress-list">
+      <article class="progress-card" *ngFor="let c of inProgress" [routerLink]="['/academy/courses', c.id]">
+        <div class="cover">{{ c.cover }}</div>
+        <div class="body">
+          <h3>{{ c.title }}</h3>
+          <p class="instructor">{{ c.instructor }} · {{ c.duration }}</p>
+          <p-progressBar [value]="c.progress ?? 0" [style]="{ height: '6px' }"></p-progressBar>
+          <span class="progress-text">{{ c.progress }}% completado</span>
+        </div>
+        <button pButton icon="pi pi-play" label="Continuar" severity="secondary"></button>
+      </article>
+    </div>
+  </section>
+
+</section>

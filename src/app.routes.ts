@@ -111,10 +111,16 @@ export const appRoutes: Routes = [
         loadChildren: () => import('./app/travel-expenses/travel-expenses.routes').then(m => m.TRAVEL_EXPENSES_ROUTES)
       },
       {
-        path: 'support-contact',
-        data: { breadcrumb: 'Soporte y contacto' },
+        path: 'academy',
+        data: { breadcrumb: 'Academia' },
         canActivate: [appCanActivateGuardChild],
-        loadChildren: () => import('./app/support-contact/support-contact.routes').then(m => m.SUPPORT_CONTACT_ROUTES)
+        loadChildren: () => import('./app/academy/academy.routes').then(m => m.ACADEMY_ROUTES)
+      },
+      {
+        path: 'communications',
+        data: { breadcrumb: 'Comunicaciones' },
+        canActivate: [appCanActivateGuardChild],
+        loadChildren: () => import('./app/communications/communications.routes').then(m => m.COMMUNICATIONS_ROUTES)
       },
 
 

@@ -1,12 +1,13 @@
 import { Component, OnInit, signal } from '@angular/core';
 import { ConfirmationService, MenuItem } from 'primeng/api';
-import { CrudPageShellComponent } from '../../shared/crud-page-shell.component';
 import { CRUD } from '../../utils/crud.class';
 import { AssetService } from '../services/asset.service';
+import { LOCAL_BASE } from '../../shared/components.index';
+import { PRIME_MODULES } from '../../shared/primeng.index';
 
 @Component({
   selector: 'app-responsibilities-custodies',
-  imports: [CrudPageShellComponent],
+  imports: [LOCAL_BASE, PRIME_MODULES],
   templateUrl: './responsibilities-custodies.component.html',
   styleUrl: './responsibilities-custodies.component.scss',
   standalone: true,
@@ -16,22 +17,22 @@ export class ResponsibilitiesCustodiesComponent extends CRUD implements OnInit {
 
   public override openNewMenu = signal<MenuItem[]>([{
     label: 'Responsiva o resguardo',
-    command: () => this.openNew({ pos: 'asset-responsibilities-custodies' })
+    command: () => this.openNew({ pos: 'employee-asset-document' })
   }]);
 
   public override getMenu = signal<MenuItem[]>([{
     label: 'Responsivas y resguardos',
-    command: () => this.getAll({ pos: 'asset-responsibilities-custodies' })
+    command: () => this.getAll({ pos: 'employee-asset-document' })
   }]);
 
   constructor(crudS: AssetService) {
-    super(crudS, 'asset-responsibilities-custodies');
+    super(crudS, 'employee-asset-document');
   }
 
   ngOnInit(): void {
-    this.typeDefault = 'asset-responsibilities-custodies';
-    this.app[this.typeDefault] = 'assets/responsibilities-custodies';
-    this.module[this.typeDefault] = 'AS';
+    this.typeDefault = 'employee-asset-document';
+    this.app[this.typeDefault] = 'employees/employee-asset-document';
+    this.module[this.typeDefault] = 'DR';
     this.initCRUD();
   }
 

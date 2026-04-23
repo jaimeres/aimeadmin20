@@ -15,8 +15,8 @@ export default [
         data: { breadcrumb: 'Solicitudes' }
       },
       {
-        path: 'orders',
-        loadComponent: () => import('./orders/orders.component').then(m => m.OrdersComponent),
+        path: 'supplier-request',
+        loadComponent: () => import('./supplier-request/supplier-request.component').then(m => m.SupplierRequestComponent),
         data: { breadcrumb: 'Pedidos' }
       },
       {

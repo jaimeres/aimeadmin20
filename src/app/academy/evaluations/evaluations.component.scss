@@ -1,0 +1,33 @@
+:host {
+  display: block;
+}
+
+.evaluations-page {
+  padding: 1.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.page-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 1rem;
+
+  h1 {
+    margin: 0 0 .25rem;
+    font-size: 1.4rem;
+  }
+
+  .sub {
+    margin: 0;
+    color: var(--text-color-secondary, #64748b);
+  }
+
+  .back {
+    color: var(--primary-color, #6366f1);
+    text-decoration: none;
+    font-size: .9rem;
+  }
+}

@@ -3,7 +3,6 @@
 <section class="social-shell" [ngClass]="shellClasses()">
   <aside *ngIf="showAdvertisingPanel()" class="social-column social-column--ads-left">
     <p-card *ngFor="let ad of adsLeft" class="social-ad-card">
-      <span class="social-ad-label">{{ ad.title }}</span>
       <h3>{{ ad.subtitle }}</h3>
       <p>{{ ad.copy }}</p>
       <button pButton type="button" [label]="ad.cta" [text]="true"></button>
@@ -11,12 +10,20 @@
   </aside>
 
   <main class="social-main">
+    <section class="welcome-banner">
+      <img src="/images/logoCortoblancoFull.png" alt="Jukai" class="welcome-logo" />
+      <div class="welcome-text">
+        <span class="welcome-kicker">Bienvenido a tu comunidad interna</span>
+        <h1>Jukai te da la bienvenida</h1>
+        <p>Tu espacio para publicar, coordinar y celebrar los momentos del equipo.</p>
+      </div>
+    </section>
+
     <header class="social-hero">
-      <p-tag value="Red social interna" severity="contrast"></p-tag>
-      <h1>Publicaciones, avisos y coordinación diaria en un feed central para toda la empresa.</h1>
+      <h2>Publicaciones, avisos y coordinación diaria</h2>
       <p>
-        La topbar permanece fija con datos reales de usuario y avisos. Los costados quedan reservados para publicidad,
-        mientras el centro conserva un ancho fijo para lectura cómoda y publicación rápida.
+        La topbar permanece fija con tus datos y avisos. Los costados quedan fijos para publicidad y novedades,
+        y el centro conserva el scroll para que navegues por el feed sin perder el contexto.
       </p>
 
       <div class="hero-chips">
@@ -101,6 +108,34 @@
   </main>
 
   <aside *ngIf="showSecondaryPanel()" class="social-column social-column--right">
+    <p-card class="celebration-card celebration-card--birthday" header="🎂 Feliz cumpleaños"
+      subheader="Felicita a quienes cumplen hoy">
+      <div class="celebration-list">
+        <article *ngFor="let person of birthdays">
+          <p-avatar [label]="person.name.charAt(0)" shape="circle"></p-avatar>
+          <div>
+            <strong>{{ person.name }}</strong>
+            <span>{{ person.role }}</span>
+          </div>
+          <p-tag [value]="person.date" severity="warn"></p-tag>
+        </article>
+      </div>
+    </p-card>
+
+    <p-card class="celebration-card celebration-card--promotion" header="🎉 Celebración de ascenso"
+      subheader="Reconocimientos del equipo">
+      <div class="celebration-list">
+        <article *ngFor="let person of promotions">
+          <p-avatar [label]="person.name.charAt(0)" shape="circle"></p-avatar>
+          <div>
+            <strong>{{ person.name }}</strong>
+            <span>{{ person.role }}</span>
+          </div>
+          <p-tag [value]="person.date" severity="success"></p-tag>
+        </article>
+      </div>
+    </p-card>
+
     <p-card class="settings-card" header="Configuración rápida" subheader="Solo visible en pantallas grandes">
       <div class="settings-list">
         <article *ngFor="let setting of settings">
@@ -124,7 +159,6 @@
     </p-card>
 
     <p-card *ngFor="let ad of adsRight" class="social-ad-card">
-      <span class="social-ad-label">{{ ad.title }}</span>
       <h3>{{ ad.subtitle }}</h3>
       <p>{{ ad.copy }}</p>
       <button pButton type="button" [label]="ad.cta" [text]="true"></button>

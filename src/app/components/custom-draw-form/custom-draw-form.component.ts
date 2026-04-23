@@ -3,6 +3,7 @@ import { FormControl, FormGroup, FormsModule, ReactiveFormsModule, FormArray, Va
 import { Component, ChangeDetectionStrategy, ElementRef, EventEmitter, inject, Input, Output, signal, computed, SimpleChanges, ViewChild, OnDestroy } from '@angular/core';
 import { Subscription } from 'rxjs';
 import { debounceTime } from 'rxjs/operators';
+import { MenuItem } from 'primeng/api';
 // ************************ADAPTADO PARA CAPACITOR*********************
 import { Camera, CameraResultType, CameraSource } from '@capacitor/camera';
 // Scanner de códigos de barras para Capacitor
@@ -1620,7 +1621,12 @@ export class CustomDrawFormComponent implements OnDestroy {
   //PEPEPEPEP
 
   getType(value: any) {
-    return value?.type //|| 'input-text';
+    // Normaliza variantes al mismo switchCase para evitar duplicar ramas.
+    // Soporta config donde el tipo externo viene como 'files' pero
+    // data_type.type='file'; ambos se renderean con el template 'file'.
+    const t = value?.type;
+    if (t === 'files') return 'file';
+    return t; //|| 'input-text';
   }
 
   /**
@@ -2182,10 +2188,310 @@ export class CustomDrawFormComponent implements OnDestroy {
     }
   }
 
+  // ═══════════════════════════════════════════════════════════════════════════
+  // BLOQUE: type "file" — template unificado con 3 modos combinables
+  // ───────────────────────────────────────────────────────────────────────────
+  // Modos controlados por la configuración del field:
+  //   upload.active=true        → captura (cámara/galería) → base64 → se envía
+  //                              junto con el formulario. Reutiliza el flujo
+  //                              de `document` (previewCamera / appendFile).
+  //   server_upload.active=true → sube inmediatamente al endpoint resuelto por
+  //                              crudS.appType['file'] (files/file) como
+  //                              multipart/form-data; agrega la relación al
+  //                              FormControl m2m del field.
+  //   búsqueda                 → autocomplete sobre el endpoint resuelto por
+  //                              data_type.type (via crudS.appType), devuelve
+  //                              archivos existentes para agregar como relación.
+  //
+  // allow_camera / allow_gallery: solo true habilita la opción; cualquier otro
+  // valor (false/undefined) la deshabilita.
+  // readonly / disabled los controla el formulario padre (no repetimos aquí).
+  // ═══════════════════════════════════════════════════════════════════════════
 
-  /*removeMedia(i: number) {
-      this.files64.splice(i, 1);
-  }*/
+  /** Resultados del autocomplete por field */
+  public fileSearchResults: { [field: string]: any[] } = {};
+  /** Modelo del autocomplete por field */
+  public fileSearchModel: { [field: string]: any } = {};
+
+  /**
+   * Lista todos los fields type='file'/'files' presentes en el drawForm
+   * (grid libre, card, fieldset y stepper). Se usa para renderizar las
+   * barras de busqueda en el area global de preview de imagenes.
+   */
+  public fileSearchFields = computed<any[]>(() => {
+    const df = this.drawFormSignal();
+    if (!df) return [];
+    const found: any[] = [];
+    const seen = new Set<string>();
+    const isFileType = (t: any) => t === 'file' || t === 'files';
+    const visit = (cfg: any) => {
+      if (!cfg) return;
+      if (isFileType(cfg?.type) && cfg?.field && !seen.has(cfg.field) && !cfg.readonly) {
+        seen.add(cfg.field);
+        found.push(cfg);
+      }
+      // Recorremos contenedores conocidos
+      ['card', 'fieldset', 'fields'].forEach(key => {
+        if (cfg?.[key] && typeof cfg[key] === 'object') {
+          Object.values(cfg[key]).forEach((v: any) => visit(v));
+        }
+      });
+    };
+    if (df.grid) Object.values(df.grid).forEach((v: any) => visit(v));
+    if (df.stepper?.steps) Object.values(df.stepper.steps).forEach((s: any) => {
+      if (s?.fields) Object.values(s.fields).forEach((v: any) => visit(v));
+    });
+    return found;
+  });
+
+  /** true estricto: allow_* solo habilita cuando es === true */
+  private _allowed(flag: any): boolean {
+    return flag === true;
+  }
+
+  /**
+   * Items del p-splitbutton para un fieldConfig type='file'.
+   * Se construyen una sola vez por llamada; el template los bindea por
+   * referencia estable cacheada en `_fileMenuCache` para evitar recálculos.
+   */
+  private _fileMenuCache: { [field: string]: MenuItem[] } = {};
+
+  getFileMenuItems(fieldConfig: any): MenuItem[] {
+    const key = fieldConfig?.field || '';
+    if (this._fileMenuCache[key]) return this._fileMenuCache[key];
+
+    const items: MenuItem[] = [];
+    const up = fieldConfig?.upload;
+    const sv = fieldConfig?.server_upload;
+
+    if (up?.active) {
+      if (this._allowed(up.allow_camera)) {
+        items.push({ label: 'Cámara (formulario)', icon: 'pi pi-camera', command: () => this.previewCamera(fieldConfig.field, fieldConfig) });
+      }
+      if (this._allowed(up.allow_gallery)) {
+        items.push({ label: 'Galería (formulario)', icon: 'pi pi-images', command: () => this.pickFromGalleryBase64(fieldConfig.field, fieldConfig) });
+      }
+    }
+    if (sv?.active) {
+      if (this._allowed(sv.allow_camera)) {
+        items.push({ label: 'Cámara (subida directa)', icon: 'pi pi-cloud-upload', command: () => this.serverUploadCapture(fieldConfig, 'camera') });
+      }
+      if (this._allowed(sv.allow_gallery)) {
+        items.push({ label: 'Galería (subida directa)', icon: 'pi pi-upload', command: () => this.serverUploadCapture(fieldConfig, 'gallery') });
+      }
+    }
+
+    this._fileMenuCache[key] = items;
+    return items;
+  }
+
+  /** Acción del click principal del splitbutton: primera opción habilitada */
+  fileMenuPrimary(fieldConfig: any): void {
+    const items = this.getFileMenuItems(fieldConfig);
+    if (items.length === 0) return;
+    const cmd = items[0].command as any;
+    if (typeof cmd === 'function') cmd();
+  }
+
+  /**
+   * Selecciona imagen de la galería y la deja como base64 en el formulario,
+   * reutilizando appendFile (mismo contrato del tipo 'document').
+   */
+  async pickFromGalleryBase64(fieldName: string, fieldConfig: any): Promise<void> {
+    this.activeFieldCapture = fieldName || null;
+    this.activeFieldConfig = fieldConfig || null;
+    try {
+      const photo = await Camera.getPhoto({
+        quality: fieldConfig?.upload?.quality ?? 60,
+        allowEditing: false,
+        resultType: CameraResultType.DataUrl,
+        source: CameraSource.Photos,
+        width: fieldConfig?.upload?.max_width,
+        height: fieldConfig?.upload?.max_height,
+      });
+      const dataUrl = await this._stripImageMetadata(photo.dataUrl || '');
+      this.appendFile({
+        type: 'image',
+        file_name: 'evidencia.jpg',
+        file: dataUrl,
+        field: fieldName || undefined,
+        fieldConfig: fieldConfig
+      });
+    } catch (error: any) {
+      if (error?.message?.toLowerCase?.().includes('cancel')) return;
+      this.messageS.changeMessage('Error al seleccionar imagen: ' + (error?.message || error));
+    }
+  }
+
+  /**
+   * Captura (cámara/galería) y sube inmediatamente al endpoint files/file
+   * via CRUDService.uploadFile. Agrega la relación al FormControl m2m y
+   * muestra la miniatura en files64Signal.
+   *
+   * Nota: el endpoint files/file recibe una sola imagen por request.
+   */
+  async serverUploadCapture(fieldConfig: any, source: 'camera' | 'gallery'): Promise<void> {
+    try {
+      const sv = fieldConfig?.server_upload || {};
+      const photo = await Camera.getPhoto({
+        quality: sv.quality ?? 60,
+        allowEditing: false,
+        resultType: CameraResultType.DataUrl,
+        source: source === 'camera' ? CameraSource.Camera : CameraSource.Photos,
+        width: sv.max_width,
+        height: sv.max_height,
+      });
+      const dataUrl = await this._stripImageMetadata(photo.dataUrl || '');
+      const blob = this._dataUrlToBlob(dataUrl);
+      const name = sv.name_file_user || 'evidencia.jpg';
+
+      this.crudS.uploadFile({ file: blob, name, appKey: 'file' }).subscribe({
+        next: (resp: any) => {
+          const data = resp?.data;
+          if (!data?.id) {
+            this.messageS.changeMessage('Respuesta de servidor sin id de archivo.');
+            return;
+          }
+          this._pushServerFileToForm(fieldConfig, data);
+        },
+        error: (err: any) => this.messageS.changeMessage('Error al subir archivo al servidor.', err)
+      });
+    } catch (error: any) {
+      if (error?.message?.toLowerCase?.().includes('cancel')) return;
+      this.messageS.changeMessage('Error al subir al servidor: ' + (error?.message || error));
+    }
+  }
+
+  /** DataURL → Blob */
+  private _dataUrlToBlob(dataUrl: string): Blob {
+    const parts = dataUrl.split(',');
+    const meta = parts[0] || '';
+    const b64 = parts[1] || '';
+    const mimeMatch = /data:([^;]+);base64/.exec(meta);
+    const mime = mimeMatch ? mimeMatch[1] : 'application/octet-stream';
+    const bin = atob(b64);
+    const arr = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
+    return new Blob([arr], { type: mime });
+  }
+
+  /**
+   * Agrega la relación retornada por el servidor al FormControl m2m y
+   * empuja una entrada en files64Signal para reutilizar la sección de
+   * miniaturas (nonSignatureFilesSignal).
+   */
+  private _pushServerFileToForm(fieldConfig: any, fileData: any): void {
+    const fg = this.formGroupSignal();
+    const fieldName: string = fieldConfig?.field || 'files';
+    const control = fg?.get(fieldName);
+    const attrs = fileData?.attributes || {};
+    const relation = { id: fileData.id, type: fileData.type || 'file' };
+
+    if (control) {
+      const current = control.value;
+      let next: any[] = Array.isArray(current) ? [...current] : (current ? [current] : []);
+      if (!next.some((r: any) => r?.id === relation.id)) next.push(relation);
+      control.setValue(next);
+      control.markAsDirty();
+    }
+
+    const isImage = /\.(jpe?g|png|gif|webp|bmp)$/i.test(attrs.file || attrs.name || '');
+    const entry = {
+      type: isImage ? 'image' : 'file',
+      file_name: attrs.name || 'archivo',
+      file: attrs.file || '',
+      step: this.currentStepSignal(),
+      field: fieldName,
+      key: fieldConfig?.key,
+      server: true,
+      relation_id: fileData.id
+    };
+    const newFiles = [...this.files64Signal(), entry];
+    this.files64Signal.set(newFiles);
+    this.files64Action.emit(newFiles);
+  }
+
+  /**
+   * Autocomplete de búsqueda — consulta el endpoint resuelto por
+   * data_type.type (via crudS.appType). Mínimo 5 caracteres.
+   */
+  onFileSearchComplete(event: any, fieldConfig: any): void {
+    const q = (event?.query || '').trim();
+    if (q.length < 5) { this.fileSearchResults[fieldConfig.field] = []; return; }
+
+    const dt = this._normalizeDataType(fieldConfig?.data_type);
+    const app = this.crudS.appType[dt?.type!]?.app;
+    const type = this.crudS.appType[dt?.type!]?.type;
+    if (!app || !type) { this.fileSearchResults[fieldConfig.field] = []; return; }
+
+    const filter = `filter[search]=${encodeURIComponent(q)}`;
+    this.crudS.getObject({ app, type, filter, limit: 10 }).subscribe({
+      next: (resp: any) => {
+        const rows = (resp?.data || []).map((d: any) => ({
+          id: d.id,
+          type: d.type || type,
+          name: d?.attributes?.name || '(sin nombre)',
+          // ─── MINIATURA: URL devuelta tal cual. No siempre es imagen
+          //     (puede ser pdf u otro). Si impacta al servidor, comentar
+          //     el img en el template.
+          thumb: d?.attributes?.file || '',
+          raw: d
+        }));
+        this.fileSearchResults[fieldConfig.field] = rows;
+      },
+      error: () => { this.fileSearchResults[fieldConfig.field] = []; }
+    });
+  }
+
+  /** Selección del autocomplete: agrega relación */
+  onFileSearchSelect(event: any, fieldConfig: any): void {
+    const item = event?.value || event;
+    if (!item?.id) return;
+    const fake = item.raw || { id: item.id, type: item.type || 'file', attributes: { name: item.name, file: item.thumb } };
+    this._pushServerFileToForm(fieldConfig, fake);
+    this.fileSearchModel[fieldConfig.field] = null;
+  }
+
+  /** Archivos (no firmas) filtrados al field actual para preview por campo */
+  getFieldFiles(fieldName: string): any[] {
+    return this.nonSignatureFilesSignal().filter((f: any) => f.field === fieldName);
+  }
+
+  /**
+   * Elimina una entrada. Si viene del servidor, remueve la relación del
+   * FormControl m2m; si es base64, delega en removeImage (flujo existente).
+   */
+  removeFileEntry(entry: any): void {
+    if (!entry) return;
+    if (entry.server) {
+      const fg = this.formGroupSignal();
+      const control = fg?.get(entry.field);
+      if (control) {
+        const current = control.value;
+        if (Array.isArray(current)) {
+          const next = current.filter((r: any) => r?.id !== entry.relation_id);
+          control.setValue(next);
+          control.markAsDirty();
+        }
+      }
+      const allFiles = this.files64Signal();
+      const realIndex = allFiles.findIndex((f: any) => f.server && f.relation_id === entry.relation_id);
+      if (realIndex !== -1) {
+        const newFiles = allFiles.filter((_, idx) => idx !== realIndex);
+        this.files64Signal.set(newFiles);
+        this.files64Action.emit(newFiles);
+      }
+      return;
+    }
+    // Para base64: localizamos el índice en nonSignatureFilesSignal y delegamos
+    const nsIdx = this.nonSignatureFilesSignal().indexOf(entry);
+    if (nsIdx !== -1) this.removeImage(nsIdx);
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // FIN BLOQUE: type "file"
+  // ═══════════════════════════════════════════════════════════════════════════
+
 
   onHidePreviousCamera() {
     //cuando se cierra la camara reinicia el indice para que siempre inicie con la 1

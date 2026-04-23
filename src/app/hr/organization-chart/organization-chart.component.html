@@ -1,1 +1,114 @@
-<app-crud-page-shell [crud]="crudPage"></app-crud-page-shell>
+<div style="position: absolute; z-index: 2;">
+  <app-custom-button-crud (deleteAction)="delete()" (editAction)="edit()"
+    (refreshAction)="getAll({ force: true, pos: pos() })" (newAction)="openNew({pos:pos()})"
+    [moreOptions]="moreOptions()" [getMenu]="getMenu()" [openNewMenu]="openNewMenu()" [selected]="selected()"
+    [startMenu]="startMenu()" (startAction)="setStatus($event)" />
+</div>
+
+<div class="table-fit-Custom">
+  <app-custom-table class="table-fit-Custom" [value]="items()" [columns]="selectedColumns()" [selected]="selected()"
+    (selectionAction)="onSelection($event)" (rowDoubleClick)="onRowDoubleClick($event)"
+    [exportDialogVisible]="exportDialogVisible" [field]="fieldExport()"
+    (exportDialogVisibleAction)="onExportDialogVisible($event)" (exportServerAction)="onExportServer($event)"
+    (lazyLoadAction)="onLazyLoad({event:$event})" [rows]="limit()[pos()]" [totalRecords]="totalRecords()[pos()]"
+    [filterDelayTable]="filterDelayTable()" />
+</div>
+
+<app-custom-local-settings [visible]="localSettingsDialogVisible" [field]="fieldConfig()" [formGroup]="configForm"
+  (saveAction)="saveConfig()" (visibleAction)="onLocalSettingsDialogVisible($event)" />
+
+<app-custom-import [visible]="importDialogVisible" (visibleAction)="onImportDialogVisible($event)"
+  (saveAction)="onImportSave($event)" />
+
+<app-custom-actions-selection [visible]="actionsSelectionDialogVisible" (visibleChange)="onVisibleChange($event)" />
+
+<p-dialog [(visible)]="formDialogVisible[$any(typeDefault)]" (onHide)="onHide($any(typeDefault))"
+  (onShow)="onShow($any(typeDefault))" [styleClass]="styleClassDialog()" modal="true"
+  [style]="{'contain': 'layout style paint'}">
+
+  <ng-template #header>
+    <div class="p-dialog-title">
+      <span class="p-dialog-title-text">{{headerDialog()}}</span>
+      <button type="button" class="p-dialog-titlebar-icon p-link" (click)="configDialog()">
+        <i class="pi pi-spin pi-cog p-dialog-icon"></i>
+      </button>
+    </div>
+  </ng-template>
+  <form [formGroup]="form()[$any(typeDefault)]" *ngIf="form()[$any(typeDefault)]">
+    <!-- [value]="tabVisible()"  -->
+    <p-tabs [scrollable]="true" value="0" (valueChange)="onTabChange($event)">
+
+      <p-tablist>
+        <p-tab value="0">General</p-tab>
+        <p-tab value="1">Clasificadores</p-tab>
+        <p-tab value="2">Notas</p-tab>
+        <p-tab value="3">Auditoría</p-tab>
+        <p-tab value="4">Documentos</p-tab>
+        <p-tab value="5">Documentos personales</p-tab>
+      </p-tablist>
+
+      <p-tabpanels>
+
+        <p-tabpanel value="0">
+          <app-custom-draw-form *ngIf="form()[$any(typeDefault)] && drawForm()[typeDefault]"
+            [drawForm]="drawForm()[typeDefault]['general']" [formGroup]="form()[$any(typeDefault)]"
+            [isCreate]="isCreate()" />
+        </p-tabpanel>
+
+        <p-tabpanel header="Clasificadores" value="1">
+          <div formArrayName="classifiers" class="pt-3">
+            <div class="p-fluid grid separator-form-small pl-2"
+              *ngFor="let level of classifierLevelsGen()[$any(pos())];  let i = index">
+              <div class="field col-12 md:col-6">
+                <span class="p-float-label">
+                  <p-select styleClass="height-input-custom"
+                    [options]="classifierTypeByLevel(level.classifier_type + 'p',level.level + 'p', i)" optionValue="id"
+                    optionLabel="name" [formControlName]="funAuxFormClassifiers('formControlName',i)"
+                    (onChange)="loadClassifiers($event, level, i)" placeholder="." [showClear]="true">
+                  </p-select>
+                  <label for="dropdown">{{level.name | slice:0:29}}</label>
+                </span>
+              </div>
+            </div>
+          </div>
+        </p-tabpanel>
+
+        <p-tabpanel value="3">
+          <app-custom-audit [cf]="customField()[typeDefault]" [selected]="selected()" />
+        </p-tabpanel>
+
+
+      </p-tabpanels>
+    </p-tabs>
+
+  </form>
+
+  <ng-template #footer>
+    <div class="p-dialog-footer">
+      <app-custom-button-footer (saveAction)="save({pos: typeDefault, is_file: true})"
+        [config]="configGeneral()[$any(typeDefault)]"
+        (saveNotHideAction)="save({pos: typeDefault, hide:false, is_file: true})"
+        (resetFormAction)="resetFormDialog()" />
+    </div>
+  </ng-template>
+
+</p-dialog>
+
+
+<app-task-module-loader *ngIf="tasksModule()" [tasksModule]="tasksModule()" (closeDialog)="closeTaskModule()">
+</app-task-module-loader>
+
+
+<p-dialog [(visible)]="chart">
+  <p-organization-chart [value]="data" selectionMode="multiple" [(selection)]="selectedNodes" [collapsible]="true">
+    <ng-template let-node pTemplate="person">
+      <div class="flex flex-col">
+        <div class="flex flex-col items-center">
+          <!-- <img [src]="node.data.image" class="mb-4 w-12 h-12" /> -->
+          <div class="font-bold mb-2">{{ node.data.name }}</div>
+          <div>{{ node.data.title }}</div>
+        </div>
+      </div>
+    </ng-template>
+  </p-organization-chart>
+</p-dialog>

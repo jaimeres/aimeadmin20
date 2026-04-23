@@ -1,7 +1,8 @@
-import { computed, signal, inject, OnChanges, SimpleChanges, Injectable, Directive } from '@angular/core';
+import { computed, signal, inject, OnChanges, SimpleChanges, Injectable, Directive, DestroyRef } from '@angular/core';
 import { Location } from '@angular/common';
 import { AbstractControl, FormArray, FormControl, FormGroup, ValidationErrors, ValidatorFn, Validators } from '@angular/forms';
-import { Router } from '@angular/router';
+import { ActivatedRoute, Router } from '@angular/router';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { MenuItem, TreeNode } from 'primeng/api';
 import { CRUDService } from './services/crud.service';
 import {
@@ -21,6 +22,8 @@ export class CRUD extends Vars implements OnChanges  /*implements OnInit*/ {
   // Inyección directa del Router
   protected router = inject(Router);
   private _location = inject(Location);
+  private _route = inject(ActivatedRoute);
+  private _destroyRef = inject(DestroyRef);
 
   /** pos leído de la URL que aún no estaba configurado en this.app al momento del constructor */
   private _pendingUrlPos: string | null = null;
@@ -48,7 +51,7 @@ export class CRUD extends Vars implements OnChanges  /*implements OnInit*/ {
   }
 
   ngOnChanges(changes: SimpleChanges) {
-    this.showComponentLocal('request-detail', changes);
+    this.showComponentLocal((this.typeDefault || this.pos()) as string, changes);
   }
 
   private shouldLoadOnStart(pos: any): boolean {
@@ -193,6 +196,29 @@ export class CRUD extends Vars implements OnChanges  /*implements OnInit*/ {
     //this.getClassifierLevelsGlogal();
     //this.getClassifierGlobal();
     this.searchRemote = undefined;
+
+    // Suscribirse a cambios de queryParams para que al navegar entre ?pos=X
+    // dentro del mismo componente se cambie la posición y recargue datos.
+    // Se usa `skip(1)` para ignorar la emisión inicial (ya resuelta por _pendingUrlPos
+    // o por shouldLoad arriba), y solo reaccionar a navegaciones posteriores.
+    let _firstEmit = true;
+    this._route.queryParams.pipe(takeUntilDestroyed(this._destroyRef)).subscribe(params => {
+      const newPos = params['pos'];
+      if (_firstEmit) {
+        _firstEmit = false;
+        // Si shouldLoad fue false y el pos de la URL difiere del typeDefault,
+        // forzar la carga ahora (el usuario navegó explícitamente a esta URL).
+        if (!shouldLoad && newPos && this.app[newPos] && newPos === pos) {
+          this.getAll({ pos: newPos, node, filter });
+        }
+        return;
+      }
+      // Navegaciones posteriores dentro del mismo componente
+      if (newPos && newPos !== this.pos() && this.app[newPos]) {
+        this.changePos(newPos);
+        this.getAll({ pos: newPos });
+      }
+    });
   }
 
   dialogSizeClass(drawFormData: any): string {
@@ -281,19 +307,20 @@ export class CRUD extends Vars implements OnChanges  /*implements OnInit*/ {
 
     if (this.posBefore != pos) {
 
-      // Actualizar la URL silenciosamente (sin disparar NavigationEnd)
-      // Esto evita que el breadcrumb/menu reaccionen a cambios internos de pestaña
+      // Calcular la URL con el pos actual (se usa tanto para replaceState como para lastVisited)
+      const currentUrl = this._location.path() || this.router.url;
+      const urlWithoutParams = currentUrl.split('?')[0];
+      const newUrl = `${urlWithoutParams}?pos=${pos}`;
+
+      // Actualizar la URL silenciosamente solo cuando no estamos resolviendo un pendingUrlPos
+      // (en ese caso la URL ya tiene el ?pos correcto porque el usuario navegó a ella)
       if (this.router && pos && !this._pendingUrlPos) {
-        // Usar _location.path() porque replaceState no actualiza router.url
-        const currentUrl = this._location.path() || this.router.url;
-        const urlWithoutParams = currentUrl.split('?')[0];
-        const newUrl = `${urlWithoutParams}?pos=${pos}`;
         this._location.replaceState(newUrl);
-
-        // Guardar como último módulo visitado
         try { localStorage.setItem('lastModuleUrl', newUrl); } catch (_) { }
+      }
 
-        // Guardar icono en historial de breadcrumb y notificar
+      // Guardar icono en historial de breadcrumb siempre (incluso al resolver pendingUrlPos)
+      if (this.router && pos) {
         const posKey = pos.replace(/-/g, '_');
         const appTypeObj = (this.crudS.appType as any)[posKey] || (this.crudS.appType as any)[pos];
         if (appTypeObj) {
@@ -329,7 +356,10 @@ export class CRUD extends Vars implements OnChanges  /*implements OnInit*/ {
       // Generar la cadena de filtros a partir de los fields de la posición actual.
       // Se ejecuta siempre que cambie la posición para que getAll2 use los filtros
       // persistentes sin necesidad de consultar el servidor.
-      this.filter = this.crudS.buildFilterString(this.crudS.fieldsForm(pos));
+
+
+      //quitar temporal is_active
+      //this.filter = this.crudS.buildFilterString(this.crudS.fieldsForm(pos));
       console.log('antes de ini Param  de changePos');
 
       this.iniParam();
@@ -1383,8 +1413,13 @@ export class CRUD extends Vars implements OnChanges  /*implements OnInit*/ {
 
     if (pos === null) return cols; // Retornar cols vacío si pos es null
 
+    // Guard: si customField()[pos] aún no está disponible (timing: constructor antes de ngOnInit),
+    // retornar cols vacío para evitar TypeError al acceder a propiedades de undefined
+    if (!this.customField()[pos]) return cols;
+
     // La configuración está directamente en configCols, no en configCols.cols
-    const colsConfig = this.crudS.configCols(pos) || {};
+    const colsConfig = this.crudS.configCols(pos) //|| {};
+
     const safePos = pos ?? 0; // Crear una variable segura para usar como índice
 
     for (const field in jsonFields) {
@@ -3654,6 +3689,8 @@ export class CRUD extends Vars implements OnChanges  /*implements OnInit*/ {
     this.tasksModule.set(options);
   }
 
+
+
   closeTaskModule() {
     this.tasksModule.set({});
   }
@@ -3683,6 +3720,7 @@ export class CRUD extends Vars implements OnChanges  /*implements OnInit*/ {
         }
       }
     }
+
     return task;
   }
 
@@ -3709,6 +3747,8 @@ export class CRUD extends Vars implements OnChanges  /*implements OnInit*/ {
         // dejo shared porque task siempre se consulta con todos los campos y se comparte  en todos los lugares
         (this.sharedS as any).data['task'] = task;
         task = this.taskModule(task, module, ids_task);
+        console.log('*************', task);
+
         this.startMenu.update((current) => [...current, { separator: true }, ...task]);
       },
       error: (err: any) => {

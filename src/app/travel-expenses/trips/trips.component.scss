@@ -1,0 +1,236 @@
+.trips-page {
+  padding: 1.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.trips-hero {
+  border-radius: 16px;
+  padding: 2rem 2.25rem;
+  background: linear-gradient(135deg, #0f172a 0%, #1e3a8a 55%, #0ea5e9 100%);
+  color: #fff;
+
+  .hero-eyebrow {
+    text-transform: uppercase;
+    letter-spacing: .12em;
+    font-size: .75rem;
+    opacity: .8;
+    margin: 0 0 .35rem;
+  }
+
+  h1 {
+    font-size: clamp(1.6rem, 3vw, 2.4rem);
+    margin: 0 0 .35rem;
+    font-weight: 700;
+  }
+
+  .hero-sub {
+    margin: 0;
+    max-width: 560px;
+    opacity: .9;
+  }
+}
+
+.trip-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .5rem;
+}
+
+.trip-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: .4rem;
+  padding: .55rem .95rem;
+  border-radius: 999px;
+  background: var(--surface-100, #f1f5f9);
+  border: 1px solid var(--surface-200, #e2e8f0);
+  color: var(--text-color, #0f172a);
+  cursor: pointer;
+  font-size: .9rem;
+  transition: background .15s, color .15s, border-color .15s;
+
+  i {
+    font-size: .95rem;
+  }
+
+  &:hover {
+    background: var(--surface-200, #e2e8f0);
+  }
+
+  &.active {
+    background: #0ea5e9;
+    color: #fff;
+    border-color: #0ea5e9;
+  }
+}
+
+.search-card {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(160px, 1fr));
+  gap: .75rem;
+  align-items: end;
+  padding: 1rem;
+  background: var(--surface-0, #fff);
+  border-radius: 14px;
+  box-shadow: 0 4px 18px rgba(15, 23, 42, 0.06);
+  border: 1px solid var(--surface-200, #e2e8f0);
+
+  .field {
+    display: flex;
+    flex-direction: column;
+    gap: .3rem;
+
+    label {
+      font-size: .75rem;
+      text-transform: uppercase;
+      letter-spacing: .08em;
+      color: var(--text-color-secondary, #64748b);
+    }
+
+    &.small {
+      max-width: 140px;
+    }
+
+    &.wide {
+      grid-column: span 2;
+    }
+  }
+
+  .search-btn {
+    height: 44px;
+    align-self: end;
+  }
+}
+
+.results {
+  display: flex;
+  flex-direction: column;
+  gap: .75rem;
+}
+
+.results-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+
+  h2 {
+    margin: 0;
+    font-size: 1.1rem;
+  }
+
+  .results-count {
+    color: var(--text-color-secondary, #64748b);
+    font-size: .85rem;
+  }
+}
+
+.results-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 1rem;
+}
+
+.result-card {
+  display: flex;
+  flex-direction: column;
+  background: var(--surface-0, #fff);
+  border: 1px solid var(--surface-200, #e2e8f0);
+  border-radius: 14px;
+  overflow: hidden;
+  transition: transform .15s, box-shadow .15s;
+
+  &:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 10px 24px rgba(15, 23, 42, 0.08);
+  }
+
+  .result-image {
+    font-size: 3rem;
+    text-align: center;
+    padding: 1.25rem;
+    background: var(--surface-100, #f1f5f9);
+  }
+
+  .result-body {
+    padding: .9rem 1rem .25rem;
+    display: flex;
+    flex-direction: column;
+    gap: .25rem;
+
+    .result-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: .5rem;
+
+      h3 {
+        margin: 0;
+        font-size: 1rem;
+      }
+    }
+
+    .result-sub {
+      margin: 0;
+      color: var(--text-color-secondary, #64748b);
+      font-size: .85rem;
+    }
+
+    .result-meta {
+      margin: 0;
+      color: var(--text-color-secondary, #64748b);
+      font-size: .8rem;
+    }
+
+    .result-rating {
+      margin-top: .25rem;
+    }
+  }
+
+  .result-foot {
+    padding: .75rem 1rem 1rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+
+    .price {
+      display: flex;
+      align-items: baseline;
+      gap: .25rem;
+
+      .amount {
+        font-weight: 700;
+        font-size: 1.15rem;
+      }
+
+      .currency {
+        font-size: .75rem;
+        color: var(--text-color-secondary, #64748b);
+      }
+    }
+  }
+}
+
+.empty {
+  grid-column: 1 / -1;
+  text-align: center;
+  padding: 2rem;
+  color: var(--text-color-secondary, #64748b);
+
+  i {
+    font-size: 1.5rem;
+    display: block;
+    margin-bottom: .5rem;
+  }
+}
+
+@media (max-width: 900px) {
+  .search-card {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .search-card .field.wide {
+    grid-column: span 2;
+  }
+}

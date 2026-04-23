@@ -1,0 +1,164 @@
+<section class="trips-page">
+
+  <header class="trips-hero">
+    <div class="hero-copy">
+      <p class="hero-eyebrow">Viajes corporativos</p>
+      <h1>¿A dónde vamos hoy?</h1>
+      <p class="hero-sub">Busca hoteles, vuelos, transporte, restaurantes, comida y experiencias locales en un solo
+        lugar.</p>
+    </div>
+  </header>
+
+  <nav class="trip-pills">
+    <button *ngFor="let c of categories" type="button" class="trip-pill" [class.active]="active() === c.value"
+      (click)="setActive($any(c.value))">
+      <i [class]="c.icon"></i>
+      <span>{{ c.label }}</span>
+    </button>
+  </nav>
+
+  <form class="search-card" (submit)="onSearch(); $event.preventDefault()">
+
+    <ng-container [ngSwitch]="active()">
+
+      <ng-container *ngSwitchCase="'hotels'">
+        <div class="field">
+          <label>Destino</label>
+          <input pInputText [(ngModel)]="destination" name="destination" placeholder="Ciudad, hotel o zona" />
+        </div>
+        <div class="field">
+          <label>Entrada</label>
+          <p-datepicker [(ngModel)]="dateFrom" name="dateFrom" dateFormat="dd/mm/yy" />
+        </div>
+        <div class="field">
+          <label>Salida</label>
+          <p-datepicker [(ngModel)]="dateTo" name="dateTo" dateFormat="dd/mm/yy" />
+        </div>
+        <div class="field small">
+          <label>Huéspedes</label>
+          <p-inputnumber [(ngModel)]="guests" name="guests" [min]="1" [max]="10" />
+        </div>
+      </ng-container>
+
+      <ng-container *ngSwitchCase="'flights'">
+        <div class="field">
+          <label>Origen</label>
+          <input pInputText [(ngModel)]="origin" name="origin" placeholder="CDMX (MEX)" />
+        </div>
+        <div class="field">
+          <label>Destino</label>
+          <input pInputText [(ngModel)]="destination" name="destination" placeholder="Cancún (CUN)" />
+        </div>
+        <div class="field">
+          <label>Ida</label>
+          <p-datepicker [(ngModel)]="dateFrom" name="dateFrom" dateFormat="dd/mm/yy" />
+        </div>
+        <div class="field">
+          <label>Regreso</label>
+          <p-datepicker [(ngModel)]="dateTo" name="dateTo" dateFormat="dd/mm/yy" />
+        </div>
+        <div class="field wide">
+          <label>Clase</label>
+          <p-selectButton [options]="classOptions" [(ngModel)]="tripClass" name="tripClass" optionLabel="label"
+            optionValue="value" />
+        </div>
+      </ng-container>
+
+      <ng-container *ngSwitchCase="'transport'">
+        <div class="field">
+          <label>Recoger en</label>
+          <input pInputText [(ngModel)]="origin" name="origin" placeholder="Av. Reforma 222" />
+        </div>
+        <div class="field">
+          <label>Destino</label>
+          <input pInputText [(ngModel)]="destination" name="destination" placeholder="Aeropuerto MEX T2" />
+        </div>
+        <div class="field small">
+          <label>Pasajeros</label>
+          <p-inputnumber [(ngModel)]="guests" name="guests" [min]="1" [max]="8" />
+        </div>
+      </ng-container>
+
+      <ng-container *ngSwitchCase="'restaurants'">
+        <div class="field">
+          <label>Ciudad o zona</label>
+          <input pInputText [(ngModel)]="destination" name="destination" placeholder="Polanco, CDMX" />
+        </div>
+        <div class="field">
+          <label>Buscar</label>
+          <input pInputText [(ngModel)]="query" name="query" placeholder="Cocina, nombre, tipo" />
+        </div>
+        <div class="field small">
+          <label>Comensales</label>
+          <p-inputnumber [(ngModel)]="guests" name="guests" [min]="1" [max]="12" />
+        </div>
+      </ng-container>
+
+      <ng-container *ngSwitchCase="'food'">
+        <div class="field">
+          <label>Entregar en</label>
+          <input pInputText [(ngModel)]="destination" name="destination" placeholder="Tu dirección" />
+        </div>
+        <div class="field">
+          <label>Buscar</label>
+          <input pInputText [(ngModel)]="query" name="query" placeholder="Tacos, sushi, pizza..." />
+        </div>
+      </ng-container>
+
+      <ng-container *ngSwitchCase="'local'">
+        <div class="field">
+          <label>Ciudad</label>
+          <input pInputText [(ngModel)]="destination" name="destination" placeholder="CDMX, Guadalajara..." />
+        </div>
+        <div class="field">
+          <label>Buscar</label>
+          <input pInputText [(ngModel)]="query" name="query" placeholder="Tour, spa, experiencia" />
+        </div>
+        <div class="field">
+          <label>Fecha</label>
+          <p-datepicker [(ngModel)]="dateFrom" name="dateFrom" dateFormat="dd/mm/yy" />
+        </div>
+      </ng-container>
+
+    </ng-container>
+
+    <button pButton type="submit" class="search-btn" icon="pi pi-search" label="Buscar"></button>
+  </form>
+
+  <section class="results">
+    <div class="results-head">
+      <h2>Resultados</h2>
+      <span class="results-count">{{ results.length }} opciones</span>
+    </div>
+
+    <div class="results-grid">
+      <article class="result-card" *ngFor="let item of results">
+        <div class="result-image">{{ item.image }}</div>
+        <div class="result-body">
+          <div class="result-head">
+            <h3>{{ item.title }}</h3>
+            <p-tag *ngIf="item.tag" [value]="item.tag" severity="success"></p-tag>
+          </div>
+          <p class="result-sub">{{ item.subtitle }}</p>
+          <p class="result-meta">{{ item.meta }}</p>
+          <div class="result-rating">
+            <p-rating [(ngModel)]="item.rating" [readonly]="true" />
+          </div>
+        </div>
+        <div class="result-foot">
+          <div class="price">
+            <span class="amount">${{ item.price | number }}</span>
+            <span class="currency">{{ item.currency }}</span>
+          </div>
+          <button pButton type="button" label="Reservar" (click)="onBook(item)"></button>
+        </div>
+      </article>
+
+      <div class="empty" *ngIf="!results.length">
+        <i class="pi pi-search"></i>
+        <p>No encontramos resultados. Ajusta tu búsqueda.</p>
+      </div>
+    </div>
+  </section>
+
+</section>

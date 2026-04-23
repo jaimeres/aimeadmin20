@@ -42,7 +42,6 @@ export class RequestComponent extends CRUD implements OnInit {
 
   public products = signal<any[]>([]);
   public stock = signal<any[]>([]);
-  private search_name = signal<string>('');
 
   constructor(crudS: PurchaseService,) {
     super(crudS, 'request-detail');
@@ -65,71 +64,6 @@ export class RequestComponent extends CRUD implements OnInit {
     }
 
 
-    /*this.relationships[this.typeDefault] = [
-      { id: 'subsidiary', field: 'request_data_subsidiary', type: 'subsidiary' },
-    ]*/
-
-    /*this.includeFieldsForm[this.typeDefault] = [
-      { field: 'request_data_code', },
-      { field: 'request_data_description', },
-      { field: 'request_data_folio', },
-      { field: 'request_data_request_type', required: true },
-      { field: 'group', },
-      { field: 'company', },
-      { field: 'request_data_subsidiary', required: true, },//aqui voy tengo que poner un objecto y que el includeFieldsForm lo AutoComplete, ahora solo acepta 
-      { field: 'name', default: '', required: true, disabled: true, },
-      { field: 'committed_budget', default: 0, disabled: true },
-      { field: 'executed_budget', default: 0, disabled: true },
-      { field: 'request_data_date', },
-      { field: 'request_data_delivery_date', },
-      { field: 'request_data_maximum_delivery_date', },
-      { field: 'request_data_validate_maximum_delivery_date', default: false, },
-      { field: 'search_name', required: true }, //para que tenga texrto cuando buscado cuando se solicita
-      { field: 'requested', default: 1, required: true }, // por defecrto lo establece en 1 la catidad solicitada
-      { field: 'request', required: false, },
-      { field: 'price', default: 0, disabled: true },
-      { field: 'currency', disabled: true },
-      { field: 'is_manual', },
-
-      { field: 'Componente', },
-      { field: 'Subcomponente', },
-      { field: 'Sintoma de falla', },
-      { field: 'Tipo de gasto', },
-    ];*/
-
-    this.startMenu.set([{
-      label: 'Existencias (F5)',
-      command: () => this.actionsRequest('E')
-    },
-    {
-      label: 'Pedido a proveedor (F6)',
-      command: () => this.actionsRequest('PP')
-    }, {
-      label: 'Subastar/Cotizar (F7)',
-      command: () => this.actionsRequest('SC')
-    }, {
-      label: 'Remisión (F8)',
-      command: () => this.actionsRequest('R')
-    }, {
-      label: 'Salida de almacén (F9)',
-      command: () => this.actionsRequest('SA')
-    }, {
-      label: 'Autorizar (F10)',
-      command: () => this.actionsRequest('A')
-    }, {
-      label: 'Duplicar (F11)',
-      command: () => this.actionsRequest('D')
-    }, {
-      label: 'Cancelar y rechazar (F12)',
-      command: () => this.actionsRequest('C')
-    }, {
-      label: 'Programar',
-      command: () => this.actionsRequest('P')
-    }, {
-      label: 'Traspaso',
-      command: () => this.actionsRequest('T')
-    },
-    ]);
 
     //////////////////////////////////////////////////////////////////////
     /*const option_label = this.searchFieldDrawForm('search_name', 'request-detail');
@@ -137,7 +71,7 @@ export class RequestComponent extends CRUD implements OnInit {
     this.initCRUD();
   }
 
-  ppDialogVisible = false;
+  /*ppDialogVisible = false;
   scDialogVisible = false;
   rDialogVisible = false;
   saDialogVisible = false;
@@ -147,40 +81,10 @@ export class RequestComponent extends CRUD implements OnInit {
   tDialogVisible = false;
   eDialogVisible = false;
 
-  actionsRequest(status: string) {
-    switch (status) {
-      case 'PP':
-        this.ppDialogVisible = true;
-        break;
-      case 'SC':
-        this.scDialogVisible = true;
-        break;
-      case 'R':
-        this.rDialogVisible = true;
-        break;
-      case 'SA':
-        this.saDialogVisible = true;
-        break;
-      case 'A':
-        this.aDialogVisible = true;
-        break;
-      case 'D':
-        //logica para duplicar
-        break;
-      case 'P':
-        this.pDialogVisible = true;
-        break;
-      case 'C':
-        this.cDialogVisible = true;
-        break;
-      case 'E':
-        this.eDialogVisible = true;
-        break;
-      case 'T':
-        this.tDialogVisible = true;
-        break;
-    }
-  }
+  // Temporal: menu clic derecho + dialogo de confirmacion visual.*/
+  tempActionDialogVisible = false;
+  tempActionLabel = '';
+
 
   /**
    * Sobreescribe el método onHide para poder avisar al padre que se cerro el dialogo
@@ -216,225 +120,9 @@ export class RequestComponent extends CRUD implements OnInit {
     //desfragmentar this.draw() para foear la actuaklizacion de la vista
     const updatedDraw = { ...this.drawForm() };
     this.drawForm.set(updatedDraw);
-
-    /*this.replaceValDrawForm(
-      [['', '', true]],
-      [['requested', 'autofocus'],],
-      this.drawForm()['request-detail']['general']['grid']);*/
   }
 
 
-  override onChangeDropdown($event: any) {
-
-    /*console.log('onChangeDropdown', $event);
-
-    const field = $event.field;
-    const id = $event.event.value;
-    const object = $event.event.object;
-
-    if (object && object.cascading) {
-      const { field, group, filter, searchLocale } = object.cascading;
-      const options = object.options || [];
-      console.log('Cascading:', field, group, filter, searchLocale);
-
-      if (searchLocale) {
-        //VA DENTRO DE UNFFOR
-        console.log(this.searchByValueObject(filter, options, group));
-        // this.currentForm()?.get(field)?.setValue();
-      }
-    }*/
-
-    /*// Mapa de relaciones entre los campos
-    const fieldMap: { [key: string]: string[] } = {
-      group: ['company', 'subsidiary', 'warehouse', 'section', 'rack', 'slot'],
-      company: ['subsidiary', 'warehouse', 'section', 'rack', 'slot'],
-      subsidiary: ['warehouse', 'section', 'rack', 'slot'],
-      warehouse: ['section', 'rack', 'slot'],
-      section: ['rack', 'slot'],
-      rack: ['slot'],
-    };
-
-    if (!fieldMap[field]) {
-      console.warn(`No hay campos dependientes para el campo: ${field}`);
-      return;
-    }
-
-    const dependentFields = fieldMap[field] || [];
-    const app_simple = dependentFields[0] || '';
-
-    // Limpiar los valores de los campos dependientes
-    dependentFields.forEach((dependentField) => {
-      this.currentForm()?.get(dependentField)?.setValue(null);
-    });
-
-    if (!id) {
-      if (this.sharedS[app_simple]) {
-        this.currentForm()?.get(app_simple)?.setValue(this.sharedS[app_simple]);
-        console.log('if', this.sharedS[app_simple]);
-        return;
-      }
-    } else {
-      if (this.sharedS[app_simple]) {
-        console.log('else', this.searchByValueObject(id, this.sharedS[app_simple], field));
-        return;
-      }
-    }
-
-    const app = `companies/${app_simple}`;
-    const type = $event.field;
-    const filter = `filter[${field}]=${id}`;
-
-    this.crudS.getObject({ app, type, filter }).subscribe({
-      next: (res: any) => {
-        this.sharedS[field] = this.generalS.DJAtoObject({ respDJA: res });
-        this.currentForm()?.get(app_simple)?.setValue(this.sharedS[app_simple]);
-        console.log('noooo', this.sharedS[field]);
-      },
-      error: (err: any) => {
-        console.log(err);
-      },
-    });*/
-  }
-
-  onnew_iconDropdown($event: any) {
-    console.log($event);
-  }
-
-  onreload_iconDropdown($event: any) {
-    console.log($event);
-  }
-
-  onclosable_iconDropdown($event: any) {
-    const draw = this.drawForm()['request-detail'];
-
-    this.searchFieldDrawForm($event, 'request-detail', true);
-
-
-
-    /*for (const tab in draw) {
-      if (!draw.hasOwnProperty(tab) || tab === 'dialog') continue;
-
-      const grids = draw[tab];
-
-      for (const grid in grids) {
-        if (!grids.hasOwnProperty(grid)) continue;
-
-        const element = grids[grid];
-
-        if (grid === 'grid' || grid === 'nested') {
-          const elementArray = Object.values(element);
-          const general = this.searchByValueObject($event, elementArray, 'field');
-
-          //Eliminar si lo encuentra directamente
-          if (general[1] >= 0) {
-            element.splice(general[1], 1);
-            break;
-          } else {
-            // Si no lo encuentra, busca dentro de 'card'
-            for (const key in element) {
-              if (!element.hasOwnProperty(key)) continue;
-
-              const card = this.searchByKeyObject('card', element[key]);
-              if (card) {
-                const cardArray = Object.values(card);
-                const field = this.searchByValueObject($event, cardArray, 'field');
-
-                //Eliminar del card si se encuentra
-                if (field[1] >= 0) {
-                  // Obtener la clave que corresponde al array para poder hacer splice
-                  const cardKey = Object.keys(card)[field[1]];
-                  if (cardKey) {
-                    delete card[cardKey]; // También puedes usar `splice` si `card` es array
-                    break;
-                  }
-                }
-              }
-            }
-          }
-        }
-      }
-    }*/
-  }
-
-  override onChangeToggle($event: any) {
-
-    const ch = $event.event.checked;
-    const field = $event.field;
-    if (field === 'is_manual') {
-
-      //limiar base_product, poprque el posible que no se limpie en requested
-      const form = this.currentForm()
-      form?.get('base_product')?.setValue(null);
-
-      //muestra/oculta el name y el buscador 
-      this.replaceValDrawForm(
-        [['', '', !ch], ['', '', ch]], [['name', 'hide'], ['search_name', 'hide']],
-        this.drawForm()['request-detail']['general']['grid']);
-
-      //deshabilita/habilita los campos manuales del formulario
-      if (ch) {
-        form?.get('price')?.enable();
-        form?.get('currency')?.enable();
-        form?.get('name')?.enable();
-        //form?.get('search_name')?.disable();
-      } else {
-        form?.get('price')?.disable();
-        form?.get('currency')?.disable();
-        form?.get('name')?.disable();
-        //form?.get('search_name')?.enable();
-      }
-    }
-  }
-
-  override onKeydownEnter($event: any) {
-    console.log('onKeydownEnterText', $event);
-
-    const value = $event.event.target.value.trim();
-    const field = $event.field;
-    if (field === 'code') {
-      if (value.length > 0) {
-        this.crudS.getObject({
-          app: 'products/product',
-          type: 'products',
-          filter: `filter[base_product.code.iexact]=${value}`,
-          include: 'base_product',
-        }).subscribe({
-          next: (res: any) => {
-
-            const temp = this.generalS.DJAtoObject({ respDJA: res });
-            if (temp.length == 0) {
-              this.messageS.changeMessage(`Artículo no encontrado.`);
-              return;
-            }
-
-            this.currentForm()?.get('product')?.setValue(temp[0].id);
-            //°°°POR EL MOMENTO ES EL PRIMER ELEMENTO PERO DESPUES DEBE RESIOLVERSE COMO LIDIar cuando se retorna mas de uno
-            //para que le asignaba dicaminacmente a search_name del fomr el valor que respondia el servidor (temp[0][sName])
-            const sName = this.search_name();  // Cadena dinámica
-            const option_label: any = {};
-            // Asigna el valor de manera dinámica
-            option_label[sName] = temp[0][sName];
-            this.currentForm()?.get('search_name')?.setValue(option_label);
-
-            //option_label
-            this.replaceValDrawForm(
-              [['', '', true]],
-              [['requested', 'autofocus'],],
-              this.drawForm()['request-detail']['general']['grid']);
-
-            //desfragmentar this.draw() para foear la actuaklizacion de la vista
-            const updatedDraw = { ...this.drawForm() };
-            this.drawForm.set(updatedDraw);
-          },
-          error: (err: any) => {
-            this.messageS.changeMessage(`Hay un error al cargar el producto.`, err, this.customField()['request-detail']);
-          }
-
-        })
-      }
-    }
-
-  }
 
   public columnsExist: any[] = [
     { field: 'code', header: 'Código', maxlength: 40, type: 'text' },
@@ -444,326 +132,35 @@ export class RequestComponent extends CRUD implements OnInit {
     { field: 'discard_proof', header: 'Desecho' },
   ];
 
-  /*override onKeydownEnterNumber($event: any) {
-    const value = $event.event.target.value.trim();
-    console.log(value);
-
-    const pos = 'request-detail';
-    if (this.formErrors(pos, false)) return;
-    this.validateRelationships(pos);
-
-    const form = this.currentForm();
-
-    const formData = form.value;
-    const include = this.include;
-    const filter = this.filter;
-    this.showBlocked();
-
-    this.crudS.saveObject({ formData, include, filter }).subscribe({
-      next: (resp: any) => {
-        const temp = [...this.products()];
-        const r = this.DJAtoObject({ resp });
-        r['editing'] = true;
-
-        temp.unshift(r);
-        this.products.set(temp);
-        form?.get('request')?.setValue(r?.request);
-        form?.get('code')?.setValue('');
-        //form?.get('request_data_code')?.setValue;
-        form?.get('search_name')?.setValue(null);
-        form?.get('name')?.setValue('');
-        form?.get('requested')?.setValue(1);
-        this.replaceValDrawForm(
-          [['', '', false], ['', '', true]],
-          [['requested', 'autofocus'], ['code', 'autofocus'],],
-          this.drawForm()['request-detail']['general']['grid']);
-
-        this.files = [];
-        this.files64 = [];
-        this.showBlocked(false);
-      },
-      error: e => {
-        this.messageS.changeMessage(`No fue posible crear ${this.singularIndefiniteArticle[pos] ||
-          this.singularIndefiniteArticle[0]}.`, e, this.customField()[pos]);
-        this.showBlocked(false);
-      }
-    });
-
-  }*/
 
   cancelRequestDetail() {
     console.log('cancelRequestDetail');
 
   }
 
-  // ...existing code...
 
-
-
-  private getCanvasPosition(event: MouseEvent | TouchEvent): { x: number, y: number } {
-    const rect = this.canvasRef.nativeElement.getBoundingClientRect();
-    let clientX = 0, clientY = 0;
-
-    if (event instanceof MouseEvent) {
-      clientX = event.clientX;
-      clientY = event.clientY;
-    } else {
-      clientX = event.touches[0].clientX;
-      clientY = event.touches[0].clientY;
-    }
-
-    return {
-      x: clientX - rect.left,
-      y: clientY - rect.top
-    };
+  private openTempDialogFor(status: string, label: string) {
+    this.tempActionLabel = label;
+    this.tempActionDialogVisible = true;
   }
 
-  startDrawing(event: MouseEvent | TouchEvent) {
-    this.isDrawing = true;
-    const { x, y } = this.getCanvasPosition(event);
-    this.ctx.beginPath();
-    this.ctx.moveTo(x, y);
-  }
 
-  draw(event: MouseEvent | TouchEvent) {
-    if (!this.isDrawing) return;
-    event.preventDefault();
-    const { x, y } = this.getCanvasPosition(event);
-    this.ctx.lineTo(x, y);
-    this.ctx.stroke();
-  }
+  //temporal
+  override onSelection(event: any[]) {
 
-  stopDrawing() {
-    this.isDrawing = false;
-  }
+    super.onSelection(event);
+    console.log(this.startMenu());
 
-  clearCanvas() {
-    const canvas = this.canvasRef.nativeElement;
-    this.ctx.clearRect(0, 0, canvas.width, canvas.height);
-  }
-
-  guardarFirma() {
-    const dataUrl = this.canvasRef.nativeElement.toDataURL('image/png');
-    console.log('Firma en base64:', dataUrl);
-    // Aquí puedes enviarlo al backend si lo deseas
-  }
-
-  initCanvas() {
-    if (!this.canvasRef) return;
-
-    const canvas = this.canvasRef.nativeElement;
-    this.ctx = canvas.getContext('2d')!;
-    this.ctx.strokeStyle = '#000';
-    this.ctx.lineWidth = 2;
-    this.ctx.lineCap = 'round';
-    this.ctx.clearRect(0, 0, canvas.width, canvas.height);
+    this.startMenu().push(
+      { separator: true },
+      { label: 'Pedido a proveedor', command: () => this.openTempDialogFor('P', 'Pedido a proveedor') },
+      { label: 'Salida de almacén', command: () => this.openTempDialogFor('SA', 'Salida de almacén') },
+      { label: 'Subastar', command: () => this.openTempDialogFor('SC', 'Subastar') },
+      { label: 'Rechazar', command: () => this.openTempDialogFor('R', 'Rechazar') },
+      { label: 'Cancelar', command: () => this.openTempDialogFor('C', 'Cancelar') },
+      { label: 'Duplicar', command: () => this.openTempDialogFor('D', 'Duplicar') },
+      { label: 'Enlazar', command: () => this.openTempDialogFor('E', 'Enlazar') },
+    );
   }
 
 }
-
-
-
-/**
- schema_base = {
-    "$schema": "https://json-schema.org/draft/2020-12/schema",
-    "type": "object",
-    # 1) Solo se permiten claves fijas declaradas en 'properties'
-    #    o claves dinámicas con prefijos permitidos (patternProperties).
-    "additionalProperties": False,
-
-    # 2) ==== AQUI AGREGA TUS CAMPOS FIJOS (uno por uno) ====
-    #    Ejemplo al agregar: "id": {"$ref": "#/$defs/field_node"}
-    #    Si un fijo necesita reglas propias, puedes hacer:
-    #    "name": {"allOf": [{"$ref": "#/$defs/field_node"}, {"$ref": "#/$defs/fixed_fields/name"}]}
-    "properties": {
-        # -- agrega aquí tus campos fijos --
-        # "id": {"$ref": "#/$defs/field_node"},
-        # "name": {"allOf": [{"$ref": "#/$defs/field_node"}, {"$ref": "#/$defs/fixed_fields/name"}]},
-    },
-
-    # 3) ==== TODOS los campos fijos son obligatorios ====
-    "required": [
-        # -- enumera aquí las claves fijas que agregues arriba --
-        # "id", "name"
-    ],
-
-    # 4) ==== CLAVES DINÁMICAS PERMITIDAS POR PREFIJO ====
-    #    Cada clave que comience con estos prefijos puede ser:
-    #      - un OBJETO CAMPO (field_node), o
-    #      - un DICCIONARIO DE CAMPOS (field_dict) con sub-claves (cada una un field_node).
-    "patternProperties": {
-        r"^(form_fields_data_|child_form_fields_data_|parent_form_data)": {
-            "anyOf": [
-                {"$ref": "#/$defs/field_node"},
-                {"$ref": "#/$defs/field_dict"}
-            ]
-        }
-
-        # ==== PARA AÑADIR MÁS PREFIJOS, DUPLICA EL BLOQUE DE ARRIBA ====
-        # r"^(otro_prefijo_)": {
-        #     "anyOf": [
-        #         {"$ref": "#/$defs/field_node"},
-        #         {"$ref": "#/$defs/field_dict"}
-        #     ]
-        # },
-    },
-
-    "$defs": {
-        # 5) ==== CONTENEDOR DE CAMPOS DINÁMICOS ====
-        #     Objeto cuyas propiedades (cualquier nombre) son campos (field_node).
-        "field_dict": {
-            "type": "object",
-            # El contenedor permite cualquiera de sus claves, pero
-            # cada valor debe validar como 'field_node'.
-            "additionalProperties": {"$ref": "#/$defs/field_node"}
-        },
-
-        # 6) ==== CASCARÓN DE UN CAMPO ====
-        #     NO imponemos reglas finas: solo 'type' y el switch por tipo.
-        #     Dentro del CAMPO: no se permiten propiedades no declaradas,
-        #     por lo que las irás declarando en los defs por tipo o por campo fijo.
-        "field_node": {
-            "type": "object",
-            "additionalProperties": False,
-
-            # Propiedades mínimas comunes (solo 'type' para activar el switch).
-            "properties": {
-                "type": {
-                    "type": "string",
-                    "enum": [
-                        "input-text",
-                        "select-button",
-                        "dropdown",
-                        "tree-select",
-                        "input-number",
-                        "auto-complete",
-                        "toggle-button",
-                        "json",
-                        "textarea",
-                        "signature",
-                        "table",
-                        "date",
-                        "time",
-                        "multi-select"
-                    ]
-                }
-            },
-            "required": ["type"],
-
-            # Switch por tipo: aquí no definimos nada aún,
-            # solo delegamos a los esquemas que TÚ llenarás por tipo.
-            "allOf": [
-                {"$ref": "#/$defs/type_switch"}
-            ]
-        },
-
-        # 7) ==== SWITCH POR TIPO (rellena los 'then' con tus defs por tipo) ====
-        "type_switch": {
-            "oneOf": [
-                {
-                    "if": {"properties": {"type": {"const": "input-text"}}, "required": ["type"]},
-                    "then": {"$ref": "#/$defs/types/input-text"}
-                },
-                {
-                    "if": {"properties": {"type": {"const": "select-button"}}, "required": ["type"]},
-                    "then": {"$ref": "#/$defs/types/select-button"}
-                },
-                {
-                    "if": {"properties": {"type": {"const": "dropdown"}}, "required": ["type"]},
-                    "then": {"$ref": "#/$defs/types/dropdown"}
-                },
-                {
-                    "if": {"properties": {"type": {"const": "tree-select"}}, "required": ["type"]},
-                    "then": {"$ref": "#/$defs/types/tree-select"}
-                },
-                {
-                    "if": {"properties": {"type": {"const": "input-number"}}, "required": ["type"]},
-                    "then": {"$ref": "#/$defs/types/input-number"}
-                },
-                {
-                    "if": {"properties": {"type": {"const": "auto-complete"}}, "required": ["type"]},
-                    "then": {"$ref": "#/$defs/types/auto-complete"}
-                },
-                {
-                    "if": {"properties": {"type": {"const": "toggle-button"}}, "required": ["type"]},
-                    "then": {"$ref": "#/$defs/types/toggle-button"}
-                },
-                {
-                    "if": {"properties": {"type": {"const": "json"}}, "required": ["type"]},
-                    "then": {"$ref": "#/$defs/types/json"}
-                },
-                {
-                    "if": {"properties": {"type": {"const": "textarea"}}, "required": ["type"]},
-                    "then": {"$ref": "#/$defs/types/textarea"}
-                },
-                {
-                    "if": {"properties": {"type": {"const": "signature"}}, "required": ["type"]},
-                    "then": {"$ref": "#/$defs/types/signature"}
-                },
-                {
-                    "if": {"properties": {"type": {"const": "table"}}, "required": ["type"]},
-                    "then": {"$ref": "#/$defs/types/table"}
-                },
-                {
-                    "if": {"properties": {"type": {"const": "date"}}, "required": ["type"]},
-                    "then": {"$ref": "#/$defs/types/date"}
-                },
-                {
-                    "if": {"properties": {"type": {"const": "time"}}, "required": ["type"]},
-                    "then": {"$ref": "#/$defs/types/time"}
-                },
-                {
-                    "if": {"properties": {"type": {"const": "multi-select"}}, "required": ["type"]},
-                    "then": {"$ref": "#/$defs/types/multi-select"}
-                }
-            ]
-        },
-
-        # 8) ==== DEFINICIONES POR TIPO (VACÍAS PARA QUE LAS LLENES) ====
-        #     En cada uno, define:
-        #       - "properties": {...}  (las propiedades válidas de ese tipo)
-        #       - "required":  [...]   (las obligatorias)
-        #       - "additionalProperties": false  (para bloquear extras del campo)
-        "types": {
-            "input-text": {
-                "type": "object",
-                "additionalProperties": False,
-                "properties": {
-                    # <-- aquí props del campo tipo input-text
-                },
-                "required": [
-                    # <-- aquí requeridos del campo tipo input-text
-                ]
-            },
-            "select-button": {"type": "object", "additionalProperties": False, "properties": {}, "required": []},
-            "dropdown": {"type": "object", "additionalProperties": False, "properties": {}, "required": []},
-            "tree-select": {"type": "object", "additionalProperties": False, "properties": {}, "required": []},
-            "input-number": {"type": "object", "additionalProperties": False, "properties": {}, "required": []},
-            "auto-complete": {"type": "object", "additionalProperties": False, "properties": {}, "required": []},
-            "toggle-button": {"type": "object", "additionalProperties": False, "properties": {}, "required": []},
-            "json": {"type": "object", "additionalProperties": False, "properties": {}, "required": []},
-            "textarea": {"type": "object", "additionalProperties": False, "properties": {}, "required": []},
-            "signature": {"type": "object", "additionalProperties": False, "properties": {}, "required": []},
-            "table": {"type": "object", "additionalProperties": False, "properties": {}, "required": []},
-            "date": {"type": "object", "additionalProperties": False, "properties": {}, "required": []},
-            "time": {"type": "object", "additionalProperties": False, "properties": {}, "required": []},
-            "multi-select": {"type": "object", "additionalProperties": False, "properties": {}, "required": []}
-        },
-
-        # 9) ==== (OPCIONAL) VALIDACIONES ESPECÍFICAS POR CAMPO FIJO ====
-        #     Si un campo fijo necesita reglas distintas a las de su 'type', defínelas aquí
-        #     y en 'properties' usa allOf para combinarlas con 'field_node'.
-        "fixed_fields": {
-            # "name": {
-            #     "type": "object",
-            #     "additionalProperties": False,
-            #     "properties": {
-            #         # reglas extra solo para el campo fijo 'name'
-            #     },
-            #     "required": []
-            # }
-        }
-    }
-}
-
- */

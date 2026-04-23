@@ -1,0 +1,283 @@
+<div style="position: absolute; z-index: 2;">
+  <app-custom-button-crud (deleteAction)="delete()" (editAction)="edit()"
+    (refreshAction)="getAll({ force: true, pos: pos() })" (newAction)="openNew({pos:pos()})"
+    [moreOptions]="moreOptions()" [getMenu]="getMenu()" [openNewMenu]="openNewMenu()" [selected]="selected()"
+    [startMenu]="startMenu()" />
+</div>
+
+<div class="table-fit-Custom">
+  <app-custom-table class="table-fit-Custom" [value]="items()" [columns]="selectedColumns()" [selected]="selected()"
+    (selectionAction)="onSelection($event)" (rowDoubleClick)="onRowDoubleClick($event)"
+    [exportDialogVisible]="exportDialogVisible" [field]="fieldExport()"
+    (exportDialogVisibleAction)="onExportDialogVisible($event)" (exportServerAction)="onExportServer($event)"
+    (lazyLoadAction)="onLazyLoad({event:$event})" [rows]="limit()[pos()]" [totalRecords]="totalRecords()[pos()]"
+    [filterDelayTable]="filterDelayTable()" />
+</div>
+
+<app-custom-local-settings [visible]="localSettingsDialogVisible" [field]="fieldConfig()" [formGroup]="configForm"
+  (saveAction)="saveConfig()" (visibleAction)="onLocalSettingsDialogVisible($event)" />
+
+<app-custom-import [visible]="importDialogVisible" (visibleAction)="onImportDialogVisible($event)"
+  (saveAction)="onImportSave($event)" />
+
+<app-custom-actions-selection [visible]="actionsSelectionDialogVisible" (visibleChange)="onVisibleChange($event)" />
+
+<!-- communication (principal) -->
+<p-dialog [(visible)]="formDialogVisible[$any(typeDefault)]" (onHide)="onHide($any(typeDefault))"
+  (onShow)="onShow($any(typeDefault))" [styleClass]="styleClassDialog()" modal="true" [resizable]="true"
+  [draggable]="true">
+  <ng-template #header>
+    <div class="p-dialog-title">
+      <span class="p-dialog-title-text">{{headerDialog()}}</span>
+      <button type="button" class="p-dialog-titlebar-icon p-link" (click)="configDialog()">
+        <i class="pi pi-spin pi-cog p-dialog-icon"></i>
+      </button>
+    </div>
+  </ng-template>
+  <form [formGroup]="form()[$any(typeDefault)]" *ngIf="form()[$any(typeDefault)]">
+    <p-tabs [scrollable]="true" value="0">
+      <p-tablist>
+        <p-tab value="0">General</p-tab>
+        <p-tab value="3">Auditoría</p-tab>
+      </p-tablist>
+      <p-tabpanels>
+        <p-tabpanel value="0">
+          <app-custom-draw-form *ngIf="form()[$any(typeDefault)] && drawForm()[typeDefault]"
+            [drawForm]="drawForm()[typeDefault]['general']" [formGroup]="form()[$any(typeDefault)]"
+            (onSelectAutoCompleteAction)="onSelectAutoComplete($event)"
+            (onChangeDropdownAction)="onChangeDropdown($event)" (onNewIconDropdownAction)="onNewIconDropdown($event)"
+            (onReloadIconDropdownAction)="onReloadIconDropdown($event)" (onChangeToggleAction)="onChangeToggle($event)"
+            (onClosableIconDropdownAction)="onClosableIconDropdown($event)"
+            (onKeydownEnterAction)="onKeydownEnter($event)" />
+        </p-tabpanel>
+        <p-tabpanel value="3">
+          <app-custom-audit [cf]="customField()[typeDefault]" [selected]="selected()" />
+        </p-tabpanel>
+      </p-tabpanels>
+    </p-tabs>
+  </form>
+  <ng-template #footer>
+    <div class="p-dialog-footer">
+      <app-custom-button-footer (saveAction)="save({pos: typeDefault})"
+        (saveNotHideAction)="save({pos: typeDefault, hide:false})" (resetFormAction)="resetFormDialog()" />
+    </div>
+  </ng-template>
+</p-dialog>
+
+<!-- communication-recipient -->
+<p-dialog [(visible)]="formDialogVisible[$any('communication-recipient')]"
+  (onHide)="onHide($any('communication-recipient'))" (onShow)="onShow('communication-recipient')"
+  [styleClass]="styleClassDialog()" modal="true" [resizable]="true" [draggable]="true">
+  <ng-template #header>
+    <div class="p-dialog-title">
+      <span class="p-dialog-title-text">{{headerDialog()}}</span>
+      <button type="button" class="p-dialog-titlebar-icon p-link" (click)="configDialog()">
+        <i class="pi pi-spin pi-cog p-dialog-icon"></i>
+      </button>
+    </div>
+  </ng-template>
+  <form [formGroup]="form()[$any('communication-recipient')]" *ngIf="form()[$any('communication-recipient')]">
+    <p-tabs [scrollable]="true" value="0">
+      <p-tablist>
+        <p-tab value="0">General</p-tab>
+        <p-tab value="3">Auditoría</p-tab>
+      </p-tablist>
+      <p-tabpanels>
+        <p-tabpanel value="0">
+          <app-custom-draw-form *ngIf="form()[$any('communication-recipient')] && drawForm()['communication-recipient']"
+            [drawForm]="drawForm()['communication-recipient']['general']"
+            [formGroup]="form()[$any('communication-recipient')]"
+            (onSelectAutoCompleteAction)="onSelectAutoComplete($event)"
+            (onChangeDropdownAction)="onChangeDropdown($event)" (onNewIconDropdownAction)="onNewIconDropdown($event)"
+            (onReloadIconDropdownAction)="onReloadIconDropdown($event)" (onChangeToggleAction)="onChangeToggle($event)"
+            (onKeydownEnterAction)="onKeydownEnter($event)"
+            (onClosableIconDropdownAction)="onClosableIconDropdown($event)" />
+        </p-tabpanel>
+        <p-tabpanel value="3">
+          <app-custom-audit [cf]="customField()['communication-recipient']" [selected]="selected()" />
+        </p-tabpanel>
+      </p-tabpanels>
+    </p-tabs>
+  </form>
+  <ng-template #footer>
+    <div class="p-dialog-footer">
+      <app-custom-button-footer (saveAction)="save({pos: 'communication-recipient'})"
+        (saveNotHideAction)="save({pos: 'communication-recipient', hide:false})"
+        (resetFormAction)="resetFormDialog()" />
+    </div>
+  </ng-template>
+</p-dialog>
+
+<!-- communication-message -->
+<p-dialog [(visible)]="formDialogVisible[$any('communication-message')]"
+  (onHide)="onHide($any('communication-message'))" (onShow)="onShow('communication-message')"
+  [styleClass]="styleClassDialog()" modal="true" [resizable]="true" [draggable]="true">
+  <ng-template #header>
+    <div class="p-dialog-title">
+      <span class="p-dialog-title-text">{{headerDialog()}}</span>
+      <button type="button" class="p-dialog-titlebar-icon p-link" (click)="configDialog()">
+        <i class="pi pi-spin pi-cog p-dialog-icon"></i>
+      </button>
+    </div>
+  </ng-template>
+  <form [formGroup]="form()[$any('communication-message')]" *ngIf="form()[$any('communication-message')]">
+    <p-tabs [scrollable]="true" value="0">
+      <p-tablist>
+        <p-tab value="0">General</p-tab>
+        <p-tab value="3">Auditoría</p-tab>
+      </p-tablist>
+      <p-tabpanels>
+        <p-tabpanel value="0">
+          <app-custom-draw-form *ngIf="form()[$any('communication-message')] && drawForm()['communication-message']"
+            [drawForm]="drawForm()['communication-message']['general']"
+            [formGroup]="form()[$any('communication-message')]"
+            (onSelectAutoCompleteAction)="onSelectAutoComplete($event)"
+            (onChangeDropdownAction)="onChangeDropdown($event)" (onNewIconDropdownAction)="onNewIconDropdown($event)"
+            (onReloadIconDropdownAction)="onReloadIconDropdown($event)" (onChangeToggleAction)="onChangeToggle($event)"
+            (onKeydownEnterAction)="onKeydownEnter($event)"
+            (onClosableIconDropdownAction)="onClosableIconDropdown($event)" />
+        </p-tabpanel>
+        <p-tabpanel value="3">
+          <app-custom-audit [cf]="customField()['communication-message']" [selected]="selected()" />
+        </p-tabpanel>
+      </p-tabpanels>
+    </p-tabs>
+  </form>
+  <ng-template #footer>
+    <div class="p-dialog-footer">
+      <app-custom-button-footer (saveAction)="save({pos: 'communication-message'})"
+        (saveNotHideAction)="save({pos: 'communication-message', hide:false})" (resetFormAction)="resetFormDialog()" />
+    </div>
+  </ng-template>
+</p-dialog>
+
+<!-- communication-attachment -->
+<p-dialog [(visible)]="formDialogVisible[$any('communication-attachment')]"
+  (onHide)="onHide($any('communication-attachment'))" (onShow)="onShow('communication-attachment')"
+  [styleClass]="styleClassDialog()" modal="true" [resizable]="true" [draggable]="true">
+  <ng-template #header>
+    <div class="p-dialog-title">
+      <span class="p-dialog-title-text">{{headerDialog()}}</span>
+      <button type="button" class="p-dialog-titlebar-icon p-link" (click)="configDialog()">
+        <i class="pi pi-spin pi-cog p-dialog-icon"></i>
+      </button>
+    </div>
+  </ng-template>
+  <form [formGroup]="form()[$any('communication-attachment')]" *ngIf="form()[$any('communication-attachment')]">
+    <p-tabs [scrollable]="true" value="0">
+      <p-tablist>
+        <p-tab value="0">General</p-tab>
+        <p-tab value="3">Auditoría</p-tab>
+      </p-tablist>
+      <p-tabpanels>
+        <p-tabpanel value="0">
+          <app-custom-draw-form
+            *ngIf="form()[$any('communication-attachment')] && drawForm()['communication-attachment']"
+            [drawForm]="drawForm()['communication-attachment']['general']"
+            [formGroup]="form()[$any('communication-attachment')]"
+            (onSelectAutoCompleteAction)="onSelectAutoComplete($event)"
+            (onChangeDropdownAction)="onChangeDropdown($event)" (onNewIconDropdownAction)="onNewIconDropdown($event)"
+            (onReloadIconDropdownAction)="onReloadIconDropdown($event)" (onChangeToggleAction)="onChangeToggle($event)"
+            (onKeydownEnterAction)="onKeydownEnter($event)"
+            (onClosableIconDropdownAction)="onClosableIconDropdown($event)" />
+        </p-tabpanel>
+        <p-tabpanel value="3">
+          <app-custom-audit [cf]="customField()['communication-attachment']" [selected]="selected()" />
+        </p-tabpanel>
+      </p-tabpanels>
+    </p-tabs>
+  </form>
+  <ng-template #footer>
+    <div class="p-dialog-footer">
+      <app-custom-button-footer (saveAction)="save({pos: 'communication-attachment'})"
+        (saveNotHideAction)="save({pos: 'communication-attachment', hide:false})"
+        (resetFormAction)="resetFormDialog()" />
+    </div>
+  </ng-template>
+</p-dialog>
+
+<!-- communication-template -->
+<p-dialog [(visible)]="formDialogVisible[$any('communication-template')]"
+  (onHide)="onHide($any('communication-template'))" (onShow)="onShow('communication-template')"
+  [styleClass]="styleClassDialog()" modal="true" [resizable]="true" [draggable]="true">
+  <ng-template #header>
+    <div class="p-dialog-title">
+      <span class="p-dialog-title-text">{{headerDialog()}}</span>
+      <button type="button" class="p-dialog-titlebar-icon p-link" (click)="configDialog()">
+        <i class="pi pi-spin pi-cog p-dialog-icon"></i>
+      </button>
+    </div>
+  </ng-template>
+  <form [formGroup]="form()[$any('communication-template')]" *ngIf="form()[$any('communication-template')]">
+    <p-tabs [scrollable]="true" value="0">
+      <p-tablist>
+        <p-tab value="0">General</p-tab>
+        <p-tab value="3">Auditoría</p-tab>
+      </p-tablist>
+      <p-tabpanels>
+        <p-tabpanel value="0">
+          <app-custom-draw-form *ngIf="form()[$any('communication-template')] && drawForm()['communication-template']"
+            [drawForm]="drawForm()['communication-template']['general']"
+            [formGroup]="form()[$any('communication-template')]"
+            (onSelectAutoCompleteAction)="onSelectAutoComplete($event)"
+            (onChangeDropdownAction)="onChangeDropdown($event)" (onNewIconDropdownAction)="onNewIconDropdown($event)"
+            (onReloadIconDropdownAction)="onReloadIconDropdown($event)" (onChangeToggleAction)="onChangeToggle($event)"
+            (onKeydownEnterAction)="onKeydownEnter($event)"
+            (onClosableIconDropdownAction)="onClosableIconDropdown($event)" />
+        </p-tabpanel>
+        <p-tabpanel value="3">
+          <app-custom-audit [cf]="customField()['communication-template']" [selected]="selected()" />
+        </p-tabpanel>
+      </p-tabpanels>
+    </p-tabs>
+  </form>
+  <ng-template #footer>
+    <div class="p-dialog-footer">
+      <app-custom-button-footer (saveAction)="save({pos: 'communication-template'})"
+        (saveNotHideAction)="save({pos: 'communication-template', hide:false})" (resetFormAction)="resetFormDialog()" />
+    </div>
+  </ng-template>
+</p-dialog>
+
+<!-- communication-channel -->
+<p-dialog [(visible)]="formDialogVisible[$any('communication-channel')]"
+  (onHide)="onHide($any('communication-channel'))" (onShow)="onShow('communication-channel')"
+  [styleClass]="styleClassDialog()" modal="true" [resizable]="true" [draggable]="true">
+  <ng-template #header>
+    <div class="p-dialog-title">
+      <span class="p-dialog-title-text">{{headerDialog()}}</span>
+      <button type="button" class="p-dialog-titlebar-icon p-link" (click)="configDialog()">
+        <i class="pi pi-spin pi-cog p-dialog-icon"></i>
+      </button>
+    </div>
+  </ng-template>
+  <form [formGroup]="form()[$any('communication-channel')]" *ngIf="form()[$any('communication-channel')]">
+    <p-tabs [scrollable]="true" value="0">
+      <p-tablist>
+        <p-tab value="0">General</p-tab>
+        <p-tab value="3">Auditoría</p-tab>
+      </p-tablist>
+      <p-tabpanels>
+        <p-tabpanel value="0">
+          <app-custom-draw-form *ngIf="form()[$any('communication-channel')] && drawForm()['communication-channel']"
+            [drawForm]="drawForm()['communication-channel']['general']"
+            [formGroup]="form()[$any('communication-channel')]"
+            (onSelectAutoCompleteAction)="onSelectAutoComplete($event)"
+            (onChangeDropdownAction)="onChangeDropdown($event)" (onNewIconDropdownAction)="onNewIconDropdown($event)"
+            (onReloadIconDropdownAction)="onReloadIconDropdown($event)" (onChangeToggleAction)="onChangeToggle($event)"
+            (onKeydownEnterAction)="onKeydownEnter($event)"
+            (onClosableIconDropdownAction)="onClosableIconDropdown($event)" />
+        </p-tabpanel>
+        <p-tabpanel value="3">
+          <app-custom-audit [cf]="customField()['communication-channel']" [selected]="selected()" />
+        </p-tabpanel>
+      </p-tabpanels>
+    </p-tabs>
+  </form>
+  <ng-template #footer>
+    <div class="p-dialog-footer">
+      <app-custom-button-footer (saveAction)="save({pos: 'communication-channel'})"
+        (saveNotHideAction)="save({pos: 'communication-channel', hide:false})" (resetFormAction)="resetFormDialog()" />
+    </div>
+  </ng-template>
+</p-dialog>

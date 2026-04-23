@@ -50,9 +50,9 @@
       <div cdkDropList (cdkDropListDropped)="onUnifiedDrop($event)" class="flex flex-col gap-1 pt-1">
 
         @for (row of unifiedRows(); track row.field; let i = $index; let last = $last) {
-        {{row.field | json}}
+        <!-- {{row.field | json}} -->
         @let col = getFilterCol(row.field);
-        {{col | json}}
+        <!-- {{col | json}} -->
 
         <div cdkDrag class="uf-row border-1 surface-border border-round surface-card p-2"
           [class.uf-row-inactive]="!row.colActive && !row.gridActive">

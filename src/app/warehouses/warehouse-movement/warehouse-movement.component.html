@@ -1,13 +1,15 @@
 <p-confirmdialog />
 
-<div style="position: absolute; z-index: 2;">
+<div style="position: absolute; z-index: 2;"
+  *ngIf="showComponentSignal()[$any('inventory-movement-detail')]?.local || showComponentSignal()[$any('inventory-movement-detail')]?.read">
   <app-custom-button-crud (deleteAction)="delete()" (editAction)="edit()"
     (refreshAction)="getAll({ force: true, pos: pos() })" (newAction)="openNew({pos:pos()})"
     [moreOptions]="moreOptions()" [getMenu]="getMenu()" [openNewMenu]="openNewMenu()" [selected]="selected()"
     [startMenu]="startMenu()" (startAction)="setStatus($event)" />
 </div>
 
-<div class="table-fit-Custom">
+<div class="table-fit-Custom"
+  *ngIf="showComponentSignal()[$any('inventory-movement-detail')]?.local || showComponentSignal()[$any('inventory-movement-detail')]?.read">
   <app-custom-table class="table-fit-Custom" [value]="items()" [columns]="selectedColumns()" [selected]="selected()"
     (selectionAction)="onSelection($event)" (rowDoubleClick)="onRowDoubleClick($event)"
     [exportDialogVisible]="exportDialogVisible" [field]="fieldExport()"

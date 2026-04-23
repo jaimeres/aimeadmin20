@@ -3,11 +3,24 @@ import { CRUD } from '../../utils/crud.class';
 import { ConfirmationService, MenuItem } from 'primeng/api';
 import { AssetService } from '../services/asset.service';
 import { CommonModule } from '@angular/common';
-import { TagModule } from 'primeng/tag';
 import { PRIME_MODULES } from '../../shared/primeng.index';
 import { LOCAL_BASE } from '../../shared/components.index';
 import { SelectModule } from 'primeng/select';
-import { TaskModuleLoaderComponent } from '../../components/task-module-loader/task-module-loader.component';
+import { PopupComponent } from '../../tasks/popup/popup.component';
+
+import { TableModule } from 'primeng/table';
+
+import { TagModule } from 'primeng/tag';
+import { ToastModule } from 'primeng/toast';
+import { ButtonModule } from 'primeng/button';
+import { InputTextModule } from 'primeng/inputtext';
+
+
+type ChatMessage = {
+  text: string;
+  align: 'left' | 'right';
+  user: string | null;
+};
 
 @Component({
   selector: 'app-maintenance',
@@ -15,9 +28,16 @@ import { TaskModuleLoaderComponent } from '../../components/task-module-loader/t
     CommonModule,
     SelectModule,
     TagModule,
-    TaskModuleLoaderComponent,
     ...PRIME_MODULES,
     ...LOCAL_BASE,
+    PopupComponent,
+
+    //QUITAR
+    TableModule,
+    ToastModule,
+    ButtonModule,
+    InputTextModule
+
   ],
   templateUrl: './maintenance.component.html',
   styleUrl: './maintenance.component.scss',
@@ -94,33 +114,132 @@ export class MaintenanceComponent extends CRUD implements OnInit {
     this.initCRUD();
   }
 
+  //temporal
   public installation = false;
   getInstallation() {
     this.installation = true;
   }
 
+  //temporal
 
-  /**
-    * Sobre escribo la funcion para que se ejecute cada vez que se selecciona un registro y poder cargar los botones de estados
-    * @param event Elemento seleccionado
-    */
-  /*override onSelection(event: any) {
-    super.onSelection(event);
-
-    const ids_task = this.selected()[0]?.tasks;
-    console.log('ids_task..................', this.selected()[0]);
-
-    if (ids_task) {
-      const id = this.selected()[0]?.status;
-
-      this.getStatus({ module: 'MA', id, ids_task });
-      const ins = {
-        label: 'Instalar',
-        command: () => this.getInstallation()
-      }
-
-      this.startMenu.update(current => [...current, ins,]);
+  messages: ChatMessage[] = [
+    {
+      text: 'Lleva 2 días sin llegar las refacciones',
+      align: 'left',
+      user: 'Juan'
+    },
+    {
+      text: 'Ya lo estoy revisando con el proveedor',
+      align: 'right',
+      user: 'Yo'
+    },
+    {
+      text: 'Avísame cualquier cambio',
+      align: 'left',
+      user: 'María'
+    },
+    {
+      text: 'Lleva 2 días sin llegar las refacciones',
+      align: 'left',
+      user: 'Juan'
+    },
+    {
+      text: 'Ya lo estoy revisando con el proveedor',
+      align: 'right',
+      user: null
+    },
+    {
+      text: 'Avísame cualquier cambio',
+      align: 'left',
+      user: 'Ana'
     }
-  }*/
+  ];
+
+  //°°°temporal notas
+  getInitials(user: string | null): string {
+    if (!user) return '';
+
+    return user
+      .trim()
+      .split(/\s+/)
+      .filter(Boolean)
+      .map(part => part[0])
+      .join('')
+      .substring(0, 2)
+      .toUpperCase();
+  }
+
+
+  //°°°Temporal instalaciones
+  dealogInstalacionesVisible = false
+  desecho() {
+    this.dealogInstalacionesVisible = true;
+  }
+
+
+  //temporal
+  override onSelection(event: any[]) {
+
+    super.onSelection(event);
+    console.log(this.startMenu());
+
+    this.startMenu().push({
+
+      label: 'Instalaciones',
+      command: () => this.desecho()
+    })
+
+  }
+
+
+  products = [
+    {
+      id: '1000',
+      code: 'f230fh0g3',
+      name: 'bomba de agua',
+      image: 'bamboo-watch.jpg',
+      quantity: 1,
+      desecho: 'NA',
+    },
+    {
+      id: '1001',
+      code: 'nvklal433',
+      name: 'Manguera de alta presión',
+      quantity: 61,
+      desecho: '15',
+    },
+    {
+      id: '1002',
+      code: 'zz21cz3c1',
+      name: 'Buje',
+      quantity: 2,
+      desecho: '2',
+
+    },
+  ];
+
+  selectedProducts: any[] = [];
+
+
+  getSeverity(status: string) {
+    switch (status) {
+      case 'INSTOCK':
+        return 'success';
+      case 'LOWSTOCK':
+        return 'warn';
+      case 'OUTOFSTOCK':
+        return 'danger';
+    }
+    return 'danger';
+  }
+
+  onCapturePhoto() {
+
+  }
+
+
+
+
+
 
 }

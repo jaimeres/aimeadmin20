@@ -1,0 +1,49 @@
+<p-dialog [(visible)]="noteVisible" [closable]="false" [draggable]="true" [resizable]="true" [modal]="false"
+  styleClass="note-dialog" contentStyleClass="note-content" [style]="{ width: '210px' }">
+  <div class="note-container">
+    <p-editor styleClass="note-editor">
+      <ng-template pTemplate="header">
+        <div class="note-toolbar-inner">
+          <span class="ql-formats note-tools">
+            <select class="ql-size">
+              <option value="small">Pequeño</option>
+              <option selected>Normal</option>
+              <option value="large">Grande</option>
+              <option value="huge">Enorme</option>
+            </select>
+
+            <select class="ql-font">
+              <option value="sans-serif" selected></option>
+              <option value="serif"></option>
+              <option value="monospace"></option>
+            </select>
+
+            <button type="button" class="ql-bold"></button>
+            <button type="button" class="ql-italic"></button>
+            <button type="button" class="ql-underline"></button>
+
+            <select class="ql-color"></select>
+            <select class="ql-background"></select>
+
+            <button type="button" class="ql-list" value="ordered"></button>
+            <select class="ql-align">
+              <option selected></option>
+              <option value="center"></option>
+              <option value="right"></option>
+              <option value="justify"></option>
+            </select>
+            <button type="button" class="ql-image"></button>
+
+            <button type="button" class="note-action-btn note-action-new" (click)="onNewNote()">
+              ＋
+            </button>
+
+            <button type="button" class="note-action-btn note-action-close" (click)="noteVisible = false">
+              X
+            </button>
+          </span>
+        </div>
+      </ng-template>
+    </p-editor>
+  </div>
+</p-dialog>

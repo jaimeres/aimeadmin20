@@ -1,0 +1,53 @@
+<section class="course-detail">
+
+  <header class="hero">
+    <a class="back" [routerLink]="['/academy/courses']"><i class="pi pi-arrow-left"></i> Cursos</a>
+    <div class="hero-main">
+      <div class="cover">{{ course.cover }}</div>
+      <div class="copy">
+        <div class="tags">
+          <p-tag [value]="course.level" severity="info" />
+          <p-tag [value]="course.duration" severity="secondary" />
+          <p-tag value="Certificado" severity="success" />
+        </div>
+        <h1>{{ course.title }}</h1>
+        <p class="instructor">Por <strong>{{ course.instructor }}</strong></p>
+        <p class="desc">{{ course.description }}</p>
+        <div class="meta">
+          <span><i class="pi pi-star-fill"></i> {{ course.rating }}</span>
+          <span><i class="pi pi-users"></i> {{ course.students }} estudiantes</span>
+        </div>
+        <div class="progress">
+          <p-progressBar [value]="course.progress"></p-progressBar>
+          <span>{{ course.progress }}% completado</span>
+        </div>
+        <div class="actions">
+          <button pButton icon="pi pi-play" label="Continuar curso"></button>
+          <button pButton icon="pi pi-bookmark" label="Guardar" severity="secondary"></button>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <section class="syllabus">
+    <h2>Contenido del curso</h2>
+    <p-accordion [value]="['0']" [multiple]="true">
+      <p-accordion-panel *ngFor="let m of modules; let i = index" [value]="i.toString()">
+        <p-accordion-header>
+          <span class="module-title">{{ m.title }}</span>
+          <span class="module-count">{{ m.lessons.length }} lecciones</span>
+        </p-accordion-header>
+        <p-accordion-content>
+          <ul class="lessons">
+            <li *ngFor="let l of m.lessons" [class.done]="l.completed">
+              <i class="pi" [class.pi-check-circle]="l.completed" [class.pi-play-circle]="!l.completed"></i>
+              <span class="lesson-title">{{ l.title }}</span>
+              <span class="lesson-duration">{{ l.duration }}</span>
+            </li>
+          </ul>
+        </p-accordion-content>
+      </p-accordion-panel>
+    </p-accordion>
+  </section>
+
+</section>
