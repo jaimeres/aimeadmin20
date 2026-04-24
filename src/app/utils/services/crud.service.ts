@@ -266,6 +266,7 @@ export class CRUDService {
   }
 
   drawForm(module: string) {
+    console.log(module,);
     return this.authS.config[module]['draw'];
   }
 
