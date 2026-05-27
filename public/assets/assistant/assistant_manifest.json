@@ -1,0 +1,14 @@
+{
+  "idle": "/assets/assistant/assistant_idle.json",
+  "talk": "/assets/assistant/assistant_talk.json",
+  "think": "/assets/assistant/assistant_think.json",
+  "notify": "/assets/assistant/assistant_notify.json",
+  "speed": "/assets/assistant/assistant_speed.json",
+  "yawning": "/assets/assistant/assistant_yawning.json",
+  "look-left": "/assets/assistant/assistant_look_left.json",
+  "look-right": "/assets/assistant/assistant_look_right.json",
+  "look-up": "/assets/assistant/assistant_look_up.json",
+  "look-down": "/assets/assistant/assistant_look_down.json",
+  "confused": "/assets/assistant/assistant_confused.json",
+  "waiting": "/assets/assistant/assistant_waiting.json"
+}

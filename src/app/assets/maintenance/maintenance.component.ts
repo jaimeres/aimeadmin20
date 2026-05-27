@@ -6,7 +6,6 @@ import { CommonModule } from '@angular/common';
 import { PRIME_MODULES } from '../../shared/primeng.index';
 import { LOCAL_BASE } from '../../shared/components.index';
 import { SelectModule } from 'primeng/select';
-import { PopupComponent } from '../../tasks/popup/popup.component';
 
 import { TableModule } from 'primeng/table';
 
@@ -14,6 +13,8 @@ import { TagModule } from 'primeng/tag';
 import { ToastModule } from 'primeng/toast';
 import { ButtonModule } from 'primeng/button';
 import { InputTextModule } from 'primeng/inputtext';
+import { ResponsibleComponent } from '../../components/responsible/responsible.component';
+import { ResponsibleActionComponent } from '../../components/responsible-action/responsible-action.component';
 
 
 type ChatMessage = {
@@ -27,16 +28,17 @@ type ChatMessage = {
   imports: [
     CommonModule,
     SelectModule,
-    TagModule,
+    ResponsibleComponent,
+    ResponsibleActionComponent,
     ...PRIME_MODULES,
     ...LOCAL_BASE,
-    PopupComponent,
 
     //QUITAR
+    TagModule,
     TableModule,
     ToastModule,
     ButtonModule,
-    InputTextModule
+    InputTextModule,
 
   ],
   templateUrl: './maintenance.component.html',
@@ -50,8 +52,11 @@ export class MaintenanceComponent extends CRUD implements OnInit {
     label: 'Solicitud',
     command: () => this.openNew({ pos: 'maintenance' })
   }, {
-    label: 'Responsables',
-    command: () => this.openNew({ pos: 'responsible-user-rule' })
+    label: 'Regla de responsables',
+    command: () => this.openNew({ pos: 'maintenance-responsible-rule' })
+  }, {
+    label: 'Acción de regla',
+    command: () => this.openNew({ pos: 'maintenance-responsible-rule-action' })
   }
   ]);
 
@@ -60,9 +65,12 @@ export class MaintenanceComponent extends CRUD implements OnInit {
     label: 'Solicitudes',
     command: () => this.getAll({ pos: 'maintenance' })
   }, {
-    label: 'Clasificador',
-    command: () => this.getAll({ pos: 'responsible-user-rule' })
-  }
+    label: 'Reglas de responsables',
+    command: () => this.getAll({ pos: 'maintenance-responsible-rule' })
+  }, {
+    label: 'Acciones de reglas',
+    command: () => this.getAll({ pos: 'maintenance-responsible-rule-action' })
+  },
   ]);
 
   constructor(crudS: AssetService) {
@@ -82,33 +90,31 @@ export class MaintenanceComponent extends CRUD implements OnInit {
     this.excludeFieldsForm[this.typeDefault] = [
       { field: 'status', },];
 
-    this.includeFieldsForm[this.typeDefault] = [
-      { field: 'maintenance_document_data_documents', },//required: true,
-      { field: 'maintenance_document_data_name', default: 'Evidencia' },
-      { field: 'maintenance_document_data_file_type' },
-    ]
+    //this.includeFieldsForm[this.typeDefault] = [
+    //  { field: 'maintenance_document_data_documents', },//required: true,
+    //  { field: 'maintenance_document_data_name', default: 'Evidencia' },
+    //  { field: 'maintenance_document_data_file_type' },
+    //]<
 
-    this.relationships[this.typeDefault] = [
-      { field: 'maintenance_document_data_file_type', type: 'file-type', app: 'files/file-type' },
-    ]
+    //this.relationships[this.typeDefault] = [
+    //  { field: 'maintenance_document_data_file_type', type: 'file-type', app: 'files/file-type' },
+    //];
 
-
-
-    this.type['maintenance-document-maintenance'] = 'maintenance-document';
+    //this.type['maintenance-document-maintenance'] = 'maintenance-document';
     this.app['maintenance-document-maintenance'] = 'assets/maintenance-document';
-    this.formDialogVisible['maintenance-document-maintenance'] = false;
-    this.singular['maintenance-document-maintenance'] = 'documento';
-    this.plural['maintenance-document-maintenance'] = 'documentos';
-    this.singularIndefiniteArticle['maintenance-document-maintenance'] = 'el documento';
-    this.pluralDefiniteArticle['maintenance-document-maintenance'] = 'los documentos';
     this.module['maintenance-document-maintenance'] = 'A';
 
     this.excludeFieldsForm['maintenance-document-maintenance'] = [
-      { field: 'documents', reemplace: false },
+      //{ field: 'documents', reemplace: false },
       //°°° falta solucionar el errore para que acepte el array de files
-      { field: 'files', reemplace: false }
+      //{ field: 'files', reemplace: false }
     ];
 
+    this.app['maintenance-responsible-rule'] = 'assets/maintenance-responsible-rule';
+    this.module['maintenance-responsible-rule'] = 'MA';
+
+    this.app['maintenance-responsible-rule-action'] = 'assets/maintenance-responsible-rule-action';
+    this.module['maintenance-responsible-rule-action'] = 'MA';
 
 
     this.initCRUD();

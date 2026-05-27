@@ -23,17 +23,11 @@
 
 .uf-row {
   transition: box-shadow 0.15s;
+  cursor: grab;
 
-  &.cdk-drag-animating {
-    transition: transform 250ms cubic-bezier(0, 0, 0.2, 1);
+  &:active {
+    cursor: grabbing;
   }
-}
-
-.cdk-drag-preview.uf-row {
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.18);
-  border-radius: 6px;
-  padding: 0.5rem;
-  background: var(--surface-card);
 }
 
 .uf-row-inactive {
@@ -155,11 +149,7 @@
   }
 }
 
-.preview-cell.cdk-drag-preview {
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.22);
-  border-radius: 6px;
-  background: var(--surface-card);
-}
+
 
 .preview-cell-inactive {
   grid-column: span 1 !important;

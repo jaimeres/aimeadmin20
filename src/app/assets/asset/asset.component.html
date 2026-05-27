@@ -213,3 +213,63 @@
   </ng-template>
 
 </p-dialog>
+
+
+<p-dialog [(visible)]="formDialogVisible[$any('asset-subsidiary')]"
+  (onHide)="onHide($any(formDialogVisible['asset-subsidiary']))" (onShow)="onShow('asset-subsidiary')"
+  [styleClass]="styleClassDialog()" modal="true" [resizable]="true" [draggable]="true">
+
+  <ng-template #header>
+    <div class="p-dialog-title">
+      <span class="p-dialog-title-text">{{headerDialog()}}</span>
+      <button type="button" class="p-dialog-titlebar-icon p-link" (click)="configDialog()">
+        <i class="pi pi-spin pi-cog p-dialog-icon"></i>
+      </button>
+    </div>
+  </ng-template>
+  <form [formGroup]="form()[$any('asset-subsidiary')]" *ngIf="form()[$any('asset-subsidiary')]">
+
+    <p-tabs [scrollable]="true" value="0">
+
+      <p-tablist>
+        <p-tab value="0">General</p-tab>
+        <p-tab value="1">Línea de tiempo</p-tab>
+        <p-tab value="3">Auditoría</p-tab>
+      </p-tablist>
+
+      <p-tabpanels>
+
+        <p-tabpanel value="0">
+          <app-custom-draw-form *ngIf="form()[$any('asset-subsidiary')] && drawForm()['asset-subsidiary']"
+            [drawForm]="drawForm()['asset-subsidiary']['general']" [formGroup]="form()[$any('asset-subsidiary')]"
+            (onSelectAutoCompleteAction)="onSelectAutoComplete($event)"
+            (onChangeDropdownAction)="onChangeDropdown($event)" (onNewIconDropdownAction)="onNewIconDropdown($event)"
+            (onReloadIconDropdownAction)="onReloadIconDropdown($event)" (onChangeToggleAction)="onChangeToggle($event)"
+            (onKeydownEnterAction)="onKeydownEnter($event)"
+            (onClosableIconDropdownAction)="onClosableIconDropdown($event)" />
+        </p-tabpanel>
+
+        <p-tabpanel value="1">
+          <!-- [[[II ESC:002-01 DOC:docs/documents/2026-05-19_002_ui_timeline_asset_subsidiary.md#escenario-01 -->
+          <app-asset-subsidiary-timeline [selected]="selected()"
+            [active]="formDialogVisible[$any('asset-subsidiary')]" />
+          <!-- ]]]FI -->
+        </p-tabpanel>
+
+        <p-tabpanel value="3">
+          <app-custom-audit [cf]="customField()['asset-subsidiary']" [selected]="selected()" />
+        </p-tabpanel>
+
+      </p-tabpanels>
+    </p-tabs>
+
+  </form>
+
+  <ng-template #footer>
+    <div class="p-dialog-footer">
+      <app-custom-button-footer (saveAction)="save({pos: 'asset-subsidiary'})"
+        (saveNotHideAction)="save({pos: 'asset-subsidiary', hide:false})" (resetFormAction)="resetFormDialog()" />
+    </div>
+  </ng-template>
+
+</p-dialog>

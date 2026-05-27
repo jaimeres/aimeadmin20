@@ -1,0 +1,24 @@
+.permissions-tree-dialog {
+  width: 900px;
+  max-width: 95vw;
+  min-height: 550px;
+}
+
+.perm-tree {
+  ::ng-deep .p-tree {
+    border: none;
+    padding: 0;
+  }
+}
+
+.perm-node {
+  width: 100%;
+}
+
+.perm-toggle {
+  ::ng-deep .p-togglebutton {
+    height: 1.75rem;
+    min-width: 3.5rem;
+    font-size: 0.75rem;
+  }
+}

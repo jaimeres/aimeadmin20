@@ -66,8 +66,8 @@
       [options]="dropdownOptionsSignal()[fieldConfig.field]" [pAutoFocus]="fieldConfig.autofocus"
       [formControl]="$any(formGroupSignal()?.get(fieldConfig.field))" key="id" [appendTo]="'body'" [showClear]="true"
       (onClear)="clearTreeSelect(fieldConfig.field)" (onChangeAction)="onChangeDropdown($event, fieldConfig)"
-      styleClass="height-input-custom" class="height-input-custom"
-      [filter]="fieldConfig.filter_local !== undefined ? fieldConfig.filter_local : false"
+      (onNodeExpand)="onTreeNodeExpand($event, fieldConfig)" styleClass="height-input-custom"
+      class="height-input-custom" [filter]="fieldConfig.filter_local !== undefined ? fieldConfig.filter_local : false"
       [filterBy]="fieldConfig.filter_by ? fieldConfig.filter_by : null" />
 
     <button *ngIf="fieldConfig.icon" type="button" pButton [icon]="fieldConfig.icon.icon"
@@ -117,10 +117,10 @@
     </p-autoComplete>
 
     <button *ngIf="fieldConfig.icon" type="button" pButton [icon]="fieldConfig.icon.icon"
-      class="height-icon-custom"></button>
+      style="width: 40px !important;" class="height-icon-custom"></button>
 
     <button *ngIf="fieldConfig?.icon2" type="button" pButton [icon]="fieldConfig.icon2.icon"
-      class="height-icon-custom"></button>
+      style="width: 40px !important;" class="height-icon-custom"></button>
 
     <label [for]="fieldConfig.field">
       {{ fieldConfig?.label }}
@@ -582,8 +582,9 @@
     fieldConfig.description?.label }}
   </div>
   <p-selectButton styleClass="height-input-custom" [formControl]="$any(formGroupSignal()?.get(fieldConfig.field))"
-    [options]="fieldConfig?.data_type?.options || []" [optionLabel]="fieldConfig.option_label || 'name'"
-    [optionValue]="fieldConfig.option_value || 'id'" class="w-full" />
+    [options]="dropdownOptionsSignal()[fieldConfig.field] || fieldConfig?.data_type?.options || fieldConfig?.options || []"
+    [optionLabel]="fieldConfig.option_label || 'name'" [optionValue]="fieldConfig.option_value || 'id'" class="w-full"
+    (onChange)="onChangeDropdown($event, fieldConfig)" />
 </ng-template>
 
 <!-- TEMPLATE REUTILIZABLE PARA BUTTON -->
@@ -596,12 +597,12 @@
 </ng-template>
 
 <!-- TEMPLATE REUTILIZABLE PARA DOCUMENT -->
-<ng-template #documentTemplate let-fieldConfig="fieldConfig">
+<!-- <ng-template #documentTemplate let-fieldConfig="fieldConfig">
   <p-splitbutton styleClass="height-input-custom w-full sb-full"
     (onClick)="previewCamera(fieldConfig.field, fieldConfig)" [label]="fieldConfig?.label"
     [pAutoFocus]="fieldConfig?.autofocus || false" [disabled]="fieldConfig?.disabled || false">
   </p-splitbutton>
-</ng-template>
+</ng-template> -->
 
 <!-- =============================================================== -->
 <!-- TEMPLATE REUTILIZABLE PARA TYPE 'file'                           -->
@@ -623,13 +624,18 @@
 <!-- Se dibujan en la parte superior del area global de preview.     -->
 <!-- =============================================================== -->
 <ng-template #fileSearchBarsTemplate>
-  <div *ngIf="fileSearchFields().length > 0" class="flex flex-col gap-2 mb-3">
+  <!-- select_system PARA MOSTRAR O NO Y DEBE AGREGARSE AL 100% DEL WIDTH
+
+  quitar el > 10
+   
+  necesito 2 modificaciones, modifica el buscador de evidencias, tiene que ocupar todo el ancho del contenedor cuando escribes debe aparecer que esta buscado,ademas en lugar de mostra el id debe mostrar el nombre del archivo 2.-->
+  <div *ngIf="fileSearchFields().length > 10" class="flex flex-col gap-2 mb-3 w-full" style="border: 1px solid red">
     <p-autoComplete *ngFor="let f of fileSearchFields()" [(ngModel)]="fileSearchModel[f.field]"
       [ngModelOptions]="{standalone: true}" [suggestions]="fileSearchResults[f.field] || []"
       (completeMethod)="onFileSearchComplete($event, f)" (onSelect)="onFileSearchSelect($event, f)"
       [forceSelection]="true" optionLabel="name"
       [placeholder]="'Buscar ' + (f.label || 'archivo') + ' existente (min. 5 caracteres)...'" styleClass="w-full"
-      [minLength]="5">
+      [minLength]="5" class="w-full">
       <ng-template let-item pTemplate="item">
         <div class="flex items-center gap-2">
           <!-- MINIATURA: URL devuelta tal cual. No siempre es imagen (pdf, etc.) -->
@@ -672,7 +678,7 @@
       <div class="grid grid-cols-12 gap-2">
         <div *ngFor="let card of entry.value.card | keyvalue : keyComparator;"
           [ngClass]="[card.value.hide ? 'hidden' : '', card.value.class || 'col-span-6', card.value.class_md || 'md:col-span-3']">
-          <div [ngSwitch]="getType(card.value)">
+          <div [ngSwitch]="card.value?.type">
 
             <div *ngSwitchCase="'input-text'">
               <ng-container *ngTemplateOutlet="inputTextTemplate; context: {fieldConfig: card.value}"></ng-container>
@@ -737,11 +743,11 @@
               <ng-container *ngTemplateOutlet="buttonTemplate; context: {fieldConfig: card.value}"></ng-container>
             </div>
 
-            <div *ngSwitchCase="'document'" class="w-full">
+            <!-- <div *ngSwitchCase="'document'" class="w-full">
               <ng-container *ngTemplateOutlet="documentTemplate; context: {fieldConfig: card.value}"></ng-container>
-            </div>
+            </div> -->
 
-            <div *ngSwitchCase="'file'" class="w-full">
+            <div *ngSwitchCase="'files'" class="w-full">
               <ng-container *ngTemplateOutlet="fileTemplate; context: {fieldConfig: card.value}"></ng-container>
             </div>
 
@@ -758,7 +764,7 @@
     </p-card>
 
     <!-- LIBRE -->
-    <div *ngIf="!entry.value?.card && !entry.value?.fieldset" [ngSwitch]="getType(entry.value)"
+    <div *ngIf="!entry.value?.card && !entry.value?.fieldset" [ngSwitch]="entry.value?.type"
       style="padding-top: 5px; padding-bottom: 5px;">
 
       <div *ngSwitchCase="'input-text'">
@@ -819,11 +825,11 @@
         <ng-container *ngTemplateOutlet="selectButtonTemplate; context: {fieldConfig: entry.value}"></ng-container>
       </div>
 
-      <div *ngSwitchCase="'document'" class="w-full">
+      <!-- <div *ngSwitchCase="'document'" class="w-full">
         <ng-container *ngTemplateOutlet="documentTemplate; context: {fieldConfig: entry.value}"></ng-container>
-      </div>
+      </div> -->
 
-      <div *ngSwitchCase="'file'" class="w-full">
+      <div *ngSwitchCase="'files'" class="w-full">
         <ng-container *ngTemplateOutlet="fileTemplate; context: {fieldConfig: entry.value}"></ng-container>
       </div>
 
@@ -855,7 +861,7 @@
           <div *ngFor="let card of entry.value.fieldset | keyvalue : keyComparator;"
             [ngClass]="[card.value.hide ? 'hidden' : '', card.value.class || 'col-span-6', card.value.class_md || 'md:col-span-3']">
 
-            <div [ngSwitch]="getType(card.value)">
+            <div [ngSwitch]="card.value?.type">
 
               <div *ngSwitchCase="'input-text'">
                 <ng-container *ngTemplateOutlet="inputTextTemplate; context: {fieldConfig: card.value}"></ng-container>
@@ -925,11 +931,11 @@
                   *ngTemplateOutlet="selectButtonTemplate; context: {fieldConfig: card.value}"></ng-container>
               </div>
 
-              <div *ngSwitchCase="'document'" class="w-full">
+              <!-- <div *ngSwitchCase="'document'" class="w-full">
                 <ng-container *ngTemplateOutlet="documentTemplate; context: {fieldConfig: card.value}"></ng-container>
-              </div>
+              </div> -->
 
-              <div *ngSwitchCase="'file'" class="w-full">
+              <div *ngSwitchCase="'files'" class="w-full">
                 <ng-container *ngTemplateOutlet="fileTemplate; context: {fieldConfig: card.value}"></ng-container>
               </div>
 
@@ -967,14 +973,14 @@
             <div *ngFor="let field of entry.value.fields | keyvalue : keyComparator;"
               [ngClass]="[ field.value.hide ? 'hidden' : '', field.value.class || 'col-span-6', field.value.class_md || 'md:col-span-3']">
 
-              <div [ngSwitch]="getType(field.value)">
+              <div [ngSwitch]="field.value?.type">
 
-                <div *ngSwitchCase="'document'" class="w-full">
-                  <ng-container
-                    *ngTemplateOutlet="documentTemplate; context: {fieldConfig: field.value}"></ng-container>
-                </div>
+                <!-- 'document' deprecated (diferenciador 3) → mismo template que 'files' -->
+                <!-- <div *ngSwitchCase="'document'" class="w-full">
+                  <ng-container *ngTemplateOutlet="fileTemplate; context: {fieldConfig: field.value}"></ng-container>
+                </div> -->
 
-                <div *ngSwitchCase="'file'" class="w-full">
+                <div *ngSwitchCase="'files'" class="w-full">
                   <ng-container *ngTemplateOutlet="fileTemplate; context: {fieldConfig: field.value}"></ng-container>
                 </div>
 

@@ -1,0 +1,115 @@
+.ra-editor {
+  display: flex;
+  flex-direction: column;
+  gap: .5rem;
+
+  .ra-info {
+    padding: .75rem 1rem;
+    border-radius: 4px;
+    font-size: .85rem;
+    background: rgba(59, 130, 246, .08);
+    color: var(--p-primary-color, #1f6feb);
+  }
+
+  .ra-toolbar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: .5rem;
+    padding: .25rem 0 .5rem;
+    flex-wrap: wrap;
+  }
+
+  .ra-toolbar-actions {
+    display: flex;
+    align-items: center;
+    gap: .25rem;
+  }
+
+  ::ng-deep .ra-panel {
+    margin-bottom: .75rem;
+  }
+
+  ::ng-deep .ra-multi {
+    width: 100%;
+  }
+
+  .ra-fixed-row {
+    display: flex;
+    align-items: center;
+    gap: .75rem;
+    padding: .25rem 0;
+    flex-wrap: wrap;
+
+    .ra-fixed-label {
+      min-width: 11rem;
+      display: flex;
+      flex-direction: column;
+      line-height: 1.1;
+    }
+
+    ::ng-deep .ra-multi {
+      flex: 1 1 16rem;
+      min-width: 16rem;
+    }
+  }
+
+  .ra-warn {
+    color: #92400e;
+    font-size: .8rem;
+  }
+
+  .ra-where-list {
+    display: flex;
+    flex-direction: column;
+    gap: .25rem;
+    margin-bottom: .5rem;
+  }
+
+  .ra-json {
+    width: 100%;
+    min-height: 240px;
+    font-family: ui-monospace, "SFMono-Regular", Consolas, monospace;
+    font-size: .8rem;
+    padding: .5rem;
+    border: 1px solid var(--p-content-border-color, #d1d5db);
+    border-radius: 4px;
+    resize: vertical;
+  }
+
+  .ra-err {
+    color: #b91c1c;
+    font-size: .8rem;
+    padding: .25rem 0;
+  }
+
+  .ra-errors {
+    margin-top: .5rem;
+    padding: .5rem .75rem;
+    border: 1px solid #fecaca;
+    background: #fef2f2;
+    border-radius: 4px;
+    color: #991b1b;
+    font-size: .8rem;
+
+    .ra-errors-title {
+      font-weight: 600;
+      margin-bottom: .25rem;
+    }
+
+    ul {
+      margin: 0;
+      padding-left: 1.25rem;
+    }
+
+    li {
+      margin: .15rem 0;
+    }
+
+    code {
+      background: rgba(0, 0, 0, .06);
+      padding: 0 .3rem;
+      border-radius: 2px;
+    }
+  }
+}

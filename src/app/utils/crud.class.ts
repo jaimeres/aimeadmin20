@@ -3,6 +3,8 @@ import { Location } from '@angular/common';
 import { AbstractControl, FormArray, FormControl, FormGroup, ValidationErrors, ValidatorFn, Validators } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import { forkJoin, of } from 'rxjs';
+import { catchError, map } from 'rxjs/operators';
 import { MenuItem, TreeNode } from 'primeng/api';
 import { CRUDService } from './services/crud.service';
 import {
@@ -10,6 +12,7 @@ import {
   resetFormOptions, saveOptions
 } from './types/crud.types';
 import { Vars } from './vars.class';
+import { DROPDOWN_TYPES_PAYLOAD } from './dropdown-types.const';
 
 @Directive()
 export class CRUD extends Vars implements OnChanges  /*implements OnInit*/ {
@@ -249,11 +252,16 @@ export class CRUD extends Vars implements OnChanges  /*implements OnInit*/ {
     const selectedColumns = arr.length > 0 ? arr : this.selectedColumns();
 
     const fields_prefixes = this.drawForm()[posIndex]?.fields_prefixes || {};
+    // Lista plana de strings para detectar si el field empieza con algún prefijo,
+    // tolerando ambas formas (array de strings o objeto { prefix: config }).
+    const prefixList: string[] = Array.isArray(fields_prefixes)
+      ? fields_prefixes.filter((p: any) => typeof p === 'string')
+      : Object.keys(fields_prefixes);
 
     selectedColumns.forEach((obj) => {
 
       //debe saltarse el valor si el campo inicial igual que cualquieda de los valores de array fields_prefixes
-      if (fields_prefixes && Object.values(fields_prefixes).some((prefix: any) => obj.field.startsWith(prefix))) {
+      if (prefixList.length && prefixList.some(prefix => obj.field.startsWith(prefix))) {
         return;
       }
 
@@ -321,8 +329,7 @@ export class CRUD extends Vars implements OnChanges  /*implements OnInit*/ {
 
       // Guardar icono en historial de breadcrumb siempre (incluso al resolver pendingUrlPos)
       if (this.router && pos) {
-        const posKey = pos.replace(/-/g, '_');
-        const appTypeObj = (this.crudS.appType as any)[posKey] || (this.crudS.appType as any)[pos];
+        const appTypeObj = this.crudS.getAppType(pos);
         if (appTypeObj) {
           let history = JSON.parse(localStorage.getItem('lastVisited') || '[]');
           const entry = { icon: appTypeObj.icon, url: newUrl, name: appTypeObj.name };
@@ -416,6 +423,195 @@ export class CRUD extends Vars implements OnChanges  /*implements OnInit*/ {
   }
 
   /**
+ * Reemplaza los valores en un formulario dinámico (`drawForm`) basándose en los campos de origen y destino.
+ * 
+ * Esta función permite copiar valores de un campo de origen a un campo de destino dentro de una estructura de formulario
+ * dinámica. También soporta la asignación de valores directos (hardcoded) y la búsqueda recursiva en estructuras anidadas
+ * como `card`. Es útil para sincronizar valores entre diferentes campos del formulario o para inicializar valores
+ * predeterminados en campos relacionados.
+ * 
+ * ### Parámetros:
+ * 
+ * @param {string[] | [string, string, string?][]} source_field 
+ *   - **Descripción:** Array que contiene los campos de coincidencia, los campos de origen y opcionalmente un valor directo.
+ *   - **Formato:**
+ *     - Para un solo reemplazo: `['sourceMatchField', 'sourceValueField', 'directValue?']`
+ *     - Para múltiples reemplazos: `[['sourceMatchField1', 'sourceValueField1', 'directValue1?'], ...]`
+ *   - **Detalles:**
+ *     - `sourceMatchField`: Nombre del campo en el formulario que se usará para buscar el valor de origen.
+ *     - `sourceValueField`: Nombre del campo dentro del objeto encontrado que contiene el valor a copiar.
+ *     - `directValue` (opcional): Valor fijo que se asignará directamente al campo de destino, ignorando la búsqueda en el formulario.
+ * 
+ * @param {string[] | [string, string][]} dest_field 
+ *   - **Descripción:** Array que contiene los campos de coincidencia y los campos de destino.
+ *   - **Formato:**
+ *     - Para un solo reemplazo: `['destMatchField', 'destValueField']`
+ *     - Para múltiples reemplazos: `[['destMatchField1', 'destValueField1'], ...]`
+ *   - **Detalles:**
+ *     - `destMatchField`: Nombre del campo en el formulario que se usará para identificar el campo de destino.
+ *     - `destValueField`: Nombre del campo dentro del objeto de destino donde se asignará el valor.
+ * 
+ * @param {any} drawForm 
+ *   - **Descripción:** Objeto que representa el formulario dinámico donde se realizarán los reemplazos.
+ *   - **Detalles:** 
+ *     - Este objeto debe tener una estructura en la que cada clave representa un campo del formulario.
+ *     - Cada campo debe contener al menos las propiedades `field` (nombre del campo) y otras propiedades relacionadas con los valores.
+ *     - Puede contener estructuras anidadas, como `card`, que también serán procesadas recursivamente.
+ * 
+ * ### Comportamiento:
+ * 
+ * 1. **Reemplazo múltiple:**
+ *    - Si `source_field` y `dest_field` son arrays de arrays, se procesan múltiples reemplazos en un solo llamado.
+ *    - Para cada par de campos de origen y destino:
+ *      - Busca el valor en el campo de origen (`sourceMatchField` y `sourceValueField`).
+ *      - Asigna el valor encontrado al campo de destino (`destMatchField` y `destValueField`).
+ * 
+ * 2. **Reemplazo único:**
+ *    - Si `source_field` y `dest_field` son arrays simples, se realiza un único reemplazo.
+ *    - Busca el valor en el campo de origen y lo asigna al campo de destino.
+ * 
+ * 3. **Valor directo (`directValue`):**
+ *    - Si se proporciona `directValue`, este valor se asigna directamente al campo de destino, ignorando la búsqueda en el formulario.
+ * 
+ * 4. **Recursividad:**
+ *    - Si un campo contiene una estructura anidada (`card`), la función se llama recursivamente para procesar los campos dentro de esa estructura.
+ * 
+ * ### Ejemplo de uso:
+ * 
+ * #### Caso 1: Reemplazo único
+ * ```typescript
+ * replaceValDrawForm(
+ *   ['sourceField', 'valueField'], 
+ *   ['destField', 'valueField'], 
+ *   drawForm
+ * );
+ * ```
+ * - Busca el valor en `drawForm` donde `field === 'sourceField'` y copia el valor de `valueField` al campo donde `field === 'destField'`.
+ * 
+ * #### Caso 2: Reemplazo múltiple
+ * ```typescript
+ * replaceValDrawForm(
+ *   [['sourceField1', 'valueField1'], ['sourceField2', 'valueField2']],
+ *   [['destField1', 'valueField1'], ['destField2', 'valueField2']],
+ *   drawForm
+ * );
+ * ```
+ * - Realiza múltiples reemplazos en un solo llamado.
+ * 
+ * #### Caso 3: Uso de `directValue`
+ * ```typescript
+ * replaceValDrawForm(
+ *   ['sourceField', 'valueField', 'fixedValue'], 
+ *   ['destField', 'valueField'], 
+ *   drawForm
+ * );
+ * ```
+ * - Asigna el valor `'fixedValue'` directamente al campo de destino, ignorando la búsqueda en el formulario.
+ * 
+ * ### Validaciones:
+ * 
+ * - Si `source_field` y `dest_field` no son del mismo tipo (ambos arrays simples o ambos arrays de arrays de strings), lanza un error.
+ * - Si `drawForm` no contiene las claves esperadas, la función no realiza ninguna acción.
+ * 
+ * ### Errores:
+ * 
+ * - Si `source_field` y `dest_field` no son arrays de strings o arrays de arrays de strings, lanza un error:
+ *   ```typescript
+ *   throw new Error('source_field y dest_field deben ser ambos arrays de strings o arrays de arrays de strings.');
+ *   ```
+
+ */
+  replaceValDrawForm(source_field: [string, string, any?] | [string, string, any?][], dest_field: [string, string] | [string, string][], drawForm: any) {
+    if (Array.isArray(source_field[0]) && Array.isArray(dest_field[0])) {
+      // Caso de múltiples reemplazos
+      (source_field as [string, string, any?][]).forEach((sourceTriple, index) => {
+        const [sourceMatchField, sourceValueField, directValue] = sourceTriple;
+        const [destMatchField, destValueField] = (dest_field as [string, string][])[index];
+        let source = directValue !== undefined ? directValue : '-1';
+        let key_dest = '-1';
+
+        for (const key in drawForm) {
+          if (!drawForm.hasOwnProperty(key)) continue;
+
+          const field = drawForm[key]['field'];
+          if (directValue === undefined && field === sourceMatchField) {
+            source = drawForm[key][sourceValueField];
+          } else if (field === destMatchField) {
+            key_dest = key;
+          }
+
+          // Llamada recursiva en caso de detectar 'card' en la estructura
+          if (typeof drawForm[key]?.card === 'object') {
+            this.replaceValDrawForm(source_field, dest_field, drawForm[key].card);
+          }
+
+          // Llamada recursiva en caso de detectar 'fieldset' en la estructura
+          if (typeof drawForm[key]?.fieldset === 'object') {
+            this.replaceValDrawForm(source_field, dest_field, drawForm[key].fieldset);
+          }
+
+          if (source !== '-1' && key_dest !== '-1') {
+            drawForm[key_dest][destValueField] = source;
+            break;
+          }
+        }
+      });
+    } else if (typeof source_field[0] === 'string' && typeof dest_field[0] === 'string') {
+      // Caso de un solo reemplazo
+      const [sourceMatchField, sourceValueField, directValue] = source_field as [string, string, string?];
+      const [destMatchField, destValueField] = dest_field as [string, string];
+      let source = directValue !== undefined ? directValue : '-1';
+      let key_dest = '-1';
+
+      for (const key in drawForm) {
+        const field = drawForm[key]['field'];
+
+        if (directValue === undefined && field === sourceMatchField) {
+          source = drawForm[key][sourceValueField];
+        } else if (field === destMatchField) {
+          key_dest = key;
+        }
+
+        // Llamada recursiva en caso de detectar 'card' en la estructura
+        if (typeof drawForm[key]?.card === 'object') {
+          this.replaceValDrawForm(source_field, dest_field, drawForm[key].card);
+        }
+
+        // Llamada recursiva en caso de detectar 'fieldset' en la estructura
+        if (typeof drawForm[key]?.fieldset === 'object') {
+          this.replaceValDrawForm(source_field, dest_field, drawForm[key].fieldset);
+        }
+
+        if (source !== '-1' && key_dest !== '-1') {
+          drawForm[key_dest][destValueField] = source;
+          break;
+        }
+      }
+    } else {
+      throw new Error('source_field y dest_field deben ser ambos arrays de strings o arrays de arrays de strings.');
+    }
+  }
+
+  /**
+   * Busca un valor en un array y opcionalmente lo elimina.
+   * @param {any} value - El valor a buscar en el array.
+   * @param {any[]} values - El array en el que buscar.
+   * @param {boolean} [deleteVal=true] - Si se debe eliminar el valor si se encuentra. Por defecto es true.
+   * @returns {number} - El índice del valor en el array, o -1 si no se encuentra.
+   */
+  searchByValue(value: any, values: any[], deleteVal = true) {
+    if (!Array.isArray(values)) {
+      return -1;
+    }
+    const index = values.indexOf(value);
+    if (index !== -1 && deleteVal) {
+      values.splice(index, 1);
+    }
+    return index;
+  }
+
+
+  /**
    * 
    * @param options 
    */
@@ -448,6 +644,10 @@ export class CRUD extends Vars implements OnChanges  /*implements OnInit*/ {
             if (active && edit) {
               if (value == 'device') {
                 defaultValue = new Date();
+              } else if (value === 'current') {
+                defaultValue = null;
+              } else {
+                defaultValue = value;
               }
             }
 
@@ -581,7 +781,6 @@ export class CRUD extends Vars implements OnChanges  /*implements OnInit*/ {
                     if (value === 'device') {
                       defaultValue = new Date();
                     } else if (value === 'current') {
-                      // Si el valor es 'current', inicializarlo con null
                       defaultValue = null;
                     } else {
                       defaultValue = value;
@@ -828,8 +1027,14 @@ export class CRUD extends Vars implements OnChanges  /*implements OnInit*/ {
           let defaultValue = value;
           const edit = fieldData?.default?.edit !== false; // si edit no está definido, se asume true
 
-          if (active && edit && value === 'device') {
-            defaultValue = new Date();
+          if (active && edit) {
+            if (value === 'device') {
+              defaultValue = new Date();
+            } else if (value === 'current') {
+              defaultValue = null;
+            } else {
+              defaultValue = value;
+            }
           }
 
           // Si edit es false o readonly es true, el campo debe ser disabled
@@ -857,7 +1062,7 @@ export class CRUD extends Vars implements OnChanges  /*implements OnInit*/ {
           }
 
           // Procesar según el tipo de campo
-          if (fieldData.type === 'dropdown' || fieldData.type === 'auto-complete' || fieldData.type === 'tree-select') {
+          if (DROPDOWN_TYPES_PAYLOAD.has(fieldData.type)) {
             // Crear campo oculto para objetos completos
             const hiddenFieldName = 'object_' + fieldName;
             formFields[hiddenFieldName] = this.fb.control(
@@ -874,6 +1079,18 @@ export class CRUD extends Vars implements OnChanges  /*implements OnInit*/ {
               fieldData.field = 'object_' + fieldData.field;
             }
 
+            // Espejar choices en sharedS.data: generateJSONform guardó las choices
+            // (tipos Choice / List) bajo la clave `${pos}:${fieldName}` (sin object_),
+            // pero el renderer ahora consultará usando el field renombrado
+            // `object_${fieldName}`. Replicamos la entrada para que el dropdown
+            // encuentre las opciones sin tener que tocar generateJSONform.
+            const _sharedData = (this.sharedS as any).data;
+            const _origKey = pos + ':' + fieldName;
+            const _objectKey = pos + ':object_' + fieldName;
+            if (_sharedData && _sharedData[_origKey] !== undefined && _sharedData[_objectKey] === undefined) {
+              _sharedData[_objectKey] = _sharedData[_origKey];
+            }
+
             // Si field trae children, recorrer el objeto para procesar campos en cascada
             if (fieldData.children && fieldData.children.fields) {
               // Procesar campos children que recibirán valores en cascada
@@ -886,7 +1103,7 @@ export class CRUD extends Vars implements OnChanges  /*implements OnInit*/ {
 
                     // Solo necesita cambiar el campo de los siguientes tipos porque son los únicos que requieren cambio
                     // para poder ser duplicados y se pueda enviar el objeto en lugar de solo el id
-                    if (typedChildFieldValue.type === 'dropdown' || typedChildFieldValue.type === 'auto-complete' || typedChildFieldValue.type === 'tree-select') {
+                    if (typedChildFieldValue.type === 'dropdown' || typedChildFieldValue.type === 'auto-complete' || typedChildFieldValue.type === 'tree-select' || typedChildFieldValue.type === 'dropdown-choice' || typedChildFieldValue.type === 'multi-select' || typedChildFieldValue.type === 'select-button') {
                       // Solo agregar object_ si no lo tiene ya
                       const newChildFieldKey = childFieldKey.startsWith('object_' + fieldPrefix) ? childFieldKey : 'object_' + childFieldKey;
 
@@ -919,7 +1136,7 @@ export class CRUD extends Vars implements OnChanges  /*implements OnInit*/ {
 
               let subDefaultValue: any = '';
               if (subField.default?.active && subField.default?.edit) {
-                subDefaultValue = subField.default.value === 'device' ? new Date() : subField.default.value;
+                subDefaultValue = subField.default.value === 'device' ? new Date() : (subField.default.value === 'current' ? null : subField.default.value);
               }
 
               // Determinar si el campo debe ser de solo lectura
@@ -1028,19 +1245,101 @@ export class CRUD extends Vars implements OnChanges  /*implements OnInit*/ {
             );
             formFields[fieldName].updateValueAndValidity();
 
-          } if (fieldData.type === 'document') {
-            // el validador ordinario del formularo, es decir, casmpos field
+          } if (fieldData.type === 'files') {
+            // [[[II Escenario 1/2 — campo `files` (relación M2M o relación hija).
+            // Reglas confirmadas con usuario (docs/documents/2026-05-16_001):
+            //   - `{prefix}files`     → valor inicial = default.value ([]). Almacena
+            //                           [{id, type}] cuando el usuario usa subida
+            //                           directa. NO se registra como relationship
+            //                           JSON:API: el valor viaja en `attributes`.
+            //   - `{prefix}documents` → valor inicial = default.value ([]). Almacena
+            //                           base64 cuando el usuario usa "(formulario)".
+            //                           En submit, [] se transforma a null.
+            //   - root.required=true se propaga a:
+            //       · documents si upload.active (solo cuando key == field)
+            //       · files     si server_upload.active
+            //       · key ctrl  si upload.active Y key != field (per-step stepper)
+            //       (si ambos activos → ambos requeridos; appendFile y
+            //        _pushServerFileToForm limpian el opuesto al llenar uno).
+            //   - upload.required / server_upload.required SOLO endurecen su lado.
+            // Escenario multi-step (key != field): cuando dos o más steps usan el
+            //   mismo `field` pero con `key` distintos (p.e. _inicial/_final), se
+            //   crea un FormControl per-step para cada key. El sibling `*_documents`
+            //   se crea sin required (es almacenamiento compartido). Esto permite que
+            //   formErrors() valide cada step de forma independiente.
+            // Importante: las relaciones padres/hijas `relacion_data_*` NO son
+            // exclusivas de files; este bloque ataca solo cuando el field es
+            // de tipo `files`. Otros tipos (date, dropdown, etc.) caen en sus
+            // ramas correspondientes arriba/abajo. ]]]FI
+            const upload = fieldData.upload || {};
+            const serverUpload = fieldData.server_upload || {};
+            const initialValue = Array.isArray(fieldData?.default?.value)
+              ? fieldData.default.value
+              : (fieldData?.default?.value ?? []);
+
+            // Detectar si hay un key per-step (key != field → stepper multi-step)
+            const perStepKey = fieldData.key;
+            const hasPerStepKey = !!(perStepKey
+              && perStepKey !== fieldName
+              && perStepKey !== fieldPrefix + 'documents'
+              && fieldPrefix !== 'form_fields_data_');
+
+            // Reaprovechamos validators que ya trae max_length/min_length y
+            // quitamos required, para añadirlo selectivamente abajo.
+            const baseValidators = validators.filter((v: any) => v !== Validators.required);
+
+            const filesValidators: any[] = [...baseValidators];
+            const documentsValidators: any[] = [...baseValidators];
+
+            // Cuando hay control per-step, *_documents no porta required:
+            // el required va al control per-step (perStepKey).
+            if (fieldData.required && upload.active && !hasPerStepKey) {
+              documentsValidators.push(Validators.required);
+            }
+            if (fieldData.required && serverUpload.active) {
+              filesValidators.push(Validators.required);
+            }
+            if (fieldData.required && !upload.active && !serverUpload.active) {
+              // Sin sub-modos declarados: required aplica al control base files.
+              filesValidators.push(Validators.required);
+            }
+            if (upload.required && !hasPerStepKey) {
+              documentsValidators.push(Validators.required);
+            }
+            if (serverUpload.required) {
+              filesValidators.push(Validators.required);
+            }
+
             formFields[fieldName] = this.fb.control(
-              { value: null, disabled: disabled },
-              { nonNullable: false, validators: validators }
+              { value: initialValue, disabled: disabled },
+              { nonNullable: false, validators: filesValidators }
             );
 
-            //campos repetidos para que tambien detengas el formulario cuando son obligatorios,
-            //si el documentos es mas de 1 campo, porejemplo, imagen_inicial, imagen_final, etc
-            formFields[fieldData.key] = this.fb.control(
-              { value: null, disabled: disabled },
-              { nonNullable: false, validators: validators }
-            );
+            // El control `{prefix}documents` solo se crea cuando NO estamos
+            // dentro de form_fields_data_ (Escenario 3 no usa documents).
+            if (fieldPrefix !== 'form_fields_data_') {
+              formFields[fieldPrefix + 'documents'] = this.fb.control(
+                { value: initialValue, disabled: disabled },
+                { nonNullable: false, validators: documentsValidators }
+              );
+            }
+
+            // Control per-step: un FormControl independiente por key distinto.
+            // Se protege con !formFields[perStepKey] para no sobreescribir si
+            // ya fue creado al procesar otro step con el mismo field.
+            if (hasPerStepKey && !formFields[perStepKey]) {
+              const perStepValidators: any[] = [...baseValidators];
+              if (fieldData.required && upload.active) {
+                perStepValidators.push(Validators.required);
+              }
+              if (upload.required) {
+                perStepValidators.push(Validators.required);
+              }
+              formFields[perStepKey] = this.fb.control(
+                { value: null, disabled: disabled },
+                { nonNullable: false, validators: perStepValidators }
+              );
+            }
 
             formFields[fieldName].updateValueAndValidity();
 
@@ -1058,192 +1357,582 @@ export class CRUD extends Vars implements OnChanges  /*implements OnInit*/ {
     }); // Cierre del forEach de nodos (dynamicFields)
   }
 
+  // ============================================================================
+  // HELPERS para escenarios de campos `files` (1, 2 y 3)
+  // ----------------------------------------------------------------------------
+  // ESCENARIO 1: campo `files` del modelo principal (relación M2M) + `documents`
+  // ESCENARIO 2: campos `files` en modelos relacionados (addFieldsByPrefix)
+  // ESCENARIO 3: campos `files` dentro de form_data / form_fields_data_*
+  // ============================================================================
+
   /**
- * Reemplaza los valores en un formulario dinámico (`drawForm`) basándose en los campos de origen y destino.
- * 
- * Esta función permite copiar valores de un campo de origen a un campo de destino dentro de una estructura de formulario
- * dinámica. También soporta la asignación de valores directos (hardcoded) y la búsqueda recursiva en estructuras anidadas
- * como `card`. Es útil para sincronizar valores entre diferentes campos del formulario o para inicializar valores
- * predeterminados en campos relacionados.
- * 
- * ### Parámetros:
- * 
- * @param {string[] | [string, string, string?][]} source_field 
- *   - **Descripción:** Array que contiene los campos de coincidencia, los campos de origen y opcionalmente un valor directo.
- *   - **Formato:**
- *     - Para un solo reemplazo: `['sourceMatchField', 'sourceValueField', 'directValue?']`
- *     - Para múltiples reemplazos: `[['sourceMatchField1', 'sourceValueField1', 'directValue1?'], ...]`
- *   - **Detalles:**
- *     - `sourceMatchField`: Nombre del campo en el formulario que se usará para buscar el valor de origen.
- *     - `sourceValueField`: Nombre del campo dentro del objeto encontrado que contiene el valor a copiar.
- *     - `directValue` (opcional): Valor fijo que se asignará directamente al campo de destino, ignorando la búsqueda en el formulario.
- * 
- * @param {string[] | [string, string][]} dest_field 
- *   - **Descripción:** Array que contiene los campos de coincidencia y los campos de destino.
- *   - **Formato:**
- *     - Para un solo reemplazo: `['destMatchField', 'destValueField']`
- *     - Para múltiples reemplazos: `[['destMatchField1', 'destValueField1'], ...]`
- *   - **Detalles:**
- *     - `destMatchField`: Nombre del campo en el formulario que se usará para identificar el campo de destino.
- *     - `destValueField`: Nombre del campo dentro del objeto de destino donde se asignará el valor.
- * 
- * @param {any} drawForm 
- *   - **Descripción:** Objeto que representa el formulario dinámico donde se realizarán los reemplazos.
- *   - **Detalles:** 
- *     - Este objeto debe tener una estructura en la que cada clave representa un campo del formulario.
- *     - Cada campo debe contener al menos las propiedades `field` (nombre del campo) y otras propiedades relacionadas con los valores.
- *     - Puede contener estructuras anidadas, como `card`, que también serán procesadas recursivamente.
- * 
- * ### Comportamiento:
- * 
- * 1. **Reemplazo múltiple:**
- *    - Si `source_field` y `dest_field` son arrays de arrays, se procesan múltiples reemplazos en un solo llamado.
- *    - Para cada par de campos de origen y destino:
- *      - Busca el valor en el campo de origen (`sourceMatchField` y `sourceValueField`).
- *      - Asigna el valor encontrado al campo de destino (`destMatchField` y `destValueField`).
- * 
- * 2. **Reemplazo único:**
- *    - Si `source_field` y `dest_field` son arrays simples, se realiza un único reemplazo.
- *    - Busca el valor en el campo de origen y lo asigna al campo de destino.
- * 
- * 3. **Valor directo (`directValue`):**
- *    - Si se proporciona `directValue`, este valor se asigna directamente al campo de destino, ignorando la búsqueda en el formulario.
- * 
- * 4. **Recursividad:**
- *    - Si un campo contiene una estructura anidada (`card`), la función se llama recursivamente para procesar los campos dentro de esa estructura.
- * 
- * ### Ejemplo de uso:
- * 
- * #### Caso 1: Reemplazo único
- * ```typescript
- * replaceValDrawForm(
- *   ['sourceField', 'valueField'], 
- *   ['destField', 'valueField'], 
- *   drawForm
- * );
- * ```
- * - Busca el valor en `drawForm` donde `field === 'sourceField'` y copia el valor de `valueField` al campo donde `field === 'destField'`.
- * 
- * #### Caso 2: Reemplazo múltiple
- * ```typescript
- * replaceValDrawForm(
- *   [['sourceField1', 'valueField1'], ['sourceField2', 'valueField2']],
- *   [['destField1', 'valueField1'], ['destField2', 'valueField2']],
- *   drawForm
- * );
- * ```
- * - Realiza múltiples reemplazos en un solo llamado.
- * 
- * #### Caso 3: Uso de `directValue`
- * ```typescript
- * replaceValDrawForm(
- *   ['sourceField', 'valueField', 'fixedValue'], 
- *   ['destField', 'valueField'], 
- *   drawForm
- * );
- * ```
- * - Asigna el valor `'fixedValue'` directamente al campo de destino, ignorando la búsqueda en el formulario.
- * 
- * ### Validaciones:
- * 
- * - Si `source_field` y `dest_field` no son del mismo tipo (ambos arrays simples o ambos arrays de arrays de strings), lanza un error.
- * - Si `drawForm` no contiene las claves esperadas, la función no realiza ninguna acción.
- * 
- * ### Errores:
- * 
- * - Si `source_field` y `dest_field` no son arrays de strings o arrays de arrays de strings, lanza un error:
- *   ```typescript
- *   throw new Error('source_field y dest_field deben ser ambos arrays de strings o arrays de arrays de strings.');
- *   ```
+   * Normaliza `drawForm[pos].fields_prefixes` a un array de objetos
+   * `{ prefix, config }` con compatibilidad hacia atrás.
+   *
+   * Acepta:
+   *   - Array de strings legacy:        ['request_data_', 'form_fields_data_']
+   *   - Objeto nuevo con config:         { 'maintenance_document_data_': { data_type:'document', kind:'child' } }
+   *
+   * Siempre garantiza que el prefijo `form_fields_data_` esté presente.
+   */
+  protected _normalizeFieldsPrefixes(pos: any): { prefix: string; config: any }[] {
+    const draw = this.drawForm()[pos];
+    const raw = draw?.fields_prefixes;
+    const out: { prefix: string; config: any }[] = [];
+    const seen = new Set<string>();
 
- */
-  replaceValDrawForm(source_field: [string, string, any?] | [string, string, any?][], dest_field: [string, string] | [string, string][], drawForm: any) {
-    if (Array.isArray(source_field[0]) && Array.isArray(dest_field[0])) {
-      // Caso de múltiples reemplazos
-      (source_field as [string, string, any?][]).forEach((sourceTriple, index) => {
-        const [sourceMatchField, sourceValueField, directValue] = sourceTriple;
-        const [destMatchField, destValueField] = (dest_field as [string, string][])[index];
-        let source = directValue !== undefined ? directValue : '-1';
-        let key_dest = '-1';
+    const push = (prefix: string, config: any = {}) => {
+      if (!prefix || seen.has(prefix)) return;
+      seen.add(prefix);
+      out.push({ prefix, config: config || {} });
+    };
 
-        for (const key in drawForm) {
-          if (!drawForm.hasOwnProperty(key)) continue;
-
-          const field = drawForm[key]['field'];
-          if (directValue === undefined && field === sourceMatchField) {
-            source = drawForm[key][sourceValueField];
-          } else if (field === destMatchField) {
-            key_dest = key;
+    if (Array.isArray(raw)) {
+      // Formatos soportados dentro del array:
+      //   - 'prefix_'                              (legacy)
+      //   - { prefix:'prefix_', kind, data_type }  (forma autodescriptiva)
+      //   - { 'prefix_': { kind, data_type, filter } }  (forma compacta real)
+      for (const p of raw) {
+        if (typeof p === 'string') {
+          push(p);
+        } else if (p && typeof p === 'object') {
+          if (typeof (p as any).prefix === 'string') {
+            push((p as any).prefix, p);
+          } else {
+            for (const [prefix, config] of Object.entries(p)) push(prefix, config);
           }
-
-          // Llamada recursiva en caso de detectar 'card' en la estructura
-          if (typeof drawForm[key]?.card === 'object') {
-            this.replaceValDrawForm(source_field, dest_field, drawForm[key].card);
-          }
-
-          // Llamada recursiva en caso de detectar 'fieldset' en la estructura
-          if (typeof drawForm[key]?.fieldset === 'object') {
-            this.replaceValDrawForm(source_field, dest_field, drawForm[key].fieldset);
-          }
-
-          if (source !== '-1' && key_dest !== '-1') {
-            drawForm[key_dest][destValueField] = source;
-            break;
-          }
-        }
-      });
-    } else if (typeof source_field[0] === 'string' && typeof dest_field[0] === 'string') {
-      // Caso de un solo reemplazo
-      const [sourceMatchField, sourceValueField, directValue] = source_field as [string, string, string?];
-      const [destMatchField, destValueField] = dest_field as [string, string];
-      let source = directValue !== undefined ? directValue : '-1';
-      let key_dest = '-1';
-
-      for (const key in drawForm) {
-        const field = drawForm[key]['field'];
-
-        if (directValue === undefined && field === sourceMatchField) {
-          source = drawForm[key][sourceValueField];
-        } else if (field === destMatchField) {
-          key_dest = key;
-        }
-
-        // Llamada recursiva en caso de detectar 'card' en la estructura
-        if (typeof drawForm[key]?.card === 'object') {
-          this.replaceValDrawForm(source_field, dest_field, drawForm[key].card);
-        }
-
-        // Llamada recursiva en caso de detectar 'fieldset' en la estructura
-        if (typeof drawForm[key]?.fieldset === 'object') {
-          this.replaceValDrawForm(source_field, dest_field, drawForm[key].fieldset);
-        }
-
-        if (source !== '-1' && key_dest !== '-1') {
-          drawForm[key_dest][destValueField] = source;
-          break;
         }
       }
-    } else {
-      throw new Error('source_field y dest_field deben ser ambos arrays de strings o arrays de arrays de strings.');
+    } else if (raw && typeof raw === 'object') {
+      for (const [prefix, config] of Object.entries(raw)) push(prefix, config);
+    }
+
+    // Garantizar siempre form_fields_data_ (Escenario 3)
+    push('form_fields_data_');
+    return out;
+  }
+
+  /**
+   * Recorre recursivamente el drawForm de una posición para detectar si bajo el
+   * `prefix` existe al menos un campo `type === 'files'`. Lo usamos para decidir
+   * si hay que hacer GETs de relaciones secundarias (Escenario 2).
+   */
+  protected _prefixHasFilesField(pos: any, prefix: string): boolean {
+    const draw = this.drawForm()[pos];
+    if (!draw) return false;
+    let found = false;
+    const walk = (node: any) => {
+      if (found || !node || typeof node !== 'object') return;
+      if (node.type === 'files' && typeof node.field === 'string' && node.field.startsWith(prefix)) {
+        found = true;
+        return;
+      }
+      for (const child of Object.values(node)) {
+        if (child && typeof child === 'object') walk(child);
+      }
+    };
+    walk(draw);
+    return found;
+  }
+
+  /**
+   * ESCENARIO 3: aplana el dict `form_data` que ahora trae el servidor para que
+   * la lógica existente del formulario encuentre los valores en la raíz del
+   * item al hacer `reset(selected)`.
+   *
+    * Reglas (basadas en cómo `addFieldsByPrefix` genera los controles):
+   *   - Dropdowns y derivados (`dropdown`, `auto-complete`, `tree-select`,
+    *     `dropdown-choice`, `multi-select`, `select-button`) crean DOS controles:
+    *       · `object_<field>` → control enlazado al dropdown (debe recibir el id).
+    *       · `<field>`        → control espejo para payload.
+    *     En edit dejamos ambos con el id escalar; si el usuario cambia la
+    *     selección, `app-custom-draw-form` vuelve a poblar `<field>` con el dict.
+   *   - `files`: array (URLs o base64). Va a `<field>`.
+   *   - Resto (escalares, fechas, booleanos): valor tal cual a `<field>`.
+   *
+   * Mutates `data` y devuelve la misma referencia para encadenar.
+   */
+  protected _flattenFormData(data: any, pos: any): any {
+    if (!data || typeof data !== 'object') return data;
+    const fd = data.form_data;
+    if (!fd || typeof fd !== 'object' || Array.isArray(fd)) return data;
+
+    // [[[II DROPDOWN_TYPES_PAYLOAD: fuente única en utils/dropdown-types.const.ts ]]]FI
+    // field -> type según el drawForm de esta posición.
+    // Importante: `addFieldsByPrefix` renombra `fieldData.field` a `object_<field>`
+    // para los dropdowns, por lo que buscamos también por ese alias.
+    const typeByField: { [k: string]: string } = {};
+    const draw = this.drawForm()[pos];
+    const walk = (node: any) => {
+      if (!node || typeof node !== 'object') return;
+      const f = node.field;
+      if (typeof f === 'string' && (f.startsWith('form_fields_data_') || f.startsWith('object_form_fields_data_'))) {
+        const canonical = f.startsWith('object_') ? f.slice('object_'.length) : f;
+        if (node.type) typeByField[canonical] = node.type;
+      }
+      for (const child of Object.values(node)) {
+        if (child && typeof child === 'object') walk(child);
+      }
+    };
+    walk(draw);
+
+    for (const [k, v] of Object.entries(fd)) {
+      const t = typeByField[k];
+      if (t && DROPDOWN_TYPES_PAYLOAD.has(t)) {
+        const normalizedId = (v && typeof v === 'object' && !Array.isArray(v)) ? (v as any).id : v;
+        // El dropdown se enlaza al control `object_<field>` y matchea por id.
+        if (!('object_' + k in data)) data['object_' + k] = normalizedId;
+        // El control espejo queda con el id; si el usuario toca el campo luego,
+        // custom-draw-form lo convertirá al dict completo usando las opciones.
+        if (!(k in data)) data[k] = normalizedId;
+      } else {
+        if (!(k in data)) data[k] = v;
+      }
+    }
+    return data;
+  }
+
+  /**
+   * ESCENARIO 3: para cada campo `form_fields_data_*` de tipo `files`, fusiona
+   * las URLs previamente guardadas en `selected[0].form_data[campo]` con los
+   * nuevos archivos en base64 que el usuario haya añadido en `formData[campo]`.
+   *
+   * Reglas:
+   *   - Si el control viene `null` o sin cambios → conserva las URLs previas.
+   *   - Si viene array → conserva URLs previas que no se hayan eliminado y
+   *     concatena los nuevos elementos base64.
+   *   - Si viene array vacío `[]` → respeta la intención del usuario (borrar todo).
+   */
+  protected _mergeFormDataFiles(pos: any, formData: any): void {
+    if (!formData || typeof formData !== 'object') return;
+    const draw = this.drawForm()[pos];
+    if (!draw) return;
+    const selectedItem = this.selected()[0];
+    const previousFormData = selectedItem?.form_data || {};
+
+    // Construye un mapa rápido fieldName -> drawNode (solo de tipo files dentro de form_fields_data_)
+    const filesByField: { [field: string]: any } = {};
+    const walk = (node: any) => {
+      if (!node || typeof node !== 'object') return;
+      if (node.type === 'files' && typeof node.field === 'string' && node.field.startsWith('form_fields_data_')) {
+        filesByField[node.field] = node;
+      }
+      for (const child of Object.values(node)) {
+        if (child && typeof child === 'object') walk(child);
+      }
+    };
+    walk(draw);
+
+    for (const fieldName of Object.keys(filesByField)) {
+      const current = formData[fieldName];
+      const previous = Array.isArray(previousFormData[fieldName]) ? previousFormData[fieldName] : [];
+
+      // null/undefined: no se modificó → conservar previas (server reescribe el campo siempre)
+      if (current === null || current === undefined) {
+        if (previous.length > 0) formData[fieldName] = [...previous];
+        continue;
+      }
+
+      // El control puede contener: URLs (strings), objetos {file, file_name} (base64 nuevos)
+      // o mezcla. Mantenemos el orden que vino del control y completamos con URLs previas
+      // que aún no estén ahí.
+      if (Array.isArray(current)) {
+        const present = new Set(
+          current.filter((x: any) => typeof x === 'string')
+        );
+        const merged: any[] = [...current];
+        for (const url of previous) {
+          if (typeof url === 'string' && !present.has(url)) merged.push(url);
+        }
+        formData[fieldName] = merged;
+      }
     }
   }
 
   /**
-   * Busca un valor en un array y opcionalmente lo elimina.
-   * @param {any} value - El valor a buscar en el array.
-   * @param {any[]} values - El array en el que buscar.
-   * @param {boolean} [deleteVal=true] - Si se debe eliminar el valor si se encuentra. Por defecto es true.
-   * @returns {number} - El índice del valor en el array, o -1 si no se encuentra.
+   * ESCENARIO 3: recompone los dropdown-like `form_fields_data_*` dentro de
+   * `formData.form_data` antes del POST/PATCH.
+   *
+   * En la UI, `object_<field>` guarda el id/string para que PrimeNG seleccione
+   * correctamente. El control `<field>` puede llegar aquí como string (si el
+   * usuario no tocó el campo tras cargar edit) o como dict (si sí lo cambió y
+   * custom-draw-form espejó la opción completa).
+   *
+   * `code`/`name` se recuperan primero desde `selected()[0].form_data[field]`
+   * cuando el id coincide; si ya cambió la selección, se buscan en las opciones
+   * del drawForm o en la caché `sharedS.data/drawDropdown` para reconstruir el
+   * mismo shape que espera el backend dentro de `form_data`.
    */
-  searchByValue(value: any, values: any[], deleteVal = true) {
-    if (!Array.isArray(values)) {
-      return -1;
+  protected _rebuildFormDataDicts(pos: any, formData: any): void {
+    if (!formData || typeof formData !== 'object') return;
+
+    const draw = this.drawForm()[pos];
+    if (!draw) return;
+
+    const selectedItem = this.selected()[0];
+    const previousFormData = selectedItem?.form_data || {};
+    // [[[II DROPDOWN_TYPES_PAYLOAD compartido (utils/dropdown-types.const.ts) ]]]FI
+    const nestedFormData = (
+      formData.form_data
+      && typeof formData.form_data === 'object'
+      && !Array.isArray(formData.form_data)
+    ) ? { ...formData.form_data } : {};
+
+    const flattenOptions = (options: any[]): any[] => {
+      const flat: any[] = [];
+
+      const visit = (option: any): void => {
+        if (!option || typeof option !== 'object') return;
+
+        if (option.data?.raw && typeof option.data.raw === 'object') {
+          flat.push(option.data.raw);
+        } else if (option.data && typeof option.data === 'object' && (option.data.id !== undefined || option.data.value !== undefined)) {
+          flat.push(option.data);
+        } else {
+          flat.push(option);
+        }
+
+        if (Array.isArray(option.children)) {
+          option.children.forEach(visit);
+        }
+      };
+
+      options.forEach(visit);
+      return flat;
+    };
+
+    const collectOptions = (fieldName: string, fieldCfg: any): any[] => {
+      const out: any[] = [];
+      const dt = fieldCfg?.data_type && typeof fieldCfg.data_type === 'object' ? fieldCfg.data_type : null;
+      const dataBag = (this.sharedS as any).data || {};
+      const drawDropdownBag = (this.sharedS as any).drawDropdown || {};
+
+      const pushOptions = (source: any): void => {
+        if (!Array.isArray(source) || source.length === 0) return;
+        out.push(...flattenOptions(source));
+      };
+
+      pushOptions(fieldCfg?.options);
+      pushOptions(dt?.options);
+      pushOptions(dataBag[pos + ':object_' + fieldName]);
+      pushOptions(dataBag[pos + ':' + fieldName]);
+      pushOptions(drawDropdownBag[pos + ':object_' + fieldName]);
+      pushOptions(drawDropdownBag[pos + ':' + fieldName]);
+
+      return out;
+    };
+
+    const toPayloadDict = (option: any, fallbackId: any): any => {
+      if (!option || typeof option !== 'object') {
+        return { id: fallbackId, code: null, name: null };
+      }
+
+      const payload: any = {
+        id: option.id ?? option.value ?? fallbackId ?? null,
+        code: option.code ?? null,
+        name: option.name ?? option.display_name ?? option.label ?? null,
+      };
+      const skipKeys = new Set([
+        'parent', 'children', 'expanded', 'partialChecked', 'leaf', 'key',
+        'label', 'icon', 'styleClass', 'draggable', 'droppable', 'selectable',
+        'data', 'type'
+      ]);
+
+      for (const [key, value] of Object.entries(option)) {
+        if (key in payload || skipKeys.has(key)) continue;
+        if (value === null || typeof value !== 'object') {
+          payload[key] = value;
+        }
+      }
+
+      return payload;
+    };
+
+    const rebuildSingleValue = (fieldName: string, rawValue: any, fieldCfg: any): any => {
+      if (rawValue && typeof rawValue === 'object' && !Array.isArray(rawValue)) {
+        return rawValue;
+      }
+
+      const previousValue = previousFormData[fieldName];
+      if (previousValue && typeof previousValue === 'object' && !Array.isArray(previousValue) && previousValue.id === rawValue) {
+        return previousValue;
+      }
+
+      const optionValueKey = fieldCfg?.option_value || 'id';
+      const match = collectOptions(fieldName, fieldCfg).find((option: any) => {
+        const candidate = option?.[optionValueKey] ?? option?.id ?? option?.value;
+        return candidate === rawValue;
+      });
+
+      return toPayloadDict(match, rawValue);
+    };
+
+    const rebuildArrayValue = (fieldName: string, rawValue: any[], fieldCfg: any): any[] => {
+      return rawValue
+        .map((value: any) => rebuildSingleValue(fieldName, value, fieldCfg))
+        .filter((value: any) => value !== null && value !== undefined);
+    };
+
+    const candidateFields = new Set<string>();
+    Object.keys(formData).forEach((key) => {
+      if (key.startsWith('form_fields_data_')) candidateFields.add(key);
+      if (key.startsWith('object_form_fields_data_')) candidateFields.add(key.slice('object_'.length));
+    });
+
+    for (const fieldName of candidateFields) {
+      const objectFieldName = 'object_' + fieldName;
+      const hasPayloadControl = Object.prototype.hasOwnProperty.call(formData, fieldName);
+      const hasUiControl = Object.prototype.hasOwnProperty.call(formData, objectFieldName);
+      if (!hasPayloadControl && !hasUiControl) continue;
+
+      const fieldCfg = this._findFieldConfigInDraw(draw, fieldName)
+        ?? this._findFieldConfigInDraw(draw, objectFieldName);
+      if (!fieldCfg || !DROPDOWN_TYPES_PAYLOAD.has(fieldCfg.type)) continue;
+
+      const sourceValue = hasPayloadControl ? formData[fieldName] : formData[objectFieldName];
+
+      if (Array.isArray(sourceValue)) {
+        nestedFormData[fieldName] = sourceValue.length > 0
+          ? rebuildArrayValue(fieldName, sourceValue, fieldCfg)
+          : [];
+      } else if (sourceValue === null || sourceValue === undefined || sourceValue === '') {
+        nestedFormData[fieldName] = null;
+      } else {
+        nestedFormData[fieldName] = rebuildSingleValue(fieldName, sourceValue, fieldCfg);
+      }
+
+      delete formData[objectFieldName];
+      delete formData[fieldName];
     }
-    const index = values.indexOf(value);
-    if (index !== -1 && deleteVal) {
-      values.splice(index, 1);
+
+    if (Object.keys(nestedFormData).length > 0) {
+      formData.form_data = nestedFormData;
     }
-    return index;
+  }
+
+  /**
+   * ESCENARIO 1: en PATCH del modelo principal, si el registro ya tenía
+   * relaciones en `files` y el usuario NO añadió archivos nuevos, eliminamos
+   * el campo `documents` del payload para que el servidor no intente crear
+   * nuevos archivos y conserve las relaciones existentes.
+   *
+   * Si el usuario sí añadió archivos (this.files / this.files64), `documents`
+   * se mantiene para que el servidor cree los nuevos y los AGREGUE a las
+   * relaciones existentes (NO las reemplaza).
+   */
+  protected _pruneDocumentsOnPatch(formData: any): void {
+    if (!formData || typeof formData !== 'object') return;
+    const selectedItem = this.selected()[0];
+    const itemHasFiles = Array.isArray(selectedItem?.files) && selectedItem.files.length > 0;
+    const userAddedNewFiles =
+      (Array.isArray(this.files) && this.files.length > 0) ||
+      (Array.isArray(this.files64) && this.files64.length > 0) ||
+      (Array.isArray(formData.documents) && formData.documents.length > 0);
+
+    if (itemHasFiles && !userAddedNewFiles) {
+      delete formData.documents;
+    }
+  }
+
+  /**
+   * ESCENARIO 2 (relaciones PADRE): NO se modifica el `include` aquí.
+   *
+   * Las relaciones padre con campos `files` ya vienen aplanadas en el item por
+   * el flujo normal: `iniParam` construye `this.include[pos]` desde las columnas
+   * visibles, el server las devuelve en `included` y `DJAtoObject` las copia
+   * a la raíz del objeto. Por lo tanto, los controles `{prefix}files` se
+   * llenan automáticamente al hacer `reset(selected)` en `resetFormDialog`.
+   *
+   * Razón del cambio: el prefijo del frontend (ej. `maintenance_document_data_`)
+   * usa `_data_` como separador y NO corresponde 1:1 con el nombre JSON:API
+   * de la relación. Intentar derivar el nombre quitando el `_` final genera
+   * peticiones inválidas (`parse_error` del servidor). Si una relación padre
+   * con archivos no estuviese ya en `include`, lo correcto es añadir su
+   * columna canónica a `this.cols()` (o `this.include[pos]`) — no inferirla
+   * desde el prefijo.
+   */
+  protected _includeForParentPrefixes(pos: any, baseInclude: string): string {
+    return baseInclude;
+  }
+
+  /**
+   * ESCENARIO 2 — relaciones HIJAS: dispara en paralelo un GET por cada prefijo
+   * declarado en `drawForm[pos].fields_prefixes` con `kind:'child'`, un único
+   * request por prefijo aunque el prefijo agrupe múltiples campos. Pobla los
+   * controles `{prefix}files` con las URLs existentes y limpia los validadores
+   * `required` de `{prefix}files`/`{prefix}documents` cuando ya hay archivos
+   * guardados (la relación está completa, no debe bloquear el save).
+   *
+   * Fuente de la verdad para el endpoint (acordado con el usuario):
+   *   fields_prefixes: [
+   *     { 'maintenance_document_data_': {
+   *         kind:'child',
+   *         data_type:'maintenance-document',  // app/type JSON:API
+   *         filter:'maintenance'               // → filter[maintenance]=<parentId>
+   *     }}
+   *   ]
+   *
+   * Si un prefijo TIENE campos `files` en drawForm pero NO está configurado
+   * como `child` con `data_type`, se considera mal configurado: los controles
+   * `{prefix}files` y `{prefix}documents` se deshabilitan y se avisa al usuario.
+   */
+  protected _loadChildPrefixData(pos: any, parentId: string): void {
+    const prefixes = this._normalizeFieldsPrefixes(pos);
+    const tasks: { prefix: string; obs: any }[] = [];
+    const unconfigured: string[] = [];
+
+    // Lookup rápido por prefijo de la config declarada.
+    const configByPrefix: { [p: string]: any } = {};
+    for (const { prefix, config } of prefixes) configByPrefix[prefix] = config;
+
+    // Detectar TODOS los prefijos declarados como `kind:'child'` (no solo los
+    // que tienen campos `files`). Las relaciones hijas pueden tener cualquier
+    // tipo de campos; el GET aplica para poblar todos sus controles, no solo
+    // files/documents.
+    const candidatePrefixes: string[] = [];
+    for (const { prefix, config } of prefixes) {
+      if (prefix === 'form_fields_data_') continue;
+      if (config?.kind === 'child') candidatePrefixes.push(prefix);
+    }
+
+    for (const prefix of candidatePrefixes) {
+      const config = configByPrefix[prefix] || {};
+
+      // `data_type` siempre es la CLAVE del diccionario `appType` del CRUDService
+      // (ej. 'maintenance-document'). NUNCA construir la URL desde el string
+      // crudo: `getAppType` es el ÚNICO punto autorizado para resolver
+      // `app` (ruta JSON:API completa, ej. 'assets/maintenance-document') y
+      // `type` (resource type JSON:API).
+      const dtKey = typeof config.data_type === 'string'
+        ? config.data_type
+        : (config.data_type?.type || config.data_type?.app || '');
+      const appTypeEntry = this.crudS.getAppType(dtKey);
+      const app = appTypeEntry?.app;
+      const type = appTypeEntry?.type;
+
+      if (!app) {
+        unconfigured.push(prefix);
+        continue;
+      }
+
+      const parentRel = config.filter || config.parent_field;
+      if (!parentRel) {
+        unconfigured.push(prefix);
+        continue;
+      }
+      const filter = `filter[${parentRel}]=${parentId}`;
+
+      tasks.push({
+        prefix,
+        obs: this.crudS.getObject({ app, type, filter, include: '' }).pipe(
+          // Importante: NO usar DJAtoObject aquí. Necesitamos el shape JSON:API
+          // crudo para extraer `relationships.files.data` como `[{id, type}]`
+          // (lo que validateRelationships + baseDJA esperan para reenviar la
+          // relación). DJAtoObject aplanaría a URLs y perderíamos el `type`.
+          map((resp: any) => resp),
+          catchError(err => {
+            console.warn(`[_loadChildPrefixData] fallo prefijo ${prefix}`, err);
+            return of({ data: [] });
+          })
+        )
+      });
+    }
+
+    // Deshabilitar controles de prefijos mal configurados.
+    if (unconfigured.length) {
+      const form = this.currentForm(pos);
+      for (const prefix of unconfigured) {
+        form?.get(prefix + 'files')?.disable();
+        form?.get(prefix + 'documents')?.disable();
+      }
+      this.messageS.changeMessage(
+        `Campos de relación sin configurar en fields_prefixes: ${unconfigured.join(', ')}. Revise la configuración.`,
+        null, {}, 'warn'
+      );
+    }
+
+    if (tasks.length === 0) return;
+
+    this.showBlocked();
+    forkJoin(tasks.map(t => t.obs)).subscribe({
+      next: (results: any[]) => {
+        const form = this.currentForm(pos);
+        const selectedItem = this.selected()[0];
+        tasks.forEach((task, i) => {
+          const resp = results[i] || { data: [] };
+          const dataArr: any[] = Array.isArray(resp?.data) ? resp.data : [];
+          if (dataArr.length === 0) return;
+
+          // Tomar primer hijo (modelo 1:1 implícito). Para 1:N este loader
+          // necesita ampliarse, pero la config actual no lo cubre.
+          const first = dataArr[0];
+
+          // Aplanar attributes del hijo a los controles `{prefix}<field>`.
+          const attrs = first?.attributes || {};
+          for (const [k, v] of Object.entries(attrs)) {
+            const ctrl = form?.get(task.prefix + k);
+            if (ctrl) ctrl.setValue(v as any, { emitEvent: false });
+          }
+
+          // Extraer `relationships.files.data` como `[{id, type}]` para
+          // viajar directamente en attributes (no en relationships JSON:API).
+          const filesCtrl = form?.get(task.prefix + 'files');
+          if (filesCtrl) {
+            const rel = first?.relationships?.files?.data;
+            const filesArr = Array.isArray(rel)
+              ? rel.filter((r: any) => r?.id).map((r: any) => ({ id: r.id, type: r.type || 'file' }))
+              : [];
+            filesCtrl.setValue(filesArr, { emitEvent: false });
+          }
+
+          // documents arranca con [] (default). En PATCH se envía null si vacío.
+          const docsCtrl = form?.get(task.prefix + 'documents');
+          docsCtrl?.setValue([], { emitEvent: false });
+
+          // Capturar id del hijo para PATCH (`{prefix}id`).
+          if (selectedItem && first?.id) {
+            selectedItem[task.prefix + 'id'] = first.id;
+          }
+
+          // En edición con archivos previos, relajar required.
+          const filesArrLen = Array.isArray(filesCtrl?.value) ? filesCtrl!.value.length : 0;
+          if (filesArrLen > 0) {
+            filesCtrl?.clearValidators();
+            filesCtrl?.updateValueAndValidity({ emitEvent: false });
+            docsCtrl?.clearValidators();
+            docsCtrl?.updateValueAndValidity({ emitEvent: false });
+          }
+        });
+        this.showBlocked(false);
+      },
+      error: () => this.showBlocked(false)
+    });
+  }
+
+  /**
+   * Devuelve la lista de prefijos (string) que aparecen como prefijo de algún
+   * campo `type==='files'` en el drawForm de la posición indicada.
+   * Se usa para detectar relaciones que requieren config en fields_prefixes.
+   */
+  protected _collectFilesPrefixes(pos: any): string[] {
+    const draw = this.drawForm()[pos];
+    const declared = this._normalizeFieldsPrefixes(pos).map(x => x.prefix);
+    const found = new Set<string>();
+    const walk = (node: any) => {
+      if (!node || typeof node !== 'object') return;
+      if (node.type === 'files' && typeof node.field === 'string') {
+        // Busca el prefijo declarado más largo que coincida (evita falsos positivos).
+        const match = declared
+          .filter(p => node.field.startsWith(p))
+          .sort((a, b) => b.length - a.length)[0];
+        if (match) found.add(match);
+      }
+      for (const child of Object.values(node)) {
+        if (child && typeof child === 'object') walk(child);
+      }
+    };
+    walk(draw);
+    return Array.from(found);
   }
 
   /**
@@ -1349,20 +2038,59 @@ export class CRUD extends Vars implements OnChanges  /*implements OnInit*/ {
           const val_local = this.searchByValueObject(field, boolLocal)[0];
           // en caso de que no se haya encontrado el campo en el fieldsBool[0], se agrega formulario
           val = val_local ? val_local.default : fieldObj.initial;
-        } else if (fieldObj.type == 'Integer' || fieldObj.type == 'Decimal' || fieldObj.type == 'DateTime') {
+        } else if (fieldObj.type == 'Integer' || fieldObj.type == 'Decimal') {
           //para que los ceros no se muestren como null
           val = fieldObj.initial !== undefined && fieldObj.initial !== null ? fieldObj.initial : null;
+
+        } else if (fieldObj.type == 'DateTime') {
+          console.log('¿¿¿¿¿¿¿¿¿¿¿¿¿¿¿¿¿¿', fieldObj.initial);
+
+          val = fieldObj.initial !== undefined && fieldObj.initial !== null ? fieldObj.initial : null;
+
         } else if (fieldObj.type == 'Choice') {
           (this.sharedS as any).data[posIndex + ':' + field_prefix + field] = fieldObj?.choices || null;
           val = fieldObj.initial || '';
+        } else if (fieldObj.relationship_type == 'ManyToMany') {
+          // Soporta dos formas de inicial:
+          //  - JSON string  → JSON.parse
+          //  - array nativo → se usa tal cual
+          //  - cualquier otra cosa → []
+          let initial: any[] = [];
+          if (Array.isArray(fieldObj.initial)) {
+            initial = fieldObj.initial;
+          } else if (typeof fieldObj.initial === 'string' && fieldObj.initial.trim() !== '') {
+            try { initial = JSON.parse(fieldObj.initial); } catch { initial = []; }
+            if (!Array.isArray(initial)) initial = [];
+          }
+          val = initial;
+
+          // Si el field expone un sub-serializer (child.type === 'Serializer'),
+          // persistimos el esquema de cada elemento de la colección para que el
+          // emisor pueda construir `data: [{ type, id, meta:{...}, ... }]` JSON:API.
+          // El esquema queda accesible vía sharedS.data en la clave `${pos}:${field}__child_schema`.
+          if (fieldObj?.child?.type === 'Serializer' && fieldObj?.child?.children) {
+            (this.sharedS as any).data[posIndex + ':' + field_prefix + field + '__child_schema'] = {
+              parent_resource: fieldObj.relationship_resource || null,
+              fields: fieldObj.child.children
+            };
+          }
+
+          // required en colecciones: al menos 1 elemento.
+          if (fieldObj.required) {
+            const minOne = (ctrl: AbstractControl): ValidationErrors | null => {
+              const v = ctrl.value;
+              return Array.isArray(v) && v.length > 0 ? null : { required: true };
+            };
+            // reemplazamos el Validators.required (no aplica a arrays) por minOne
+            const idx = validators.indexOf(Validators.required);
+            if (idx !== -1) validators.splice(idx, 1);
+            validators.push(minOne);
+          }
         } else if (fieldObj.type == 'GenericField') {
           val = fieldObj.initial || null;
         } else if (fieldObj.type == 'Image') {
           val = fieldObj.initial || null;
-        } else if (fieldObj.relationship_type == 'ManyToMany') {
-          const initial = fieldObj.initial ? JSON.parse(fieldObj.initial) : [];
-          val = initial || null;
-        } else if (fieldObj.type == 'List') {
+        } else if (fieldObj.type == 'List') { //child
           //si initian es un array, ub objecto o un json
 
           //°°°aqui caen los documents deberia llamar a la configuración y agregar elementos por documents_ y algo, por ejemplo
@@ -1376,8 +2104,18 @@ export class CRUD extends Vars implements OnChanges  /*implements OnInit*/ {
               (this.sharedS as any).data[posIndex + ':' + field_prefix + field] = fieldObj?.child?.choices;
             }
           }
-          if (fieldObj.initial && typeof fieldObj.initial == 'object') {
-            val = JSON.parse(fieldObj.initial);
+
+          if (Array.isArray(fieldObj.initial)) {
+            val = fieldObj.initial;
+          } else if (fieldObj.initial && typeof fieldObj.initial === 'object') {
+            val = fieldObj.initial;
+          } else if (typeof fieldObj.initial === 'string' && fieldObj.initial.trim() !== '') {
+            try {
+              val = JSON.parse(fieldObj.initial);
+            } catch {
+              // Algunos List (p.ej. choices locales) llegan como valor simple, no como JSON.
+              val = fieldObj.initial;
+            }
           } else {
             val = [];
           }
@@ -1390,15 +2128,12 @@ export class CRUD extends Vars implements OnChanges  /*implements OnInit*/ {
     }
 
     const draw = this.drawForm()[posIndex];
-    const fields_prefixes = draw?.fields_prefixes || [];
+    // Normaliza fields_prefixes a una lista uniforme (compat array de strings y objeto)
+    const fields_prefixes = this._normalizeFieldsPrefixes(posIndex);
 
-    //sumar form_fields_data_ a fields_prefixes si no existe 
-    if (!fields_prefixes.includes('form_fields_data_')) {
-      fields_prefixes.push('form_fields_data_');
-    }
+    for (const { prefix: field_prefix } of fields_prefixes) {
+      console.log('?????????????????????????', field_prefix);
 
-    //recorrer el array Array [ "request_data_", "form_fields_data_" ]
-    for (const field_prefix of fields_prefixes) {
       this.addFieldsByPrefix(formFields, draw, field_prefix, posIndex);
     }
 
@@ -1528,6 +2263,76 @@ export class CRUD extends Vars implements OnChanges  /*implements OnInit*/ {
         }
 
         cols.push(columnObj);
+      }
+    }
+
+    // Agregar columnas para los campos form_fields_data_ declarados en el drawForm,
+    // análogo a cómo generateJSONform agrega controles mediante addFieldsByPrefix.
+    // El header se obtiene de customField()[pos] (settings/settings/me): se consideran
+    // solo las claves que inician con 'form_fields_data_'.
+    // Se agrega ANTES del sort para que el order de colsConfig las ubique en la posición correcta.
+    const drawForCols = this.drawForm()[pos];
+    if (drawForCols) {
+      const fieldsPrefixes = this._normalizeFieldsPrefixes(pos);
+      for (const { prefix: pfx } of fieldsPrefixes) {
+        if (pfx !== 'form_fields_data_') continue;
+
+        Object.keys(drawForCols).forEach(nodeKey => {
+          if (nodeKey === 'dialog' || nodeKey === 'fields_prefixes') return;
+
+          const node = drawForCols[nodeKey];
+          if (!node || typeof node !== 'object') return;
+
+          const layoutsToProcess: any[] = [];
+          if (node.grid && typeof node.grid === 'object') {
+            layoutsToProcess.push(node.grid);
+          } else if (node.nested && typeof node.nested === 'object') {
+            layoutsToProcess.push(node.nested);
+          }
+
+          if (node.stepper?.steps) {
+            Object.keys(node.stepper.steps).forEach(stepKey => {
+              const step = node.stepper.steps[stepKey];
+              if (step?.fields && typeof step.fields === 'object') {
+                layoutsToProcess.push(step.fields);
+              }
+            });
+          }
+
+          layoutsToProcess.forEach(fieldsLayout => {
+            Object.keys(fieldsLayout).forEach(key => {
+              const fieldData = fieldsLayout[key];
+              const fieldName = fieldData?.field;
+              if (!fieldName || !fieldName.startsWith(pfx)) return;
+              // Saltar controles object_ (son duplicados UI para dropdown)
+              if (fieldName.startsWith('object_')) return;
+
+              // El header proviene de customField()[pos] (settings/settings/me) o del drawForm
+              const header = this.customField()[pos]?.[fieldName] || fieldData.header || fieldName;
+
+              // En los items de la tabla, form_fields_data_* está anidado en form_data (atributo del modelo)
+              const colField = 'form_data.' + fieldName;
+              const columnObj: any = { field: colField, header };
+
+              // Aplicar colsConfig (sortable, hide, order) igual que los campos regulares
+              if (colsConfig && colsConfig[fieldName]) {
+                const fieldConfig = colsConfig[fieldName];
+                if (fieldConfig.hasOwnProperty('sortable')) {
+                  columnObj.sortable = fieldConfig.sortable;
+                }
+                if (fieldConfig.hide === true) {
+                  if (!this.itemsRemove[safePos]) this.itemsRemove[safePos] = [];
+                  this.itemsRemove[safePos].push(columnObj.field);
+                }
+                if (fieldConfig.hasOwnProperty('order')) {
+                  columnObj._order = parseInt(fieldConfig.order, 10);
+                }
+              }
+
+              cols.push(columnObj);
+            });
+          });
+        });
       }
     }
 
@@ -2096,18 +2901,31 @@ export class CRUD extends Vars implements OnChanges  /*implements OnInit*/ {
     this.iniParam(this.cols()); //se inicializa el include y el fields para que se muestren todos los campos en el form
     this.showBlocked();
 
-    const include = this.include[pos];
+    // ESCENARIO 2 (relaciones padre con files): no se manipula el `include`.
+    // El flujo normal ya las trae via `iniParam` + `DJAtoObject` (aplanado).
+    // Ver `_includeForParentPrefixes` para el detalle.
+    const include = this._includeForParentPrefixes(pos, this.include[pos]);
+
     this.crudS.getDetail({ id, include }).subscribe({
       next: (resp: any) => {
         this.showBlocked(false);
         const additionalFieldsAppCols = this.additionalFieldsAppCols[pos] || [];
         const data = this.DJAtoObject({ resp, additionalFieldsAppCols });
 
-        console.log('000*****', additionalFieldsAppCols, data);
+        // ESCENARIO 3: aplanar `form_data` para que la lógica existente de
+        // dropdowns/files encuentre `form_fields_data_xxx` en la raíz del item.
+        this._flattenFormData(data, pos);
 
+        console.log('000*****', additionalFieldsAppCols, data);
 
         //obtener los campos classifers del formulario form()
         this.classifierLevelsDropdown(data);
+
+        // ESCENARIO 2 (relaciones HIJAS con files): un GET por prefijo `kind:'child'`
+        // (en paralelo con forkJoin) para poblar `{prefix}files` / `{prefix}documents`.
+        // Se dispara DESPUÉS de classifierLevelsDropdown para no bloquear la apertura
+        // del diálogo: el usuario verá el formulario y los hijos se rellenan al llegar.
+        this._loadChildPrefixData(pos, id);
       },
       error: (err: any) => {
         this.showBlocked(false);
@@ -2457,36 +3275,17 @@ export class CRUD extends Vars implements OnChanges  /*implements OnInit*/ {
     this.files64 = [];
 
     if (selected) {
-      // Convierte a {key, id, label} SOLO los campos tree-select (PrimeNG lo requiere).
-      // Los campos multi-select deben quedar como array de IDs simples para que
-      // PrimeNG pueda hacer la comparación optionValue='id' → chip label correcto.
-      const draw = this.drawForm()[pos];
-      const treeSelectFields = new Set<string>();
-      if (draw) {
-        const walkDraw = (node: any) => {
-          if (!node || typeof node !== 'object') return;
-          if (node.type === 'tree-select' && node.field) treeSelectFields.add(node.field);
-          for (const child of Object.values(node)) {
-            if (child && typeof child === 'object') walkDraw(child);
-          }
-        };
-        walkDraw(draw);
-      }
-
+      // [[[II ESC:001-07 DOC:docs/documents/2026-05-16_001_consolidacion_dropdown_types_y_fix_escenarios.md#escenario-07
+      // Rehidrata tree-selects al shape real de PrimeNG (array de nodos con
+      // key/label) y conserva la relación serializada para reenvío en edición.
+      const drawAtPos = this.drawForm()[pos];
       for (const [key, value] of Object.entries(selected)) {
-        if (key === 'classifiers' || key === 'included' || !Array.isArray(value) || value.length === 0) continue;
-        if (!treeSelectFields.has(key)) continue; // solo tree-select necesita {key, id, label}
-        const included = selected.included || [];
-        for (let i = 0; i < value.length; i++) {
-          const element = value[i];
-          for (let j = 0; j < included.length; j++) {
-            const el = included[j];
-            if (el.id === element) {
-              selected[key][i] = { key: el.id, id: el.id, label: el.attributes.name };
-            }
-          }
-        }
+        if (key === 'classifiers' || key === 'included' || !Array.isArray(value)) continue;
+        const fieldCfg = this._findFieldConfigInDraw(drawAtPos, key);
+        if (fieldCfg?.type !== 'tree-select') continue;
+        selected[key] = this._hydrateTreeSelectControlValue(selected, key, fieldCfg);
       }
+      // ]]]FI
       //necesito seprar las fechas que se conviertes en 2 campos una para las convertidas y otras para el formulario enviado al servidor
       //this.timeZone trae las fechas a convertir, para las fechas de crud no har problema porque esas no se envias
 
@@ -2535,18 +3334,6 @@ export class CRUD extends Vars implements OnChanges  /*implements OnInit*/ {
     const form = this.currentForm(pos) as FormGroup;
     if (pos === null || !form) return false;
 
-    // Valida files si aplica (ajusta 'files'/'documents' según tu control real)
-    //|||lo comento porque parece que ya no es necesario ya que lo require ya se cconfigurar en el server
-    /*const filesCtrl = form.get('files');
-    if (is_file) {
-      const noFiles =
-        (this.files?.length ?? 0) === 0 &&
-        (this.files64?.length ?? 0) === 0 &&
-        (!filesCtrl || (Array.isArray(filesCtrl.value) ? filesCtrl.value.length === 0 : !filesCtrl.value));
-
-      if (noFiles) filesCtrl?.setErrors({ required: true });
-      else filesCtrl?.setErrors(null);
-    }*/
 
     if (form.valid) return false;
 
@@ -2577,63 +3364,22 @@ export class CRUD extends Vars implements OnChanges  /*implements OnInit*/ {
     visit(form, []);
 
     // Mensaje y salida
-    (this.messageS as any).changeMessage('Revise campos marcados en rojo.', errors, this.customField()[pos]);
+    console.log(this.customField()[pos]);
+
+    (this.messageS as any).changeMessage('Revise campos marcados en rojo...', errors, this.customField()[pos]);
     return true;
   }
-  /*formErrors(pos = this.pos(), is_file = false): boolean {
-    const form = this.currentForm(pos);
-    if (pos === null) return false; // Retornar false si pos es null
-    console.log('form().valid', form.valid, form);
 
-    if (is_file && this.files.length === 0 && this.files64.length === 0 && form.get('files')?.value.length === 0) {
-      //°°°activar
-      //form.get('documents')?.setErrors({ required: true });
-    } else {
-      form.get('documents')?.setErrors(null);
-    }
-
-    // si el formulario no es valido, busco cuales son los campos que tienen errores y los muestro en el mensaje,
-    // cpon esto el usuario sabe que campos son los que tienen errores
-    if (!form.valid) {
-      const errors: any = {};
-      errors['local'] = []; // con local hago diferencia si el error es local o del servidor
-      Object.keys(form.controls).forEach((controlName) => {
-        const control: any = form.get(controlName);
-
-        if (control.errors) {
-          errors['local'].push({ errors: control.errors, field: controlName });
-          console.log('control', controlName, control);
-          //en caso que el form no sea valido, marco el campo como sucio para que lo ponga en rojo y lanzo el mensaje
-          control?.markAsDirty();
-          control?.markAsTouched();
-        } else if (control.controls) {
-
-          //°°°esta pendiente acceder el al thml para tomar el nombre de la etiqueta o otro
-          //lugar para personalizar el mensaje
-          Object.keys(control.controls).forEach((controlName) => {
-            const controlSub: any = control.get(controlName);
-            console.log('controlSub', controlName, controlSub.errors, controlSub);
-            if (controlSub.errors) {
-              console.log('detaleeeeesss', controlName, controlSub);
-              //°°°esta deshabilitado porque el mensaje ya que no expesifico el campo
-              //errors['local'].push({ errors: controlSub.errors, field: controlName })
-              controlSub?.markAsDirty();
-              controlSub?.markAsTouched();
-            }
-          });
-        }
-      });
-
-      //muestro el mensaje con los error y detengo la función
-      (this.messageS as any).changeMessage('Revise campos marcados en rojo.', errors, this.customField()[pos]);
-      return true;
-    }
-    return false;
-  }*/
 
   /**
    * Valida las relaciones del formulario
    * @param pos Posición de la app en el array
+   *
+   * Para campos `tree-select` con `tree.serialization` declarado en su config
+   * (estrategia genérica `child_relationship_with_parent_meta`) se transforma
+   * la selección de TreeNodes en un array JSON:API "rico" con `meta` y campos
+   * extra. `baseDJA` reconoce el flag `__rich:true` y los preserva tal cual.
+   * El resto de campos mantienen el comportamiento original.
    */
   validateRelationships(pos: any) {
     // Pongo relationships=null en lugar de relationships=[], porque aunque esta vacio simpre entrará a la primera
@@ -2642,10 +3388,313 @@ export class CRUD extends Vars implements OnChanges  /*implements OnInit*/ {
     // asigno el id de la relación al campo correspondiente, por ejemplo, si la relación es con user,
     //el campo se llama user ?????
 
+    const formValueAll = this.currentForm(pos).value;
+    const drawAtPos = this.drawForm()[pos];
 
     for (let element of this.crudS.relationships) {
-      element.id = this.currentForm(pos).value[element.field];
+      const rawValue = formValueAll[element.field];
+
+      // Detección genérica de tree-select con serialización configurable.
+      // No se hardcodea por nombre de campo: se busca la config del field en
+      // el drawForm de esta posición.
+      const fieldCfg = this._findFieldConfigInDraw(drawAtPos, element.field);
+      const treeCfg = fieldCfg?.tree;
+      if (fieldCfg?.type === 'tree-select' && treeCfg?.serialization && Array.isArray(rawValue)) {
+        const serialized = this._serializeTreeSelection(rawValue, treeCfg);
+        element.id = serialized;
+        // Si la estrategia define un type diferente al declarado en relationships
+        // (p.ej. el padre es `responsible` pero la relación es a `person`),
+        // se respeta el type del primer item serializado para que baseDJA lo
+        // use como fallback cuando algún item no traiga `type`.
+        if (serialized.length && serialized[0].type) {
+          element.type = serialized[0].type;
+        }
+        continue;
+      }
+
+      element.id = rawValue;
     }
+  }
+
+  /**
+   * Busca recursivamente en la config `drawForm[pos]` el primer objeto cuyo
+   * `field === fieldName`. Cubre `grid`, `card`, `fieldset`, `stepper.steps`,
+   * `children.fields.{static|dynamic|derived}` y cualquier otra estructura
+   * anidada sin acoplarse a un layout específico.
+   */
+  private _findFieldConfigInDraw(draw: any, fieldName: string): any | null {
+    if (!draw || !fieldName) return null;
+    const seen = new WeakSet<object>();
+    const walk = (n: any): any | null => {
+      if (!n || typeof n !== 'object') return null;
+      if (seen.has(n)) return null;
+      seen.add(n);
+      if (Array.isArray(n)) {
+        for (const it of n) {
+          const r = walk(it);
+          if (r) return r;
+        }
+        return null;
+      }
+      if (n.field === fieldName && (n.type || n.data_type || n.tree)) {
+        return n;
+      }
+      for (const k of Object.keys(n)) {
+        // evitar campos no estructurales que pueden contener strings idénticos
+        const v = n[k];
+        if (v && typeof v === 'object') {
+          const r = walk(v);
+          if (r) return r;
+        }
+      }
+      return null;
+    };
+    return walk(draw);
+  }
+
+  // [[[II ESC:001-07 DOC:docs/documents/2026-05-16_001_consolidacion_dropdown_types_y_fix_escenarios.md#escenario-07
+  /**
+   * Rehidrata un tree-select en edición al shape que PrimeNG compara por `key`
+   * y renderiza por `label`, conservando además la relación serializada para
+   * poder reenviarla intacta cuando el usuario no toca el campo.
+   */
+  private _hydrateTreeSelectControlValue(selected: any, fieldName: string, fieldCfg: any): any[] {
+    const current = Array.isArray(selected?.[fieldName]) ? selected[fieldName] : [];
+    if (!current.length) return [];
+
+    const first = current[0];
+    if (first && typeof first === 'object' && first.key !== undefined && first.label !== undefined) {
+      return current;
+    }
+
+    const relationItems = Array.isArray(selected?.[`${fieldName}__array`]) ? selected[`${fieldName}__array`] : [];
+    const included = Array.isArray(selected?.included) ? selected.included : [];
+
+    return current
+      .map((rawValue: any) => {
+        const relationId = rawValue?.data?.id ?? rawValue?.id ?? rawValue?.value ?? rawValue;
+        if (!relationId) return null;
+
+        const relation = relationItems.find((item: any) => item?.id === relationId)
+          ?? (rawValue && typeof rawValue === 'object' ? rawValue : null);
+        const includedItem = included.find((item: any) => item?.id === relationId) ?? null;
+        const nodeType = this._resolveTreeSelectNodeType(relation, includedItem, fieldCfg);
+        const serialized = this._buildTreeSerializedItemFromRelation(relation, fieldCfg, nodeType, relationId);
+
+        return {
+          key: nodeType ? `${nodeType}:${relationId}` : String(relationId),
+          label: this._resolveTreeSelectNodeLabel(includedItem, relation, fieldCfg, relationId),
+          data: {
+            id: relationId,
+            type: nodeType,
+            parent: this._getTreeSelectParentFromSerializedItem(serialized),
+            __serialized: serialized,
+          },
+          selectable: true,
+          leaf: true,
+          __serialized: serialized,
+        };
+      })
+      .filter((node: any) => node !== null);
+  }
+
+  private _buildTreeSerializedItemFromRelation(relation: any, fieldCfg: any, fallbackType: string | null, fallbackId: any): any | null {
+    const treeSer = fieldCfg?.tree?.serialization || {};
+    const relationMeta = this._normalizeTreeRelationMeta(relation?.meta);
+    const itemId = relation?.id ?? fallbackId ?? null;
+    if (!itemId) return null;
+
+    const item: any = {
+      __rich: true,
+      type: relation?.type || fallbackType || treeSer.relationship_type_default,
+      id: itemId,
+    };
+
+    if (treeSer.meta && typeof treeSer.meta === 'object') {
+      const metaOut: any = {};
+      for (const key of Object.keys(treeSer.meta)) {
+        const metaCfg = treeSer.meta[key] || {};
+        const source = relationMeta?.[key] ?? relation?.meta?.[key] ?? null;
+        if (!source?.id) continue;
+        metaOut[key] = { type: source.type || metaCfg.type, id: source.id };
+      }
+      if (Object.keys(metaOut).length) item.meta = metaOut;
+    }
+
+    if (treeSer.extra && typeof treeSer.extra === 'object') {
+      for (const key of Object.keys(treeSer.extra)) {
+        if (relation?.[key] !== undefined) item[key] = relation[key];
+        else if (relationMeta?.[key] !== undefined) item[key] = relationMeta[key];
+        else item[key] = treeSer.extra[key];
+      }
+    }
+
+    return item;
+  }
+
+  private _normalizeTreeRelationMeta(meta: any): any | null {
+    if (Array.isArray(meta)) {
+      return meta.find((item: any) => item && typeof item === 'object') || null;
+    }
+    return meta && typeof meta === 'object' ? meta : null;
+  }
+
+  private _resolveTreeSelectNodeType(relation: any, includedItem: any, fieldCfg: any): string | null {
+    const levels = Array.isArray(fieldCfg?.tree?.levels) ? fieldCfg.tree.levels : [];
+    const fallbackLevel = [...levels].reverse().find((level: any) => level?.selectable !== false)
+      ?? [...levels].reverse().find((level: any) => !!level);
+    return relation?.type
+      || includedItem?.type
+      || fallbackLevel?.resource
+      || fallbackLevel?.data_type?.type
+      || fallbackLevel?.name
+      || null;
+  }
+
+  private _resolveTreeSelectLabelField(relation: any, includedItem: any, fieldCfg: any): any {
+    const nodeType = this._resolveTreeSelectNodeType(relation, includedItem, fieldCfg);
+    const rootCfg = fieldCfg?.tree?.root || {};
+    const rootType = rootCfg?.resource || rootCfg?.data_type?.type || rootCfg?.name || null;
+    if (rootCfg?.label_field && (!nodeType || rootType === nodeType)) {
+      return rootCfg.label_field;
+    }
+
+    const levels = Array.isArray(fieldCfg?.tree?.levels) ? fieldCfg.tree.levels : [];
+    const levelCfg = levels.find((level: any) => {
+      const levelType = level?.resource || level?.data_type?.type || level?.name || null;
+      return !!levelType && levelType === nodeType;
+    });
+
+    return levelCfg?.label_field || rootCfg?.label_field || fieldCfg?.option_label || 'name';
+  }
+
+  private _resolveTreeSelectNodeLabel(includedItem: any, relation: any, fieldCfg: any, fallbackId: any): string {
+    const labelField = this._resolveTreeSelectLabelField(relation, includedItem, fieldCfg);
+    const includedSource = includedItem?.attributes
+      ? { id: includedItem.id, type: includedItem.type, ...includedItem.attributes }
+      : includedItem;
+    const includeLabel = this._readTreeSelectLabel(includedSource, labelField, String(fallbackId));
+    return this._readTreeSelectLabel(relation, labelField, includeLabel);
+  }
+
+  private _readTreeSelectLabel(source: any, labelField: any, fallback: string): string {
+    if (!source || typeof source !== 'object') return fallback;
+    if (typeof source.label === 'string' && source.label.trim() !== '') return source.label.trim();
+
+    const labelFields = typeof labelField === 'string' && labelField.includes(',')
+      ? labelField.split(',').map((field: string) => field.trim()).filter((field: string) => field !== '')
+      : [labelField || 'name'];
+    const parts = labelFields
+      .map((field: string) => source?.[field])
+      .filter((value: any) => value != null && String(value).trim() !== '')
+      .map((value: any) => String(value).trim());
+    if (parts.length) return parts.join(' ');
+
+    return String(source?.name ?? source?.display_name ?? source?.username ?? fallback ?? '');
+  }
+
+  private _getTreeSelectParentFromSerializedItem(serialized: any): any | null {
+    if (!serialized?.meta || typeof serialized.meta !== 'object') return null;
+    const parent = Object.values(serialized.meta)
+      .find((value: any) => value && typeof value === 'object' && value.id);
+    return parent ? { id: (parent as any).id, type: (parent as any).type || null } : null;
+  }
+
+  private _getPreserializedTreeSelectionItem(node: any, treeCfg: any): any | null {
+    const explicit = node?.__serialized ?? node?.data?.__serialized;
+    if (explicit && typeof explicit === 'object') {
+      return this._buildTreeSerializedItemFromRelation(
+        explicit,
+        { tree: treeCfg },
+        explicit?.type ?? node?.data?.type ?? null,
+        explicit?.id ?? node?.data?.id ?? null,
+      );
+    }
+
+    if (node?.__rich || node?.__jsonapi) {
+      return this._buildTreeSerializedItemFromRelation(node, { tree: treeCfg }, node?.type ?? null, node?.id ?? null);
+    }
+
+    if ((!node?.data || typeof node.data !== 'object') && node?.id) {
+      return this._buildTreeSerializedItemFromRelation(node, { tree: treeCfg }, node?.type ?? null, node?.id ?? null);
+    }
+
+    return null;
+  }
+  // ]]]FI
+
+  /**
+   * Convierte la selección actual de un `<p-treeSelect>` (array de TreeNodes)
+   * en un array JSON:API "rico" segun `tree.serialization`.
+   *
+   * Estrategia soportada: `child_relationship_with_parent_meta`
+   *   - Solo se serializan nodos seleccionables (hojas configuradas con
+   *     `selectable: true`), descartando nodos raíz no seleccionables.
+   *   - El `type` del item es el del nodo hijo (`selected_node.resource`).
+   *   - El `id` del item es `selected_node.data.id`.
+   *   - El `meta` se construye desde `tree.serialization.meta`, tomando
+   *     `id_from`/`type` del nodo padre cuando se indica `parent_node.id`.
+   *   - Cualquier `tree.serialization.extra` se mezcla en cada item
+   *     (p.ej. `source: "M"` para selección manual).
+   *
+   * Si falta info crítica (parent en meta, id de child) el item se omite
+   * para no enviar relaciones incompletas al backend.
+   */
+  private _serializeTreeSelection(selection: any[], treeCfg: any): any[] {
+    if (!Array.isArray(selection)) return [];
+    const ser = treeCfg?.serialization || {};
+    const strategy = ser.strategy || 'child_relationship_with_parent_meta';
+    const out: any[] = [];
+
+    for (const node of selection) {
+      // [[[II ESC:001-07 DOC:docs/documents/2026-05-16_001_consolidacion_dropdown_types_y_fix_escenarios.md#escenario-07
+      const preserved = this._getPreserializedTreeSelectionItem(node, treeCfg);
+      if (preserved) {
+        out.push(preserved);
+        continue;
+      }
+      // ]]]FI
+
+      if (!node || typeof node !== 'object') continue;
+      const data = node.data || {};
+      // Solo nodos hoja seleccionables. p-treeSelect en checkbox propaga la
+      // selección al padre; ese padre vendrá con selectable:false desde el
+      // mapeo de TreeNodes y debe descartarse.
+      if (node.selectable === false) continue;
+      if (!data.id) continue;
+
+      if (strategy === 'child_relationship_with_parent_meta') {
+        const parentData = data.parent || node.parent?.data || null;
+        const item: any = {
+          __rich: true,
+          type: data.type || ser.relationship_type_default,
+          id: data.id,
+        };
+        // meta declarado en config: { meta: { responsible: { type: 'responsible', id_from: 'parent_node.id' } } }
+        if (ser.meta && typeof ser.meta === 'object') {
+          const metaOut: any = {};
+          for (const k of Object.keys(ser.meta)) {
+            const m = ser.meta[k] || {};
+            const idFrom = m.id_from || 'parent_node.id';
+            let metaId: any = null;
+            if (idFrom === 'parent_node.id') metaId = parentData?.id ?? null;
+            else if (idFrom === 'selected_node.id') metaId = data.id;
+            if (!metaId) continue; // sin metadata padre no se serializa
+            metaOut[k] = { type: m.type, id: metaId };
+          }
+          if (Object.keys(metaOut).length) item.meta = metaOut;
+          else continue; // meta requerido y no resuelto
+        }
+        if (ser.extra && typeof ser.extra === 'object') {
+          Object.assign(item, ser.extra);
+        }
+        out.push(item);
+      } else {
+        // Estrategia default: enviar como relación simple { type, id }
+        out.push({ __rich: true, type: data.type, id: data.id });
+      }
+    }
+    return out;
   }
 
   /**
@@ -2695,7 +3744,7 @@ export class CRUD extends Vars implements OnChanges  /*implements OnInit*/ {
     //recorer formData y quitar todos los campos quue tiene la cadena document_
     Object.keys(formData).forEach((key) => {
 
-      console.log(key, typeof formData[key] === 'object', formData[key] !== null, formData[key]);
+      //console.log(key, typeof formData[key] === 'object', formData[key] !== null, formData[key]);
 
       const value = formData[key];
 
@@ -2704,41 +3753,41 @@ export class CRUD extends Vars implements OnChanges  /*implements OnInit*/ {
 
         if (target && typeof target === 'object' && target.constructor === Object) {
           const field = (target as any).field;
+          const innerKey = (target as any).key;
 
-          // ✅ Borra solo si el key NO es el mismo que el field
-          // (ej: inventory_movement_data_document_final -> se borra)
-          // (ej: inventory_movement_data_documents -> NO se borra)
-          if (field && key && key !== field) {
+          // [[[II Borrar solo controles "duplicados" legacy: cuando el key del
+          // formulario no coincide ni con el `field` ni con el `key` del
+          // payload base64. Con la inversión de ruteo (base64 → key/documents),
+          // el control `{prefix}documents` queda con items cuyo `key` ES su
+          // propio nombre — NO debe borrarse. Ver docs/documents/2026-05-16_001. ]]]FI
+          if (field && key && key !== field && key !== innerKey) {
             delete formData[key];
+          } else if (field && key && key === field && !Array.isArray(value) && (target as any).file !== undefined) {
+            // ✅ Normaliza campo tipo List: si el valor es un objeto suelto (caché antigua)
+            // con datos de archivo (propiedad 'file'), lo envuelve en un array.
+            formData[key] = [value];
           }
         }
       }
-
-
-
-      // revisar si formData[key] es objeto
-      /*if (typeof formData[key] === 'object' && formData[key] !== null) {
-
-        //asignar a consta data el valor de formData[key], pero formData[key] puede ser ub jector con field o un array de objetos con field, por ejemplo en el caso de los classifiers
-        console.log(formData[key], key);
-        const field = Array.isArray(formData[key]) && formData[key].length > 0 ? formData[key][0].field : formData[key].field;
-
-        if (field != key) {
-
-          console.log('111111111', field, key, Array.isArray(formData[key]), formData[key].length > 0, formData[key].field, formData);
-
-          delete formData[key];
-        }
-      }*/
-
-      /*if (key.includes('document_')) {
-        delete formData[key];
-      }
- 
-      if (key.includes('documents_')) {
-        delete formData[key];
-      }*/
     });
+
+    // ESCENARIO 3: fusionar URLs previas + nuevos base64 en form_fields_data_* tipo files
+    this._mergeFormDataFiles(safePos, formData);
+
+    // ESCENARIO 3: los dropdown-like de `form_fields_data_*` se dibujan con un
+    // control string (`object_<field>`), pero el backend recibe un dict dentro
+    // de `form_data`. Aquí se recompone ese dict antes de enviar.
+    this._rebuildFormDataDicts(safePos, formData);
+
+    // [[[II ESC:001-06 DOC:docs/documents/2026-05-16_001_consolidacion_dropdown_types_y_fix_escenarios.md#escenario-06
+    // Parche temporal: NO convertir `*_documents=[]` a null. Mientras se
+    // investiga por qué algunos controles se nulifican, es mejor omitir la
+    // clave y dejar que el serializador final sanee el payload. ]]]FI
+    for (const k of Object.keys(formData)) {
+      if (!k.endsWith('documents')) continue;
+      const v = formData[k];
+      if (Array.isArray(v) && v.length === 0) delete formData[k];
+    }
 
     //console.log('forrmmmmmmmmmmmmmmmmmm', formData);
     //revisar porque la primer seleccion del archivo se envia vacio de asset-document
@@ -2781,6 +3830,27 @@ export class CRUD extends Vars implements OnChanges  /*implements OnInit*/ {
         this.messageS.changeMessage(`Elija ${this.singularIndefiniteArticle[safePos] || this.singularIndefiniteArticle[0]} que desea editar.`);
         this.showBlocked(false);
         return;
+      }
+
+      // ESCENARIO 1 (PATCH modelo principal): si el registro ya tenía relaciones
+      // en `files` y el usuario NO añadió archivos nuevos, eliminar `documents`
+      // del payload para conservar las relaciones existentes intactas.
+      this._pruneDocumentsOnPatch(formData);
+
+      // ESCENARIO 2 (PATCH): siempre enviar el id del hijo (`{prefix}id`) para
+      // que el backend sepa a qué registro relacionado aplicar el cambio.
+      // El id se capturó en _loadChildPrefixData → selected()[0][prefix+'id'].
+      const _selPatch = this.selected()[0];
+      if (_selPatch) {
+        const _prefixes = this._normalizeFieldsPrefixes(safePos);
+        for (const { prefix, config } of _prefixes) {
+          if (!config || config.kind !== 'child') continue;
+          const idKey = prefix + 'id';
+          const childId = _selPatch[idKey];
+          if (childId && formData[idKey] == null) {
+            formData[idKey] = childId;
+          }
+        }
       }
 
       this.crudS.edit({ formData, id, include /*, files*/ }).subscribe({
@@ -2920,7 +3990,7 @@ export class CRUD extends Vars implements OnChanges  /*implements OnInit*/ {
       this.file(options);
     } else {
 
-      form.get('maintenance_document_data_documents')?.setValue(this.files64);
+      //form.get('maintenance_document_data_documents')?.setValue(this.files64);
 
       console.log('save else', data, form.get('documents'), form.get('maintenance_document_data_documents'), this.files64)
       //form.get('documents')?.setValue(this.files64);
@@ -4060,7 +5130,7 @@ export class CRUD extends Vars implements OnChanges  /*implements OnInit*/ {
     const formGroup = this.currentForm();
     const currentPos: any = this.pos();
 
-    console.log('🔘 [CRUD] Botón clickeado:', buttonInfo);
+    console.log('🔘 [CRUD] Botón clickeado::::', buttonInfo);
 
     // ============================================
     // LÓGICA CRUD SEGÚN LA ACCIÓN
@@ -4133,8 +5203,6 @@ export class CRUD extends Vars implements OnChanges  /*implements OnInit*/ {
       // Ejemplo: llamar servicio con filtros del formulario
       // this.crudS.search(this.app, formValues).subscribe(...)
     }
-
-
   }
 
   /**

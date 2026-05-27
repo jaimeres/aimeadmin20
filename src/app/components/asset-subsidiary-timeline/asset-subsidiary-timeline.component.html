@@ -1,0 +1,130 @@
+<div class="timeline-container" [class.loading]="loading()">
+
+  <!-- Header: asset + range + group + actions -->
+  <div class="timeline-toolbar">
+
+    <div class="t-block t-asset">
+      <span class="t-label">Activo:</span>
+      <span class="t-value" [pTooltip]="assetId() || 'Sin activo'">{{ assetName() || '—' }}</span>
+    </div>
+
+    <div class="t-block">
+      <span class="t-label">Rango:</span>
+      <p-datepicker [ngModel]="range()" (ngModelChange)="onRangeChange($event)" selectionMode="range"
+        [readonlyInput]="false" dateFormat="dd/mm/yy" appendTo="body" [showButtonBar]="true" [showIcon]="true" />
+    </div>
+
+    <div class="t-block">
+      <span class="t-label">Agrupar:</span>
+      <p-select [options]="[
+        {label:'Día', value:'day'},
+        {label:'Auto (consecutivos iguales)', value:'auto'}
+      ]" [ngModel]="groupMode()" (ngModelChange)="setGroup($event)" appendTo="body" />
+    </div>
+
+    <div class="t-spacer"></div>
+
+    <p-button icon="pi pi-refresh" severity="secondary" (onClick)="reload()" [loading]="loading()" pTooltip="Recargar"
+      tooltipPosition="bottom" />
+    <p-button icon="pi pi-save" label="Guardar cambios" [disabled]="pendingDiff().length === 0 || saving()"
+      [loading]="saving()" (onClick)="save()" />
+  </div>
+
+  <!-- Validación -->
+  <div class="timeline-validation" *ngIf="validation().length > 0">
+    <p-message *ngFor="let i of validation()" [severity]="i.level === 'error' ? 'error' : 'warn'" [text]="i.message" />
+  </div>
+
+  <!-- Diff resumen -->
+  <div class="timeline-diff-summary" *ngIf="pendingDiff().length > 0">
+    <span class="ds-chip ds-post">{{ pendingDiff().length }} cambio(s) pendiente(s)</span>
+  </div>
+
+  <!-- Heatmap -->
+  <div class="heatmap-wrapper" *ngIf="!loading() && assetId()">
+
+    <div class="heatmap" [style.--ncols]="days().length">
+
+      <!-- header columnas (días) -->
+      <div class="hm-corner">Sucursal</div>
+      <div class="hm-col-head" *ngFor="let d of days(); trackBy: trackByKey" [class.empty]="isDayEmpty(d)"
+        [pTooltip]="'Suma: ' + daySum(d).toFixed(2) + '%'">
+        <span class="hm-dow">{{ fmtDow(d) }}</span>
+        <span class="hm-day">{{ fmtDay(d) }}</span>
+      </div>
+
+      <!-- filas de sucursales -->
+      <ng-container *ngFor="let sub of rowSubsidiaries(); trackBy: trackById">
+        <div class="hm-row-head" [pTooltip]="sub.id">{{ sub.name }}</div>
+        <ng-container *ngFor="let d of days(); trackBy: trackByKey">
+          <div class="hm-cell" [class.filled]="!!cellOf(sub.id, d)" [class.is-default]="cellOf(sub.id, d)?.is_default"
+            (click)="openCellPopup(sub, d)"
+            [pTooltip]="cellOf(sub.id, d) ? (cellOf(sub.id, d)!.percentage + '% — ' + sub.name) : 'Vacío (click para asignar)'">
+            <ng-container *ngIf="cellOf(sub.id, d) as cell">
+              <span class="hm-pct">{{ cell.percentage }}%</span>
+              <i class="pi pi-star-fill hm-star" *ngIf="cell.is_default"></i>
+            </ng-container>
+          </div>
+        </ng-container>
+      </ng-container>
+
+      <!-- fila "vacíos" — solo aparece si hay días sin asignación, para que el usuario pueda agregar -->
+      <ng-container *ngIf="hasAnyEmpty()">
+        <div class="hm-row-head ghost">+ Nueva asignación</div>
+        <div class="hm-cell ghost" *ngFor="let d of days(); trackBy: trackByKey" [class.gap]="isDayEmpty(d)"
+          (click)="openCellPopup(null, d)" pTooltip="Asignar sucursal a este día">
+          <i class="pi pi-plus" *ngIf="isDayEmpty(d)"></i>
+        </div>
+      </ng-container>
+
+    </div>
+  </div>
+
+  <div class="empty-state" *ngIf="!loading() && !assetId()">
+    <i class="pi pi-info-circle"></i>
+    <span>Selecciona un activo para ver y editar su línea de tiempo.</span>
+  </div>
+
+</div>
+
+<!-- Popup de edición de celda -->
+<p-dialog [(visible)]="popupVisible" [modal]="true" [closable]="true" [draggable]="false"
+  header="Asignar sucursal a día" appendTo="body" [style]="{ width: '420px' }">
+  <div class="cell-popup">
+    <div class="cp-row" *ngIf="popupDay">
+      <span class="cp-label">Día:</span>
+      <span class="cp-value">{{ popupDay | date:'dd/MM/yyyy' }}</span>
+    </div>
+
+    <div class="cp-row">
+      <span class="cp-label">Sucursal:</span>
+      <p-select [(ngModel)]="popupForm.subsidiaryId" [options]="subsidiaries()" optionLabel="name" optionValue="id"
+        appendTo="body" [disabled]="popupRowSub !== null" placeholder="Seleccione…" />
+    </div>
+
+    <div class="cp-row">
+      <span class="cp-label">Porcentaje:</span>
+      <p-inputnumber [(ngModel)]="popupForm.percentage" mode="decimal" [min]="0" [max]="100" [minFractionDigits]="0"
+        [maxFractionDigits]="2" suffix=" %" />
+    </div>
+
+    <div class="cp-row">
+      <span class="cp-label">Predeterminada:</span>
+      <p-toggleswitch [(ngModel)]="popupForm.is_default" />
+    </div>
+
+    <div class="cp-row">
+      <span class="cp-label">Aplicar hasta (opcional):</span>
+      <p-datepicker [(ngModel)]="popupApplyRangeUntil" dateFormat="dd/mm/yy" appendTo="body" [showButtonBar]="true"
+        placeholder="Sólo este día si vacío" />
+    </div>
+  </div>
+
+  <ng-template pTemplate="footer">
+    <p-button label="Eliminar" icon="pi pi-trash" severity="danger" text (onClick)="removeAssignment()"
+      *ngIf="popupRowSub" />
+    <p-button label="Cancelar" severity="secondary" text (onClick)="popupVisible = false" />
+    <p-button label="Aplicar" icon="pi pi-check" (onClick)="applyPopup()"
+      [disabled]="!popupForm.subsidiaryId || popupForm.percentage == null" />
+  </ng-template>
+</p-dialog>

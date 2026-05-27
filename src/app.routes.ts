@@ -1,6 +1,7 @@
 import { AppLayout } from '@/layout/components/app.layout';
 import { Routes } from '@angular/router';
 import { appCanActivateGuardChild } from './app/auth/guards/app-can-activate-child.guard';
+import { permissionGuard, permissionChildGuard } from './app/auth/guards/permission.guard';
 
 
 export const appRoutes: Routes = [
@@ -8,6 +9,7 @@ export const appRoutes: Routes = [
     path: '',
     component: AppLayout,
     //canActivate: [appCanActivateGuard],
+    canActivateChild: [permissionChildGuard],
     children: [
       //{ path: '', redirectTo: '/biometric-test', pathMatch: 'full' },
       { path: '', redirectTo: '/dashboards', pathMatch: 'full' },

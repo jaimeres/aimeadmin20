@@ -8,6 +8,9 @@ import { AssetService } from '../services/asset.service';
 import { ConfirmationService, PRIME_MODULES } from '../../shared/primeng.index';
 import { LOCAL_BASE } from '../../shared/components.index';
 import { MenuItem } from 'primeng/api';
+// [[[II ESC:002-01 DOC:docs/documents/2026-05-19_002_ui_timeline_asset_subsidiary.md#escenario-01
+import { AssetSubsidiaryTimelineComponent } from '../../components/asset-subsidiary-timeline/asset-subsidiary-timeline.component';
+// ]]]FI
 
 @Component({
   selector: 'app-asset',
@@ -18,6 +21,7 @@ import { MenuItem } from 'primeng/api';
     SelectModule,
     ...PRIME_MODULES,
     ...LOCAL_BASE,
+    AssetSubsidiaryTimelineComponent,
   ],
   templateUrl: './asset.component.html',
   styleUrl: './asset.component.scss',
@@ -40,6 +44,10 @@ export class AssetComponent extends CRUD implements OnInit {
   }, {
     label: 'Documento',
     command: () => this.openNew({ pos: 'asset-document' })
+  },
+  {
+    label: 'Activo por sucursal',
+    command: () => this.openNew({ pos: 'asset-subsidiary' })
   }
   ]);
 
@@ -55,10 +63,13 @@ export class AssetComponent extends CRUD implements OnInit {
   }, {
     label: 'Documentos',
     command: () => this.getAll({ pos: 'asset-document' })
+  }, {
+    label: 'Activos por sucursales',
+    command: () => this.getAll({ pos: 'asset-subsidiary' })
   }
   ]);
 
-  drawAccessorySignal = signal<any>({
+  /*drawAccessorySignal = signal<any>({
     //app
     'dialog': {
       'width': 'width-650px-custom',
@@ -77,7 +88,7 @@ export class AssetComponent extends CRUD implements OnInit {
       }
     }
 
-  });
+  });*/
 
 
   public assets = signal<any[]>([]); //los activos
@@ -128,31 +139,36 @@ export class AssetComponent extends CRUD implements OnInit {
     this.app['asset-document-asset'] = 'assets/asset-document';
     this.module['asset-document-asset'] = 'A';
 
-    this.excludeFieldsForm['asset-document-asset'] = [
-      { field: 'documents', reemplace: false },
-      //°°° falta solucionar el errore para que acepte el array de files
-      { field: 'files', reemplace: false }
-    ];
+    //this.excludeFieldsForm['asset-document-asset'] = [
+    //  { field: 'documents', reemplace: false },
+    //  //°°° falta solucionar el errore para que acepte el array de files
+    //  { field: 'files', reemplace: false }
+    //];
 
     //------------------------------------------------------
     this.type['accessory'] = 'accessory';
     this.app['accessory'] = 'assets/accessory';
     this.module['accessory'] = 'A';
 
+    this.type['asset-subsidiary'] = 'asset-subsidiary';
+    this.app['asset-subsidiary'] = 'assets/asset-subsidiary';
+    this.module['asset-subsidiary'] = 'APS';
+
+
     this.initCRUD();
   }
 
   //especia para el componenet no se debe osayu para otrso componentes
-  onSelectFile(event: any) {
-
-    //°°°solo falta cuando se modifican el campo files
-    const form = this.currentForm(this.pos());
-    this.files = event.currentFiles;
-    //si selecciona archivos quita los posibles error del document de form
-    if (this.files.length > 0 || (form.get('files')?.value?.length || 0) > 0) {
-      form.get('documents')?.setErrors(null);
-    }
-  }
+  //onSelectFile(event: any) {
+  //
+  //  //°°°solo falta cuando se modifican el campo files
+  //  const form = this.currentForm(this.pos());
+  //  this.files = event.currentFiles;
+  //  //si selecciona archivos quita los posibles error del document de form
+  //  if (this.files.length > 0 || (form.get('files')?.value?.length || 0) > 0) {
+  //    form.get('documents')?.setErrors(null);
+  //  }
+  //}
 
 
 

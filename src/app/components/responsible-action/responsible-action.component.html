@@ -1,0 +1,106 @@
+<div class="ra-editor">
+
+  @if (!hasField()) {
+  <div class="ra-info">
+    <i class="pi pi-info-circle mr-1"></i>
+    <strong>Acción de regla</strong> — el backend aún no ha enviado la
+    configuración del editor (<code>editor_type: rule_action</code>) para este formulario.
+  </div>
+  } @else {
+
+  <p-tabs [formControl]="tabCtrl">
+    <p-tablist>
+      <p-tab [value]="0"><i class="pi pi-list mr-2"></i>Visual</p-tab>
+      <p-tab [value]="1"><i class="pi pi-code mr-2"></i>JSON</p-tab>
+    </p-tablist>
+
+    <p-tabpanels>
+
+      <p-tabpanel [value]="0">
+        <div class="ra-toolbar">
+          <small class="text-color-secondary">Define qué usuarios serán asignados como responsables.</small>
+          <div class="ra-toolbar-actions">
+            <p-button icon="pi pi-question-circle" [text]="true" severity="info" size="small"
+              pTooltip="Ayuda — reglas de responsables" tooltipPosition="left" (onClick)="help.open()">
+            </p-button>
+            <p-button label="Vaciar" icon="pi pi-eraser" [text]="true" severity="secondary" size="small"
+              (onClick)="resetEmpty()">
+            </p-button>
+          </div>
+        </div>
+
+        <p-panel header="Asignación fija" [toggleable]="true" styleClass="ra-panel">
+          @if (fixedTargets().length === 0) {
+          <small class="text-color-secondary"><i class="pi pi-info-circle mr-1"></i>Sin targets configurados.</small>
+          } @else {
+          <div class="grid grid-cols-12 gap-2">
+            @for (t of fixedTargets(); track t.key) {
+            <div class="col-span-6 md:col-span-4">
+              @if (t.loadError) {
+              <small class="ra-warn"><i class="pi pi-exclamation-triangle mr-1"></i>{{ t.loadError }}</small>
+              } @else {
+              <p-floatlabel variant="on">
+                <p-multiselect [inputId]="'ra-fixed-' + t.key" [options]="t.options" [formControl]="t.selectionCtrl"
+                  [filter]="true" filterBy="label" optionLabel="label" optionValue="value" [showClear]="true"
+                  appendTo="body" [loading]="t.loading" (onFocus)="ensureLoaded(t)" (onClick)="ensureLoaded(t)"
+                  placeholder=" " styleClass="ra-multi w-full"></p-multiselect>
+                <label [for]="'ra-fixed-' + t.key">{{ t.desc || t.key }}</label>
+              </p-floatlabel>
+              }
+            </div>
+            }
+          </div>
+          }
+        </p-panel>
+
+        <p-panel header="Auto-usuarios (consulta dinámica)" [toggleable]="true" styleClass="ra-panel">
+          <small class="text-color-secondary block mb-2">
+            <i class="pi pi-info-circle mr-1"></i>
+            Lógica: <strong>{{ whereLogic() }}</strong> · aplica a: <strong>{{ applyTo() }}</strong>
+          </small>
+
+          <div class="ra-where-list">
+            @for (row of whereRows(); track $index) {
+            <app-where-row [value]="row" [paths]="autoPaths()" [opsMeta]="autoOpsMeta()" [allowedOps]="allowedOps()"
+              (valueChange)="onWhereChange($index, $event)" (removeRow)="onWhereRemove($index)">
+            </app-where-row>
+            }
+          </div>
+
+          <p-button icon="pi pi-plus" label="Agregar condición" [text]="true" severity="secondary" size="small"
+            (onClick)="addWhereRow()">
+          </p-button>
+        </p-panel>
+      </p-tabpanel>
+
+      <p-tabpanel [value]="1">
+        <div class="ra-toolbar">
+          <small class="text-color-secondary">Sólo se permiten claves
+            <code>fixed</code> y <code>auto_users</code>.</small>
+          <p-button label="Formatear" icon="pi pi-align-left" [text]="true" severity="secondary" size="small"
+            (onClick)="formatJson()">
+          </p-button>
+        </div>
+        <textarea class="ra-json" spellcheck="false" [formControl]="jsonCtrl"></textarea>
+        @if (jsonParseError(); as msg) {
+        <div class="ra-err"><i class="pi pi-times-circle mr-1"></i>JSON: {{ msg }}</div>
+        }
+      </p-tabpanel>
+
+    </p-tabpanels>
+  </p-tabs>
+
+  @if (errors().length > 0) {
+  <div class="ra-errors">
+    <div class="ra-errors-title"><i class="pi pi-exclamation-circle mr-1"></i>Problemas detectados</div>
+    <ul>
+      @for (e of errors(); track $index) {
+      <li><code>{{ e.path || '(raíz)' }}</code> — {{ e.message }}</li>
+      }
+    </ul>
+  </div>
+  }
+  }
+</div>
+
+<app-rule-help #help mode="action"></app-rule-help>

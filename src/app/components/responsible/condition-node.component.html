@@ -1,0 +1,46 @@
+<div class="cond-node" [class.depth-0]="depth === 0">
+
+  <div class="cond-header">
+    <p-select [options]="modeOptions" [formControl]="modeCtrl" appendTo="body" styleClass="cn-mode"></p-select>
+    @if (removable) {
+    <p-button icon="pi pi-trash" [text]="true" severity="danger" size="small" (onClick)="emitRemove()"
+      pTooltip="Quitar nodo"></p-button>
+    }
+  </div>
+
+  @switch (mode()) {
+  @case ('simple') {
+  <app-where-row [value]="$any(nodeSig())" [paths]="paths" [opsMeta]="opsMeta" [allowedOps]="allowedOps"
+    [ctxPaths]="ctxPaths()" (valueChange)="onSimpleChange($event)" (removeRow)="emitRemove()">
+  </app-where-row>
+  }
+  @case ('all') {
+  <div class="cond-children">
+    @for (child of children(); track $index) {
+    <app-condition-node [node]="child" [paths]="paths" [opsMeta]="opsMeta" [allowedOps]="allowedOps" [depth]="depth + 1"
+      (nodeChange)="onChildChange($index, $event)" (removeSelf)="onChildRemove($index)">
+    </app-condition-node>
+    }
+    <p-button icon="pi pi-plus" label="Agregar" [text]="true" size="small" severity="secondary" (onClick)="addChild()">
+    </p-button>
+  </div>
+  }
+  @case ('any') {
+  <div class="cond-children">
+    @for (child of children(); track $index) {
+    <app-condition-node [node]="child" [paths]="paths" [opsMeta]="opsMeta" [allowedOps]="allowedOps" [depth]="depth + 1"
+      (nodeChange)="onChildChange($index, $event)" (removeSelf)="onChildRemove($index)">
+    </app-condition-node>
+    }
+    <p-button icon="pi pi-plus" label="Agregar" [text]="true" size="small" severity="secondary" (onClick)="addChild()">
+    </p-button>
+  </div>
+  }
+  @case ('empty') {
+  <div class="cond-empty text-color-secondary text-xs">
+    <i class="pi pi-info-circle mr-1"></i>Vacío — la regla aplica siempre.
+  </div>
+  }
+  }
+
+</div>

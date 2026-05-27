@@ -47,9 +47,11 @@ export function playerFactory() { return import('lottie-web'); }
     <!--<p-toast />-->
     <app-blocked />
 
+    <!-- harcodea la imagen logo_assistant.png, directo en el lottie -->
+    <!--         animationPath="/assets/assistant/logo_assistant.png" -->
         <app-assistant-widget
         [welcomeTips]="['¿Necesitas ayuda?', 'Puedo guiarte en este módulo', 'Pregunta lo que quieras']"
-        animationPath="/assets/assistant/logo_assistant.png"
+
         apiUrl="/api/assistant/chat"
       ></app-assistant-widget>
    

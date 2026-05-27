@@ -31,6 +31,9 @@ Si existe conflicto entre una práctica genérica y estas reglas, seguir siempre
 - Si el HTML consume datos derivados de otro estado, usar `computed`.
 - Si se necesita reaccionar a cambios de estado, usar `effect` con cuidado y solo para efectos secundarios.
 
+## ngModel
+no uses ngModel, en su lugar usa formularios reactivos con FormControl, FormGroup o FormArray.
+
 Ejemplos esperados:
 
 ```bash

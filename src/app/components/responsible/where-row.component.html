@@ -1,0 +1,38 @@
+<div class="where-row">
+  <p-select [options]="pathOptions()" [formControl]="pathCtrl" placeholder="path" [filter]="true" filterBy="label"
+    appendTo="body" styleClass="wr-path"></p-select>
+
+  <p-select [options]="opOptions()" [formControl]="opCtrl" placeholder="op" appendTo="body" styleClass="wr-op">
+  </p-select>
+
+  @switch (kind()) {
+  @case ('none') {
+  <span class="wr-none text-color-secondary"><i class="pi pi-info-circle mr-1"></i>sin valor</span>
+  }
+  @case ('scalar') {
+  <input pInputText [formControl]="scalarCtrl" placeholder="valor" class="wr-scalar" />
+  }
+  @case ('array') {
+  <p-autocomplete [formControl]="chipsCtrl" [multiple]="true" [typeahead]="false" placeholder="enter para agregar"
+    styleClass="wr-chips"></p-autocomplete>
+  }
+  @case ('between') {
+  <input pInputText [formControl]="minCtrl" placeholder="min" class="wr-between" />
+  <input pInputText [formControl]="maxCtrl" placeholder="max" class="wr-between" />
+  }
+  @case ('path') {
+  <p-select [options]="ctxPathOptions()" [formControl]="pathRefCtrl" placeholder="referenciar path" [filter]="true"
+    filterBy="label" appendTo="body" styleClass="wr-pathref"></p-select>
+  }
+  @case ('unset') {
+  <span class="text-color-secondary text-xs">elige operador</span>
+  }
+  @default {
+  <span class="text-color-secondary text-xs">operador no reconocido</span>
+  }
+  }
+
+  <p-button icon="pi pi-times" [text]="true" severity="danger" size="small" (onClick)="emitRemove()" pTooltip="Quitar"
+    tooltipPosition="left" styleClass="wr-remove">
+  </p-button>
+</div>

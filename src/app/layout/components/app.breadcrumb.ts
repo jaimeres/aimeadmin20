@@ -142,8 +142,7 @@ export class AppBreadcrumb {
       const urlSearchParams = new URLSearchParams(event.url.split('?')[1] || '');
       const posParam = urlSearchParams.get('pos');
       if (posParam) {
-        const key = posParam.replace(/-/g, '_');
-        const appTypeObj = this.crudService.appType[key as keyof typeof this.crudService.appType];
+        const appTypeObj = this.crudService.getAppType(posParam);
         if (appTypeObj && breadcrumbs.length > 0) {
           breadcrumbs[breadcrumbs.length - 1].label += ` / ${appTypeObj.name}`;
         }
@@ -167,8 +166,7 @@ export class AppBreadcrumb {
     const urlSearchParams = new URLSearchParams(window.location.search);
     const posParam = urlSearchParams.get('pos');
     if (posParam) {
-      const key = posParam.replace(/-/g, '_');
-      const appTypeObj = this.crudService.appType[key as keyof typeof this.crudService.appType];
+      const appTypeObj = this.crudService.getAppType(posParam);
       if (appTypeObj && breadcrumbs.length > 0) {
         breadcrumbs[breadcrumbs.length - 1].label += ` / ${appTypeObj.name}`;
       }

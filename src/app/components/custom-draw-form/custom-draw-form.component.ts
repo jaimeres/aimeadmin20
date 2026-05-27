@@ -1,4 +1,5 @@
 import { CommonModule, KeyValue } from '@angular/common';
+import { DROPDOWN_TYPES_PRELOAD } from '../../utils/dropdown-types.const';
 import { FormControl, FormGroup, FormsModule, ReactiveFormsModule, FormArray, Validators, FormBuilder } from '@angular/forms';
 import { Component, ChangeDetectionStrategy, ElementRef, EventEmitter, inject, Input, Output, signal, computed, SimpleChanges, ViewChild, OnDestroy } from '@angular/core';
 import { Subscription } from 'rxjs';
@@ -281,6 +282,21 @@ export class CustomDrawFormComponent implements OnDestroy {
   }
 
   /**
+   * Busca en `bag` cualquier clave cuyo sufijo sea `:${field}`. Sirve de fallback
+   * para cuando `generateJSONform` escribió con prefijo namespaced (`<pos>:<field>`)
+   * pero el componente padre no propagó `[type]` al `<app-custom-draw-form>`,
+   * dejando `typeSignal()` vacío y por tanto `_sharedKey` sin prefijo.
+   */
+  private _lookupBySuffix(bag: Record<string, any>, field: string): any {
+    if (!bag || typeof bag !== 'object') return null;
+    const suffix = `:${field}`;
+    for (const key of Object.keys(bag)) {
+      if (key.endsWith(suffix) && bag[key]) return bag[key];
+    }
+    return null;
+  }
+
+  /**
    * Verifica si ya existen opciones en caché para un dropdown.
    * Además valida que el campo calculado de `option_label` exista.
    */
@@ -300,23 +316,43 @@ export class CustomDrawFormComponent implements OnDestroy {
       return _dt.options;
     }
 
+    // Opciones del campo con prefijo (ej. form_fields_data_*): el servidor ya no las
+    // envía vía HTTP OPTIONS sino que vienen en el array `options` del propio config
+    // del drawForm (equivalente a data_type.options pero en el nivel raíz del elemento).
+    if (element?.options && Array.isArray(element.options) && element.options.length > 0) {
+      if (optionLabelField) {
+        this.applyOptionLabelToOptions(element.options, element, optionLabelField);
+      }
+      return element.options;
+    }
+
     //si ya existe datos para ese dropdown no se vuelve a consultar
+    // Se busca en `sharedS.data` con la clave namespaced (<pos>:<field>); si el padre
+    // no propaga `[type]` se cae al lookup sin prefijo y, como último recurso, se
+    // escanea cualquier clave que termine en `:<field>` para soportar el caso en
+    // que `generateJSONform` escribió con un prefijo distinto al typeSignal local.
     const _dataKey = this._sharedKey(element.field);
-    if (this.sharedS.data[_dataKey] && !force) {
-      if (optionLabelField && !this.hasOptionLabelField(this.sharedS.data[_dataKey], optionLabelField)) {
+    const _data = this.sharedS.data[_dataKey]
+      ?? this.sharedS.data[element.field]
+      ?? this._lookupBySuffix(this.sharedS.data, element.field);
+    if (_data && !force) {
+      if (optionLabelField && !this.hasOptionLabelField(_data, optionLabelField)) {
         return false;
       }
-      return this.sharedS.data[_dataKey];
+      return _data;
     }
 
     //si ya existe datos para ese dropdown no se vuelve a consultar, va depsues de la validación de generalS.data,
     // porque seguramente trae los datos mas actualizados, por ejemplo cuando se agregan  o eliminan elementos
     const _ddKey = this._sharedKey(element.field);
-    if (this.sharedS.drawDropdown[_ddKey] && !force) {
-      if (optionLabelField && !this.hasOptionLabelField(this.sharedS.drawDropdown[_ddKey], optionLabelField)) {
+    const _dd = this.sharedS.drawDropdown[_ddKey]
+      ?? this.sharedS.drawDropdown[element.field]
+      ?? this._lookupBySuffix(this.sharedS.drawDropdown, element.field);
+    if (_dd && !force) {
+      if (optionLabelField && !this.hasOptionLabelField(_dd, optionLabelField)) {
         return false;
       }
-      return this.sharedS.drawDropdown[_ddKey];
+      return _dd;
     }
 
     // Cache persistente solo para móviles usando Preferences
@@ -341,9 +377,14 @@ export class CustomDrawFormComponent implements OnDestroy {
     if (dropdownOptions && !force) {
       this.dropdownOptionsSignal.set({
         ...this.dropdownOptionsSignal(),
-        [element.field]: dropdownOptions
+        [element.field]: this._toTreeNodesIfNeeded(element, dropdownOptions)
       });
       return;
+    }
+    // Reload: invalidar cache de lazy-load del tree-select para volver a
+    // consultar los hijos en la próxima expansión.
+    if (force && this._treeLoadedKeys?.[element.field]) {
+      this._treeLoadedKeys[element.field].clear();
     }
     //si no existe datos para ese dropdown se consulta al servidor,
     // en lugar de poner la app y el type en cada campo de json que genera el draw se pone una referencia
@@ -352,8 +393,8 @@ export class CustomDrawFormComponent implements OnDestroy {
     const _dt2 = this._normalizeDataType(element?.data_type);
     // const _dt2 = element?.data_type; // ORIGINAL: descomentar cuando data_type sea solo objeto
     // --- FIN TEMPORAL ---
-    const app = this.crudS.appType[_dt2?.type!]?.app;
-    const type = this.crudS.appType[_dt2?.type!]?.type;
+    const app = this.crudS.getAppType(_dt2?.type)?.app;
+    const type = this.crudS.getAppType(_dt2?.type)?.type;
     if (app && type) {
       const filter = this._buildDropdownFilter(_dt2?.filter);
       const sort = _dt2?.ordering || '';
@@ -382,7 +423,7 @@ export class CustomDrawFormComponent implements OnDestroy {
         this.sharedS.drawDropdown[this._sharedKey(element.field)] = dataDropdown;
         this.dropdownOptionsSignal.set({
           ...this.dropdownOptionsSignal(),
-          [element.field]: dataDropdown
+          [element.field]: this._toTreeNodesIfNeeded(element, dataDropdown)
         });
         if (!force && this.isMobileCacheEnabled(element)) {
           await this.writeMobileCache(element, dataDropdown);
@@ -416,8 +457,8 @@ export class CustomDrawFormComponent implements OnDestroy {
     const _dt = this._normalizeDataType(element?.data_type);
     // const _dt = element?.data_type; // ORIGINAL: descomentar cuando data_type sea solo objeto
     // --- FIN TEMPORAL ---
-    const app = this.crudS.appType[_dt?.type!]?.app || 'app';
-    const type = this.crudS.appType[_dt?.type!]?.type || 'type';
+    const app = this.crudS.getAppType(_dt?.type)?.app || 'app';
+    const type = this.crudS.getAppType(_dt?.type)?.type || 'type';
     const field = element?.field || 'field';
     const userKey = this.getCacheUserKey();
     return `dropdownCache:${userKey}:${app}:${type}:${field}`;
@@ -540,12 +581,8 @@ export class CustomDrawFormComponent implements OnDestroy {
     }
   }
 
-  private readonly DROPDOWN_TYPES = new Set([
-    'dropdown',
-    'tree-select',
-    'multi-select',
-    'dropdown-choice',
-  ]);
+  // [[[II Fuente única de tipos dropdown en utils/dropdown-types.const.ts ]]]FI
+  private readonly DROPDOWN_TYPES = DROPDOWN_TYPES_PRELOAD;
 
   private isDropdown(el: any): boolean {
     return !!el?.type && this.DROPDOWN_TYPES.has(el.type);
@@ -796,6 +833,17 @@ export class CustomDrawFormComponent implements OnDestroy {
       }
       if (this.formStatusSubscription) {
         this.formStatusSubscription.unsubscribe();
+      }
+
+      // Cuando el formulario se construye por primera vez (transición null → FormGroup),
+      // addFieldsByPrefix ya muté los nombres de campo a 'object_...' y data_type.options
+      // sigue intacto en el elemento. Re-ejecutar dropdownOptions para que el signal
+      // se popule con las claves object_ correctas (dropdown, dropdown-choice, multi-select, etc.).
+      if (!previousValue && currentValue) {
+        const _dform = this.drawFormSignal();
+        if (_dform) {
+          this.dropdownOptions(_dform);
+        }
       }
 
       // Si el formGroup cambió (reset o nuevo objeto), limpiar todos los canvas de firma Y archivos multimedia
@@ -1120,22 +1168,64 @@ export class CustomDrawFormComponent implements OnDestroy {
     for (const fieldConfig of stepFields) {
       const fieldName = (fieldConfig as any).field;
       const keyName = (fieldConfig as any).key;
+      const fieldType = (fieldConfig as any).type;
+      const fieldHide = (fieldConfig as any).hide;
 
       if (!fieldName && !keyName) continue;
+      // Los campos ocultos no los puede llenar el usuario → no bloquear navegación
+      if (fieldHide) continue;
+
+      // [[[II Diferenciador 2: para type='files'/'document' sin key explícito o con
+      //   sibling *_documents, reconciliar validators antes de validar.
+      //   - *_documents con valor (cámara) → limpiar required de *_files.
+      //   - *_files con valor (servidor) → limpiar required de *_documents
+      //     Y del keyCtrl per-step (si existe).
+      //   Refleja lo que hacen appendFile() y _pushServerFileToForm().
+      //   NOTA: los controles se inicializan con [] (array vacío) que es truthy
+      //   en JS; se usa hasValue() para detectar contenido real. ]]]FI
+      if ((fieldType === 'files' || fieldType === 'file' || fieldType === 'document') && fieldName) {
+        const docsCandidate = fieldName.replace(/files$/, 'documents');
+        if (docsCandidate !== fieldName) {
+          const docsCtrl = formGroup.get(docsCandidate);
+          const filesCtrl = formGroup.get(fieldName);
+          const hasValue = (v: any) => v != null && (Array.isArray(v) ? v.length > 0 : !!v);
+          if (hasValue(docsCtrl?.value) && filesCtrl) {
+            // Captura cámara satisfecha → liberar required de *_files
+            filesCtrl.clearValidators();
+            filesCtrl.updateValueAndValidity({ emitEvent: false });
+          } else if (hasValue(filesCtrl?.value) && docsCtrl) {
+            // Subida servidor satisfecha → liberar required de *_documents
+            docsCtrl.clearValidators();
+            docsCtrl.updateValueAndValidity({ emitEvent: false });
+            // Liberar también el keyCtrl per-step si existe
+            if (keyName && keyName !== fieldName) {
+              const keyCtrlAux = formGroup.get(keyName);
+              if (keyCtrlAux) {
+                keyCtrlAux.clearValidators();
+                keyCtrlAux.updateValueAndValidity({ emitEvent: false });
+              }
+            }
+          }
+          // Validar explícitamente el sibling *_documents: es quien porta el
+          // required cuando upload.active=true (filesCtrl no lo tiene).
+          if (docsCtrl) {
+            docsCtrl.markAsTouched();
+            docsCtrl.markAsDirty();
+            docsCtrl.updateValueAndValidity();
+            if (docsCtrl.invalid) { allValid = false; }
+          }
+        }
+      }
 
       // Validar field
       if (fieldName) {
         const control = formGroup.get(fieldName);
         if (control) {
-          // Marcar como touched Y dirty para mostrar errores visualmente
           control.markAsTouched();
           control.markAsDirty();
           control.updateValueAndValidity();
-
           if (control.invalid) {
             allValid = false;
-          } else {
-            //console.log(`✅ Campo field "${fieldName}" válido`);
           }
         }
       }
@@ -1144,15 +1234,11 @@ export class CustomDrawFormComponent implements OnDestroy {
       if (keyName && keyName !== fieldName) {
         const keyControl = formGroup.get(keyName);
         if (keyControl) {
-          // Marcar como touched Y dirty para mostrar errores visualmente
           keyControl.markAsTouched();
           keyControl.markAsDirty();
           keyControl.updateValueAndValidity();
-
           if (keyControl.invalid) {
             allValid = false;
-          } else {
-            //console.log(`✅ Campo key "${keyName}" válido`);
           }
         }
       }
@@ -1184,8 +1270,8 @@ export class CustomDrawFormComponent implements OnDestroy {
     const _dt = this._normalizeDataType(entry?.data_type);
     // const _dt = entry?.data_type; // ORIGINAL: descomentar cuando data_type sea solo objeto
     // --- FIN TEMPORAL ---
-    const app = this.crudS.appType[_dt?.type!]?.app;
-    const type = this.crudS.appType[_dt?.type!]?.type;
+    const app = this.crudS.getAppType(_dt?.type)?.app;
+    const type = this.crudS.getAppType(_dt?.type)?.type;
 
     this.crudS.getObject({ app, type, filter, include }).subscribe((data: any) => {
       data = this.generalS.DJAtoObject({
@@ -1330,6 +1416,69 @@ export class CustomDrawFormComponent implements OnDestroy {
    * Procesa los children.fields de un dropdown/autocomplete padre.
    * Evalúa activate, requested y filtra opciones hijas por condiciones.
    * Esta lógica estaba duplicada en onChangeDropdown y onSelectAutoComplete.
+   *
+   * ──────────────────────────────────────────────────────────────────────────
+   * Documentación de `activate` (también aplica a `requested` y `filter`)
+   * ──────────────────────────────────────────────────────────────────────────
+   * `activate` controla SI un campo (o un hijo declarado en children.fields)
+   * está activo, deshabilitado, oculto o sólo lectura, en función del estado
+   * de otros campos del formulario o del nodo padre seleccionado.
+   *
+   *   activate: {
+   *     active: boolean,            // si false, no se evalúa nada
+   *     conditions: Condition[],    // reglas que cruzan campos/valores
+   *     logic: 'AND' | 'OR',        // cómo se combinan las conditions
+   *     action: 'inactive'|'active' // qué hacer cuando se cumplen las cond.
+   *                                 //   'inactive' (default): si se cumple
+   *                                 //   la regla, el campo se DESACTIVA.
+   *                                 //   'active': si se cumple, se ACTIVA.
+   *     default_state: 'active'|'inactive'|'hidden'|'readonly'
+   *                                 // estado inicial antes de tener datos
+   *                                 // o cuando la regla aún no es evaluable.
+   *                                 // Para children dinámicos como
+   *                                 // responsible_persons → person, usar
+   *                                 // 'inactive' evita cargar nada hasta
+   *                                 // que exista un padre válido.
+   *   }
+   *
+   * `activate.conditions[*]` es una regla con esta forma:
+   *
+   *   {
+   *     source: 'form' | 'parent' | 'node' | 'selected',
+   *                              // de dónde se lee el valor a comparar.
+   *                              //   form     → otro campo del formulario.
+   *                              //   parent   → el objeto padre seleccionado
+   *                              //              (tree-select / dropdown).
+   *                              //   node     → el TreeNode actual (lazy).
+   *                              //   selected → la opción seleccionada del
+   *                              //              field de origen.
+   *     field: string,           // nombre del campo origen.
+   *     value_key: string,       // propiedad a leer dentro de ese valor
+   *                              // (p.ej. 'id' para comparar IDs).
+   *     filter_group: string,    // alternativa a value_key cuando se cruzan
+   *                              // grupos de filtro entre padre/hijo.
+   *     operator: 'equals' | 'not_equals' | 'in' | 'not_in'
+   *             | 'isnull' | 'not_null' | 'icontains' | 'iexact',
+   *     value: any,              // valor único a comparar.
+   *     values: any[]            // o lista (para in/not_in).
+   *   }
+   *
+   * Diferencia entre `action` y `default_state`:
+   *   - `default_state` es el estado inicial: cómo arranca el campo cuando
+   *     todavía no se han cumplido (o no se pueden evaluar) las condiciones.
+   *   - `action` describe qué hacer al cumplirse las condiciones. La lógica
+   *     existente trata `action: 'inactive'` como "desactivar cuando se
+   *     cumplen", invirtiendo el estado en caso contrario.
+   *
+   * Ejemplo `responsible_persons.children.fields.dynamic.person`:
+   *   activate: {
+   *     active: true,
+   *     default_state: 'inactive', // sin padre válido, no carga.
+   *     logic: 'AND',
+   *     conditions: [{ source: 'parent', field: 'responsible',
+   *                    value_key: 'id', operator: 'not_equals', value: '' }]
+   *   }
+   * ──────────────────────────────────────────────────────────────────────────
    */
   private _processChildrenFields(
     field: string,
@@ -1399,9 +1548,20 @@ export class CustomDrawFormComponent implements OnDestroy {
           const _dtStatic = this._normalizeDataType(fieldConfig?.data_type);
           // const _dtStatic = fieldConfig?.data_type; // ORIGINAL: descomentar cuando data_type sea solo objeto
           // --- FIN TEMPORAL ---
-          const options = _dtStatic?.options || [];
+          // Las opciones pueden venir top-level (ej. parent_form_data_PLAZA) o dentro de data_type.options
+          const options = (Array.isArray(fieldConfig?.options) && fieldConfig.options.length)
+            ? fieldConfig.options
+            : (_dtStatic?.options || []);
           const fc = fieldConfig?.filter;
-          if (fc?.active && isActive) {
+          // Si el child no expone filter explícito pero declara filter_group propio,
+          // derivamos un filtro implícito que empareja option[fg] === parentOption[fg]
+          const implicitFg: string | null = (!fc?.active && fieldConfig?.filter_group)
+            ? fieldConfig.filter_group : null;
+
+          const publishOpts = (opts: any[]) => this._updateDropdownOptions(key, this._toTreeNodesIfNeeded(fieldConfig, opts));
+          if (!isActive) {
+            publishOpts([]);
+          } else if (fc?.active) {
             let filtered = options.filter((option: any) => {
               const conds = fc.conditions || [];
               if (conds.length === 0) return true;
@@ -1419,12 +1579,85 @@ export class CustomDrawFormComponent implements OnDestroy {
             const pos = fc.result_position || 'all';
             if (pos === 'first' && filtered.length) filtered = [filtered[0]];
             else if (pos === 'last' && filtered.length) filtered = [filtered[filtered.length - 1]];
-            this._updateDropdownOptions(key, filtered);
+            publishOpts(filtered);
+          } else if (implicitFg && currentDropdownOption) {
+            // Filtro implícito por filter_group del padre/hijo
+            const parentVal = currentDropdownOption[implicitFg];
+            let filtered = options.filter((o: any) => o[implicitFg] === parentVal);
+            const pos = fieldConfig?.result_position || 'all';
+            if (pos === 'first' && filtered.length) filtered = [filtered[0]];
+            else if (pos === 'last' && filtered.length) filtered = [filtered[filtered.length - 1]];
+            publishOpts(filtered);
+          } else if (options.length) {
+            // Sin filter declarado: pasar opciones tal cual
+            publishOpts(options);
           } else {
-            this._updateDropdownOptions(key, []);
+            publishOpts([]);
           }
+        } else if (fieldType === 'dynamic') {
+          // [[[II 2026-05-25 · 003 · dynamic-children-field-loading
+          // Consulta al servidor con filtros forced inyectados desde el padre.
+          // Soporta result_position ('first'|'last'|'all') y auto-selección (selected: true).
+          const _dtDyn = this._normalizeDataType(fieldConfig?.data_type);
+          const dynApp = this.crudS.getAppType(_dtDyn?.type)?.app;
+          const dynType = this.crudS.getAppType(_dtDyn?.type)?.type;
+
+          if (!isActive || !dynApp || !dynType) {
+            this._updateDropdownOptions(key, []);
+            continue;
+          }
+
+          // El valor del padre se extrae usando filter_group (default 'id')
+          const filterGroup = fieldConfig?.filter_group || 'id';
+          const parentValue = currentDropdownOption?.[filterGroup]
+            ?? (filterGroup === 'id' ? currentValue : null);
+
+          if (parentValue == null || parentValue === '') {
+            this._updateDropdownOptions(key, []);
+            formControl?.setValue(null);
+            continue;
+          }
+
+          // Construir filtro: entradas forced reciben parentValue como default_value
+          const filterCfg: Record<string, any> = {};
+          if (_dtDyn?.filter && typeof _dtDyn.filter === 'object') {
+            for (const [fk, fv] of Object.entries(_dtDyn.filter) as [string, any][]) {
+              if (fv?.forced) {
+                filterCfg[fk] = { ...fv, active: true, default_value: parentValue };
+              } else if (fv?.active) {
+                filterCfg[fk] = fv;
+              }
+            }
+          }
+          const filter = this.crudS.buildDropdownFilterString(filterCfg);
+          const sort = _dtDyn?.ordering || '';
+          const limit = _dtDyn?.limit || 0;
+
+          const resultPos = fieldConfig?.result_position || 'all';
+          const autoSelect = fieldConfig?.selected === true;
+          const optionValue = fieldConfig?.option_value || 'id';
+
+          this.messageS.showBlocked(true);
+          this.crudS.getObject({ app: dynApp, type: dynType, filter, sort, limit }).subscribe((data: any) => {
+            let rows = this.generalS.DJAtoObject({
+              respDJA: data,
+              fields: { [key]: fieldConfig }
+            }) || [];
+
+            if (resultPos === 'first' && rows.length) rows = [rows[0]];
+            else if (resultPos === 'last' && rows.length) rows = [rows[rows.length - 1]];
+
+            this._updateDropdownOptions(key, this._toTreeNodesIfNeeded(fieldConfig, rows));
+
+            if (autoSelect && rows.length) {
+              formControl?.setValue(rows[0]?.[optionValue] ?? null);
+            } else if (!rows.length) {
+              formControl?.setValue(null);
+            }
+            this.messageS.showBlocked(false);
+          });
+          // ]]]FI
         }
-        // dynamic: no-op de momento
       }
     });
   }
@@ -1435,6 +1668,210 @@ export class CustomDrawFormComponent implements OnDestroy {
       ...this.dropdownOptionsSignal(),
       [field]: options
     });
+  }
+
+  /**
+   * Transforma una lista plana de opciones en `TreeNode[]` cuando el field
+   * es tipo `tree-select`. Soporta hijos preargados en `option.children`
+   * (configurable vía `field.tree_children_field`). Para otros tipos
+   * devuelve las opciones tal cual.
+   *
+   * Si el field declara `tree.root` el nodo raíz se marca con:
+   *   - `key = "<root.resource>:<id>"` (namespace por recurso para evitar
+   *     colisiones con hijos lazy de otros niveles).
+   *   - `selectable = tree.root.selectable !== false` (por defecto seleccionable).
+   *   - `leaf = false` cuando `tree.lazy === true` o existen `tree.levels`,
+   *     para que p-treeSelect dibuje el chevron de expansión.
+   *   - `data.type = root.resource` y `data.__level = 0` para enrutar el
+   *     lazy-load del siguiente nivel.
+   */
+  private _toTreeNodesIfNeeded(fieldConfig: any, options: any[]): any[] {
+    if (!Array.isArray(options)) return options || [];
+    if (fieldConfig?.type !== 'tree-select') return options;
+    // Si ya viene shaped (label/key/children), no re-envolver
+    const first = options[0];
+    if (first && (first.label !== undefined && (first.key !== undefined || first.data !== undefined))) {
+      return options;
+    }
+    const tree = fieldConfig?.tree;
+    const rootCfg = tree?.root;
+    const rootSelectable = rootCfg ? rootCfg.selectable !== false : true;
+    const rootResource: string | null = rootCfg?.resource || tree?.root?.resource || null;
+    const isLazy = !!tree?.lazy && Array.isArray(tree?.levels) && tree.levels.length > 0;
+
+    const labelField = rootCfg?.label_field || fieldConfig?.option_label || 'name';
+    const valueField = rootCfg?.value_field || fieldConfig?.option_value || 'id';
+    const childrenField = fieldConfig?.tree_children_field || 'children';
+    const labelFromOption = (opt: any): string => {
+      if (!labelField) return String(opt?.id ?? '');
+      if (typeof labelField === 'string' && labelField.includes(',')) {
+        return labelField.split(',')
+          .map((f: string) => opt?.[f.trim()])
+          .filter((v: any) => v != null && String(v).trim() !== '')
+          .map((v: any) => String(v))
+          .join(' ');
+      }
+      return String(opt?.[labelField] ?? '');
+    };
+    const toNode = (opt: any): any => {
+      const kids = Array.isArray(opt?.[childrenField]) ? opt[childrenField] : [];
+      const id = opt?.[valueField] ?? '';
+      const node: any = {
+        key: rootResource ? `${rootResource}:${id}` : String(id),
+        label: labelFromOption(opt),
+        data: {
+          ...opt,
+          id: opt?.id ?? id,
+          type: rootResource || opt?.type || null,
+          __level: 0,
+          raw: opt,
+        },
+        selectable: rootSelectable,
+      };
+      if (kids.length) {
+        node.children = kids.map(toNode);
+        node.leaf = false;
+      } else if (isLazy) {
+        // Lazy: aunque no haya children precargados, mostramos chevron.
+        node.children = [];
+        node.leaf = false;
+      } else {
+        node.leaf = true;
+      }
+      return node;
+    };
+    return options.map(toNode);
+  }
+
+  private _emptyMirroredDropdownValue(fieldConfig: any): any {
+    return fieldConfig?.type === 'multi-select' || fieldConfig?.type === 'tree-select'
+      ? []
+      : null;
+  }
+
+  private _flattenDropdownOptions(options: any[]): any[] {
+    const flat: any[] = [];
+
+    const visit = (option: any): void => {
+      if (!option || typeof option !== 'object') return;
+
+      if (option.data?.raw && typeof option.data.raw === 'object') {
+        flat.push(option.data.raw);
+      } else if (option.data && typeof option.data === 'object' && (option.data.id !== undefined || option.data.value !== undefined)) {
+        flat.push(option.data);
+      } else {
+        flat.push(option);
+      }
+
+      if (Array.isArray(option.children)) {
+        option.children.forEach(visit);
+      }
+    };
+
+    options.forEach(visit);
+    return flat;
+  }
+
+  private _findDropdownOption(fieldConfig: any, selectedValue: any): any {
+    const optionValueKey = fieldConfig?.option_value || 'id';
+    const options = this._flattenDropdownOptions(this.dropdownOptionsSignal()[fieldConfig.field] ?? []);
+
+    if (selectedValue?.raw && typeof selectedValue.raw === 'object') {
+      return selectedValue.raw;
+    }
+
+    const normalizedValue = selectedValue?.data?.id
+      ?? selectedValue?.id
+      ?? selectedValue?.value
+      ?? (typeof selectedValue?.key === 'string' ? selectedValue.key.split(':').pop() : selectedValue);
+
+    return options.find((item: any) => {
+      const candidate = item?.[optionValueKey] ?? item?.id ?? item?.value;
+      return candidate === normalizedValue;
+    }) ?? null;
+  }
+
+  private _mapDropdownOptionToPayload(foundObject: any, fieldConfig: any): any {
+    if (!foundObject) return null;
+
+    let currentValueObject = foundObject;
+
+    if (fieldConfig?.cols_values && Array.isArray(fieldConfig.cols_values) && fieldConfig.cols_values.length > 0) {
+      let filteredObject: any = null;
+
+      const FIELD_ALIASES: Record<string, string[]> = {
+        'id': ['value'],
+        'name': ['display_name', 'label'],
+        'value': ['id'],
+        'display_name': ['name', 'label'],
+      };
+
+      fieldConfig.cols_values.forEach((colConfig: any) => {
+        const fieldName = colConfig.field;
+
+        if (!fieldName) {
+          return;
+        }
+
+        if (!filteredObject) {
+          filteredObject = {};
+        }
+
+        const sourceKey = colConfig.source || fieldName;
+
+        if (foundObject.hasOwnProperty(sourceKey)) {
+          filteredObject[fieldName] = foundObject[sourceKey];
+        } else {
+          const aliases = FIELD_ALIASES[sourceKey] || [];
+          const aliasKey = aliases.find((alias) => foundObject.hasOwnProperty(alias));
+          if (aliasKey !== undefined) {
+            filteredObject[fieldName] = foundObject[aliasKey];
+          } else if (colConfig.hasOwnProperty('default')) {
+            filteredObject[fieldName] = colConfig.default;
+          }
+        }
+      });
+
+      currentValueObject = filteredObject;
+    } else {
+      const autoId = foundObject.id ?? foundObject.value ?? null;
+      const autoName = foundObject.name ?? foundObject.display_name ?? foundObject.label ?? null;
+      currentValueObject = { id: autoId, name: autoName };
+
+      const SKIP_KEYS = new Set(['id', 'name', 'parent', 'children', 'expanded',
+        'partialChecked', 'leaf', 'key', 'label', 'icon', 'styleClass',
+        'draggable', 'droppable', 'selectable', 'data', 'type']);
+
+      for (const key of Object.keys(foundObject)) {
+        if (key in currentValueObject || SKIP_KEYS.has(key)) continue;
+        const value = foundObject[key];
+        if (value === null || typeof value !== 'object') {
+          currentValueObject[key] = value;
+        }
+      }
+    }
+
+    if (foundObject?.type_type && currentValueObject && !fieldConfig?.field?.startsWith('form_data_') && !fieldConfig?.field?.startsWith('parent_form_data_')) {
+      currentValueObject['type'] = foundObject.type_type;
+      currentValueObject['id'] = foundObject.id;
+    }
+
+    return currentValueObject;
+  }
+
+  private _buildMirroredDropdownValue(currentValue: any, fieldConfig: any): any {
+    if (currentValue == null || currentValue === '' || (Array.isArray(currentValue) && currentValue.length === 0)) {
+      return this._emptyMirroredDropdownValue(fieldConfig);
+    }
+
+    if (Array.isArray(currentValue)) {
+      return currentValue
+        .map((value) => this._mapDropdownOptionToPayload(this._findDropdownOption(fieldConfig, value), fieldConfig))
+        .filter((value) => value !== null && value !== undefined);
+    }
+
+    return this._mapDropdownOptionToPayload(this._findDropdownOption(fieldConfig, currentValue), fieldConfig)
+      ?? this._emptyMirroredDropdownValue(fieldConfig);
   }
 
   // ─── FIN MOTOR DE EVALUACIÓN ───────────────────────────────────────────────
@@ -1454,50 +1891,8 @@ export class CustomDrawFormComponent implements OnDestroy {
     //asigna el valor del campo object_parent_form_data_X al objeto completo
     if (field.startsWith('object_')) {
       const newField = field.replace('object_', '');
-      const foundObject = this.dropdownOptionsSignal()[field]?.
-        find((item: any) => item.id === currentValue || item.value === currentValue);
-      // alert() — eliminado: era un debug leftover
-      // Si existe cols_values y es un array válido, filtrar el objeto, sino usar el objeto completo
-      // cols_values ahora es un array de objetos: [{field: 'id', required: true, default: null}, ...]
-      //°°°falta required aunque no creo que deba llevalor
-      let currentValueObject = foundObject;
-
-      if (foundObject && object?.cols_values && Array.isArray(object.cols_values) && object.cols_values.length > 0) {
-        let filteredObject: any = null;
-
-        object.cols_values.forEach((colConfig: any) => {
-          // Extraer el nombre del campo de la configuración
-          const fieldName = colConfig.field;
-
-          if (!fieldName) {
-            return;
-          }
-
-          if (!filteredObject) {
-            filteredObject = {};
-          }
-
-          // Asignar valor desde foundObject, o usar default si no existe
-          if (foundObject.hasOwnProperty(fieldName)) {
-            filteredObject[fieldName] = foundObject[fieldName];
-          } else if (colConfig.hasOwnProperty('default')) {
-            // Si el campo no existe en foundObject pero tiene default, usar el default
-            filteredObject[fieldName] = colConfig.default;
-          }
-        });
-
-        currentValueObject = filteredObject;
-      }
-
-      //siempre se envia id y hay type, porque se asume que es una relacion y puede ser que se ocupe si no es 
-      // no incia con parent_form_data_, form_data_ 
-
-      if (foundObject?.type_type && currentValueObject && !field.startsWith('form_data_') && !field.startsWith('parent_form_data_')) {
-        currentValueObject['type'] = foundObject.type_type;
-        currentValueObject['id'] = foundObject.id;
-      }
-
-      this.formGroupSignal()?.get(newField)?.setValue(currentValueObject);
+      const mirroredValue = this._buildMirroredDropdownValue(currentValue, object);
+      this.formGroupSignal()?.get(newField)?.setValue(mirroredValue);
     }
 
     // Crear el objeto con la información completa
@@ -1516,11 +1911,9 @@ export class CustomDrawFormComponent implements OnDestroy {
     // REFACTORIZADO: lógica de children movida a _processChildrenFields
     // El bloque original (~500 líneas) evaluaba activate, requested y filtraba
     // opciones estáticas duplicando la misma lógica de onSelectAutoComplete.
-    const dropdownOptions = this.dataDropdownExists(object);
-    let currentDropdownOption: any = null;
-    if (dropdownOptions) {
-      currentDropdownOption = this.searchByValueObject(currentValue, dropdownOptions, 'id', false)[0];
-    }
+    const currentDropdownOption = Array.isArray(currentValue)
+      ? this._findDropdownOption(object, currentValue[0])
+      : this._findDropdownOption(object, currentValue);
     this._processChildrenFields(field, currentValue, object, currentDropdownOption);
 
     /* ── BLOQUE ORIGINAL COMENTADO (onChangeDropdown children) ──
@@ -1618,16 +2011,6 @@ export class CustomDrawFormComponent implements OnDestroy {
     }
     ── FIN BLOQUE ORIGINAL (onSelectAutoComplete children) ── */
   }
-  //PEPEPEPEP
-
-  getType(value: any) {
-    // Normaliza variantes al mismo switchCase para evitar duplicar ramas.
-    // Soporta config donde el tipo externo viene como 'files' pero
-    // data_type.type='file'; ambos se renderean con el template 'file'.
-    const t = value?.type;
-    if (t === 'files') return 'file';
-    return t; //|| 'input-text';
-  }
 
   /**
    * esta función establece el valor [] en un tree-select ya que cuando se limía pone un string vacio
@@ -1637,8 +2020,215 @@ export class CustomDrawFormComponent implements OnDestroy {
   clearTreeSelect(field: any) {
 
     this.formGroup.get(field)?.setValue([]);
+    if (typeof field === 'string' && field.startsWith('object_')) {
+      this.formGroup.get(field.replace('object_', ''))?.setValue([]);
+    }
 
   }
+
+  /**
+   * Set de keys ya cargadas por field para no re-disparar requests al
+   * re-expandir el mismo nodo. Reload (ícono de recarga) deberá vaciar la
+   * entrada para volver a consultar.
+   */
+  private _treeLoadedKeys: { [field: string]: Set<string> } = {};
+
+  /**
+   * Lazy load de hijos al expandir un nodo de un tree-select.
+   *
+   * La carga de hijos vive en `children.fields.dynamic[<key>]`, alineado con
+   * la cascada de dropdown. `tree.levels[i]` solo declara metadatos de
+   * navegación (qué key del dynamic resolver, si es seleccionable, label/value
+   * field, si hay más niveles); NO inventa filtros ni backend params.
+   *
+   * Resolución del child config (en orden):
+   *   1) `level.child_field` → `config.children.fields.dynamic[level.child_field]`
+   *   2) `level.name`        → `config.children.fields.dynamic[level.name]`
+   *   3) Único entry de `dynamic` cuando hay solo uno.
+   *
+   * Filtro construido (reusa `crudS.buildDropdownFilterString`):
+   *   - Base: `child.data_type.filter` tal cual (mismo formato que dropdown).
+   *   - Más: por cada `child.filter.conditions[*]` con `source: 'parent'`,
+   *     se inyecta `{ [cond.field]: { active:true, forced:true,
+   *     default: <op>, default_value: <parent[value_key]> } }`.
+   *     Esto evita asumir nombres de filtro (`filter[responsible]`) y respeta
+   *     exactamente la config existente.
+   *
+   * Activación:
+   *   - Si `child.activate.active` está habilitado se evalúan condiciones
+   *     contra el nodo padre (source 'parent'). Si la regla resultante es
+   *     "inactive" el nodo se marca como hoja vacía y no se hace request.
+   */
+  onTreeNodeExpand(event: any, fieldConfig: any): void {
+    const node = event?.node;
+    if (!node) return;
+
+    const tree = fieldConfig?.tree;
+    const lazyLevels: any[] = Array.isArray(tree?.levels) ? tree.levels : [];
+
+    if (tree?.lazy && lazyLevels.length > 0) {
+      const currentLevel: number = (node?.data?.__level ?? 0);
+      const targetLevelIdx = currentLevel; // levels[0] es el primer hijo del root
+      const levelCfg = lazyLevels[targetLevelIdx];
+      if (!levelCfg) return; // no hay más niveles configurados
+
+      const cacheKey = String(node.key ?? node?.data?.id ?? '');
+      const loaded = (this._treeLoadedKeys[fieldConfig.field] ||= new Set<string>());
+      if (loaded.has(cacheKey)) return;
+      if (Array.isArray(node.children) && node.children.length > 0) {
+        loaded.add(cacheKey);
+        return;
+      }
+
+      // 1) Resolver child config en children.fields.dynamic ──────────────────
+      const dynamicMap = fieldConfig?.children?.fields?.dynamic || {};
+      const childKey = levelCfg.child_field
+        ?? levelCfg.name
+        ?? (Object.keys(dynamicMap).length === 1 ? Object.keys(dynamicMap)[0] : null);
+      const childCfg = childKey ? dynamicMap[childKey] : null;
+
+      // 2) Activación basada en activate.conditions con source:'parent' ─────
+      const parentNodeData = node?.data || {};
+      if (childCfg?.activate?.active) {
+        const conds: any[] = childCfg.activate.conditions || [];
+        const logic = childCfg.activate.logic || 'AND';
+        const action = childCfg.activate.action || 'inactive';
+        const results = conds.map((c: any) => {
+          if (c?.source && c.source !== 'parent') return true; // ignorar reglas no-padre aquí
+          const vk = c?.value_key || 'id';
+          const v = parentNodeData?.[vk] ?? parentNodeData?.raw?.[vk] ?? null;
+          const op = c?.operator || 'equals';
+          const expected = c?.value;
+          if (op === 'isnull') return v == null || v === '';
+          if (op === 'not_null' || op === 'isnotnull') return !(v == null || v === '');
+          if (op === 'equals') return v === expected;
+          if (op === 'not_equals') return v !== expected;
+          if (op === 'in' && Array.isArray(c?.values)) return c.values.includes(v);
+          if (op === 'not_in' && Array.isArray(c?.values)) return !c.values.includes(v);
+          return false;
+        });
+        const met = (logic === 'AND') ? results.every(Boolean) : results.some(Boolean);
+        // action:'inactive' → al cumplirse la condición, DESACTIVA. invertimos.
+        const isActive = action === 'inactive' ? !met : met;
+        if (!isActive) {
+          node.children = [];
+          node.loading = false;
+          loaded.add(cacheKey);
+          return;
+        }
+      }
+
+      // 3) Construir filtro JSON:API a partir del child config ─────────────
+      const filterCfg: any = {};
+      if (childCfg?.data_type?.filter && typeof childCfg.data_type.filter === 'object') {
+        Object.assign(filterCfg, childCfg.data_type.filter);
+      }
+      if (childCfg?.filter?.active && Array.isArray(childCfg.filter.conditions)) {
+        for (const cond of childCfg.filter.conditions) {
+          if (cond?.source && cond.source !== 'parent') continue;
+          if (!cond?.field) continue;
+          const vk = cond.value_key || 'id';
+          const v = parentNodeData?.[vk] ?? parentNodeData?.raw?.[vk] ?? null;
+          if (v == null || v === '') continue;
+          const op = cond.operator === 'equals' ? 'exact' : (cond.operator || 'exact');
+          filterCfg[cond.field] = {
+            active: true,
+            forced: true,
+            default: op,
+            default_value: v,
+          };
+        }
+      }
+
+      // 4) Resolver recurso/endpoint preferentemente desde el child ────────
+      const resource = childCfg?.data_type?.type
+        || levelCfg.resource
+        || levelCfg.data_type?.type
+        || levelCfg.name
+        || childKey;
+      const at = this.crudS.getAppType(resource) || {};
+      const app = at.app;
+      const type = at.type;
+      if (!app || !type) return;
+
+      const filter = this.crudS.buildDropdownFilterString(filterCfg);
+      const sort = childCfg?.data_type?.ordering || levelCfg?.data_type?.ordering || '';
+      const limit = childCfg?.data_type?.limit || levelCfg?.data_type?.limit || 0;
+
+      node.loading = true;
+      this.messageS.showBlocked(true);
+      this.crudS.getObject({ app, type, filter, sort, limit }).subscribe({
+        next: (data: any) => {
+          // Convierte la respuesta JSON:API a objetos planos usando la misma
+          // tubería que dataDropdown — así heredamos `_data_` includes y label.
+          const rows = this.generalS.DJAtoObject({
+            respDJA: data,
+            fields: { [fieldConfig.field]: fieldConfig },
+          }) || [];
+
+          const labelField = childCfg?.option_label || levelCfg.label_field || fieldConfig.option_label || 'name';
+          const valueField = childCfg?.option_value || levelCfg.value_field || fieldConfig.option_value || 'id';
+          const hasMoreLevels = !!lazyLevels[targetLevelIdx + 1];
+          const selectable = levelCfg.selectable !== false;
+          const parentRef = {
+            id: node?.data?.id ?? null,
+            type: node?.data?.type ?? null,
+          };
+          const labelFrom = (opt: any): string => {
+            if (typeof labelField === 'string' && labelField.includes(',')) {
+              return labelField.split(',')
+                .map((f: string) => opt?.[f.trim()])
+                .filter((v: any) => v != null && String(v).trim() !== '')
+                .map((v: any) => String(v))
+                .join(' ');
+            }
+            return String(opt?.[labelField] ?? '');
+          };
+
+          node.children = rows.map((opt: any) => {
+            const id = opt?.[valueField] ?? opt?.id ?? '';
+            return {
+              key: `${resource}:${id}`,
+              label: labelFrom(opt),
+              data: {
+                ...opt,
+                id: opt?.id ?? id,
+                type: resource,
+                __level: targetLevelIdx + 1,
+                parent: parentRef,
+                raw: opt,
+              },
+              selectable,
+              leaf: !hasMoreLevels,
+              children: hasMoreLevels ? [] : undefined,
+            };
+          });
+          node.loading = false;
+          loaded.add(cacheKey);
+
+          // Refresca la referencia del array de opciones para que p-treeSelect
+          // reaccione (PrimeNG OnPush en algunas versiones requiere nueva ref).
+          const current = this.dropdownOptionsSignal()[fieldConfig.field] || [];
+          this._updateDropdownOptions(fieldConfig.field, [...current]);
+          this.messageS.showBlocked(false);
+        },
+        error: () => {
+          node.loading = false;
+          this.messageS.showBlocked(false);
+        },
+      });
+      return;
+    }
+
+    // Comportamiento previo (modo clásico, sin tree.levels):
+    if (Array.isArray(node.children) && node.children.length > 0) return;
+    const childOption = node?.data ?? null;
+    const value = node?.key ?? childOption?.id ?? null;
+    if (childOption) {
+      this._processChildrenFields(fieldConfig.field, value, fieldConfig, childOption);
+    }
+  }
+
 
   panelStyleSignal = signal<{ [key: string]: string }>({});
 
@@ -1699,7 +2289,7 @@ export class CustomDrawFormComponent implements OnDestroy {
       sent_data: buttonConfig.sent_data || ''
     };
 
-    //console.log('🔘 Botón clickeado:', buttonInfo);
+    console.log('🔘 Botón clickeado:', buttonInfo);
     this.onButtonClickAction.emit(buttonInfo);
   }
 
@@ -1866,13 +2456,48 @@ export class CustomDrawFormComponent implements OnDestroy {
       fileName = `${payload.fieldConfig.name_file_user}.${extension}`;
     }
 
+    // [[[II Ruteo Escenarios 1/2/3 — base64 (flujo "(formulario)"):
+    //   Prioridad 1: control key per-step (cuando key != field Y el control
+    //     existe en el formGroup). Garantiza captura independiente por step en
+    //     stepper multi-step donde distintos steps comparten el mismo `field`
+    //     pero tienen `key` distintos (p.e. _inicial/_final).
+    //   Prioridad 2: sibling *_documents (cuando no hay key per-step). Aplica
+    //     a 'files', 'file' y 'document' (deprecated) sin key per-step.
+    //   Prioridad 3 (legacy): key sin control en formGroup (type='document').
+    //   Fallback: propio field.
+    //   Ver docs/documents/2026-05-16_001 ]]]FI
+    const formGroup = this.formGroupSignal();
+    const currentKey = payload.fieldConfig?.key;
+    let base64TargetField: string | undefined;
+
+    // Prioridad 1: control key per-step (key != field y existe en formGroup)
+    if (currentKey && currentKey !== payload.field && formGroup?.get(currentKey)) {
+      base64TargetField = currentKey;
+    }
+    // Prioridad 2: sibling *_documents (aplica a 'files', 'file' y 'document' deprecated)
+    if (!base64TargetField && payload.field && (
+      payload.fieldConfig?.type === 'files'
+      || payload.fieldConfig?.type === 'file'
+      || payload.fieldConfig?.type === 'document'
+    )) {
+      const documentsCandidate = payload.field.replace(/files$/, 'documents');
+      if (documentsCandidate !== payload.field && formGroup?.get(documentsCandidate)) {
+        base64TargetField = documentsCandidate;
+      }
+    }
+    // Prioridad 3 (fallback legacy): key sin control en formGroup
+    if (!base64TargetField && currentKey && currentKey !== payload.field) {
+      base64TargetField = currentKey;
+    }
+    if (!base64TargetField) base64TargetField = payload.field;
+
     const fileObject = {
       type: payload.type,
       file_name: fileName,
       file: payload.file,
       step: currentStep,
-      field: payload.field, // Agregar el campo que capturó la imagen
-      key: payload.fieldConfig?.key // Agregar la key si existe
+      field: base64TargetField, // [[[II marcar destino real para el sweep de submitForm ]]]FI
+      key: payload.fieldConfig?.key
     };
 
     const newFiles = [
@@ -1883,49 +2508,33 @@ export class CustomDrawFormComponent implements OnDestroy {
     this.files64Signal.set(newFiles);
     this.files64Action.emit(newFiles);
 
-    // Establecer el valor en el FormControl si hay un campo especificado
-    if (payload.field || payload.fieldConfig?.key) {
-      const formGroup = this.formGroupSignal();
-      const currentKey = payload.fieldConfig?.key;
-
-      // Establecer valor en el campo "field" — contiene el base64 real
-      if (payload.field) {
-        // PERF: por `field` se suman todas las imágenes aunque provengan de distintas keys
-        const fieldFiles = newFiles.filter(f => f.field === payload.field);
-
-        // Si es un solo archivo, establecer el objeto; si son múltiples, establecer el array
-        const valueToSet = fieldFiles.length === 1 ? fieldFiles[0] : (fieldFiles.length > 1 ? fieldFiles : null);
-
-        const control = formGroup?.get(payload.field);
-        if (control) {
-          control.setValue(valueToSet);
-          control.markAsDirty();
-        }
+    // Escribir base64 en el control destino
+    if (base64TargetField) {
+      const control = formGroup?.get(base64TargetField);
+      if (control) {
+        const targetFiles = newFiles.filter(f => f.field === base64TargetField);
+        // Preservar URLs previas (PATCH) si las hay
+        const current = control.value;
+        const existingUrls: any[] = Array.isArray(current)
+          ? current.filter((v: any) => typeof v === 'string')
+          : (typeof current === 'string' && current ? [current] : []);
+        const combined = [...existingUrls, ...targetFiles];
+        control.setValue(combined.length > 0 ? combined : null);
+        control.markAsDirty();
       }
 
-      // Establecer valor LIGERO en el campo "key" (si existe y es diferente de field)
-      // El control key solo necesita satisfacer la validación required.
-      // submitForm() descarta este valor (delete formData[key] cuando key !== field),
-      // así que NO necesita el base64 completo — ahorrar ~150-300 KB por foto.
-      if (currentKey && currentKey !== payload.field) {
-        const keyFiles = newFiles.filter(f => f.key === currentKey);
-        // Placeholder ligero: misma estructura pero sin el base64 pesado
-        const toLightRef = (f: any) => ({
-          type: f.type,
-          file_name: f.file_name,
-          file: `[ref:${f.field}]`, // ~20 bytes vs ~200 KB
-          step: f.step,
-          field: f.field,
-          key: f.key
-        });
-        const valueToSet = keyFiles.length === 1
-          ? toLightRef(keyFiles[0])
-          : (keyFiles.length > 1 ? keyFiles.map(toLightRef) : null);
-
-        const keyControl = formGroup?.get(currentKey);
-        if (keyControl) {
-          keyControl.setValue(valueToSet);
-          keyControl.markAsDirty();
+      // Si la captura es de tipo `files` o `document` (deprecated) y el destino
+      // fue el control hermano `*_documents`, limpiar required del control
+      // `*_files` (la relación queda satisfecha por cámara / diferenciador 2).
+      if (
+        (payload.fieldConfig?.type === 'files' || payload.fieldConfig?.type === 'file' || payload.fieldConfig?.type === 'document')
+        && payload.field
+        && base64TargetField !== payload.field
+      ) {
+        const filesCtrl = formGroup?.get(payload.field);
+        if (filesCtrl) {
+          filesCtrl.clearValidators();
+          filesCtrl.updateValueAndValidity({ emitEvent: false });
         }
       }
     }
@@ -2189,7 +2798,7 @@ export class CustomDrawFormComponent implements OnDestroy {
   }
 
   // ═══════════════════════════════════════════════════════════════════════════
-  // BLOQUE: type "file" — template unificado con 3 modos combinables
+  // BLOQUE: type "files" — template unificado con 3 modos combinables
   // ───────────────────────────────────────────────────────────────────────────
   // Modos controlados por la configuración del field:
   //   upload.active=true        → captura (cámara/galería) → base64 → se envía
@@ -2214,7 +2823,8 @@ export class CustomDrawFormComponent implements OnDestroy {
   public fileSearchModel: { [field: string]: any } = {};
 
   /**
-   * Lista todos los fields type='file'/'files' presentes en el drawForm
+    * Lista todos los fields type='files' presentes en el drawForm.
+    * Acepta el alias legacy 'file' para compatibilidad.
    * (grid libre, card, fieldset y stepper). Se usa para renderizar las
    * barras de busqueda en el area global de preview de imagenes.
    */
@@ -2250,14 +2860,17 @@ export class CustomDrawFormComponent implements OnDestroy {
   }
 
   /**
-   * Items del p-splitbutton para un fieldConfig type='file'.
+    * Items del p-splitbutton para un fieldConfig type='files'.
+    * Acepta el alias legacy 'file'.
    * Se construyen una sola vez por llamada; el template los bindea por
    * referencia estable cacheada en `_fileMenuCache` para evitar recálculos.
    */
   private _fileMenuCache: { [field: string]: MenuItem[] } = {};
 
   getFileMenuItems(fieldConfig: any): MenuItem[] {
-    const key = fieldConfig?.field || '';
+    // Incluir el `key` en el cache key para que steps con el mismo `field`
+    // pero distinto `key` (stepper per-step) tengan entradas independientes.
+    const key = `${fieldConfig?.field || ''}::${fieldConfig?.key || ''}`;
     if (this._fileMenuCache[key]) return this._fileMenuCache[key];
 
     const items: MenuItem[] = [];
@@ -2393,6 +3006,27 @@ export class CustomDrawFormComponent implements OnDestroy {
       if (!next.some((r: any) => r?.id === relation.id)) next.push(relation);
       control.setValue(next);
       control.markAsDirty();
+
+      // [[[II Subida directa satisface la relación → limpiar required del
+      // control hermano `*_documents` (si existe) y del control per-step
+      // `key` (si key != field y existe). Ver 2026-05-16_001 ]]]FI
+      const docsCandidate = fieldName.replace(/files$/, 'documents');
+      if (docsCandidate !== fieldName) {
+        const docsCtrl = fg?.get(docsCandidate);
+        if (docsCtrl) {
+          docsCtrl.clearValidators();
+          docsCtrl.updateValueAndValidity({ emitEvent: false });
+        }
+        // Limpiar también el keyCtrl per-step cuando servidor satisface el campo
+        const keyCandidate = fieldConfig?.key;
+        if (keyCandidate && keyCandidate !== fieldName) {
+          const keyCtrl = fg?.get(keyCandidate);
+          if (keyCtrl) {
+            keyCtrl.clearValidators();
+            keyCtrl.updateValueAndValidity({ emitEvent: false });
+          }
+        }
+      }
     }
 
     const isImage = /\.(jpe?g|png|gif|webp|bmp)$/i.test(attrs.file || attrs.name || '');
@@ -2420,8 +3054,8 @@ export class CustomDrawFormComponent implements OnDestroy {
     if (q.length < 5) { this.fileSearchResults[fieldConfig.field] = []; return; }
 
     const dt = this._normalizeDataType(fieldConfig?.data_type);
-    const app = this.crudS.appType[dt?.type!]?.app;
-    const type = this.crudS.appType[dt?.type!]?.type;
+    const app = this.crudS.getAppType(dt?.type)?.app;
+    const type = this.crudS.getAppType(dt?.type)?.type;
     if (!app || !type) { this.fileSearchResults[fieldConfig.field] = []; return; }
 
     const filter = `filter[search]=${encodeURIComponent(q)}`;
@@ -2489,7 +3123,7 @@ export class CustomDrawFormComponent implements OnDestroy {
   }
 
   // ═══════════════════════════════════════════════════════════════════════════
-  // FIN BLOQUE: type "file"
+  // FIN BLOQUE: type "files"
   // ═══════════════════════════════════════════════════════════════════════════
 
 
@@ -2543,17 +3177,17 @@ export class CustomDrawFormComponent implements OnDestroy {
           // PERF: por `field` se suman todas las imágenes aunque provengan de distintas keys
           const remainingFieldFiles = newFiles.filter(f => f.field === fileToRemove.field);
 
-          // Si no quedan archivos, establecer null; si queda uno, establecer el objeto; si son múltiples, establecer el array
-          let valueToSet = null;
-          if (remainingFieldFiles.length === 1) {
-            valueToSet = remainingFieldFiles[0];
-          } else if (remainingFieldFiles.length > 1) {
-            valueToSet = remainingFieldFiles;
-          }
-
           const control = formGroup?.get(fileToRemove.field);
           if (control) {
-            control.setValue(valueToSet);
+            // En edición (PATCH): preservar URLs de archivos ya existentes en el servidor.
+            const current = control.value;
+            const existingUrls: any[] = Array.isArray(current)
+              ? current.filter((v: any) => typeof v === 'string')
+              : (typeof current === 'string' && current ? [current] : []);
+
+            const combined = [...existingUrls, ...remainingFieldFiles];
+            // Siempre se establece como array para que los campos tipo List reciban el formato correcto
+            control.setValue(combined.length > 0 ? combined : null);
             control.markAsDirty();
           }
         }
@@ -2632,9 +3266,8 @@ export class CustomDrawFormComponent implements OnDestroy {
     const drawForm = this.drawFormSignal();
     if (!drawForm?.stepper) return true;
 
-    const isLinear = drawForm.stepper.linear === true;
-    if (!isLinear) return true; // Si no es linear, permitir navegar libremente
-
+    // Los botones "Siguiente" siempre validan campos antes de avanzar
+    // (diferenciador 1). La prop linear solo controla las pestañas del header.
     const currentStep = this.currentStepSignal();
     if (currentStep === null) return true;
 

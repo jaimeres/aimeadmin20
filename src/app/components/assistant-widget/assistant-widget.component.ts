@@ -49,16 +49,16 @@ export class AssistantWidgetComponent {
 1   * IMPORTANTE: Los JSON de Lottie pueden ser pesados, usa imágenes estáticas cuando sea posible
    */
   @Input() animationPath: string | Record<AssistantMood, string> = {
-    idle: '/assets/assistant/assistant_idle.json',
-    talk: '/assets/assistant/assistant_talk.json',
-    think: '/assets/assistant/assistant_think.json',
-    notify: '/assets/assistant/assistant_notify.json',
-    speed: '/assets/assistant/assistant_speed.json',
-    yawning: '/assets/assistant/assistant_yawning.json',      // Estado: bostezando por inactividad
-    'look-left': '/assets/assistant/assistant_look_left.json',   // Mirando a la izquierda
-    'look-right': '/assets/assistant/assistant_look_right.json', // Mirando a la derecha
-    'look-up': '/assets/assistant/assistant_look_up.json',       // Mirando arriba
-    'look-down': '/assets/assistant/assistant_look_down.json',   // Mirando abajo
+    idle: '/assets/assistant/assistant_idle.json',              // Estado inactivo
+    talk: '/assets/assistant/assistant_talk.json',              // Hablando (burbujas de diálogo)
+    think: '/assets/assistant/assistant_think.json',            // Pensando/respondiendo (burbujas de diálogo)
+    notify: '/assets/assistant/assistant_notify.json',          // Estado de notificación (error o alerta importante)
+    speed: '/assets/assistant/assistant_speed.json',            // Usuario rápido/eficiente
+    yawning: '/assets/assistant/assistant_yawning.json',        // Estado: bostezando por inactividad
+    'look-left': '/assets/assistant/assistant_look_left.json',  // Mirando a la izquierda
+    'look-right': '/assets/assistant/assistant_look_right.json',// Mirando a la derecha
+    'look-up': '/assets/assistant/assistant_look_up.json',      // Mirando arriba
+    'look-down': '/assets/assistant/assistant_look_down.json',  // Mirando abajo
     confused: '/assets/assistant/assistant_confused.json',     // Usuario lento/confundido
     waiting: '/assets/assistant/assistant_waiting.json',       // Esperando acción del usuario
   };

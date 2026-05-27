@@ -1,0 +1,81 @@
+<div class="rr-editor">
+
+  @if (!hasField()) {
+  <div class="rr-info">
+    <i class="pi pi-info-circle mr-1"></i>
+    <strong>Reglas de responsables (condiciones)</strong> — el backend aún no ha enviado la
+    configuración del editor (<code>editor_type: rule_tree</code>) para este formulario.
+  </div>
+  } @else if (!type()) {
+  <div class="rr-info">
+    <i class="pi pi-info-circle mr-1"></i>
+    Selecciona un <strong>tipo de regla</strong> para configurar las condiciones.
+  </div>
+  } @else if (!catalog()) {
+  <div class="rr-warn">
+    <i class="pi pi-exclamation-triangle mr-1"></i>
+    No hay catálogo definido para el tipo "<strong>{{ type() }}</strong>".
+    Tipos disponibles: {{ availableTypes().join(', ') || '—' }}.
+  </div>
+  } @else {
+
+  <p-tabs [formControl]="tabCtrl">
+    <p-tablist>
+      <p-tab [value]="0"><i class="pi pi-sitemap mr-2"></i>Visual</p-tab>
+      <p-tab [value]="1"><i class="pi pi-code mr-2"></i>JSON</p-tab>
+    </p-tablist>
+
+    <p-tabpanels>
+
+      <p-tabpanel [value]="0">
+        <div class="rr-toolbar">
+          <small class="text-color-secondary">
+            Catálogo: <strong>{{ type() }}</strong> · paths: {{ (paths() | keyvalue).length }}
+          </small>
+          <div class="rr-toolbar-actions">
+            <p-button icon="pi pi-question-circle" [text]="true" severity="info" size="small"
+              pTooltip="Ayuda — reglas de responsables" tooltipPosition="left" (onClick)="help.open()">
+            </p-button>
+            <p-button label="Vaciar (regla siempre aplica)" icon="pi pi-eraser" [text]="true" severity="secondary"
+              size="small" (onClick)="resetEmpty()">
+            </p-button>
+          </div>
+        </div>
+
+        <app-condition-node [node]="tree()" [paths]="paths()" [opsMeta]="opsMeta()" [allowedOps]="allowedOps()"
+          [removable]="false" (nodeChange)="onTreeChange($event)">
+        </app-condition-node>
+      </p-tabpanel>
+
+      <p-tabpanel [value]="1">
+        <div class="rr-toolbar">
+          <small class="text-color-secondary">Edición libre. Sólo se permiten claves
+            <code>all</code> / <code>any</code> / <code>path</code> / <code>op</code> / <code>value</code>.
+          </small>
+          <p-button label="Formatear" icon="pi pi-align-left" [text]="true" severity="secondary" size="small"
+            (onClick)="formatJson()">
+          </p-button>
+        </div>
+        <textarea class="rr-json" spellcheck="false" [formControl]="jsonCtrl"></textarea>
+        @if (jsonParseError(); as msg) {
+        <div class="rr-err"><i class="pi pi-times-circle mr-1"></i>JSON: {{ msg }}</div>
+        }
+      </p-tabpanel>
+
+    </p-tabpanels>
+  </p-tabs>
+
+  @if (errors().length > 0) {
+  <div class="rr-errors">
+    <div class="rr-errors-title"><i class="pi pi-exclamation-circle mr-1"></i>Problemas detectados</div>
+    <ul>
+      @for (e of errors(); track $index) {
+      <li><code>{{ e.path || '(raíz)' }}</code> — {{ e.message }}</li>
+      }
+    </ul>
+  </div>
+  }
+  }
+</div>
+
+<app-rule-help #help mode="rule"></app-rule-help>

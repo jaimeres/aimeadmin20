@@ -1,0 +1,222 @@
+:host {
+  display: block;
+  width: 100%;
+}
+
+.timeline-container {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  min-height: 300px;
+  padding: 0.25rem 0.25rem 0.75rem;
+
+  &.loading {
+    opacity: 0.6;
+    pointer-events: none;
+  }
+}
+
+.timeline-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+
+  .t-block {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+  }
+
+  .t-asset .t-value {
+    font-weight: 600;
+    max-width: 240px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .t-label {
+    font-size: 0.85rem;
+    color: var(--p-text-muted-color, #6b7280);
+  }
+
+  .t-spacer {
+    flex: 1;
+  }
+}
+
+.timeline-validation {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.timeline-diff-summary {
+  display: flex;
+  gap: 0.5rem;
+
+  .ds-chip {
+    background: var(--p-primary-100, #dbeafe);
+    color: var(--p-primary-700, #1d4ed8);
+    border-radius: 999px;
+    padding: 0.15rem 0.6rem;
+    font-size: 0.8rem;
+    font-weight: 600;
+  }
+}
+
+.heatmap-wrapper {
+  overflow: auto;
+  border: 1px solid var(--p-content-border-color, #e5e7eb);
+  border-radius: 6px;
+  max-height: 60vh;
+}
+
+.heatmap {
+  display: grid;
+  grid-template-columns: 180px repeat(var(--ncols, 30), 36px);
+  font-size: 0.75rem;
+}
+
+.hm-corner {
+  position: sticky;
+  top: 0;
+  left: 0;
+  z-index: 3;
+  background: var(--p-surface-100, #f3f4f6);
+  border-right: 1px solid var(--p-content-border-color, #e5e7eb);
+  border-bottom: 1px solid var(--p-content-border-color, #e5e7eb);
+  padding: 0.4rem 0.5rem;
+  font-weight: 600;
+}
+
+.hm-col-head {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: var(--p-surface-100, #f3f4f6);
+  border-bottom: 1px solid var(--p-content-border-color, #e5e7eb);
+  border-right: 1px solid var(--p-surface-200, #e5e7eb);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 0.25rem 0;
+  line-height: 1.1;
+
+  .hm-dow {
+    font-size: 0.65rem;
+    color: var(--p-text-muted-color, #6b7280);
+  }
+
+  .hm-day {
+    font-weight: 600;
+  }
+
+  &.empty {
+    background: rgba(220, 38, 38, 0.08);
+    color: var(--p-red-600, #dc2626);
+  }
+}
+
+.hm-row-head {
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  background: var(--p-surface-50, #fafafa);
+  border-right: 1px solid var(--p-content-border-color, #e5e7eb);
+  border-bottom: 1px solid var(--p-surface-200, #e5e7eb);
+  padding: 0.35rem 0.5rem;
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+
+  &.ghost {
+    font-style: italic;
+    color: var(--p-text-muted-color, #6b7280);
+  }
+}
+
+.hm-cell {
+  border-right: 1px solid var(--p-surface-200, #e5e7eb);
+  border-bottom: 1px solid var(--p-surface-200, #e5e7eb);
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  position: relative;
+  transition: background 120ms ease;
+
+  &:hover {
+    background: var(--p-primary-50, #eff6ff);
+  }
+
+  &.filled {
+    background: var(--p-primary-100, #dbeafe);
+    color: var(--p-primary-800, #1e40af);
+    font-weight: 600;
+  }
+
+  &.is-default {
+    box-shadow: inset 0 0 0 2px var(--p-yellow-500, #eab308);
+  }
+
+  .hm-pct {
+    font-size: 0.7rem;
+  }
+
+  .hm-star {
+    position: absolute;
+    top: 2px;
+    right: 2px;
+    font-size: 0.6rem;
+    color: var(--p-yellow-500, #eab308);
+  }
+
+  &.ghost {
+    background: transparent;
+    color: var(--p-text-muted-color, #9ca3af);
+
+    &.gap {
+      background: rgba(220, 38, 38, 0.08);
+    }
+
+    &:hover {
+      background: var(--p-primary-50, #eff6ff);
+    }
+  }
+}
+
+.empty-state {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 1.5rem;
+  color: var(--p-text-muted-color, #6b7280);
+  justify-content: center;
+}
+
+.cell-popup {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+
+  .cp-row {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+
+    .cp-label {
+      width: 160px;
+      color: var(--p-text-muted-color, #6b7280);
+      font-size: 0.85rem;
+    }
+
+    .cp-value {
+      font-weight: 600;
+    }
+  }
+}

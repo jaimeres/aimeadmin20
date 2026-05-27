@@ -60,7 +60,7 @@
 
               <app-custom-draw-form *ngIf="form()[$any(typeDefault)] && drawForm()[typeDefault]"
                 [drawForm]="drawForm()[typeDefault]['general']" [formGroup]="form()[$any(typeDefault)]"
-                (onKeydownEnterAction)="onKeydownEnter($event)" />
+                (onKeydownEnterAction)="onKeydownEnter($event)" (onButtonClickAction)="handleButtonClick($event)" />
             </ng-template>
 
 

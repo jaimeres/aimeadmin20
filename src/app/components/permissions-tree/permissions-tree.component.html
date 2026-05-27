@@ -1,0 +1,120 @@
+<ng-template #content>
+  <!-- Toolbar -->
+  <div class="flex flex-wrap align-items-center gap-2 pb-2">
+    @if (showSearch()) {
+    <span class="p-input-icon-left flex-1" style="min-width:220px;">
+      <i class="pi pi-search"></i>
+      <input pInputText [ngModel]="searchTerm()" (ngModelChange)="setSearch($event)" placeholder="Buscar permiso..."
+        class="w-full p-inputtext-sm" />
+    </span>
+    }
+    @if (loading()) {
+    <p-progressSpinner styleClass="w-2rem h-2rem" strokeWidth="3" />
+    }
+    @if (dirty()) {
+    <p-tag value="Cambios sin guardar" severity="warn" />
+    }
+    @if (editable() && apps().length > 0) {
+    <p-button icon="pi pi-undo" label="Restablecer" severity="secondary" [outlined]="true" size="small"
+      [disabled]="!dirty() || saving()" (onClick)="reset()" />
+    }
+    @if (editable()) {
+    <p-button icon="pi pi-save" label="Guardar" size="small" [loading]="saving()" [disabled]="!dirty()"
+      (onClick)="save()" />
+    }
+  </div>
+
+  @if (apps().length === 0 && !loading()) {
+  <div class="text-center text-color-secondary py-5">
+    <i class="pi pi-shield text-3xl mb-2"></i>
+    <p class="text-sm m-0">No hay permisos disponibles.</p>
+  </div>
+  }
+
+  @if (apps().length > 0) {
+  <!-- Tabs por aplicación -->
+  <p-tabs [scrollable]="true" [value]="activeApp()" (valueChange)="setActiveApp($any($event))">
+    <p-tablist>
+      @for (a of apps(); track a) {
+      <p-tab [value]="a">
+        <i class="pi pi-th-large mr-2"></i>
+        <span class="capitalize">{{ a }}</span>
+        @if (grantedByApp()[a] > 0) {
+        <p-tag class="ml-2" [value]="grantedByApp()[a].toString()" severity="info" />
+        }
+      </p-tab>
+      }
+    </p-tablist>
+
+    <p-tabpanels>
+      @for (a of apps(); track a) {
+      <p-tabpanel [value]="a">
+
+        @if (editable()) {
+        <div class="flex justify-content-end gap-2 pb-2">
+          <p-button icon="pi pi-check-square" label="Otorgar todo" severity="secondary" [outlined]="true" size="small"
+            pTooltip="Activar todos los permisos de esta aplicación" tooltipPosition="top"
+            (onClick)="toggleAllInApp(a, true)" />
+          <p-button icon="pi pi-stop" label="Quitar todo" severity="secondary" [outlined]="true" size="small"
+            pTooltip="Desactivar todos los permisos de esta aplicación" tooltipPosition="top"
+            (onClick)="toggleAllInApp(a, false)" />
+        </div>
+        }
+
+        @if ((treeNodesByApp()[a]?.length ?? 0) === 0) {
+        <div class="text-center text-color-secondary py-3">
+          <i class="pi pi-search text-2xl mb-2"></i>
+          <p class="text-sm m-0">Sin resultados.</p>
+        </div>
+        } @else {
+        <p-tree [value]="treeNodesByApp()[a] ?? []" styleClass="w-full perm-tree">
+          <ng-template let-node pTemplate="default">
+            <div class="flex align-items-center gap-2 py-1 perm-node">
+              <i [class]="node.icon"></i>
+              <span class="flex-1">{{ node.label }}</span>
+            </div>
+          </ng-template>
+
+          <ng-template let-node pTemplate="action">
+            <div class="flex align-items-center gap-2 py-1 perm-node">
+              <i [class]="node.icon"></i>
+              <span class="flex-1">{{ node.label }}</span>
+              <code class="text-xs text-color-secondary">{{ node.key }}</code>
+              <p-toggleButton [ngModel]="node.data.leaf?.value === true" (ngModelChange)="toggleLeaf(node)"
+                [disabled]="!editable()" onLabel="Sí" offLabel="No" onIcon="pi pi-check" offIcon="pi pi-times"
+                styleClass="perm-toggle" />
+            </div>
+          </ng-template>
+
+          <ng-template let-node pTemplate="module">
+            <div class="flex align-items-center gap-2 py-1 perm-node">
+              <i [class]="node.icon"></i>
+              <span class="flex-1 font-semibold">{{ node.label }}</span>
+              @if (editable()) {
+              <p-button icon="pi pi-check-square" size="small" [text]="true" severity="secondary"
+                pTooltip="Otorgar todo el módulo" tooltipPosition="top"
+                (onClick)="toggleAllInModule(node.data.app, node.data.module, true); $event.stopPropagation()" />
+              <p-button icon="pi pi-stop" size="small" [text]="true" severity="secondary"
+                pTooltip="Quitar todo el módulo" tooltipPosition="top"
+                (onClick)="toggleAllInModule(node.data.app, node.data.module, false); $event.stopPropagation()" />
+              }
+            </div>
+          </ng-template>
+        </p-tree>
+        }
+      </p-tabpanel>
+      }
+    </p-tabpanels>
+  </p-tabs>
+  }
+</ng-template>
+
+<!-- Render con o sin diálogo según `inDialog` -->
+@if (inDialog()) {
+<p-dialog [visible]="_visible()" (visibleChange)="onVisibleChange($event)" [header]="header()" [modal]="true"
+  [resizable]="true" [maximizable]="true" styleClass="permissions-tree-dialog" appendTo="body" (onHide)="onHide()">
+  <ng-container *ngTemplateOutlet="content"></ng-container>
+</p-dialog>
+} @else {
+<ng-container *ngTemplateOutlet="content"></ng-container>
+}

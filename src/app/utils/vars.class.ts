@@ -1430,7 +1430,7 @@ export class Vars {
             field: 'file_type',
             type: 'dropdown',
             autofocus: false,
-            data_type: 'file_type'
+            data_type: 'file-type'
           },
           6: {
             class: 'col-span-6',
@@ -1521,7 +1521,7 @@ export class Vars {
             class: 'col-span-6',
             class_md: 'md:col-span-4',
             field: 'movement_type',
-            data_type: 'movement_type',
+            data_type: 'movement-type',
             type: 'dropdown',
             hide: false,
             autofocus: false

@@ -100,17 +100,11 @@ export class CRUDService {
       "name": "Productos",
       "icon": "pi pi-shopping-bag"
     },
-    "base_product": {
+    "base-product": {
       "app": "products/base-product",
       "type": "base-product",
       "name": "Productos Base",
       "icon": "pi pi-clone"
-    },
-    "purchase_unit": {
-      "app": "products/unit",
-      "type": "unit",
-      "name": "Unidades de Compra",
-      "icon": "pi pi-shopping-cart"
     },
     "status": {
       "app": "status/status",
@@ -118,7 +112,7 @@ export class CRUDService {
       "name": "Estados",
       "icon": "pi pi-flag"
     },
-    "file_type": {
+    "file-type": {
       "app": "files/file-type",
       "type": "file-type",
       "name": "Tipos de Archivo",
@@ -142,28 +136,40 @@ export class CRUDService {
       "name": "Mantenimiento",
       "icon": "pi pi-wrench"
     },
-    "asset_type": {
+    "workshop": {
+      "app": "assets/workshop",
+      "type": "workshop",
+      "name": "Talleres",
+      "icon": "pi pi-cog"
+    },
+    "asset-type": {
       "app": "assets/asset-type",
       "type": "asset-type",
       "name": "Tipos de Activos",
       "icon": "pi pi-tags"
     },
-    "capacity_type": {
+    "capacity-type": {
       "app": "assets/capacity-type",
       "type": "capacity-type",
       "name": "Tipos de Capacidad",
       "icon": "pi pi-chart-bar"
     },
-    "asset_other": {
+    "asset-other": {
       "app": "assets/asset-other",
       "type": "asset-other",
       "name": "Otros Activos",
       "icon": "pi pi-ellipsis-h"
     },
-    "asset_document": {
+    "asset-document": {
       "app": "assets/asset-document",
       "type": "asset-document",
       "name": "Documentos de Activos",
+      "icon": "pi pi-file-pdf"
+    },
+    "maintenance-document": {
+      "app": "assets/maintenance-document",
+      "type": "maintenance-document",
+      "name": "Documentos de Mantenimiento",
       "icon": "pi pi-file-pdf"
     },
     "person": {
@@ -184,7 +190,7 @@ export class CRUDService {
       "name": "Usuarios",
       "icon": "pi pi-users"
     },
-    "movement_type": {
+    "movement-type": {
       "app": "inventories/movement-type",
       "type": "movement-type",
       "name": "Tipos de Movimiento",
@@ -196,43 +202,51 @@ export class CRUDService {
       "name": "Responsables",
       "icon": "pi pi-user-check"
     },
-    "inventory_movement_detail": {
+    "inventory-movement-detail": {
       "app": "inventories/inventory-movement-detail",
       "type": "inventory-movement-detail",
       "name": "Movimientos de almacén",
       "icon": "pi pi-arrow-right-arrow-left"
     },
-    "responsible_user_rule": {
-      "app": "responsibles/responsible-user-rule",
-      "type": "responsible-user-rule",
-      "name": "Regla de responsable",
-      "icon": "pi pi-user-check"
+
+    "maintenance-responsible-rule": {
+      "app": "assets/maintenance-responsible-rule",
+      "type": "maintenance-responsible-rule",
+      "name": "Regla (responsable)",
+      "icon": "pi pi-cog"
     },
-    "alternate_equivalent": {
+    "maintenance-responsible-rule-action": {
+      "app": "assets/maintenance-responsible-rule-action",
+      "type": "maintenance-responsible-rule-action",
+      "name": "Acción de regla (responsable)",
+      "icon": "pi pi-bolt"
+    },
+
+    "alternate-equivalent": {
       "app": "products/alternate-equivalent",
       "type": "alternate-equivalent",
       "name": "Alternos/Equivalentes",
       "icon": "pi pi-sync"
     },
-    "product_variation": {
+    "product-variation": {
       "app": "products/product-variation",
       "type": "product-variation",
       "name": "Variaciones de Producto",
       "icon": "pi pi-list"
     },
-    "web_product": {
+    "web-product": {
       "app": "products/web-product",
       "type": "web-product",
       "name": "Producto Web",
       "icon": "pi pi-globe"
     },
-    "app_classifier_type": {
+    "app-classifier-type": {
       "app": "classifiers/app-classifier-type",
       "type": "app-classifier-type",
       "name": "Tipo de Clasificador",
       "icon": "pi pi-tags"
     },
-    "classifier_level": {
+    "classifier-level": {
       "app": "classifiers/classifier-level",
       "type": "classifier-level",
       "name": "Niveles de Clasificador",
@@ -244,19 +258,56 @@ export class CRUDService {
       "name": "Tareas",
       "icon": "pi pi-check-square"
     },
-    "task_detail": {
+    "task-detail": {
       "app": "tasks/task-detail",
       "type": "task-detail",
       "name": "Detalle de Tarea",
       "icon": "pi pi-check-square"
     },
-    "request_detail": {
+    "request-detail": {
       "app": "purchases/request-detail",
       "type": "request-detail",
       "name": "Detalle de Solicitud",
       "icon": "pi pi-file-edit"
+    },
+    "maintenance-responsible-person": {
+      "app": "assets/maintenance-responsible-person",
+      "type": "maintenance-responsible-person",
+      "name": "Responsable de Mantenimiento",
+      "icon": "pi pi-user-gear"
+    },
+    "maintenance-responsible-customer": {
+      "app": "assets/maintenance-responsible-customer",
+      "type": "maintenance-responsible-customer",
+      "name": "Responsable de Mantenimiento (cliente)",
+      "icon": "pi pi-user-gear"
+    },
+    "maintenance-responsible-supplier": {
+      "app": "assets/maintenance-responsible-supplier",
+      "type": "maintenance-responsible-supplier",
+      "name": "Responsable de Mantenimiento (proveedor)",
+      "icon": "pi pi-user-gear"
     }
   };
+
+  /**
+   * Resuelve una entrada de `appType` tolerando guiones bajos vs guiones medios.
+   *
+   * El backend usa convenciones distintas según el contexto:
+   *  - URLs / JSON:API resource type para tablas nuevas → kebab-case (`responsible-rule`).
+   *  - `data_type.type` de FK del config → nombre Django de la relación, en
+   *    snake_case (`capacity_type`, `asset_type`, `classifier_level`, ...).
+   *
+   * Para evitar dispersar transformaciones por todo el código, este es el ÚNICO
+   * punto que normaliza. Los consumidores siempre llaman `getAppType(_dt?.type)`.
+   */
+  public getAppType(key?: string | null): any | undefined {
+    if (!key) return undefined;
+    const dict = this.appType as any;
+    return dict[key]
+      ?? dict[key.replace(/_/g, '-')]
+      ?? dict[key.replace(/-/g, '_')];
+  }
 
   configCols(module: string) {
     console.log(module,);
@@ -582,9 +633,12 @@ export class CRUDService {
   save(formData: any, include: string = '', fields: string = '', filter: string = '') {
     //°°°DEL FILTER NO ESTOY SEGURO
     const query = this.query(include, filter, '', fields);
+    // [[[II ESC:001-06 DOC:docs/documents/2026-05-16_001_consolidacion_dropdown_types_y_fix_escenarios.md#escenario-06
+    const sanitizedFormData = this._stripNullsForSave(formData) || {};
+    // ]]]FI
 
     return this.http.post(`${this.baseUrl()}${query}`, this.generalS.baseDJA({
-      attributes: formData,
+      attributes: sanitizedFormData,
       type: this.type,
       relationships: this.relationships
     })).pipe(
@@ -608,6 +662,9 @@ export class CRUDService {
   }) {
     //°°°DEL FILTER NO ESTOY SEGURO
     const query = this.query(include, filter, '', fields);
+    // [[[II ESC:001-06 DOC:docs/documents/2026-05-16_001_consolidacion_dropdown_types_y_fix_escenarios.md#escenario-06
+    const sanitizedFormData = this._stripNullsForSave(formData) || {};
+    // ]]]FI
 
 
     /* if (files) {
@@ -621,7 +678,7 @@ export class CRUDService {
          map((resp: any) => resp));
      }*/
     const r = this.generalS.baseDJA({
-      attributes: formData,
+      attributes: sanitizedFormData,
       type: this.type,
       relationships: this.relationships
     });
@@ -630,6 +687,49 @@ export class CRUDService {
       map((resp: any) => resp)
     );
   }
+
+  // [[[II ESC:001-06 DOC:docs/documents/2026-05-16_001_consolidacion_dropdown_types_y_fix_escenarios.md#escenario-06
+  private _stripNullsForSave(value: any, stack: WeakSet<object> = new WeakSet<object>()): any {
+    if (value === null || value === undefined) {
+      return undefined;
+    }
+
+    if (value instanceof Date || value instanceof Blob || value instanceof File) {
+      return value;
+    }
+
+    if (typeof value !== 'object') {
+      return value;
+    }
+
+    if (stack.has(value)) {
+      return undefined;
+    }
+
+    stack.add(value);
+
+    try {
+      if (Array.isArray(value)) {
+        return value
+          .map((item) => this._stripNullsForSave(item, stack))
+          .filter((item) => item !== undefined);
+      }
+
+      const sanitized: any = {};
+
+      for (const [key, childValue] of Object.entries(value)) {
+        const normalizedValue = this._stripNullsForSave(childValue, stack);
+        if (normalizedValue !== undefined) {
+          sanitized[key] = normalizedValue;
+        }
+      }
+
+      return sanitized;
+    } finally {
+      stack.delete(value);
+    }
+  }
+  // ]]]FI
 
   /**
    * @param formData campos del formulario
@@ -692,7 +792,7 @@ export class CRUDService {
     appKey?: string;
     extraFields?: { [k: string]: string };
   }) {
-    const app = (this.appType as any)[appKey]?.app || 'files/file';
+    const app = this.getAppType(appKey)?.app || 'files/file';
     const fd = new FormData();
     fd.append('file', file, name || 'file');
     fd.append('name', name || 'file');

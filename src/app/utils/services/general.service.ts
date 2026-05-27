@@ -59,6 +59,9 @@ export class GeneralService {
    * @param {string} id - Para editar.
    */
   baseDJA({ attributes, type, relationships = [], id }: { attributes: any; type: string; relationships?: any[]; id?: string }) {
+    // [[[II ESC:001-06 DOC:docs/documents/2026-05-16_001_consolidacion_dropdown_types_y_fix_escenarios.md#escenario-06
+    attributes = this._stripNullsFromPayload(attributes) || {};
+    // ]]]FI
     let relationshipsResp = [];
     // genera el objeto relationships
     for (let relation of relationships) {
@@ -92,6 +95,18 @@ export class GeneralService {
 
           //si id es un objecto
           if (typeof id === 'object') {
+            // Soporte JSON:API "rico": objetos pre-construidos por componentes
+            // como <tree-select> con serialización (parent en `meta`, source, etc.).
+            // Si el item viene marcado con __rich/__jsonapi se conservan TODAS sus
+            // propiedades (type, id, meta, source, ...) en lugar de reducirlo a
+            // {id, type}. type por defecto cae al de la relación si falta.
+            if (id.__rich || id.__jsonapi) {
+              const { __rich, __jsonapi, ...rest } = id as any;
+              if (!rest.type) rest.type = relation.type;
+              if (!rest.id) continue;
+              data.push(rest);
+              continue;
+            }
             data.push({ id: id.id, type: relation.type });
             continue;
           }
@@ -102,11 +117,20 @@ export class GeneralService {
         relationshipsResp[relation.field] = {
           data: data
         };
+        // elimina el campo de attributes para evitar enviarlo dos veces y
+        // prevenir errores de referencias circulares (PrimeNG objects)
+        if (attributes.hasOwnProperty(relation.field)) {
+          delete attributes[relation.field];
+        }
       } else if (relation.id) {
         //los objectos con relaciobes one to many, no se pueden enviar como array, por eso se envía como objeto
         relationshipsResp[relation.field] = {
           data: { id: relation.id, type: relation.type }
         };
+        // elimina el campo de attributes para evitar enviarlo dos veces
+        if (attributes.hasOwnProperty(relation.field)) {
+          delete attributes[relation.field];
+        }
       } else {
         // elimina las relaciones nulas pero del objecto principal para que jsonapi no lo tome como un campo y no se queje
         if (attributes.hasOwnProperty(relation.field)) {
@@ -116,6 +140,8 @@ export class GeneralService {
     }
 
     // genera el objeto data, con type y attributes
+    attributes = this._stripNullsFromPayload(attributes) || {};
+
     let dataResp: any = {
       data: {
         type: type,
@@ -140,6 +166,9 @@ export class GeneralService {
   }
 
   baseDJAFormData({ attributes, type, relationships = [], id, files = null }: { attributes: any; type: string; relationships?: any[]; id?: string; files?: any }) {
+    // [[[II ESC:001-06 DOC:docs/documents/2026-05-16_001_consolidacion_dropdown_types_y_fix_escenarios.md#escenario-06
+    attributes = this._stripNullsFromPayload(attributes) || {};
+    // ]]]FI
     let relationshipsResp = [];
     // genera el objeto relationships
     for (let relation of relationships) {
@@ -324,6 +353,49 @@ export class GeneralService {
       return `${fecha} ${hora}`;
     }
   }
+
+  // [[[II ESC:001-06 DOC:docs/documents/2026-05-16_001_consolidacion_dropdown_types_y_fix_escenarios.md#escenario-06
+  private _stripNullsFromPayload(value: any, stack: WeakSet<object> = new WeakSet<object>()): any {
+    if (value === null || value === undefined) {
+      return undefined;
+    }
+
+    if (value instanceof Date || value instanceof Blob || value instanceof File) {
+      return value;
+    }
+
+    if (typeof value !== 'object') {
+      return value;
+    }
+
+    if (stack.has(value)) {
+      return undefined;
+    }
+
+    stack.add(value);
+
+    try {
+      if (Array.isArray(value)) {
+        return value
+          .map((item) => this._stripNullsFromPayload(item, stack))
+          .filter((item) => item !== undefined);
+      }
+
+      const sanitized: any = {};
+
+      for (const [key, childValue] of Object.entries(value)) {
+        const normalizedValue = this._stripNullsFromPayload(childValue, stack);
+        if (normalizedValue !== undefined) {
+          sanitized[key] = normalizedValue;
+        }
+      }
+
+      return sanitized;
+    } finally {
+      stack.delete(value);
+    }
+  }
+  // ]]]FI
 
   /**
    * Convierte la respuesta JSON:API (DJA) a un array de objetos planos listos para

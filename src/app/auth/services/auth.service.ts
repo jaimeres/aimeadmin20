@@ -1,4 +1,4 @@
-import { Injectable, signal, computed } from '@angular/core';
+import { Injectable, signal, computed, inject } from '@angular/core';
 import { User } from '../../types/user';
 import { LoggedUser } from '../../types/logged-user';
 import { CookieOptions, CookieService } from 'ngx-cookie-service';
@@ -13,6 +13,7 @@ import { BiometricAuthService } from './biometric-auth.service';
 import { FormCacheService } from '../../utils/services/form-cache.service';
 import { Preferences } from '@capacitor/preferences';
 import { App } from '@capacitor/app';
+import { PermissionsService } from './permissions.service';
 
 @Injectable({
   providedIn: 'root'
@@ -46,7 +47,13 @@ export class AuthService {
   readonly username = computed(() => this._user()?.username ?? null);
   readonly userImage = computed(() => this._user()?.image ?? null);
 
+  /** Servicio de permisos (inicializado en el constructor) */
+  public permissionsS!: PermissionsService;
+
   constructor(private http: HttpClient, private cookieS: CookieService, private messageS: MessageService, private router: Router, private generalS: GeneralService, public biometricAuthS: BiometricAuthService, private formCacheS: FormCacheService) {
+    // Servicio de permisos (inject para evitar romper la firma del constructor existente)
+    this.permissionsS = inject(PermissionsService);
+
     // Cargar tokens y usuario al inicializar (solo importante para móviles)
     this._storageReady = this.loadTokensFromStorage();
 
@@ -93,8 +100,11 @@ export class AuthService {
     // Persistir en cookie para web (por si hay reload)
     if (userData) {
       this.cookieS.set('user', JSON.stringify(userData), this._cookieOptions);
+      // Hidratar permisos a partir del payload de login
+      this.permissionsS?.loadFromLogin(userData);
     } else {
       this.cookieS.delete('user');
+      this.permissionsS?.clear();
     }
   }
 
