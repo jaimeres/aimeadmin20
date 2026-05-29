@@ -1107,6 +1107,11 @@ export class CRUD extends Vars implements OnChanges  /*implements OnInit*/ {
                       // Solo agregar object_ si no lo tiene ya
                       const newChildFieldKey = childFieldKey.startsWith('object_' + fieldPrefix) ? childFieldKey : 'object_' + childFieldKey;
 
+                      // [[[II ESC:003-02 DOC:docs/documents/2026-05-25_003_dynamic-children-field-loading.md#escenario-02
+                      // Mantiene alineados la clave del mapa children.fields y el
+                      // metadata `field` consumido por custom-draw-form.
+                      typedChildFieldValue.field = newChildFieldKey;
+                      // ]]]FI
                       fieldData.children.fields[typeKey][newChildFieldKey] = typedChildFieldValue;
                       delete fieldData.children.fields[typeKey][childFieldKey];
                     }
@@ -3134,6 +3139,7 @@ export class CRUD extends Vars implements OnChanges  /*implements OnInit*/ {
     this.isCreateSecundary = true;
     const parentSelect = this.selected()[0];
     const child_form_fields = parentSelect?.child_form_fields || {};
+    console.log('child_form_fields', parentSelect, child_form_fields);
     if (!parentSelect.is_detail_required) {
       this.messageS.changeMessage(`${parentSelect?.name} no requiere detalle.`, null, {}, 'info');
       return;

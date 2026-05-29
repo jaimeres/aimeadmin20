@@ -246,13 +246,6 @@ export class CustomDrawFormComponent implements OnDestroy {
     return signatureData;
   });
 
-  // --- TEMPORAL: compatibilidad data_type como cadena ---
-  private _normalizeDataType(dt: any): { type?: string; options?: any[]; filter?: any; ordering?: string; limit?: number } {
-    if (typeof dt === 'string') return { type: dt };
-    return dt || {};
-  }
-  // --- FIN TEMPORAL ---
-
   // --- TEMPORAL: eliminar metadatos EXIF/GPS de imágenes ---
   private _stripImageMetadata(dataUrl: string, quality = 0.85): Promise<string> {
     return new Promise((resolve) => {
@@ -305,10 +298,7 @@ export class CustomDrawFormComponent implements OnDestroy {
     // si tiene opciones no se consulta al servidor    
     //aqui voy estoy revisando porque option no se inicializa con los dartos del choice y como se parseMarkerlos dropdawn en sabe al modulo
     //no lleva force ya que no consulta al servidor //inicia cambio data_type
-    // --- TEMPORAL: compatibilidad data_type como cadena ---
-    const _dt = this._normalizeDataType(element?.data_type);
-    // const _dt = element?.data_type; // ORIGINAL: descomentar cuando data_type sea solo objeto
-    // --- FIN TEMPORAL ---
+    const _dt = element?.data_type ?? {};
     if (_dt?.options && Array.isArray(_dt.options) && _dt.options.length > 0) {
       if (optionLabelField) {
         this.applyOptionLabelToOptions(_dt.options, element, optionLabelField);
@@ -389,10 +379,7 @@ export class CustomDrawFormComponent implements OnDestroy {
     //si no existe datos para ese dropdown se consulta al servidor,
     // en lugar de poner la app y el type en cada campo de json que genera el draw se pone una referencia
     // a un objeto que tiene la app y el type para evitar que esta info se guarde en el servidor y se pueda inyectar en el componente
-    // --- TEMPORAL: compatibilidad data_type como cadena ---
-    const _dt2 = this._normalizeDataType(element?.data_type);
-    // const _dt2 = element?.data_type; // ORIGINAL: descomentar cuando data_type sea solo objeto
-    // --- FIN TEMPORAL ---
+    const _dt2 = element?.data_type ?? {};
     const app = this.crudS.getAppType(_dt2?.type)?.app;
     const type = this.crudS.getAppType(_dt2?.type)?.type;
     if (app && type) {
@@ -453,10 +440,7 @@ export class CustomDrawFormComponent implements OnDestroy {
    * Genera la llave de cache móvil para un dropdown por usuario.
    */
   private getMobileCacheKey(element: any): string {
-    // --- TEMPORAL: compatibilidad data_type como cadena ---
-    const _dt = this._normalizeDataType(element?.data_type);
-    // const _dt = element?.data_type; // ORIGINAL: descomentar cuando data_type sea solo objeto
-    // --- FIN TEMPORAL ---
+    const _dt = element?.data_type ?? {};
     const app = this.crudS.getAppType(_dt?.type)?.app || 'app';
     const type = this.crudS.getAppType(_dt?.type)?.type || 'type';
     const field = element?.field || 'field';
@@ -581,6 +565,52 @@ export class CustomDrawFormComponent implements OnDestroy {
     }
   }
 
+  // [[[II ESC:003-03 DOC:docs/documents/2026-05-25_003_dynamic-children-field-loading.md#escenario-03
+  private normalizeOptionsForField(options: any[], fieldConfig: any): any[] {
+    if (!Array.isArray(options) || options.length === 0) return options || [];
+
+    const optionValue = fieldConfig?.option_value;
+    const labelFields = this.parseOptionLabel(fieldConfig?.option_label);
+    const aliases: Record<string, string[]> = {
+      'value': ['id'],
+      'id': ['value'],
+      'display_name': ['name', 'label'],
+      'name': ['display_name', 'label'],
+      'label': ['display_name', 'name'],
+    };
+
+    const normalized = options.map((option: any) => {
+      if (!option || typeof option !== 'object') return option;
+
+      const next = { ...option };
+
+      if (optionValue && next[optionValue] === undefined) {
+        const aliasKey = (aliases[optionValue] || []).find((alias) => next[alias] !== undefined);
+        if (aliasKey !== undefined) {
+          next[optionValue] = next[aliasKey];
+        }
+      }
+
+      for (const labelField of labelFields) {
+        if (next[labelField] !== undefined) continue;
+        const aliasKey = (aliases[labelField] || []).find((alias) => next[alias] !== undefined);
+        if (aliasKey !== undefined) {
+          next[labelField] = next[aliasKey];
+        }
+      }
+
+      return next;
+    });
+
+    const labelField = this.getOptionLabelField(fieldConfig);
+    if (labelField) {
+      this.applyOptionLabelToOptions(normalized, fieldConfig, labelField);
+    }
+
+    return normalized;
+  }
+  // ]]]FI
+
   // [[[II Fuente única de tipos dropdown en utils/dropdown-types.const.ts ]]]FI
   private readonly DROPDOWN_TYPES = DROPDOWN_TYPES_PRELOAD;
 
@@ -603,6 +633,41 @@ export class CustomDrawFormComponent implements OnDestroy {
       }
     }
   }
+
+  // [[[II ESC:003-03 DOC:docs/documents/2026-05-25_003_dynamic-children-field-loading.md#escenario-03
+  private findFieldConfigByField(field: string): any | null {
+    if (!field) return null;
+
+    const drawForm = this.drawFormSignal();
+    let found: any = null;
+
+    const scanCollection = (collection: any): void => {
+      if (!collection || typeof collection !== 'object' || found) return;
+
+      for (const el of Object.values(collection)) {
+        this.walkElement(el, (node: any) => {
+          if (!found && node?.field === field) {
+            found = node;
+          }
+        });
+
+        if (found) return;
+      }
+    };
+
+    scanCollection(drawForm?.grid);
+
+    const steps = drawForm?.stepper?.steps;
+    if (!found && steps && typeof steps === 'object') {
+      for (const step of Object.values(steps)) {
+        scanCollection((step as any)?.fields);
+        if (found) break;
+      }
+    }
+
+    return found;
+  }
+  // ]]]FI
 
   /**
    * Procesa una colección { 0: {...}, 1: {...} } o array de elementos
@@ -1266,10 +1331,7 @@ export class CustomDrawFormComponent implements OnDestroy {
     //    }
     //}
     const additionalFieldsIncluded = entry.fields_included_relationships;
-    // --- TEMPORAL: compatibilidad data_type como cadena ---
-    const _dt = this._normalizeDataType(entry?.data_type);
-    // const _dt = entry?.data_type; // ORIGINAL: descomentar cuando data_type sea solo objeto
-    // --- FIN TEMPORAL ---
+    const _dt = entry?.data_type ?? {};
     const app = this.crudS.getAppType(_dt?.type)?.app;
     const type = this.crudS.getAppType(_dt?.type)?.type;
 
@@ -1484,7 +1546,8 @@ export class CustomDrawFormComponent implements OnDestroy {
     field: string,
     currentValue: any,
     config: any,
-    currentDropdownOption: any
+    currentDropdownOption: any,
+    depth: number = 0
   ): void {
     const children = config.children || {};
     const fields = children?.fields || {};
@@ -1495,7 +1558,25 @@ export class CustomDrawFormComponent implements OnDestroy {
       for (const key in fields[fieldType]) {
         if (!fields[fieldType].hasOwnProperty(key)) continue;
         const fieldConfig = fields[fieldType][key];
-        const formControl = this.formGroupSignal()?.get(key);
+        // [[[II ESC:003-02 DOC:docs/documents/2026-05-25_003_dynamic-children-field-loading.md#escenario-02
+        const isDropdownLikeChild = this.isDropdown(fieldConfig);
+        const objectField = key.startsWith('object_') ? key : `object_${key}`;
+        const candidateFields = [
+          isDropdownLikeChild ? objectField : null,
+          fieldConfig?.field,
+          key,
+        ].filter((candidate, index, arr): candidate is string =>
+          typeof candidate === 'string' && candidate.length > 0 && arr.indexOf(candidate) === index
+        );
+        const targetField = candidateFields.find(candidate => !!this.formGroupSignal()?.get(candidate))
+          ?? candidateFields[0]
+          ?? key;
+        const formControl = this.formGroupSignal()?.get(targetField);
+        const mirroredField = targetField.startsWith('object_')
+          ? targetField.replace(/^object_/, '')
+          : null;
+        const targetFieldConfig = this.findFieldConfigByField(targetField) ?? fieldConfig;
+        // ]]]FI
 
         // ── 1. ACTIVACIÓN ──
         let isActive = true;
@@ -1510,8 +1591,8 @@ export class CustomDrawFormComponent implements OnDestroy {
           if (isActive) { formControl.enable(); }
           else { formControl.disable(); formControl.setValue(null); }
         }
-        if (key.startsWith('object_')) {
-          const rel = this.formGroupSignal()?.get(key.replace('object_', ''));
+        if (mirroredField) {
+          const rel = this.formGroupSignal()?.get(mirroredField);
           if (rel) {
             if (isActive) { rel.enable(); } else { rel.disable(); rel.setValue(null); }
           }
@@ -1528,8 +1609,8 @@ export class CustomDrawFormComponent implements OnDestroy {
             formControl.setValidators(isRequired ? [Validators.required] : []);
             formControl.updateValueAndValidity();
           }
-          if (key.startsWith('object_')) {
-            const rel = this.formGroupSignal()?.get(key.replace('object_', ''));
+          if (mirroredField) {
+            const rel = this.formGroupSignal()?.get(mirroredField);
             if (rel) {
               rel.setValidators(isRequired ? [Validators.required] : []);
               rel.updateValueAndValidity();
@@ -1538,129 +1619,308 @@ export class CustomDrawFormComponent implements OnDestroy {
         }
 
         // ── 3. PROCESAR SEGÚN TIPO ──
+        // [[[II ESC:003-04 DOC:docs/documents/2026-05-25_003_dynamic-children-field-loading.md#escenario-04
+        // Contrato unificado: los 3 modos comparten el mismo pipeline.
+        //   - La fuente (servidor/local) se decide por la presencia de data_type.type.
+        //   - El filtrado (filter.conditions), result_position y auto_select son
+        //     idénticos en static y dynamic.
+        //   - 'derived' copia un atributo del padre (from: 'parent') o del servidor
+        //     (from: 'server'); también respeta activate/requested.
+        // El valor del padre para los filtros se extrae con filter_group (default 'id').
+        const childFilterGroup = fieldConfig?.filter_group || 'id';
+        const parentValue = (currentDropdownOption && typeof currentDropdownOption === 'object')
+          ? (currentDropdownOption[childFilterGroup] ?? (childFilterGroup === 'id' ? currentValue : null))
+          : currentValue;
+
         if (fieldType === 'derived') {
-          const fn = fieldConfig?.field_name;
-          if (fn && currentDropdownOption && isActive && currentDropdownOption[fn]) {
-            formControl?.setValue(currentDropdownOption[fn]);
-          }
-        } else if (fieldType === 'static') {
-          // --- TEMPORAL: compatibilidad data_type como cadena ---
-          const _dtStatic = this._normalizeDataType(fieldConfig?.data_type);
-          // const _dtStatic = fieldConfig?.data_type; // ORIGINAL: descomentar cuando data_type sea solo objeto
-          // --- FIN TEMPORAL ---
-          // Las opciones pueden venir top-level (ej. parent_form_data_PLAZA) o dentro de data_type.options
-          const options = (Array.isArray(fieldConfig?.options) && fieldConfig.options.length)
-            ? fieldConfig.options
-            : (_dtStatic?.options || []);
-          const fc = fieldConfig?.filter;
-          // Si el child no expone filter explícito pero declara filter_group propio,
-          // derivamos un filtro implícito que empareja option[fg] === parentOption[fg]
-          const implicitFg: string | null = (!fc?.active && fieldConfig?.filter_group)
-            ? fieldConfig.filter_group : null;
-
-          const publishOpts = (opts: any[]) => this._updateDropdownOptions(key, this._toTreeNodesIfNeeded(fieldConfig, opts));
-          if (!isActive) {
-            publishOpts([]);
-          } else if (fc?.active) {
-            let filtered = options.filter((option: any) => {
-              const conds = fc.conditions || [];
-              if (conds.length === 0) return true;
-              const results = conds.map((cond: any) => {
-                if (!cond.field) return false;
-                const cv = this._resolveConditionValue(cond.field, field, currentDropdownOption);
-                if (!cv) return false;
-                const fg = cond.filter_group || 'id';
-                const optVal = fg ? option[fg] : option.id;
-                const cmpVal = fg ? cv[fg] : cv;
-                return this._evaluateOperator(cond.operator || 'equals', cmpVal, cond.values || [], optVal);
-              });
-              return (fc.logic || 'AND') === 'AND' ? results.every(Boolean) : results.some(Boolean);
-            });
-            const pos = fc.result_position || 'all';
-            if (pos === 'first' && filtered.length) filtered = [filtered[0]];
-            else if (pos === 'last' && filtered.length) filtered = [filtered[filtered.length - 1]];
-            publishOpts(filtered);
-          } else if (implicitFg && currentDropdownOption) {
-            // Filtro implícito por filter_group del padre/hijo
-            const parentVal = currentDropdownOption[implicitFg];
-            let filtered = options.filter((o: any) => o[implicitFg] === parentVal);
-            const pos = fieldConfig?.result_position || 'all';
-            if (pos === 'first' && filtered.length) filtered = [filtered[0]];
-            else if (pos === 'last' && filtered.length) filtered = [filtered[filtered.length - 1]];
-            publishOpts(filtered);
-          } else if (options.length) {
-            // Sin filter declarado: pasar opciones tal cual
-            publishOpts(options);
-          } else {
-            publishOpts([]);
-          }
-        } else if (fieldType === 'dynamic') {
-          // [[[II 2026-05-25 · 003 · dynamic-children-field-loading
-          // Consulta al servidor con filtros forced inyectados desde el padre.
-          // Soporta result_position ('first'|'last'|'all') y auto-selección (selected: true).
-          const _dtDyn = this._normalizeDataType(fieldConfig?.data_type);
-          const dynApp = this.crudS.getAppType(_dtDyn?.type)?.app;
-          const dynType = this.crudS.getAppType(_dtDyn?.type)?.type;
-
-          if (!isActive || !dynApp || !dynType) {
-            this._updateDropdownOptions(key, []);
-            continue;
-          }
-
-          // El valor del padre se extrae usando filter_group (default 'id')
-          const filterGroup = fieldConfig?.filter_group || 'id';
-          const parentValue = currentDropdownOption?.[filterGroup]
-            ?? (filterGroup === 'id' ? currentValue : null);
-
-          if (parentValue == null || parentValue === '') {
-            this._updateDropdownOptions(key, []);
-            formControl?.setValue(null);
-            continue;
-          }
-
-          // Construir filtro: entradas forced reciben parentValue como default_value
-          const filterCfg: Record<string, any> = {};
-          if (_dtDyn?.filter && typeof _dtDyn.filter === 'object') {
-            for (const [fk, fv] of Object.entries(_dtDyn.filter) as [string, any][]) {
-              if (fv?.forced) {
-                filterCfg[fk] = { ...fv, active: true, default_value: parentValue };
-              } else if (fv?.active) {
-                filterCfg[fk] = fv;
-              }
-            }
-          }
-          const filter = this.crudS.buildDropdownFilterString(filterCfg);
-          const sort = _dtDyn?.ordering || '';
-          const limit = _dtDyn?.limit || 0;
-
-          const resultPos = fieldConfig?.result_position || 'all';
-          const autoSelect = fieldConfig?.selected === true;
-          const optionValue = fieldConfig?.option_value || 'id';
-
-          this.messageS.showBlocked(true);
-          this.crudS.getObject({ app: dynApp, type: dynType, filter, sort, limit }).subscribe((data: any) => {
-            let rows = this.generalS.DJAtoObject({
-              respDJA: data,
-              fields: { [key]: fieldConfig }
-            }) || [];
-
-            if (resultPos === 'first' && rows.length) rows = [rows[0]];
-            else if (resultPos === 'last' && rows.length) rows = [rows[rows.length - 1]];
-
-            this._updateDropdownOptions(key, this._toTreeNodesIfNeeded(fieldConfig, rows));
-
-            if (autoSelect && rows.length) {
-              formControl?.setValue(rows[0]?.[optionValue] ?? null);
-            } else if (!rows.length) {
-              formControl?.setValue(null);
-            }
-            this.messageS.showBlocked(false);
+          this._processDerivedChild({
+            fieldConfig, targetField, targetFieldConfig, formControl,
+            parentField: field, parentOption: currentDropdownOption, parentValue,
+            childFilterGroup, isActive, depth,
           });
-          // ]]]FI
+        } else {
+          // static + dynamic comparten el mismo motor de carga unificado.
+          this._loadChildOptions({
+            fieldConfig, targetField, targetFieldConfig, formControl,
+            parentField: field, parentOption: currentDropdownOption, parentValue,
+            childFilterGroup, isActive, depth,
+          });
         }
+        // ]]]FI
       }
     });
   }
+
+  // [[[II ESC:003-04 DOC:docs/documents/2026-05-25_003_dynamic-children-field-loading.md#escenario-04
+  // ─── PIPELINE UNIFICADO DE children.fields (static / dynamic / derived) ───
+
+  /** Profundidad máxima de la cascada recursiva disparada por auto_select. */
+  private readonly _MAX_CASCADE_DEPTH = 6;
+
+  /** Traduce un operador del contrato a operador de filtro del servidor (o null si no es mapeable). */
+  private _mapOperatorToServerOp(operator: string): string | null {
+    switch (operator) {
+      case 'equals': return 'exact';
+      case 'in': return 'in';
+      case 'range': return 'range';
+      case 'isnull': return 'isnull';
+      case 'icontains': return 'icontains';
+      default: return null; // not_equals, not_in, greater_than, less_than → se resuelven en cliente
+    }
+  }
+
+  /**
+   * Construye el filtro de servidor para un child, combinando:
+   *   1. data_type.filter — entradas `forced` reciben parentValue; `active` se respetan.
+   *   2. filter.conditions con scope 'server' (o 'auto' cuando la fuente es servidor).
+   */
+  private _buildChildServerFilter(ctx: {
+    fieldConfig: any; parentField: string; parentOption: any; parentValue: any; childFilterGroup: string;
+  }): string {
+    const { fieldConfig, parentField, parentOption, parentValue, childFilterGroup } = ctx;
+    const dt = fieldConfig?.data_type ?? {};
+    const childFilter = fieldConfig?.filter;
+    const filterCfg: Record<string, any> = {};
+
+    if (dt?.filter && typeof dt.filter === 'object') {
+      for (const [fk, fv] of Object.entries(dt.filter) as [string, any][]) {
+        if (fk === 'logic') continue;
+        if (fv?.forced) {
+          if (parentValue != null && parentValue !== '') {
+            filterCfg[fk] = { ...fv, active: true, default_value: parentValue };
+          }
+        } else if (fv?.active) {
+          filterCfg[fk] = fv;
+        }
+      }
+    }
+
+    const conds: any[] = Array.isArray(childFilter?.conditions) ? childFilter.conditions : [];
+    for (const cond of conds) {
+      if (!cond?.field) continue;
+      const scope = cond.scope || 'auto';
+      if (scope === 'client') continue;
+      const serverOp = this._mapOperatorToServerOp(cond.operator || 'equals');
+      if (!serverOp) continue; // operador no mapeable → se aplica en cliente
+      const cv = this._resolveConditionValue(cond.field, parentField, parentOption);
+      if (cv == null) continue;
+      const vk = cond.value_key || cond.filter_group || childFilterGroup;
+      const resolved = (vk && typeof cv === 'object') ? cv[vk] : cv;
+      const value = (Array.isArray(cond.values) && cond.values.length) ? cond.values : resolved;
+      if (value == null || value === '') continue;
+      filterCfg[cond.field] = { active: true, default: serverOp, default_value: value };
+    }
+
+    return this.crudS.buildDropdownFilterString(filterCfg);
+  }
+
+  /**
+   * Aplica en cliente las conditions de filter que no se resolvieron en el servidor,
+   * más el filtro implícito por filter_group declarado (solo para fuente local).
+   */
+  private _applyClientFilter(ctx: {
+    options: any[]; fieldConfig: any; parentField: string; parentOption: any;
+    childFilterGroup: string; isServer: boolean;
+  }): any[] {
+    const { options, fieldConfig, parentField, parentOption, childFilterGroup, isServer } = ctx;
+    if (!Array.isArray(options)) return [];
+    const childFilter = fieldConfig?.filter;
+    const declaredFg = fieldConfig?.filter_group; // sin default → para filtro implícito
+
+    const allConds: any[] = (childFilter?.active && Array.isArray(childFilter.conditions))
+      ? childFilter.conditions : [];
+    const clientConds = allConds.filter((cond: any) => {
+      if (!cond?.field) return false;
+      const scope = cond.scope || 'auto';
+      const serverOp = this._mapOperatorToServerOp(cond.operator || 'equals');
+      if (scope === 'client') return true;
+      if (scope === 'server') return !isServer || !serverOp;
+      return !isServer ? true : !serverOp; // auto
+    });
+
+    if (clientConds.length) {
+      return options.filter((option: any) => {
+        const results = clientConds.map((cond: any) => {
+          const cv = this._resolveConditionValue(cond.field, parentField, parentOption);
+          if (cv == null) return false;
+          const fg = cond.filter_group || cond.value_key || childFilterGroup;
+          const cmpVal = (fg && typeof cv === 'object') ? cv[fg] : cv;
+          const optVal = (fg && option && typeof option === 'object') ? option[fg] : option?.id;
+          return this._evaluateOperator(cond.operator || 'equals', cmpVal, cond.values || [], optVal);
+        });
+        return (childFilter.logic || 'AND') === 'AND' ? results.every(Boolean) : results.some(Boolean);
+      });
+    }
+
+    if (!isServer && !childFilter?.active && declaredFg && parentOption && typeof parentOption === 'object') {
+      const parentVal = parentOption[declaredFg];
+      if (parentVal !== undefined) {
+        return options.filter((o: any) => o && typeof o === 'object' && o[declaredFg] === parentVal);
+      }
+    }
+
+    return options;
+  }
+
+  /** Recorta el resultado según result_position: 'all' (default) | 'first' | 'last' | índice numérico. */
+  private _applyResultPosition(rows: any[], pos: any): any[] {
+    if (!Array.isArray(rows) || rows.length === 0) return rows || [];
+    if (pos === 'first') return [rows[0]];
+    if (pos === 'last') return [rows[rows.length - 1]];
+    if (typeof pos === 'number' && Number.isInteger(pos) && pos >= 0 && pos < rows.length) return [rows[pos]];
+    return rows; // 'all'
+  }
+
+  /**
+   * Publica las opciones del child y aplica auto_select (+ cascada recursiva) o default_field.
+   * auto_select reemplaza al antiguo `selected`; se conserva `selected` como alias legado.
+   */
+  private _publishChildOptions(ctx: {
+    fieldConfig: any; targetField: string; targetFieldConfig: any; formControl: any; rows: any[]; depth: number;
+  }): void {
+    const { fieldConfig, targetField, targetFieldConfig, formControl, rows, depth } = ctx;
+    const normalized = this.normalizeOptionsForField(rows, targetFieldConfig);
+    this._updateDropdownOptions(targetField, this._toTreeNodesIfNeeded(targetFieldConfig, normalized));
+
+    const optionValue = fieldConfig?.option_value || 'id';
+    const autoSelect = fieldConfig?.auto_select === true || fieldConfig?.selected === true;
+
+    if (autoSelect && normalized.length) {
+      const selectedRow = normalized[0];
+      const value = selectedRow?.[optionValue] ?? null;
+      formControl?.setValue(value);
+      this._syncMirroredField(targetField, selectedRow, targetFieldConfig);
+      // Cascada recursiva: el child auto-seleccionado dispara sus propios children.
+      if (depth < this._MAX_CASCADE_DEPTH) {
+        this._processChildrenFields(targetField, value, targetFieldConfig, selectedRow, depth + 1);
+      }
+    } else if (!normalized.length) {
+      if (fieldConfig?.default_field !== undefined && fieldConfig?.default_field !== null) {
+        formControl?.setValue(fieldConfig.default_field);
+      } else {
+        formControl?.setValue(null);
+      }
+    }
+  }
+
+  /** Sincroniza el campo espejo (sin prefijo object_) con el payload de la opción seleccionada. */
+  private _syncMirroredField(targetField: string, selectedRow: any, targetFieldConfig: any): void {
+    if (!targetField.startsWith('object_')) return;
+    const mirror = targetField.replace(/^object_/, '');
+    const ctrl = this.formGroupSignal()?.get(mirror);
+    if (!ctrl) return;
+    ctrl.setValue(this._mapDropdownOptionToPayload(selectedRow, targetFieldConfig));
+  }
+
+  /**
+   * Carga las opciones de un child static/dynamic. La fuente es servidor cuando
+   * data_type.type resuelve un app/type; en otro caso usa options locales.
+   */
+  private _loadChildOptions(ctx: {
+    fieldConfig: any; targetField: string; targetFieldConfig: any; formControl: any;
+    parentField: string; parentOption: any; parentValue: any; childFilterGroup: string;
+    isActive: boolean; depth: number;
+  }): void {
+    const { fieldConfig, targetField, targetFieldConfig, formControl,
+            parentField, parentOption, parentValue, childFilterGroup, isActive, depth } = ctx;
+
+    if (!isActive) {
+      this._updateDropdownOptions(targetField, []);
+      formControl?.setValue(null);
+      return;
+    }
+
+    const dt = fieldConfig?.data_type ?? {};
+    const app = this.crudS.getAppType(dt?.type)?.app;
+    const type = this.crudS.getAppType(dt?.type)?.type;
+    const isServer = !!(app && type);
+
+    const finish = (rows: any[]) => {
+      const filtered = this._applyClientFilter({
+        options: rows, fieldConfig, parentField, parentOption, childFilterGroup, isServer,
+      });
+      const positioned = this._applyResultPosition(
+        filtered, fieldConfig?.filter?.result_position ?? fieldConfig?.result_position ?? 'all'
+      );
+      this._publishChildOptions({
+        fieldConfig, targetField, targetFieldConfig, formControl, rows: positioned, depth,
+      });
+    };
+
+    if (isServer) {
+      const filter = this._buildChildServerFilter({
+        fieldConfig, parentField, parentOption, parentValue, childFilterGroup,
+      });
+      const sort = dt?.ordering || '';
+      const limit = dt?.limit || 0;
+      this.messageS.showBlocked(true);
+      this.crudS.getObject({ app, type, filter, sort, limit }).subscribe((data: any) => {
+        const rows = this.generalS.DJAtoObject({
+          respDJA: data,
+          fields: { [targetField]: targetFieldConfig },
+        }) || [];
+        finish(rows);
+        this.messageS.showBlocked(false);
+      });
+    } else {
+      const options = (Array.isArray(fieldConfig?.options) && fieldConfig.options.length)
+        ? fieldConfig.options
+        : (Array.isArray(dt?.options) ? dt.options : []);
+      finish(options);
+    }
+  }
+
+  /**
+   * Procesa un child 'derived': copia un atributo desde el padre seleccionado
+   * (from: 'parent', default) o desde el primer registro del servidor (from: 'server').
+   */
+  private _processDerivedChild(ctx: {
+    fieldConfig: any; targetField: string; targetFieldConfig: any; formControl: any;
+    parentField: string; parentOption: any; parentValue: any; childFilterGroup: string;
+    isActive: boolean; depth: number;
+  }): void {
+    const { fieldConfig, targetField, targetFieldConfig, formControl,
+            parentField, parentOption, parentValue, childFilterGroup, isActive } = ctx;
+
+    if (!isActive) { formControl?.setValue(null); return; }
+
+    const fieldName = fieldConfig?.field_name ?? fieldConfig?.derived?.field_name;
+    const from = fieldConfig?.derived?.from || 'parent';
+    const fallback = fieldConfig?.derived?.fallback;
+
+    const applyValue = (val: any) => {
+      if (val !== undefined && val !== null && val !== '') { formControl?.setValue(val); }
+      else if (fallback !== undefined) { formControl?.setValue(fallback); }
+    };
+
+    if (from === 'server') {
+      const dt = fieldConfig?.data_type ?? {};
+      const app = this.crudS.getAppType(dt?.type)?.app;
+      const type = this.crudS.getAppType(dt?.type)?.type;
+      if (!app || !type || !fieldName) { applyValue(undefined); return; }
+      const filter = this._buildChildServerFilter({
+        fieldConfig, parentField, parentOption, parentValue, childFilterGroup,
+      });
+      const sort = dt?.ordering || '';
+      this.messageS.showBlocked(true);
+      this.crudS.getObject({ app, type, filter, sort, limit: 1 }).subscribe((data: any) => {
+        const rows = this.generalS.DJAtoObject({
+          respDJA: data, fields: { [targetField]: targetFieldConfig },
+        }) || [];
+        applyValue(rows.length ? rows[0]?.[fieldName] : undefined);
+        this.messageS.showBlocked(false);
+      });
+      return;
+    }
+
+    // from === 'parent'
+    if (fieldName && parentOption && typeof parentOption === 'object') {
+      applyValue(parentOption[fieldName]);
+    } else {
+      applyValue(undefined);
+    }
+  }
+  // ]]]FI
 
   /** Helper: actualiza una entrada de dropdownOptionsSignal sin repetir el spread. */
   private _updateDropdownOptions(field: string, options: any[]): void {
@@ -3053,7 +3313,7 @@ export class CustomDrawFormComponent implements OnDestroy {
     const q = (event?.query || '').trim();
     if (q.length < 5) { this.fileSearchResults[fieldConfig.field] = []; return; }
 
-    const dt = this._normalizeDataType(fieldConfig?.data_type);
+    const dt = fieldConfig?.data_type ?? {};
     const app = this.crudS.getAppType(dt?.type)?.app;
     const type = this.crudS.getAppType(dt?.type)?.type;
     if (!app || !type) { this.fileSearchResults[fieldConfig.field] = []; return; }
