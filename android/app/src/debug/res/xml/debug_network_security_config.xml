@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<network-security-config>
+    <!-- [[[II ESC:006-01 DOC:docs/documents/2026-06-01_006_android-http-local-debug.md#escenario-01 -->
+    <base-config cleartextTrafficPermitted="true" />
+    <!-- ]]]FI -->
+</network-security-config>

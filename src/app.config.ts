@@ -6,6 +6,7 @@ import { providePrimeNG } from 'primeng/config';
 import { appRoutes } from './app.routes';
 import Material from '@primeuix/themes/material';
 import { definePreset } from '@primeuix/themes';
+import { NativeLocalhostInterceptor } from './app/auth/interceptors/native-localhost.interceptor';
 import { TokenAccessInterceptor } from './app/auth/interceptors/token-access.interceptor';
 import { provideLottieOptions } from 'ngx-lottie';
 export function playerFactory() { return import('lottie-web'); }
@@ -41,6 +42,9 @@ export const appConfig: ApplicationConfig = {
     provideHttpClient(
       withFetch(),
       withInterceptors([
+        // [[[II ESC:006-01 DOC:docs/documents/2026-06-01_006_android-http-local-debug.md#escenario-01
+        NativeLocalhostInterceptor,
+        // ]]]FI
         TokenAccessInterceptor
       ])
     ),

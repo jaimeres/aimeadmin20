@@ -111,6 +111,9 @@ function colTypeToFilterType(colType: string): FilterFieldType {
     case 'multi-select':
     case 'auto-complete':
     case 'tree-select':
+    // [[[II ESC:007-03 DOC:docs/documents/2026-06-01_007_custom-draw-form-listbox.md#escenario-03
+    case 'listbox':
+    // ]]]FI
     case 'select-button':
       return 'fk';
     default:

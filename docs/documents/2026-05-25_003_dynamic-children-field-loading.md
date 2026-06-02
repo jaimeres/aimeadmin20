@@ -197,3 +197,76 @@
   6. **Generalización:** cualquier combinación de N condiciones (AND/OR), mezcla cliente/servidor (`scope`), cascada multinivel por `auto_select`, y `derived` desde servidor.
 
 - **Validación:** `get_errors` sin errores de compilación tras el refactor. Pendiente validación funcional en navegador (maintenance + tasks/task).
+
+### Escenario 05 · Resolución de children en servidor (`filter.scope`)
+
+- **Prompt original (resumen literal):** "el servidor también puede hacerse cargo de los cambios para evitar que el cliente esté consultando al servidor y después enviando los datos. `children.fields` ahora declara dónde se resuelven vía `filter.scope`: `client` (o ausente) → como hasta hoy; `server` → NO consultar al servidor por selección, renderizar el campo como auto/solo-lectura (si `edit:false`) o editable con valor sugerido vacío (si `edit:true`), el servidor calcula y llena el valor al hacer create. `required` se lee del campo raíz como siempre. Caso CEB: al elegir asset, NO pedir `workshop`, `form_fields_data_cluster` ni `form_fields_data_region` al servidor; enviar el create sin ellos y el servidor los completa."
+- **Archivo:** `src/app/components/custom-draw-form/custom-draw-form.component.ts`
+- **Métodos:** `_processChildrenFields` (rama nueva por `filter.scope`) y nuevo helper `_applyServerScopedChild`.
+- **Problema:** Todos los children se resolvían en cliente: cada selección del padre disparaba una consulta al servidor (`_loadChildOptions` / `_processDerivedChild`) y el resultado se reenviaba en el create. En cascadas como CEB (`asset → workshop → cluster/region`) esto generaba viajes cliente⇆servidor innecesarios y duplicaba la lógica de resolución.
+- **Solución:**
+  1. En `_processChildrenFields`, antes de los bloques de activación/required/carga, se lee `childScope = fieldConfig.filter.scope` (default `'client'`).
+  2. Si `scope === 'server'` se delega en `_applyServerScopedChild` y se hace `continue` (NO se consulta al servidor ni se evalúan activate/requested/carga para ese hijo).
+  3. `_applyServerScopedChild`:
+     - Limpia las opciones del `targetField` (`_updateDropdownOptions(targetField, [])`).
+     - Limpia el valor previo (queda obsoleto al cambiar el padre) → valor sugerido vacío.
+     - `edit: false` (default) ⇒ `formControl.disable()` (solo-lectura).
+     - `edit: true` ⇒ `formControl.enable()` (editable con valor vacío).
+     - Relaja el `required` en cliente (`clearValidators()` + `updateValueAndValidity()`) para poder **enviar el create sin el campo**; la obligatoriedad real la reimpone el servidor en `resolve_children`.
+     - Aplica lo mismo al campo espejo (`object_*` ↔ sin prefijo) cuando existe.
+- **Decisiones de diseño:**
+  - `filter.scope` es la única fuente de verdad de DÓNDE se resuelve el hijo (alineado con el contrato del servidor `2026-05-29-007`). `scope` en `conditions[*]` sigue rigiendo solo el filtrado cliente/servidor cuando `scope='client'`.
+  - Los controles `edit:false` quedan deshabilitados, por lo que Angular los excluye de `formGroup.value` (no viajan en el create) y no disparan validación required. Para `edit:true` se relaja el required explícitamente.
+  - `required` se sigue declarando en el campo raíz (form builder); en cliente solo se relaja para los hijos resueltos por servidor.
+- **Caso CEB:** marcar `workshop`, `form_fields_data_cluster` y `form_fields_data_region` con `filter.scope: 'server'` (y `edit: false`). Al elegir `asset` el cliente ya no consulta esos recursos; el create se envía sin esos campos y el servidor los completa.
+
+#### Nodos nuevos en el diccionario
+
+| Nodo | Tipo | Valores posibles | Default | Aplica a | Notas |
+|---|---|---|---|---|---|
+| `filter.scope` | string | `'client'` \| `'server'` | `'client'` | 3 modos | `server` ⇒ el cliente no consulta; el servidor resuelve y llena en create. |
+| `edit` | boolean | `true` \| `false` | `false` | 3 modos (solo con `filter.scope='server'`) | `false` ⇒ control solo-lectura (deshabilitado); `true` ⇒ editable con valor sugerido vacío. |
+
+- **Validación:** `get_errors` sin errores de compilación. Pendiente validación funcional en navegador (CEB: alta de tarea con `asset` y verificación de que el create se envía sin `workshop`/`cluster`/`region`).
+
+### Escenario 06 · Obligatoriedad de children por schema efectivo + `filter.scope`
+
+- **Fecha:** 2026-05-30 · **Consecutivo:** 003-06
+- **Prompt original (resumen literal):** "Implementen la obligatoriedad de children solo para los children cuyo `child_key` empiece con `form_fields_data_` o `parent_form_data_`. No apliquen estas reglas a campos de modelo ni a `relacion_data_*`. La obligatoriedad real sale del campo raíz `fields[child_key].required` dentro del schema efectivo. `requested` y `activate` no cambian la obligatoriedad del backend; hoy deben tratarse como UX, no como validación dura del servidor. Si `requested` contradice al root, prevalece el root. Si `filter.scope='client'` y root `required=true` ⇒ el cliente garantiza valor antes de enviar. Si `filter.scope='server'` (edit false o true) ⇒ el cliente no exige captura ni bloquea submit; el servidor completa. Si no existe schema efectivo para ese prefijo, no impongan obligatoriedad local. No permitan que `activate` o `requested.action='not_required'` relajen un `required=true` del campo raíz cuando el child sea `scope=client`."
+- **Archivos:**
+  - `src/app/utils/crud.class.ts` (form builder: `addFieldsByPrefix`, `openTasksDetail` y nuevo helper `_childRequiredPolicy`).
+  - `src/app/components/custom-draw-form/custom-draw-form.component.ts` (guard de runtime en `_processChildrenFields`).
+- **Problema:** La obligatoriedad de los children dinámicos se tomaba directamente del nodo de layout (`fieldData.required`) o de `requested`/`activate`, lo que permitía que la UX relajara un `required=true` real del backend (riesgo de enviar create inválido) y, a la vez, exigía captura local para children que el servidor resuelve (`scope=server`), bloqueando el submit innecesariamente.
+- **Alcance (solo estos prefijos):**
+  - `form_fields_data_*` ⇒ schema efectivo = `form_fields` (`crudS.fieldsForm(pos)[child_key]`).
+  - `parent_form_data_*` ⇒ schema efectivo = `child_form_fields.fields[child_key]` del padre (ya resuelto en `openTasksDetail`).
+  - Campos de modelo y `relacion_data_*` ⇒ **sin cambios** (su `required` sigue saliendo del nodo/schema como antes).
+- **Fuente de verdad:** `rootRequired = schemaEntry.required` (o `layoutNode.required` como respaldo) **gobierna la obligatoriedad lógica**, pero la decisión de DÓNDE se resuelve el child (cliente vs servidor) la dicta el **PADRE** vía `<padre>.children.fields.(static|dynamic|derived).<child_key>.filter.scope`. `requested`/`activate` son UX; el root prevalece.
+- **Corrección clave (ajuste tras pruebas):** `form_fields_data_*` / `parent_form_data_*` **NO portan `filter.scope` en su propio nodo**; el scope vive en la declaración del padre (p.e. `workshop.children.fields.static.form_fields_data_cluster.filter.scope = 'server'`). Por eso se añadió `_collectChildScopeRegistry(draw)` que escanea TODO el layout y construye `Map<child_key_normalizada → { scope, edit }>` (normaliza quitando `object_`; `server` prevalece sobre `client` si el target aparece bajo varios padres).
+- **Solución — `_childRequiredPolicy({ childKey, schemaEntry, layoutNode, hasSchema, scopeInfo })` ⇒ `{ applyRequired, readOnly }`:**
+  1. Children **no objetivo** (no empiezan con los prefijos): `applyRequired = (schemaEntry?.required ?? layoutNode?.required) === true`, `readOnly = false` (comportamiento previo).
+  2. Children **objetivo sin schema efectivo** (`hasSchema=false`): `{ applyRequired:false, readOnly:false }` (no se impone obligatoriedad local).
+  3. Children **objetivo con schema**: usa `scopeInfo` del registro del padre:
+     - `scopeInfo.scope==='server'` ⇒ `{ applyRequired:false, readOnly: !scopeInfo.edit }` (no exige captura; solo-lectura si `edit:false`, editable opcional si `edit:true`). El servidor inicializa el valor en el create.
+     - sin declaración server (cliente o no es child de nadie) ⇒ `{ applyRequired: rootRequired, readOnly:false }`.
+- **Algoritmo de detección (cliente):** para cada `form_fields_data_X`/`parent_form_data_X`, buscar si aparece como key en algún `<padre>.children.fields.(static|dynamic|derived)`; si ese nodo tiene `filter.scope==='server'`, marcarlo como "resuelto por servidor" (no exigir, no bloquear submit, respetar `edit` para readonly/editable). Si el backend no logra resolverlo, devolverá el error required y la lógica existente lo mapea al control.
+- **Integración en el form builder:**
+  - `addFieldsByPrefix` (`form_fields_data_*`): construye `_childScopeRegistry = _collectChildScopeRegistry(draw)` una vez; calcula `_childPolicy` con `schemaEntry = fieldsForm(pos)[fieldName]`, `hasSchema = startsWith('form_fields_data_') ? !!schemaEntry : true` y `scopeInfo = _childScopeRegistry.get(fieldName)`; usa `_childPolicy.applyRequired` para `Validators.required` y `_childPolicy.readOnly` en el `disabled`.
+  - `openTasksDetail` (`parent_form_data_*`): construye el registro desde `childFormFields.draw` + `drawForm()[pos]` (por si el padre vive en cualquiera); calcula `_childPolicy` con `schemaEntry = fields[fieldData.field]`, `hasSchema = !!field`, `scopeInfo = registro.get(fieldData.field)`.
+  - La validación efectiva del submit la realiza la lógica existente (`formErrors`/`Validators.required`); no se añadió mapeo de errores de servidor (ya cubierto por el manejo existente en `submitForm`).
+- **Caso concreto (Alta de tipo de mantenimiento):** `form_fields_data_cluster` y `form_fields_data_region` son children de `workshop` con `filter.scope='server'` y `edit=false` ⇒ NO se muestran obligatorios ni bloquean el guardado aunque su root tenga `required=true`; el usuario solo elige `workshop` y el servidor llena Cluster/Región. `workshop` mantiene su obligatoriedad normal (campo de modelo, padre que dispara la resolución).
+- **Guard de runtime (`_processChildrenFields`):** Para un child objetivo (prefijos), `scope` cliente (`fieldConfig.filter.scope !== 'server'`) y `targetFieldConfig.required === true` se calcula `lockRequired = true`:
+  - `activate` NO puede desactivar/nulificar el control (`isActive` se fuerza a `true`).
+  - `requested` NO puede relajar el required (`isRequired = true` siempre); el root prevalece sobre `requested.action='not_required'`.
+- **Reglas de valor presente (referencia de contrato):** dropdown/dropdown-choice/select-button ⇒ objeto con `id`/`value` no vacío; input-text/textarea/date/time/input-number ⇒ valor ≠ null y ≠ ''; multi-select/tree-select ⇒ arreglo con ≥ 1 elemento. En esta iteración se delega en `Validators.required` (cubre null/''/arreglo vacío) y en el control `object_*` para dropdowns.
+- **UX:** `scope=server + edit=false` ⇒ child automático/solo-lectura; `scope=server + edit=true` ⇒ editable pero no obligatorio antes del submit.
+
+#### Nodos nuevos / helper
+
+| Elemento | Ubicación | Notas |
+|---|---|---|
+| `_collectChildScopeRegistry(root)` | `crud.class.ts` | Escanea el layout y mapea `child_key → { scope, edit }` desde `<padre>.children.fields.*`. |
+| `_childRequiredPolicy(...)` | `crud.class.ts` | Decide `applyRequired`/`readOnly` por prefijo + root + `scopeInfo` (declaración del padre). |
+| `lockRequired` (runtime) | `custom-draw-form.component.ts` (`_processChildrenFields`) | Impide que `activate`/`requested` relajen un root `required=true` en `scope=client`. |
+
+- **Validación:** `get_errors` sin errores en `crud.class.ts` ni `custom-draw-form.component.ts`. Pendiente validación funcional en navegador (children `form_fields_data_*`/`parent_form_data_*` con `scope=client` required y `scope=server`).

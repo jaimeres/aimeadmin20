@@ -481,8 +481,10 @@ export class GeneralService {
       if (!field || !field.option_label) continue;
 
       const optionLabel = String(field.option_label).trim();
-      const isTreeSelect = field.type === 'tree-select';
+      // [[[II ESC:007-03 DOC:docs/documents/2026-06-01_007_custom-draw-form-listbox.md#escenario-03
+      const isTreeSelect = field.type === 'tree-select' || field.type === 'listbox';
       const isMultiSelect = field.type === 'multi-select';
+      // ]]]FI
 
       // Para tree-select, 'label' se maneja nativamente; para campos simples (no multi),
       // 'name'/'display_name' usan el fallback directo sin necesidad de regla
@@ -538,13 +540,17 @@ export class GeneralService {
 
           if (included && item.length > 0) {
             const multipleConfig = fields[relationshipName]?.cols?.multiple;
-            const isTreeSel = lfRule?.type === 'tree-select' || fields[relationshipName]?.type === 'tree-select';
+            const isTreeSel = lfRule?.type === 'tree-select' || lfRule?.type === 'listbox' || fields[relationshipName]?.type === 'tree-select' || fields[relationshipName]?.type === 'listbox';
             //console.log(`[DJA] M2M "${relationshipName}": items=${item.length} | active=`, multipleConfig?.active, '| lfRule=', lfRule?.label_field_key, '| cols.multiple=', multipleConfig);
 
             let displayValue: string;
-            if (lfRule && multipleConfig?.active === true) {
-              // cols.multiple.active explicitamente true -> mostrar nombres concatenados
-              const separator: string = multipleConfig.separator ?? ',';
+            // [[[II ESC:005-02 DOC:docs/documents/2026-05-31_005_columnas-form-data-y-tree-select-nombres.md#escenario-02
+            if (lfRule && (multipleConfig?.active === true || isTreeSel)) {
+              // cols.multiple.active explicitamente true -> mostrar nombres concatenados.
+              // Para tree-select (con nodo tree, p.ej. responsible_persons) SIEMPRE se
+              // muestran los nombres unidos por el separador (mismo comportamiento que
+              // requesters), en lugar del conteo, aunque no declare cols.multiple.active.
+              const separator: string = multipleConfig?.separator ?? ',';
               const displays: string[] = item.map((itm: any) => {
                 const inc = (included as any[]).find((i: any) => i.id == itm.id);
                 if (!inc) return '';
@@ -563,6 +569,7 @@ export class GeneralService {
                 displayValue = msgTemplate.replace('{e}', String(item.length));
               }
             }
+            // ]]]FI
 
             // tree-select usa 'label' como clave nativa; los demas usan rel__name
             data[relationshipName + '__name'] = displayValue;
@@ -577,7 +584,7 @@ export class GeneralService {
           if (id && included) {
             const inc = (included as any[]).find((i: any) => i.id == id);
             if (inc?.attributes) {
-              const isTreeSel = lfRule?.type === 'tree-select' || fields[relationshipName]?.type === 'tree-select';
+              const isTreeSel = lfRule?.type === 'tree-select' || lfRule?.type === 'listbox' || fields[relationshipName]?.type === 'tree-select' || fields[relationshipName]?.type === 'listbox';
               let displayValue: string;
               if (lfRule) {
                 const temp: any = {};
@@ -656,6 +663,30 @@ export class GeneralService {
         }
       });
 
+      // [[[II ESC:005-03 DOC:docs/documents/2026-05-31_005_columnas-form-data-y-tree-select-nombres.md#escenario-03
+      // Aplana los formularios dinámicos (`form_data` propio del registro y
+      // `parent_form_data` que el hijo captura contra el padre) hacia claves planas
+      // `form_data.<campo>` / `parent_form_data.<campo>`, que es exactamente el
+      // `col.field` que generateJSONColumns crea para estos campos.
+      //
+      // El valor persistido puede venir como objeto (p.ej. una opción/relación:
+      // { id, code, name }), como primitivo o como arreglo. Se formatea usando el
+      // `option_label` declarado en la configuración del campo (uniendo los valores
+      // si trae varias claves separadas por coma, igual que los demás campos); si el
+      // objeto no expone esas claves se hace fallback a name/display_name/label/code/id.
+      // Se reutiliza este mismo ciclo (registro por registro) para evitar más latencia.
+      for (const formDataKey of ['form_data', 'parent_form_data']) {
+        const formDataValue = dja.attributes?.[formDataKey];
+        if (formDataValue && typeof formDataValue === 'object' && !Array.isArray(formDataValue)) {
+          for (const childKey in formDataValue) {
+            if (!Object.prototype.hasOwnProperty.call(formDataValue, childKey)) continue;
+            const fieldCfg = fields?.[childKey];
+            data[formDataKey + '.' + childKey] = this._formatDynamicValue(formDataValue[childKey], fieldCfg);
+          }
+        }
+      }
+      // ]]]FI
+
       if (node) {
         return { data: data, leaf: false, parent: null }; //
       }
@@ -698,7 +729,7 @@ export class GeneralService {
     const labelFieldKey: string = rule.label_field_key;
 
 
-    if (rule.type === 'tree-select') {
+    if (rule.type === 'tree-select' || rule.type === 'listbox') {
       const baseVal = src[keys[0]];
       data['label'] = baseVal == null ? '' : String(baseVal).trim();
     }
@@ -715,6 +746,56 @@ export class GeneralService {
     }
     //console.log('--------------------', keys, labelFieldKey, parts.length, data[labelFieldKey], data,);
   }
+
+  // [[[II ESC:005-03 DOC:docs/documents/2026-05-31_005_columnas-form-data-y-tree-select-nombres.md#escenario-03
+  /**
+   * Formatea un valor persistido de un formulario dinámico (`form_data` /
+   * `parent_form_data`) para mostrarlo en la celda de la tabla.
+   *
+   * - `null`/`undefined` → `''`.
+   * - Arreglo → formatea cada elemento y los une con el separador de
+   *   `cols.multiple.separator` (por defecto `','`).
+   * - Objeto → usa `option_label` (clave o claves separadas por coma) para leer y
+   *   unir los valores del objeto (mismo criterio que el resto de campos). Si ninguna
+   *   clave de `option_label` resuelve, hace fallback a
+   *   name/display_name/label/value/code/id.
+   * - Primitivo → se devuelve como string.
+   *
+   * @param value Valor crudo almacenado en `form_data[childKey]`.
+   * @param fieldCfg Configuración del campo (de `fieldsForm(pos)[childKey]`), opcional.
+   */
+  private _formatDynamicValue(value: any, fieldCfg: any): string {
+    if (value === null || value === undefined) return '';
+
+    if (Array.isArray(value)) {
+      const separator: string = fieldCfg?.cols?.multiple?.separator ?? ',';
+      return value
+        .map((v: any) => this._formatDynamicValue(v, fieldCfg))
+        .filter((s: string) => s !== '')
+        .join(separator);
+    }
+
+    if (typeof value === 'object') {
+      const optionLabel = fieldCfg?.option_label;
+      let parts: string[] = [];
+      if (optionLabel) {
+        const keys = String(optionLabel).split(',').map((s: string) => s.trim()).filter((s: string) => s.length > 0);
+        parts = keys
+          .map((k: string) => value[k])
+          .filter((v: any) => v !== null && v !== undefined && v !== '')
+          .map((v: any) => String(v).trim());
+      }
+      if (parts.length) return parts.join(' ');
+
+      // Fallback: el objeto persistido no expone las claves de option_label
+      // (p.ej. una opción guardada como { id, code, name } y option_label 'display_name').
+      const fallback = value.name ?? value.display_name ?? value.label ?? value.value ?? value.code ?? value.id;
+      return fallback === null || fallback === undefined ? '' : String(fallback).trim();
+    }
+
+    return String(value);
+  }
+  // ]]]FI
 
   // Llama esto una vez desde cualquier componente (por ejemplo, al hacer submit)
   // ***********************ADAPTADO PARA CAPACITOR*********************

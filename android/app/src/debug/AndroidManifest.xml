@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- [[[II ESC:006-01 DOC:docs/documents/2026-06-01_006_android-http-local-debug.md#escenario-01 -->
+    <application
+        android:usesCleartextTraffic="true"
+        android:networkSecurityConfig="@xml/debug_network_security_config" />
+    <!-- ]]]FI -->
+</manifest>

@@ -14,6 +14,9 @@ import { FormCacheService } from '../../utils/services/form-cache.service';
 import { Preferences } from '@capacitor/preferences';
 import { App } from '@capacitor/app';
 import { PermissionsService } from './permissions.service';
+// [[[II ESC:004-01 DOC:docs/documents/2026-05-30_004_sistema-avisos-socket.md#escenario-01
+import { NotificationSocketService } from '../../utils/services/notification-socket.service';
+// ]]]FI
 
 @Injectable({
   providedIn: 'root'
@@ -49,6 +52,11 @@ export class AuthService {
 
   /** Servicio de permisos (inicializado en el constructor) */
   public permissionsS!: PermissionsService;
+
+  // [[[II ESC:004-01 DOC:docs/documents/2026-05-30_004_sistema-avisos-socket.md#escenario-01
+  /** Servicio de avisos/alertas en tiempo real (Socket.IO). */
+  private notificationSocketS = inject(NotificationSocketService);
+  // ]]]FI
 
   constructor(private http: HttpClient, private cookieS: CookieService, private messageS: MessageService, private router: Router, private generalS: GeneralService, public biometricAuthS: BiometricAuthService, private formCacheS: FormCacheService) {
     // Servicio de permisos (inject para evitar romper la firma del constructor existente)
@@ -174,6 +182,9 @@ export class AuthService {
         this.setLoggedin(false);
         this.setUser(null);
         this.messageS.changeMessage('Sesión cerrada correctamente', null, {}, 'success');
+        // [[[II ESC:004-01 DOC:docs/documents/2026-05-30_004_sistema-avisos-socket.md#escenario-01
+        this.notificationSocketS.disconnect(); // Cerrar socket de avisos al salir
+        // ]]]FI
         this.redirectMP();
       }),
       catchError(async (err) => {
@@ -190,6 +201,9 @@ export class AuthService {
         this.setLoggedin(false);
         this.setUser(null);
         this.messageS.changeMessage('Sesión cerrada correctamente');
+        // [[[II ESC:004-01 DOC:docs/documents/2026-05-30_004_sistema-avisos-socket.md#escenario-01
+        this.notificationSocketS.disconnect(); // Cerrar socket de avisos al salir
+        // ]]]FI
         this.redirectMP();
         return of(null);
       })
@@ -397,6 +411,20 @@ export class AuthService {
           this.setLoggedin(true);
           this.setUser(resp.data.user);
           await this.saveTokensToStorage(); // Guardar inmediatamente después del login
+
+          // [[[II ESC:004-01 DOC:docs/documents/2026-05-30_004_sistema-avisos-socket.md#escenario-01
+          // ====================================================================
+          // AVISO DE INICIO DE SESIÓN (Socket.IO) — PREPARADO LOCALMENTE
+          // El servidor de avisos AÚN NO está implementado; esto queda listo.
+          // Conecta el socket con el token y emite el aviso de login.
+          //
+          // 👉 PARA DEJAR DE ENVIAR EL AVISO DE LOGIN: comenta las DOS líneas
+          //    siguientes (connect + emitLoginNotice). Con eso el socket no se
+          //    conecta ni notifica el inicio de sesión.
+          this.notificationSocketS.connect(this.access);
+          this.notificationSocketS.emitLoginNotice(resp.data.user);
+          // ====================================================================
+          // ]]]FI
         }),
         switchMap((resp: any) => {
           // Hacer llamada a configuración después del login exitoso

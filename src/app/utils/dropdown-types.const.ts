@@ -7,12 +7,14 @@
  * NO incluir `auto-complete` para flujo de PRECARGA (usa completeMethod remoto).
  * Sí incluirlo cuando solo se necesite saber que el control tiene la dualidad
  * `object_<field>` / `<field>` (renombrado por addFieldsByPrefix).
- * Referencia: docs/documents/2025-XX-XX_consolidacion_dropdown_types.md ]]]FI
+ * Referencia histórica: docs/documents/2025-XX-XX_consolidacion_dropdown_types.md
+ * Referencia adicional: docs/documents/2026-06-01_007_custom-draw-form-listbox.md#escenario-03 ]]]FI
  */
 export const DROPDOWN_TYPES_PAYLOAD: ReadonlySet<string> = new Set([
   'dropdown',
   'auto-complete',
   'tree-select',
+  'listbox',
   'dropdown-choice',
   'multi-select',
   'select-button',
@@ -21,6 +23,7 @@ export const DROPDOWN_TYPES_PAYLOAD: ReadonlySet<string> = new Set([
 export const DROPDOWN_TYPES_PRELOAD: ReadonlySet<string> = new Set([
   'dropdown',
   'tree-select',
+  'listbox',
   'dropdown-choice',
   'multi-select',
   'select-button',

@@ -6,7 +6,7 @@
       <p-select [options]="dropdownOptionsSignal()[fieldConfig.field]" [optionValue]="fieldConfig.option_value || 'id'"
         [optionLabel]="fieldConfig.option_label | joinOrSelf" [placeholder]="fieldConfig.placeholder || '.'"
         [editable]="fieldConfig.editable" [formControl]="$any(formGroupSignal()?.get(fieldConfig.field))"
-        [scrollHeight]="fieldConfig.scrollHeight || '200px'" (onShow)="onShowDropdownAction.emit($event)"
+        (onShow)="onShowDropdownAction.emit($event)"
         [showClear]="fieldConfig.showClear !== undefined ? fieldConfig.showClear : true"
         [filter]="fieldConfig.filter_local !== undefined ? fieldConfig.filter_local : false"
         [filterBy]="fieldConfig.filter_by ? fieldConfig.filter_by : null"
@@ -47,7 +47,7 @@
       [appendTo]="'body'" />
 
     <button *ngIf="fieldConfig.reload_icon" type="button" pButton icon="pi pi-replay" class="height-icon-custom"
-      (click)="onReloadIconDropdownAction.emit(fieldConfig.field)"></button>
+      (click)="dataDropdown(fieldConfig, true); onReloadIconDropdownAction.emit(fieldConfig.field)"></button>
     <button *ngIf="fieldConfig.new_icon" type="button" pButton icon="pi pi-plus" class="height-icon-custom"
       (click)="onNewIconDropdownAction.emit(fieldConfig.field)"></button>
     <button *ngIf="fieldConfig.closable_icon" type="button" pButton icon="pi pi-times" class="height-icon-custom"
@@ -70,6 +70,9 @@
       class="height-input-custom" [filter]="fieldConfig.filter_local !== undefined ? fieldConfig.filter_local : false"
       [filterBy]="fieldConfig.filter_by ? fieldConfig.filter_by : null" />
 
+    <button *ngIf="fieldConfig.reload_icon !== undefined ? fieldConfig.reload_icon : false" type="button" pButton
+      icon="pi pi-replay" class="height-icon-custom"
+      (click)="dataDropdown(fieldConfig, true); onReloadIconDropdownAction.emit(fieldConfig.field)"></button>
     <button *ngIf="fieldConfig.icon" type="button" pButton [icon]="fieldConfig.icon.icon"
       class="height-icon-custom"></button>
     <button *ngIf="fieldConfig?.icon2" type="button" pButton [icon]="fieldConfig.icon2.icon"
@@ -79,6 +82,56 @@
     </label>
   </p-floatlabel>
 </ng-template>
+
+<!-- [[[II ESC:007-01 DOC:docs/documents/2026-06-01_007_custom-draw-form-listbox.md#escenario-01 -->
+<!-- TEMPLATE REUTILIZABLE PARA LISTBOX -->
+<ng-template #listboxTemplate let-fieldConfig="fieldConfig">
+  <div class="flex flex-col gap-2 w-full">
+    <div class="flex items-center justify-between gap-2"
+      *ngIf="fieldConfig?.label || fieldConfig.reload_icon || fieldConfig.icon || fieldConfig?.icon2">
+      <label *ngIf="fieldConfig?.label" [for]="fieldConfig.field" class="text-sm listbox-label">
+        {{ fieldConfig?.label }}
+      </label>
+
+      <div class="flex items-center gap-1">
+        <button *ngIf="fieldConfig.reload_icon !== undefined ? fieldConfig.reload_icon : false" type="button" pButton
+          icon="pi pi-replay" class="height-icon-custom"
+          (click)="dataDropdown(fieldConfig, true); onReloadIconDropdownAction.emit(fieldConfig.field)"></button>
+        <button *ngIf="fieldConfig.icon" type="button" pButton [icon]="fieldConfig.icon.icon"
+          class="height-icon-custom"></button>
+        <button *ngIf="fieldConfig?.icon2" type="button" pButton [icon]="fieldConfig.icon2.icon"
+          class="height-icon-custom"></button>
+      </div>
+    </div>
+
+    <p-listbox [options]="dropdownOptionsSignal()[fieldConfig.field]" [pAutoFocus]="fieldConfig.autofocus"
+      [formControl]="$any(formGroupSignal()?.get(fieldConfig.field))" [multiple]="true" [checkbox]="true"
+      [metaKeySelection]="false" [showToggleAll]="false" [dataKey]="fieldConfig.option_value || 'id'"
+      [optionLabel]="fieldConfig.tree ? 'label' : (fieldConfig.option_label | joinOrSelf)"
+      [optionValue]="fieldConfig.tree ? null : (fieldConfig.option_value || 'id')"
+      [group]="fieldConfig.tree ? true : false" [optionGroupChildren]="'items'" [optionGroupLabel]="'label'" [filter]="fieldConfig.tree
+        ? (fieldConfig.filter_local !== undefined ? fieldConfig.filter_local : false)
+        : (fieldConfig.filter_local !== undefined ? fieldConfig.filter_local : true)" [filterBy]="fieldConfig.tree
+        ? (fieldConfig.filter_by ? fieldConfig.filter_by : 'label')
+        : (fieldConfig.filter_by ? fieldConfig.filter_by : (fieldConfig.option_label | joinOrSelf))"
+      [scrollHeight]="fieldConfig.scroll_height || '120px'" class="w-full listbox-float"
+      (onChange)="onChangeDropdown($event, fieldConfig)">
+
+      <ng-template #group let-group>
+        <div class="text-sm font-semibold text-color-secondary listbox-group-label floating-listbox-simple-label ">
+          {{ group.label }}
+        </div>
+      </ng-template>
+
+      <ng-template #item let-option>
+        <div class="flex items-center min-h-6 ">
+          {{ fieldConfig.tree ? option.label : option[(fieldConfig.option_label | joinOrSelf)] || option.label }}
+        </div>
+      </ng-template>
+    </p-listbox>
+  </div>
+</ng-template>
+<!-- ]]]FI -->
 
 
 <!-- TEMPLATE REUTILIZABLE PARA AUTO-COMPLETE -->
@@ -713,6 +766,10 @@
               <ng-container *ngTemplateOutlet="treeSelectTemplate; context: {fieldConfig: card.value}"></ng-container>
             </div>
 
+            <div *ngSwitchCase="'listbox'">
+              <ng-container *ngTemplateOutlet="listboxTemplate; context: {fieldConfig: card.value}"></ng-container>
+            </div>
+
 
             <div *ngSwitchCase="'toggle-button'">
               <ng-container *ngTemplateOutlet="toggleButtonTemplate; context: {fieldConfig: card.value}"></ng-container>
@@ -797,6 +854,10 @@
         <p-inputgroup>
           <ng-container *ngTemplateOutlet="treeSelectTemplate; context: {fieldConfig: entry.value}"></ng-container>
         </p-inputgroup>
+      </div>
+
+      <div *ngSwitchCase="'listbox'">
+        <ng-container *ngTemplateOutlet="listboxTemplate; context: {fieldConfig: entry.value}"></ng-container>
       </div>
 
       <div *ngSwitchCase="'date'">
@@ -902,6 +963,10 @@
               <p-inputgroup *ngSwitchCase="'tree-select'">
                 <ng-container *ngTemplateOutlet="treeSelectTemplate; context: {fieldConfig: card.value}"></ng-container>
               </p-inputgroup>
+
+              <div *ngSwitchCase="'listbox'">
+                <ng-container *ngTemplateOutlet="listboxTemplate; context: {fieldConfig: card.value}"></ng-container>
+              </div>
 
               <div *ngSwitchCase="'date'">
                 <ng-container *ngTemplateOutlet="dateTemplate; context: {fieldConfig: card.value}"></ng-container>

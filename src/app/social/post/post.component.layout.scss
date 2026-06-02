@@ -1,0 +1,157 @@
+$ink: #0f172a;
+$muted: #475569;
+$line: rgba(148, 163, 184, 0.22);
+$panel: rgba(248, 250, 252, 0.92);
+
+.social-toolbar,
+.composer-actions,
+.post-header,
+.post-footer {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  align-items: center;
+}
+
+.story-list,
+.trend-list,
+.settings-list {
+  gap: 0.85rem;
+}
+
+.story-item,
+.trend-list article,
+.settings-list article {
+  display: grid;
+  gap: 0.85rem;
+  padding: 0.85rem;
+  border-radius: 1rem;
+  background: $panel;
+  border: 1px solid $line;
+}
+
+.story-item,
+.trend-list article {
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+}
+
+.settings-list article {
+  grid-template-columns: 1fr auto;
+  align-items: start;
+}
+
+.story-item strong,
+.trend-list strong,
+.settings-list strong,
+.post-author h2,
+.social-ad-card h3 {
+  margin: 0;
+  color: $ink;
+}
+
+.story-item span,
+.trend-list span {
+  color: $muted;
+  font-size: 0.84rem;
+}
+
+.post-author {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0.85rem;
+  align-items: center;
+}
+
+.post-body,
+.post-tags,
+.post-visual {
+  margin-top: 1rem;
+}
+
+.post-visual {
+  --post-accent: #0ea5e9;
+  display: grid;
+  place-items: end start;
+  min-height: 14rem;
+  padding: 1rem;
+  border-radius: 1.25rem;
+  color: #fff;
+  font-weight: 700;
+  background: linear-gradient(135deg, var(--post-accent), #0f172a);
+}
+
+.post-footer {
+  flex-wrap: wrap;
+  color: #334155;
+  font-size: 0.95rem;
+}
+
+.post-footer span {
+  display: inline-flex;
+  gap: 0.45rem;
+  align-items: center;
+}
+
+.social-ad-label {
+  display: none;
+}
+
+.social-ad-card h3 {
+  font-size: 1.05rem;
+  line-height: 1.2;
+}
+
+.settings-list p {
+  margin-top: 0.35rem;
+  line-height: 1.5;
+}
+
+:host ::ng-deep .social-topbar.layout-topbar-blue {
+  box-shadow:
+    0 1px 2px rgb(0 0 0 / 12%),
+    0 4px 5px rgb(0 0 0 / 14%),
+    0 2px 4px -1px rgb(0 0 0 / 20%);
+}
+
+:host ::ng-deep .social-topbar .layout-menu-button {
+  display: none !important;
+}
+
+@media (max-width: 640px) {
+  :host {
+    height: auto;
+    overflow: visible;
+  }
+
+  .social-shell {
+    padding-inline: 0.75rem;
+    height: auto;
+    overflow: visible;
+  }
+
+  .social-main,
+  .social-column {
+    overflow: visible;
+    height: auto;
+  }
+
+  .welcome-banner {
+    grid-template-columns: 1fr;
+    text-align: center;
+    justify-items: center;
+  }
+
+  .social-hero {
+    padding: 1rem;
+    border-radius: 1.4rem;
+  }
+
+  .social-toolbar,
+  .composer-actions,
+  .post-header,
+  .post-footer {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}

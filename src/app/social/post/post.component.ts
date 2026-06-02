@@ -130,7 +130,7 @@ function resolveSystemRouteFromStorage(): RutaSistema {
     TextareaModule,
   ],
   templateUrl: './post.component.html',
-  styleUrl: './post.component.scss',
+  styleUrls: ['./post.component.scss', './post.component.layout.scss'],
   standalone: true,
   providers: [ConfirmationService]
 })

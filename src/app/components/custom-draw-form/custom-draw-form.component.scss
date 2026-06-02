@@ -1,4 +1,4 @@
-:host ::ng-deep p-inputnumber {
+/*:host ::ng-deep p-inputnumber {
   width: 100% !important;
   max-width: 100% !important;
   overflow: hidden;
@@ -9,8 +9,7 @@
   max-width: 100% !important;
   box-sizing: border-box;
   overflow-x: hidden;
-}
-
+}*/
 /*
 Estilos para tabla compacta
 */
@@ -154,10 +153,6 @@ Estilos para componente de firma digital
   object-fit: contain;
 }
 
-
-
-
-
 // Estilos para validación de campos obligatorios
 .p-invalid {
   border-color: #e24c4c !important;
@@ -224,4 +219,26 @@ small.text-red-500 {
 /* Forzar que el header también tenga el mismo padding */
 ::ng-deep .p-autocomplete-list-container .p-autocomplete-list-header {
   padding: 0 !important;
+}
+
+/* Listbox: simular floatlabel y normalizar negritas */
+:host ::ng-deep .listbox-float {
+  margin-top: -0.75rem !important;
+}
+
+:host ::ng-deep .listbox-label,
+:host ::ng-deep .listbox-group-label {
+  font-weight: 400 !important;
+}
+
+:host ::ng-deep .p-listbox-option-group {
+  padding: 0 0 0 0.8rem !important;
+}
+
+:host ::ng-deep .p-listbox-header {
+  padding: 0.3rem 0.5rem 0 0.8rem !important;
+}
+
+:host ::ng-deep .floating-listbox-simple-label {
+  font-weight: bold !important;
 }

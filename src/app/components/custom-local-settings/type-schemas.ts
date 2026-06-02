@@ -345,6 +345,7 @@ export const TYPE_SCHEMAS: Record<string, AdvancedSection[]> = {
   'dropdown-choice': FK_LIKE_SCHEMA,
   'multi-select': FK_LIKE_SCHEMA,
   'tree-select': FK_LIKE_SCHEMA,
+  'listbox': FK_LIKE_SCHEMA,
   'auto-complete': AUTOCOMPLETE_SCHEMA,
   'button': BUTTON_SCHEMA,
   'files': FILES_SCHEMA,

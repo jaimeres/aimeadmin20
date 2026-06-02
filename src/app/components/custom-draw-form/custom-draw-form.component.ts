@@ -21,6 +21,7 @@ import { InputNumberModule } from 'primeng/inputnumber';
 import { InputTextModule } from 'primeng/inputtext';
 import { MultiSelectModule } from 'primeng/multiselect';
 import { PasswordModule } from 'primeng/password';
+import { ListboxModule } from 'primeng/listbox';
 import { SelectModule } from 'primeng/select';
 import { SelectButtonModule } from 'primeng/selectbutton';
 import { SplitButton } from 'primeng/splitbutton';
@@ -98,6 +99,7 @@ export class JoinOrSelfPipe implements PipeTransform {
 
     AutoCompleteModule,
     MultiSelectModule,
+    ListboxModule,
     ToggleButtonModule,
     TextareaModule,
     InputNumberModule,
@@ -365,14 +367,12 @@ export class CustomDrawFormComponent implements OnDestroy {
 
     const dropdownOptions = /*await*/ this.dataDropdownExists(element, force);
     if (dropdownOptions && !force) {
-      this.dropdownOptionsSignal.set({
-        ...this.dropdownOptionsSignal(),
-        [element.field]: this._toTreeNodesIfNeeded(element, dropdownOptions)
-      });
+      const resolvedOptions = await this._buildDropdownOptionsForField(element, dropdownOptions);
+      this._updateDropdownOptions(element.field, resolvedOptions);
       return;
     }
-    // Reload: invalidar cache de lazy-load del tree-select para volver a
-    // consultar los hijos en la próxima expansión.
+    // Reload: invalidar cache de lazy-load del árbol para volver a consultar
+    // los hijos en la próxima expansión o precarga de listbox agrupado.
     if (force && this._treeLoadedKeys?.[element.field]) {
       this._treeLoadedKeys[element.field].clear();
     }
@@ -386,6 +386,7 @@ export class CustomDrawFormComponent implements OnDestroy {
       const filter = this._buildDropdownFilter(_dt2?.filter);
       const sort = _dt2?.ordering || '';
       const limit = _dt2?.limit || 0;
+
 
       this.messageS.showBlocked(true);
       this.crudS.getObject({ app, type, filter, sort, limit }).subscribe(async (data: any) => {
@@ -408,10 +409,8 @@ export class CustomDrawFormComponent implements OnDestroy {
         }
 
         this.sharedS.drawDropdown[this._sharedKey(element.field)] = dataDropdown;
-        this.dropdownOptionsSignal.set({
-          ...this.dropdownOptionsSignal(),
-          [element.field]: this._toTreeNodesIfNeeded(element, dataDropdown)
-        });
+        const resolvedOptions = await this._buildDropdownOptionsForField(element, dataDropdown);
+        this._updateDropdownOptions(element.field, resolvedOptions);
         if (!force && this.isMobileCacheEnabled(element)) {
           await this.writeMobileCache(element, dataDropdown);
         }
@@ -1578,7 +1577,41 @@ export class CustomDrawFormComponent implements OnDestroy {
         const targetFieldConfig = this.findFieldConfigByField(targetField) ?? fieldConfig;
         // ]]]FI
 
+        // [[[II ESC:003-05 DOC:docs/documents/2026-05-25_003_dynamic-children-field-loading.md#escenario-05
+        // ── 0. RESOLUCIÓN EN SERVIDOR (filter.scope) ──
+        // `filter.scope` declara DÓNDE se resuelve el child:
+        //   'client' (o ausente) → comportamiento actual: se consulta al servidor
+        //                           en cada selección del padre y se muestran opciones.
+        //   'server'             → el cliente NO consulta al servidor. El campo se
+        //                           renderiza como solo-lectura (edit:false) o editable
+        //                           con valor sugerido vacío (edit:true). El servidor
+        //                           calcula y llena el valor al hacer create, por lo que
+        //                           se relaja el required en cliente para poder enviar
+        //                           el create sin estos campos.
+        const childScope = String(fieldConfig?.filter?.scope ?? 'client').toLowerCase();
+        if (childScope === 'server') {
+          this._applyServerScopedChild({ fieldConfig, targetField, formControl, mirroredField });
+          continue;
+        }
+        // ]]]FI
+
         // ── 1. ACTIVACIÓN ──
+        // [[[II ESC:003-06 DOC:docs/documents/2026-05-25_003_dynamic-children-field-loading.md#escenario-06
+        // Regla de obligatoriedad: para children client-scope cuyo key empieza con
+        // form_fields_data_/parent_form_data_ y cuyo root del schema efectivo es
+        // required, ni `activate` ni `requested.action='not_required'` pueden relajar
+        // la obligatoriedad. Si la UI lo ocultara, no debe nulificarse en silencio:
+        // se mantiene habilitado y required para que el form no pase vacío.
+        const childKeyRaw = targetField.startsWith('object_')
+          ? targetField.slice('object_'.length)
+          : targetField;
+        const isTargetChild = childKeyRaw.startsWith('form_fields_data_')
+          || childKeyRaw.startsWith('parent_form_data_');
+        const childScopeReq = String(fieldConfig?.filter?.scope ?? 'client').toLowerCase();
+        const rootRequired = targetFieldConfig?.required === true;
+        const lockRequired = isTargetChild && childScopeReq !== 'server' && rootRequired;
+        // ]]]FI
+
         let isActive = true;
         const act = fieldConfig?.activate;
         if (act?.active) {
@@ -1587,6 +1620,8 @@ export class CustomDrawFormComponent implements OnDestroy {
           );
           isActive = (act.action || 'inactive') === 'inactive' ? !met : met;
         }
+        // Un child client-scope con root required NO se desactiva/nulifica por activate.
+        if (lockRequired) { isActive = true; }
         if (formControl) {
           if (isActive) { formControl.enable(); }
           else { formControl.disable(); formControl.setValue(null); }
@@ -1604,7 +1639,10 @@ export class CustomDrawFormComponent implements OnDestroy {
           const met = this._evaluateConditions(
             req.conditions || [], req.logic || 'AND', field, currentDropdownOption
           );
-          const isRequired = req.action === 'required' ? met : !met;
+          // El root del schema efectivo prevalece: si lockRequired, siempre required.
+          const isRequired = lockRequired
+            ? true
+            : (req.action === 'required' ? met : !met);
           if (formControl) {
             formControl.setValidators(isRequired ? [Validators.required] : []);
             formControl.updateValueAndValidity();
@@ -1650,6 +1688,40 @@ export class CustomDrawFormComponent implements OnDestroy {
       }
     });
   }
+
+  // [[[II ESC:003-05 DOC:docs/documents/2026-05-25_003_dynamic-children-field-loading.md#escenario-05
+  /**
+   * Aplica un child declarado con `filter.scope: 'server'`: el cliente NO consulta
+   * al servidor por selección del padre. El servidor resuelve y llena el valor al
+   * hacer create. En cliente:
+   *   - `edit: false` (default) → control deshabilitado (solo-lectura).
+   *   - `edit: true`            → control habilitado con valor sugerido vacío.
+   * En ambos casos se limpian las opciones y el valor previo (queda obsoleto al
+   * cambiar el padre) y se relaja el `required` para poder enviar el create sin el
+   * campo; la obligatoriedad real la reimpone el servidor.
+   */
+  private _applyServerScopedChild(ctx: {
+    fieldConfig: any; targetField: string; formControl: any; mirroredField: string | null;
+  }): void {
+    const { fieldConfig, targetField, formControl, mirroredField } = ctx;
+    const editable = fieldConfig?.edit === true;
+
+    // No mostramos opciones: la resolución es responsabilidad del servidor.
+    this._updateDropdownOptions(targetField, []);
+
+    const reset = (ctrl: any) => {
+      if (!ctrl) return;
+      ctrl.clearValidators();
+      ctrl.setValue(null);
+      if (editable) { ctrl.enable({ emitEvent: false }); }
+      else { ctrl.disable({ emitEvent: false }); }
+      ctrl.updateValueAndValidity({ emitEvent: false });
+    };
+
+    reset(formControl);
+    if (mirroredField) { reset(this.formGroupSignal()?.get(mirroredField)); }
+  }
+  // ]]]FI
 
   // [[[II ESC:003-04 DOC:docs/documents/2026-05-25_003_dynamic-children-field-loading.md#escenario-04
   // ─── PIPELINE UNIFICADO DE children.fields (static / dynamic / derived) ───
@@ -1822,7 +1894,7 @@ export class CustomDrawFormComponent implements OnDestroy {
     isActive: boolean; depth: number;
   }): void {
     const { fieldConfig, targetField, targetFieldConfig, formControl,
-            parentField, parentOption, parentValue, childFilterGroup, isActive, depth } = ctx;
+      parentField, parentOption, parentValue, childFilterGroup, isActive, depth } = ctx;
 
     if (!isActive) {
       this._updateDropdownOptions(targetField, []);
@@ -1880,7 +1952,7 @@ export class CustomDrawFormComponent implements OnDestroy {
     isActive: boolean; depth: number;
   }): void {
     const { fieldConfig, targetField, targetFieldConfig, formControl,
-            parentField, parentOption, parentValue, childFilterGroup, isActive } = ctx;
+      parentField, parentOption, parentValue, childFilterGroup, isActive } = ctx;
 
     if (!isActive) { formControl?.setValue(null); return; }
 
@@ -1930,11 +2002,29 @@ export class CustomDrawFormComponent implements OnDestroy {
     });
   }
 
+  // [[[II ESC:007-03 DOC:docs/documents/2026-06-01_007_custom-draw-form-listbox.md#escenario-03
+  private _isListboxTreeField(fieldConfig: any): boolean {
+    return fieldConfig?.type === 'listbox' && !!fieldConfig?.tree;
+  }
+
+  private _isTreeLikeField(fieldConfig: any): boolean {
+    return fieldConfig?.type === 'tree-select' || this._isListboxTreeField(fieldConfig);
+  }
+
+  private async _buildDropdownOptionsForField(fieldConfig: any, options: any[]): Promise<any[]> {
+    const normalizedOptions = this._toTreeNodesIfNeeded(fieldConfig, options);
+    if (fieldConfig?.type === 'listbox') {
+      return this._toListboxOptionsIfNeeded(fieldConfig, normalizedOptions);
+    }
+    return normalizedOptions;
+  }
+  // ]]]FI
+
   /**
    * Transforma una lista plana de opciones en `TreeNode[]` cuando el field
-   * es tipo `tree-select`. Soporta hijos preargados en `option.children`
-   * (configurable vía `field.tree_children_field`). Para otros tipos
-   * devuelve las opciones tal cual.
+   * usa contrato de árbol (`tree-select` o `listbox` con `tree`). Soporta
+   * hijos preargados en `option.children` (configurable vía
+   * `field.tree_children_field`). Para otros tipos devuelve las opciones tal cual.
    *
    * Si el field declara `tree.root` el nodo raíz se marca con:
    *   - `key = "<root.resource>:<id>"` (namespace por recurso para evitar
@@ -1947,7 +2037,7 @@ export class CustomDrawFormComponent implements OnDestroy {
    */
   private _toTreeNodesIfNeeded(fieldConfig: any, options: any[]): any[] {
     if (!Array.isArray(options)) return options || [];
-    if (fieldConfig?.type !== 'tree-select') return options;
+    if (!this._isTreeLikeField(fieldConfig)) return options;
     // Si ya viene shaped (label/key/children), no re-envolver
     const first = options[0];
     if (first && (first.label !== undefined && (first.key !== undefined || first.data !== undefined))) {
@@ -2003,8 +2093,156 @@ export class CustomDrawFormComponent implements OnDestroy {
     return options.map(toNode);
   }
 
+  // [[[II ESC:007-02 DOC:docs/documents/2026-06-01_007_custom-draw-form-listbox.md#escenario-02
+  private async _toListboxOptionsIfNeeded(fieldConfig: any, options: any[]): Promise<any[]> {
+    if (fieldConfig?.type !== 'listbox') return options || [];
+    if (!this._isListboxTreeField(fieldConfig)) return options || [];
+    if (!Array.isArray(options) || options.length === 0) return [];
+    if (Array.isArray(options[0]?.items)) return options;
+
+    await this._ensureListboxTreeNodesLoaded(fieldConfig, options);
+    return this._toListboxGroups(options, fieldConfig);
+  }
+
+  private async _ensureListboxTreeNodesLoaded(fieldConfig: any, nodes: any[]): Promise<void> {
+    for (const node of nodes) {
+      await this._ensureListboxTreeNodeLoaded(fieldConfig, node);
+    }
+  }
+
+  private async _ensureListboxTreeNodeLoaded(fieldConfig: any, node: any): Promise<void> {
+    if (!node || typeof node !== 'object') return;
+
+    await this._loadTreeNodeChildren(fieldConfig, node);
+
+    if (!Array.isArray(node.children) || node.children.length === 0) return;
+
+    for (const child of node.children) {
+      if (child?.leaf === false || (Array.isArray(child?.children) && child.children.length > 0)) {
+        await this._ensureListboxTreeNodeLoaded(fieldConfig, child);
+      }
+    }
+  }
+
+  private _toListboxGroups(nodes: any[], fieldConfig: any): any[] {
+    return nodes
+      .map((node: any) => {
+        const items = this._collectSelectableListboxItems(node, fieldConfig, node);
+        if (!items.length && node?.selectable !== false) {
+          items.push(this._createListboxItemFromTreeNode(node, fieldConfig, node));
+        }
+        return {
+          label: node?.label ?? '',
+          value: node?.key ?? node?.data?.id ?? node?.label ?? '',
+          items,
+        };
+      })
+      .filter((group: any) => Array.isArray(group.items) && group.items.length > 0);
+  }
+
+  private _collectSelectableListboxItems(node: any, fieldConfig: any, groupNode: any): any[] {
+    const items: any[] = [];
+    const children = Array.isArray(node?.children) ? node.children : [];
+
+    for (const child of children) {
+      if (child?.selectable !== false) {
+        items.push(this._createListboxItemFromTreeNode(child, fieldConfig, groupNode));
+      }
+
+      if (Array.isArray(child?.children) && child.children.length > 0) {
+        items.push(...this._collectSelectableListboxItems(child, fieldConfig, groupNode));
+      }
+    }
+
+    return items;
+  }
+
+  private _createListboxItemFromTreeNode(node: any, fieldConfig: any, groupNode: any): any {
+    const rawSource = node?.data?.raw && typeof node.data.raw === 'object'
+      ? node.data.raw
+      : (node?.data && typeof node.data === 'object' ? node.data : {});
+    const raw = { ...rawSource };
+    const id = node?.data?.id ?? raw.id ?? node?.key ?? null;
+    const label = node?.label ?? raw.label ?? '';
+
+    if (raw.id === undefined) {
+      raw.id = id;
+    }
+
+    if (!raw.label && label) {
+      raw.label = label;
+    }
+
+    return {
+      id,
+      label,
+      type: node?.data?.type ?? raw.type ?? null,
+      parent: node?.data?.parent ?? (groupNode && groupNode !== node
+        ? {
+          id: groupNode?.data?.id ?? null,
+          type: groupNode?.data?.type ?? null,
+        }
+        : null),
+      raw,
+      __serialized: this._buildListboxTreeSerializedItem(node, fieldConfig?.tree),
+    };
+  }
+
+  private _buildListboxTreeSerializedItem(node: any, treeCfg: any): any | null {
+    const explicit = node?.__serialized ?? node?.data?.__serialized;
+    if (explicit && typeof explicit === 'object') {
+      return explicit;
+    }
+
+    const data = node?.data || {};
+    if (!data.id) return null;
+
+    const serialization = treeCfg?.serialization || {};
+    const strategy = serialization.strategy || 'child_relationship_with_parent_meta';
+
+    if (strategy === 'child_relationship_with_parent_meta') {
+      const parentData = data.parent || null;
+      const item: any = {
+        __rich: true,
+        type: data.type || serialization.relationship_type_default,
+        id: data.id,
+      };
+
+      if (serialization.meta && typeof serialization.meta === 'object') {
+        const metaOut: any = {};
+        for (const key of Object.keys(serialization.meta)) {
+          const metaCfg = serialization.meta[key] || {};
+          const idFrom = metaCfg.id_from || 'parent_node.id';
+          let metaId: any = null;
+
+          if (idFrom === 'parent_node.id') {
+            metaId = parentData?.id ?? null;
+          } else if (idFrom === 'selected_node.id') {
+            metaId = data.id;
+          }
+
+          if (!metaId) continue;
+          metaOut[key] = { type: metaCfg.type, id: metaId };
+        }
+
+        if (Object.keys(metaOut).length) {
+          item.meta = metaOut;
+        }
+      }
+
+      if (serialization.extra && typeof serialization.extra === 'object') {
+        Object.assign(item, serialization.extra);
+      }
+
+      return item;
+    }
+
+    return { __rich: true, type: data.type || serialization.relationship_type_default, id: data.id };
+  }
+  // ]]]FI
+
   private _emptyMirroredDropdownValue(fieldConfig: any): any {
-    return fieldConfig?.type === 'multi-select' || fieldConfig?.type === 'tree-select'
+    return fieldConfig?.type === 'multi-select' || fieldConfig?.type === 'tree-select' || fieldConfig?.type === 'listbox'
       ? []
       : null;
   }
@@ -2015,12 +2253,20 @@ export class CustomDrawFormComponent implements OnDestroy {
     const visit = (option: any): void => {
       if (!option || typeof option !== 'object') return;
 
-      if (option.data?.raw && typeof option.data.raw === 'object') {
+      const isGroup = Array.isArray(option.items) && option.id === undefined && option.value !== undefined && option.raw === undefined && option.data === undefined;
+
+      if (option.raw && typeof option.raw === 'object') {
+        flat.push(option.raw);
+      } else if (option.data?.raw && typeof option.data.raw === 'object') {
         flat.push(option.data.raw);
       } else if (option.data && typeof option.data === 'object' && (option.data.id !== undefined || option.data.value !== undefined)) {
         flat.push(option.data);
-      } else {
+      } else if (!isGroup) {
         flat.push(option);
+      }
+
+      if (Array.isArray(option.items)) {
+        option.items.forEach(visit);
       }
 
       if (Array.isArray(option.children)) {
@@ -2293,6 +2539,179 @@ export class CustomDrawFormComponent implements OnDestroy {
    */
   private _treeLoadedKeys: { [field: string]: Set<string> } = {};
 
+  // [[[II ESC:007-02 DOC:docs/documents/2026-06-01_007_custom-draw-form-listbox.md#escenario-02
+  private _loadTreeNodeChildren(fieldConfig: any, node: any): Promise<void> {
+    return new Promise((resolve) => {
+      const tree = fieldConfig?.tree;
+      const lazyLevels: any[] = Array.isArray(tree?.levels) ? tree.levels : [];
+
+      if (!tree?.lazy || lazyLevels.length === 0 || !node) {
+        resolve();
+        return;
+      }
+
+      const currentLevel: number = (node?.data?.__level ?? 0);
+      const targetLevelIdx = currentLevel;
+      const levelCfg = lazyLevels[targetLevelIdx];
+      if (!levelCfg) {
+        resolve();
+        return;
+      }
+
+      const cacheKey = String(node.key ?? node?.data?.id ?? '');
+      const loaded = (this._treeLoadedKeys[fieldConfig.field] ||= new Set<string>());
+      if (loaded.has(cacheKey)) {
+        resolve();
+        return;
+      }
+
+      if (Array.isArray(node.children) && node.children.length > 0) {
+        loaded.add(cacheKey);
+        resolve();
+        return;
+      }
+
+      const dynamicMap = fieldConfig?.children?.fields?.dynamic || {};
+      const childKey = levelCfg.child_field
+        ?? levelCfg.name
+        ?? (Object.keys(dynamicMap).length === 1 ? Object.keys(dynamicMap)[0] : null);
+      const childCfg = childKey ? dynamicMap[childKey] : null;
+      const parentNodeData = node?.data || {};
+
+      if (childCfg?.activate?.active) {
+        const conds: any[] = childCfg.activate.conditions || [];
+        const logic = childCfg.activate.logic || 'AND';
+        const action = childCfg.activate.action || 'inactive';
+        const results = conds.map((c: any) => {
+          if (c?.source && c.source !== 'parent') return true;
+          const vk = c?.value_key || 'id';
+          const value = parentNodeData?.[vk] ?? parentNodeData?.raw?.[vk] ?? null;
+          const op = c?.operator || 'equals';
+          const expected = c?.value;
+          if (op === 'isnull') return value == null || value === '';
+          if (op === 'not_null' || op === 'isnotnull') return !(value == null || value === '');
+          if (op === 'equals') return value === expected;
+          if (op === 'not_equals') return value !== expected;
+          if (op === 'in' && Array.isArray(c?.values)) return c.values.includes(value);
+          if (op === 'not_in' && Array.isArray(c?.values)) return !c.values.includes(value);
+          return false;
+        });
+        const met = logic === 'AND' ? results.every(Boolean) : results.some(Boolean);
+        const isActive = action === 'inactive' ? !met : met;
+        if (!isActive) {
+          node.children = [];
+          node.loading = false;
+          loaded.add(cacheKey);
+          resolve();
+          return;
+        }
+      }
+
+      const filterCfg: any = {};
+      if (childCfg?.data_type?.filter && typeof childCfg.data_type.filter === 'object') {
+        Object.assign(filterCfg, childCfg.data_type.filter);
+      }
+      if (childCfg?.filter?.active && Array.isArray(childCfg.filter.conditions)) {
+        for (const cond of childCfg.filter.conditions) {
+          if (cond?.source && cond.source !== 'parent') continue;
+          if (!cond?.field) continue;
+          const vk = cond.value_key || 'id';
+          const value = parentNodeData?.[vk] ?? parentNodeData?.raw?.[vk] ?? null;
+          if (value == null || value === '') continue;
+          const op = cond.operator === 'equals' ? 'exact' : (cond.operator || 'exact');
+          filterCfg[cond.field] = {
+            active: true,
+            forced: true,
+            default: op,
+            default_value: value,
+          };
+        }
+      }
+
+      const resource = childCfg?.data_type?.type
+        || levelCfg.resource
+        || levelCfg.data_type?.type
+        || levelCfg.name
+        || childKey;
+      const at = this.crudS.getAppType(resource) || {};
+      const app = at.app;
+      const type = at.type;
+      if (!app || !type) {
+        resolve();
+        return;
+      }
+
+      const filter = this.crudS.buildDropdownFilterString(filterCfg);
+      const sort = childCfg?.data_type?.ordering || levelCfg?.data_type?.ordering || '';
+      const limit = childCfg?.data_type?.limit || levelCfg?.data_type?.limit || 0;
+
+      node.loading = true;
+      this.messageS.showBlocked(true);
+      this.crudS.getObject({ app, type, filter, sort, limit }).subscribe({
+        next: (data: any) => {
+          const rows = this.generalS.DJAtoObject({
+            respDJA: data,
+            fields: { [fieldConfig.field]: fieldConfig },
+          }) || [];
+
+          const labelField = childCfg?.option_label || levelCfg.label_field || fieldConfig.option_label || 'name';
+          const valueField = childCfg?.option_value || levelCfg.value_field || fieldConfig.option_value || 'id';
+          const hasMoreLevels = !!lazyLevels[targetLevelIdx + 1];
+          const selectable = levelCfg.selectable !== false;
+          const parentRef = {
+            id: node?.data?.id ?? null,
+            type: node?.data?.type ?? null,
+          };
+          const labelFrom = (opt: any): string => {
+            if (typeof labelField === 'string' && labelField.includes(',')) {
+              return labelField.split(',')
+                .map((field: string) => opt?.[field.trim()])
+                .filter((value: any) => value != null && String(value).trim() !== '')
+                .map((value: any) => String(value))
+                .join(' ');
+            }
+            return String(opt?.[labelField] ?? '');
+          };
+
+          node.children = rows.map((opt: any) => {
+            const id = opt?.[valueField] ?? opt?.id ?? '';
+            return {
+              key: `${resource}:${id}`,
+              label: labelFrom(opt),
+              data: {
+                ...opt,
+                id: opt?.id ?? id,
+                type: resource,
+                __level: targetLevelIdx + 1,
+                parent: parentRef,
+                raw: opt,
+              },
+              selectable,
+              leaf: !hasMoreLevels,
+              children: hasMoreLevels ? [] : undefined,
+            };
+          });
+          node.loading = false;
+          loaded.add(cacheKey);
+
+          if (fieldConfig?.type === 'tree-select') {
+            const current = this.dropdownOptionsSignal()[fieldConfig.field] || [];
+            this._updateDropdownOptions(fieldConfig.field, [...current]);
+          }
+
+          this.messageS.showBlocked(false);
+          resolve();
+        },
+        error: () => {
+          node.loading = false;
+          this.messageS.showBlocked(false);
+          resolve();
+        },
+      });
+    });
+  }
+  // ]]]FI
+
   /**
    * Lazy load de hijos al expandir un nodo de un tree-select.
    *
@@ -2327,156 +2746,7 @@ export class CustomDrawFormComponent implements OnDestroy {
     const lazyLevels: any[] = Array.isArray(tree?.levels) ? tree.levels : [];
 
     if (tree?.lazy && lazyLevels.length > 0) {
-      const currentLevel: number = (node?.data?.__level ?? 0);
-      const targetLevelIdx = currentLevel; // levels[0] es el primer hijo del root
-      const levelCfg = lazyLevels[targetLevelIdx];
-      if (!levelCfg) return; // no hay más niveles configurados
-
-      const cacheKey = String(node.key ?? node?.data?.id ?? '');
-      const loaded = (this._treeLoadedKeys[fieldConfig.field] ||= new Set<string>());
-      if (loaded.has(cacheKey)) return;
-      if (Array.isArray(node.children) && node.children.length > 0) {
-        loaded.add(cacheKey);
-        return;
-      }
-
-      // 1) Resolver child config en children.fields.dynamic ──────────────────
-      const dynamicMap = fieldConfig?.children?.fields?.dynamic || {};
-      const childKey = levelCfg.child_field
-        ?? levelCfg.name
-        ?? (Object.keys(dynamicMap).length === 1 ? Object.keys(dynamicMap)[0] : null);
-      const childCfg = childKey ? dynamicMap[childKey] : null;
-
-      // 2) Activación basada en activate.conditions con source:'parent' ─────
-      const parentNodeData = node?.data || {};
-      if (childCfg?.activate?.active) {
-        const conds: any[] = childCfg.activate.conditions || [];
-        const logic = childCfg.activate.logic || 'AND';
-        const action = childCfg.activate.action || 'inactive';
-        const results = conds.map((c: any) => {
-          if (c?.source && c.source !== 'parent') return true; // ignorar reglas no-padre aquí
-          const vk = c?.value_key || 'id';
-          const v = parentNodeData?.[vk] ?? parentNodeData?.raw?.[vk] ?? null;
-          const op = c?.operator || 'equals';
-          const expected = c?.value;
-          if (op === 'isnull') return v == null || v === '';
-          if (op === 'not_null' || op === 'isnotnull') return !(v == null || v === '');
-          if (op === 'equals') return v === expected;
-          if (op === 'not_equals') return v !== expected;
-          if (op === 'in' && Array.isArray(c?.values)) return c.values.includes(v);
-          if (op === 'not_in' && Array.isArray(c?.values)) return !c.values.includes(v);
-          return false;
-        });
-        const met = (logic === 'AND') ? results.every(Boolean) : results.some(Boolean);
-        // action:'inactive' → al cumplirse la condición, DESACTIVA. invertimos.
-        const isActive = action === 'inactive' ? !met : met;
-        if (!isActive) {
-          node.children = [];
-          node.loading = false;
-          loaded.add(cacheKey);
-          return;
-        }
-      }
-
-      // 3) Construir filtro JSON:API a partir del child config ─────────────
-      const filterCfg: any = {};
-      if (childCfg?.data_type?.filter && typeof childCfg.data_type.filter === 'object') {
-        Object.assign(filterCfg, childCfg.data_type.filter);
-      }
-      if (childCfg?.filter?.active && Array.isArray(childCfg.filter.conditions)) {
-        for (const cond of childCfg.filter.conditions) {
-          if (cond?.source && cond.source !== 'parent') continue;
-          if (!cond?.field) continue;
-          const vk = cond.value_key || 'id';
-          const v = parentNodeData?.[vk] ?? parentNodeData?.raw?.[vk] ?? null;
-          if (v == null || v === '') continue;
-          const op = cond.operator === 'equals' ? 'exact' : (cond.operator || 'exact');
-          filterCfg[cond.field] = {
-            active: true,
-            forced: true,
-            default: op,
-            default_value: v,
-          };
-        }
-      }
-
-      // 4) Resolver recurso/endpoint preferentemente desde el child ────────
-      const resource = childCfg?.data_type?.type
-        || levelCfg.resource
-        || levelCfg.data_type?.type
-        || levelCfg.name
-        || childKey;
-      const at = this.crudS.getAppType(resource) || {};
-      const app = at.app;
-      const type = at.type;
-      if (!app || !type) return;
-
-      const filter = this.crudS.buildDropdownFilterString(filterCfg);
-      const sort = childCfg?.data_type?.ordering || levelCfg?.data_type?.ordering || '';
-      const limit = childCfg?.data_type?.limit || levelCfg?.data_type?.limit || 0;
-
-      node.loading = true;
-      this.messageS.showBlocked(true);
-      this.crudS.getObject({ app, type, filter, sort, limit }).subscribe({
-        next: (data: any) => {
-          // Convierte la respuesta JSON:API a objetos planos usando la misma
-          // tubería que dataDropdown — así heredamos `_data_` includes y label.
-          const rows = this.generalS.DJAtoObject({
-            respDJA: data,
-            fields: { [fieldConfig.field]: fieldConfig },
-          }) || [];
-
-          const labelField = childCfg?.option_label || levelCfg.label_field || fieldConfig.option_label || 'name';
-          const valueField = childCfg?.option_value || levelCfg.value_field || fieldConfig.option_value || 'id';
-          const hasMoreLevels = !!lazyLevels[targetLevelIdx + 1];
-          const selectable = levelCfg.selectable !== false;
-          const parentRef = {
-            id: node?.data?.id ?? null,
-            type: node?.data?.type ?? null,
-          };
-          const labelFrom = (opt: any): string => {
-            if (typeof labelField === 'string' && labelField.includes(',')) {
-              return labelField.split(',')
-                .map((f: string) => opt?.[f.trim()])
-                .filter((v: any) => v != null && String(v).trim() !== '')
-                .map((v: any) => String(v))
-                .join(' ');
-            }
-            return String(opt?.[labelField] ?? '');
-          };
-
-          node.children = rows.map((opt: any) => {
-            const id = opt?.[valueField] ?? opt?.id ?? '';
-            return {
-              key: `${resource}:${id}`,
-              label: labelFrom(opt),
-              data: {
-                ...opt,
-                id: opt?.id ?? id,
-                type: resource,
-                __level: targetLevelIdx + 1,
-                parent: parentRef,
-                raw: opt,
-              },
-              selectable,
-              leaf: !hasMoreLevels,
-              children: hasMoreLevels ? [] : undefined,
-            };
-          });
-          node.loading = false;
-          loaded.add(cacheKey);
-
-          // Refresca la referencia del array de opciones para que p-treeSelect
-          // reaccione (PrimeNG OnPush en algunas versiones requiere nueva ref).
-          const current = this.dropdownOptionsSignal()[fieldConfig.field] || [];
-          this._updateDropdownOptions(fieldConfig.field, [...current]);
-          this.messageS.showBlocked(false);
-        },
-        error: () => {
-          node.loading = false;
-          this.messageS.showBlocked(false);
-        },
-      });
+      void this._loadTreeNodeChildren(fieldConfig, node);
       return;
     }
 

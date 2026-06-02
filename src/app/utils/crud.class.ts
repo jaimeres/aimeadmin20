@@ -625,6 +625,20 @@ export class CRUD extends Vars implements OnChanges  /*implements OnInit*/ {
 
     if (draw) {
 
+      // [[[II ESC:003-06 Registro de children parent_form_data_* resueltos por
+      // servidor (filter.scope declarado por el padre). Se escanea el draw del
+      // child_form y el draw principal por si el padre vive en cualquiera. ]]]FI
+      const _childScopeRegistry = this._collectChildScopeRegistry(draw);
+      const _mainDraw = this.drawForm()?.[pos];
+      if (_mainDraw) {
+        for (const [k, v] of this._collectChildScopeRegistry(_mainDraw)) {
+          const prev = _childScopeRegistry.get(k);
+          if (!prev || (v.scope === 'server' && prev.scope !== 'server')) {
+            _childScopeRegistry.set(k, v);
+          }
+        }
+      }
+
       Object.keys(draw).forEach(keyBase => {
         if (keyBase == 'dialog' || keyBase === '') return;
 
@@ -651,8 +665,19 @@ export class CRUD extends Vars implements OnChanges  /*implements OnInit*/ {
               }
             }
 
-            // Si edit es false o readonly es true, el campo debe ser disabled
-            const disabled = field.readonly || !edit;
+            // [[[II ESC:003-06 Política de obligatoriedad para children
+            // parent_form_data_* (schema efectivo = child_form_fields.fields). ]]]FI
+            const _childPolicy = this._childRequiredPolicy({
+              childKey: fieldData.field,
+              schemaEntry: field,
+              layoutNode: fieldData,
+              hasSchema: !!field,
+              scopeInfo: _childScopeRegistry.get(fieldData.field) ?? null,
+            });
+
+            // Si edit es false o readonly es true, el campo debe ser disabled.
+            // `_childPolicy.readOnly` fuerza solo lectura para scope=server + edit=false.
+            const disabled = field.readonly || !edit || _childPolicy.readOnly;
 
             // Guardar el estado readonly en la variable para saber que campos debe deshabilitar al guardar
             if (disabled) {
@@ -663,11 +688,11 @@ export class CRUD extends Vars implements OnChanges  /*implements OnInit*/ {
             }
 
             const validators: any[] = [];
-            // Agrega validadores si es requerido
-            if (field.required) {
+            // Agrega validadores si es requerido. Para children parent_form_data_*
+            // la obligatoriedad la decide _childRequiredPolicy (root + filter.scope/edit).
+            if (_childPolicy.applyRequired) {
               validators.push(Validators.required);
             }
-
             if (field.max_length) {
               validators.push(Validators.maxLength(field.max_length));
             }
@@ -676,8 +701,9 @@ export class CRUD extends Vars implements OnChanges  /*implements OnInit*/ {
               validators.push(Validators.minLength(field.min_length));
             }
 
-            // Crear campo oculto para objetos completos en campos de tipo select
-            if (field.type === 'dropdown' || field.type === 'auto-complete' || field.type === 'tree-select') {
+            // [[[II ESC:007-03 DOC:docs/documents/2026-06-01_007_custom-draw-form-listbox.md#escenario-03
+            // Crear campo oculto para objetos completos en campos tipo dropdown-like.
+            if (DROPDOWN_TYPES_PAYLOAD.has(field.type)) {
               const hiddenFieldName = 'object_' + fieldData.field;
 
               // Crear validadores para el campo oculto
@@ -728,7 +754,7 @@ export class CRUD extends Vars implements OnChanges  /*implements OnInit*/ {
 
                       //solo necesita cambiar el campo de los siguientes tipos porque son los unicos que requieren cambio
                       //para poder ser duplicados y se pueda enviar el objeto en lugar de solo el id como lo hace el form
-                      if (typedFieldValue.type === 'dropdown' || typedFieldValue.type === 'auto-complete' || typedFieldValue.type === 'tree-select') {
+                      if (DROPDOWN_TYPES_PAYLOAD.has(typedFieldValue.type)) {
                         // Solo agregar object_ si no lo tiene ya
                         const newFieldKey = fieldKey.startsWith('object_' + options.parentField) ? fieldKey : 'object_' + fieldKey;
 
@@ -741,8 +767,9 @@ export class CRUD extends Vars implements OnChanges  /*implements OnInit*/ {
                 });
               }
             }
-            //los validadores para los campos ocultos no aplican porque los detiene su equivalente de dropdown, auto-complete y tree-select
+            //los validadores para los campos ocultos no aplican porque los detiene su equivalente visible dropdown-like
             //en teoria no debria causra problema esto ya que cuando se asigna el valor visible tambien al campo oculto
+            // ]]]FI
 
             //si field.type es signature agregarlo en this.fb.array<FirmaGroup>
             if (field.type === 'signature') {
@@ -893,8 +920,8 @@ export class CRUD extends Vars implements OnChanges  /*implements OnInit*/ {
                     defaultColumnValue = null;
                   } else if (columnType === 'date') {
                     defaultColumnValue = null;
-                  } else if (columnType === 'dropdown' || columnType === 'multi-select') {
-                    defaultColumnValue = columnType === 'multi-select' ? [] : '';
+                  } else if (columnType === 'dropdown' || columnType === 'multi-select' || columnType === 'listbox') {
+                    defaultColumnValue = columnType === 'multi-select' || columnType === 'listbox' ? [] : '';
                   } else if (columnType === 'checkbox') {
                     defaultColumnValue = false;
                   }
@@ -961,6 +988,122 @@ export class CRUD extends Vars implements OnChanges  /*implements OnInit*/ {
     }
   }
 
+  // [[[II ESC:003-06 DOC:docs/documents/2026-05-25_003_dynamic-children-field-loading.md#escenario-06
+  /**
+   * Escanea TODO el layout (`draw`) y construye un registro de los children que
+   * algún campo padre declara con `filter.scope = 'server'` dentro de
+   * `<padre>.children.fields.(static|dynamic|derived).<child_key>`.
+   *
+   * Motivo: `form_fields_data_*` / `parent_form_data_*` NO portan `filter.scope`
+   * en su propio nodo; el scope vive en la declaración del PADRE (p.e.
+   * `workshop.children.fields.static.form_fields_data_cluster.filter.scope`).
+   * Si el padre lo declara `server`, el servidor resuelve e inicializa el valor
+   * en el create y el cliente NO debe exigirlo.
+   *
+   * La clave se normaliza quitando el prefijo `object_` (los children dropdown se
+   * renombran a `object_<key>`). Si un mismo target aparece bajo varios padres,
+   * `server` prevalece sobre `client`.
+   *
+   * @returns Map<child_key_normalizada, { scope, edit }>.
+   */
+  protected _collectChildScopeRegistry(root: any): Map<string, { scope: string; edit: boolean }> {
+    const registry = new Map<string, { scope: string; edit: boolean }>();
+    const visited = new Set<any>();
+
+    const walk = (node: any) => {
+      if (!node || typeof node !== 'object' || visited.has(node)) return;
+      visited.add(node);
+
+      const childFields = node?.children?.fields;
+      if (childFields && typeof childFields === 'object') {
+        ['static', 'dynamic', 'derived'].forEach(typeKey => {
+          const group = childFields[typeKey];
+          if (group && typeof group === 'object') {
+            Object.keys(group).forEach(childKey => {
+              const childNode = group[childKey];
+              const normalized = childKey.startsWith('object_')
+                ? childKey.slice('object_'.length)
+                : childKey;
+              const scope = String(childNode?.filter?.scope ?? 'client').toLowerCase();
+              const edit = (childNode?.edit ?? childNode?.default?.edit) === true;
+              const prev = registry.get(normalized);
+              // server prevalece; si no, conservar la primera (o promover a server).
+              if (!prev || (scope === 'server' && prev.scope !== 'server')) {
+                registry.set(normalized, { scope, edit });
+              }
+            });
+          }
+        });
+      }
+
+      for (const k of Object.keys(node)) {
+        walk(node[k]);
+      }
+    };
+
+    walk(root);
+    return registry;
+  }
+
+  /**
+   * Política de obligatoriedad local para children cuyo `child_key` empieza con
+   * `form_fields_data_` o `parent_form_data_`. NO aplica a campos de modelo ni a
+   * `relacion_data_*` (para esos se respeta `required` tal cual).
+   *
+   * Fuente de verdad de obligatoriedad lógica: el `required` raíz del schema
+   * efectivo (`form_fields_data_*` → `crudS.fieldsForm(pos)[child_key]`;
+   * `parent_form_data_*` → `child_form_fields.fields[child_key]`).
+   *
+   * PERO la decisión de DÓNDE se resuelve (cliente vs servidor) la gobierna el
+   * PADRE vía `children.fields...filter.scope`, no el nodo del propio campo:
+   *   - El padre declara el child con `scope='server'`  → el servidor lo resuelve
+   *     e inicializa en el create; el cliente NO exige ni bloquea el submit.
+   *       · `edit=false` → render solo lectura (auto).
+   *       · `edit=true`  → editable opcional, pero tampoco obligatorio.
+   *   - Sin declaración server (scope cliente o no es child de nadie) → se respeta
+   *     el `required` raíz del schema efectivo.
+   *   - Sin schema efectivo para el prefijo → no se impone obligatoriedad local.
+   *
+   * `scopeInfo` proviene de `_collectChildScopeRegistry` (registro del PADRE).
+   *
+   * @returns `applyRequired` (forzar Validators.required en cliente) y
+   *          `readOnly` (render solo lectura: declarado server + `edit=false`).
+   */
+  protected _childRequiredPolicy(opts: {
+    childKey: string; schemaEntry: any; layoutNode: any; hasSchema: boolean;
+    scopeInfo?: { scope: string; edit: boolean } | null;
+  }): { applyRequired: boolean; readOnly: boolean } {
+    const { childKey, schemaEntry, layoutNode, hasSchema, scopeInfo } = opts;
+
+    const isTargetChild = typeof childKey === 'string'
+      && (childKey.startsWith('form_fields_data_') || childKey.startsWith('parent_form_data_'));
+
+    // Campos de modelo / relacion_data_*: comportamiento estándar (required tal cual).
+    if (!isTargetChild) {
+      const rootReq = (schemaEntry?.required ?? layoutNode?.required) === true;
+      return { applyRequired: rootReq, readOnly: false };
+    }
+
+    // ¿Algún PADRE declara este child como resuelto por el servidor?
+    // Se evalúa ANTES del guard de schema: la decisión server proviene de la
+    // declaración del padre (children.fields...filter.scope), no del schema del
+    // propio campo. Así, aunque el form_fields_data_* no exista en el OPTIONS,
+    // un child server-side igual queda no-obligatorio y readOnly según `edit`.
+    if (scopeInfo && scopeInfo.scope === 'server') {
+      // edit:true o false → nunca bloquea el submit; el servidor completa el valor.
+      return { applyRequired: false, readOnly: !scopeInfo.edit };
+    }
+
+    // Sin schema efectivo → no imponer obligatoriedad local.
+    if (!hasSchema) return { applyRequired: false, readOnly: false };
+
+    const rootRequired = (schemaEntry?.required ?? layoutNode?.required) === true;
+
+    // No es child server-side: la obligatoriedad sale del root del schema efectivo.
+    return { applyRequired: rootRequired, readOnly: false };
+  }
+  // ]]]FI
+
   /**
    * Agrega campos al formulario filtrando por prefijo de campo
    * @param formFields - Referencia al objeto de campos del formulario
@@ -972,6 +1115,11 @@ export class CRUD extends Vars implements OnChanges  /*implements OnInit*/ {
     if (!dynamicFields || typeof dynamicFields !== 'object') {
       return;
     }
+
+    // [[[II ESC:003-06 Registro de children resueltos por servidor (filter.scope).
+    // El scope vive en la declaración del PADRE, no en el nodo del propio campo;
+    // por eso se escanea TODO el layout una sola vez. ]]]FI
+    const _childScopeRegistry = this._collectChildScopeRegistry(dynamicFields);
 
     // Iterar sobre todos los nodos del objeto dinámico, excluyendo dialog y fields_prefixes
     Object.keys(dynamicFields).forEach(nodeKey => {
@@ -1037,8 +1185,22 @@ export class CRUD extends Vars implements OnChanges  /*implements OnInit*/ {
             }
           }
 
-          // Si edit es false o readonly es true, el campo debe ser disabled
-          const disabled = fieldData.readonly || !edit;
+          // [[[II ESC:003-06 Política de obligatoriedad para children
+          // form_fields_data_* / parent_form_data_* (ver _childRequiredPolicy). ]]]FI
+          const _schemaDict = this.crudS.fieldsForm(pos) || {};
+          const _schemaEntry = _schemaDict[fieldName];
+          const _isFormFieldsChild = fieldName.startsWith('form_fields_data_');
+          const _childPolicy = this._childRequiredPolicy({
+            childKey: fieldName,
+            schemaEntry: _schemaEntry,
+            layoutNode: fieldData,
+            hasSchema: _isFormFieldsChild ? !!_schemaEntry : true,
+            scopeInfo: _childScopeRegistry.get(fieldName) ?? null,
+          });
+
+          // Si edit es false o readonly es true, el campo debe ser disabled.
+          // `_childPolicy.readOnly` fuerza solo lectura para scope=server + edit=false.
+          const disabled = fieldData.readonly || !edit || _childPolicy.readOnly;
 
           // Guardar el estado readonly en el fieldData para que el template pueda usarlo
           if (disabled) {
@@ -1050,8 +1212,10 @@ export class CRUD extends Vars implements OnChanges  /*implements OnInit*/ {
 
           const validators: any[] = [];
 
-          // Agregar validadores
-          if (fieldData.required) {
+          // Agregar validadores. Para children form_fields_data_*/parent_form_data_*
+          // la obligatoriedad la decide _childRequiredPolicy (root del schema efectivo
+          // + filter.scope/edit); para el resto, el `required` del propio campo.
+          if (_childPolicy.applyRequired) {
             validators.push(Validators.required);
           }
           if (fieldData.max_length) {
@@ -1103,7 +1267,7 @@ export class CRUD extends Vars implements OnChanges  /*implements OnInit*/ {
 
                     // Solo necesita cambiar el campo de los siguientes tipos porque son los únicos que requieren cambio
                     // para poder ser duplicados y se pueda enviar el objeto en lugar de solo el id
-                    if (typedChildFieldValue.type === 'dropdown' || typedChildFieldValue.type === 'auto-complete' || typedChildFieldValue.type === 'tree-select' || typedChildFieldValue.type === 'dropdown-choice' || typedChildFieldValue.type === 'multi-select' || typedChildFieldValue.type === 'select-button') {
+                    if (DROPDOWN_TYPES_PAYLOAD.has(typedChildFieldValue.type)) {
                       // Solo agregar object_ si no lo tiene ya
                       const newChildFieldKey = childFieldKey.startsWith('object_' + fieldPrefix) ? childFieldKey : 'object_' + childFieldKey;
 
@@ -1216,8 +1380,8 @@ export class CRUD extends Vars implements OnChanges  /*implements OnInit*/ {
                 let defaultColumnValue: any = '';
                 if (column.type === 'input-number') defaultColumnValue = null;
                 else if (column.type === 'date') defaultColumnValue = null;
-                else if (column.type === 'dropdown' || column.type === 'multi-select') {
-                  defaultColumnValue = column.type === 'multi-select' ? [] : '';
+                else if (column.type === 'dropdown' || column.type === 'multi-select' || column.type === 'listbox') {
+                  defaultColumnValue = column.type === 'multi-select' || column.type === 'listbox' ? [] : '';
                 } else if (column.type === 'checkbox') defaultColumnValue = false;
 
                 rowGroup[column.field] = this.fb.control(defaultColumnValue, columnValidators);
@@ -2239,6 +2403,18 @@ export class CRUD extends Vars implements OnChanges  /*implements OnInit*/ {
           // usando la funcion searchByValue
         } else if (fieldObj.type == 'DateTime' && this.searchByValue(field, this.timeZone[pos], false) !== -1) {
           columnObj = { field: field_prefix + field + '__text', header: this.customField()[pos][field_relationship + field] + ' ' + header_prefix, /*sortable: true*/ };
+        } else if (fieldObj.relationship_type == 'ManyToMany' || fieldObj.relationship_type == 'ManyToOne' || fieldObj.relationship_type == 'OneToOne') {
+          // [[[II ESC:005-01 DOC:docs/documents/2026-05-31_005_columnas-form-data-y-tree-select-nombres.md#escenario-01
+          // Campos relacionales que el OPTIONS NO tipa como 'Relationship'/'Serializer'
+          // (p.ej. 'GenericField' con relationship_type M2M: responsible_persons,
+          // responsible_customers, responsible_suppliers). Sin esto la columna apuntaba
+          // al campo crudo y mostraba los ids/UUID en lugar del nombre.
+          // DJAtoObject resuelve el display en `<field>__name` (nombres unidos por
+          // separador). Además, usar `__name` hace que iniParam agregue la relación al
+          // include automáticamente (igual que requesters), para que el server devuelva
+          // los objetos en `included` y se puedan resolver los nombres.
+          columnObj = { field: field_prefix + field + '__name', header: this.customField()[pos][field_relationship + field] + ' ' + header_prefix, /*sortable: true*/ };
+          // ]]]FI
         } else {
           columnObj = { field: field_prefix + field, header: this.customField()[pos][field_relationship + field] + header_prefix, /*sortable: true*/ };
         }
@@ -3281,15 +3457,17 @@ export class CRUD extends Vars implements OnChanges  /*implements OnInit*/ {
     this.files64 = [];
 
     if (selected) {
-      // [[[II ESC:001-07 DOC:docs/documents/2026-05-16_001_consolidacion_dropdown_types_y_fix_escenarios.md#escenario-07
-      // Rehidrata tree-selects al shape real de PrimeNG (array de nodos con
-      // key/label) y conserva la relación serializada para reenvío en edición.
+      // [[[II ESC:007-03 DOC:docs/documents/2026-06-01_007_custom-draw-form-listbox.md#escenario-03
+      // Rehidrata campos tree-like (`tree-select` y `listbox` con `tree`) al
+      // shape real que PrimeNG compara/renderiza, conservando la relación
+      // serializada para reenvío en edición.
       const drawAtPos = this.drawForm()[pos];
       for (const [key, value] of Object.entries(selected)) {
         if (key === 'classifiers' || key === 'included' || !Array.isArray(value)) continue;
         const fieldCfg = this._findFieldConfigInDraw(drawAtPos, key);
-        if (fieldCfg?.type !== 'tree-select') continue;
-        selected[key] = this._hydrateTreeSelectControlValue(selected, key, fieldCfg);
+        const isTreeLikeField = fieldCfg?.type === 'tree-select' || (fieldCfg?.type === 'listbox' && fieldCfg?.tree);
+        if (!isTreeLikeField) continue;
+        selected[key] = this._hydrateTreeLikeControlValue(selected, key, fieldCfg);
       }
       // ]]]FI
       //necesito seprar las fechas que se conviertes en 2 campos una para las convertidas y otras para el formulario enviado al servidor
@@ -3405,7 +3583,7 @@ export class CRUD extends Vars implements OnChanges  /*implements OnInit*/ {
       // el drawForm de esta posición.
       const fieldCfg = this._findFieldConfigInDraw(drawAtPos, element.field);
       const treeCfg = fieldCfg?.tree;
-      if (fieldCfg?.type === 'tree-select' && treeCfg?.serialization && Array.isArray(rawValue)) {
+      if ((fieldCfg?.type === 'tree-select' || fieldCfg?.type === 'listbox') && treeCfg?.serialization && Array.isArray(rawValue)) {
         const serialized = this._serializeTreeSelection(rawValue, treeCfg);
         element.id = serialized;
         // Si la estrategia define un type diferente al declarado en relationships
@@ -3458,18 +3636,24 @@ export class CRUD extends Vars implements OnChanges  /*implements OnInit*/ {
     return walk(draw);
   }
 
-  // [[[II ESC:001-07 DOC:docs/documents/2026-05-16_001_consolidacion_dropdown_types_y_fix_escenarios.md#escenario-07
+  // [[[II ESC:007-03 DOC:docs/documents/2026-06-01_007_custom-draw-form-listbox.md#escenario-03
   /**
-   * Rehidrata un tree-select en edición al shape que PrimeNG compara por `key`
-   * y renderiza por `label`, conservando además la relación serializada para
-   * poder reenviarla intacta cuando el usuario no toca el campo.
+   * Rehidrata un campo tree-like en edición al shape que PrimeNG compara y
+   * renderiza, conservando además la relación serializada para poder reenviarla
+   * intacta cuando el usuario no toca el campo.
    */
-  private _hydrateTreeSelectControlValue(selected: any, fieldName: string, fieldCfg: any): any[] {
+  private _hydrateTreeLikeControlValue(selected: any, fieldName: string, fieldCfg: any): any[] {
     const current = Array.isArray(selected?.[fieldName]) ? selected[fieldName] : [];
     if (!current.length) return [];
 
+    const isListboxTree = fieldCfg?.type === 'listbox' && fieldCfg?.tree;
+
     const first = current[0];
-    if (first && typeof first === 'object' && first.key !== undefined && first.label !== undefined) {
+    if (!isListboxTree && first && typeof first === 'object' && first.key !== undefined && first.label !== undefined) {
+      return current;
+    }
+
+    if (isListboxTree && first && typeof first === 'object' && first.id !== undefined && first.label !== undefined) {
       return current;
     }
 
@@ -3486,10 +3670,33 @@ export class CRUD extends Vars implements OnChanges  /*implements OnInit*/ {
         const includedItem = included.find((item: any) => item?.id === relationId) ?? null;
         const nodeType = this._resolveTreeSelectNodeType(relation, includedItem, fieldCfg);
         const serialized = this._buildTreeSerializedItemFromRelation(relation, fieldCfg, nodeType, relationId);
+        const rawSource = includedItem?.attributes
+          ? { id: includedItem.id, type: includedItem.type, ...includedItem.attributes }
+          : (relation && typeof relation === 'object' ? { ...relation } : { id: relationId, type: nodeType });
+        const label = this._resolveTreeSelectNodeLabel(includedItem, relation, fieldCfg, relationId);
+
+        if (!rawSource.label) {
+          rawSource.label = label;
+        }
+
+        if (rawSource.id === undefined) {
+          rawSource.id = relationId;
+        }
+
+        if (isListboxTree) {
+          return {
+            id: relationId,
+            label,
+            type: nodeType,
+            parent: this._getTreeSelectParentFromSerializedItem(serialized),
+            raw: rawSource,
+            __serialized: serialized,
+          };
+        }
 
         return {
           key: nodeType ? `${nodeType}:${relationId}` : String(relationId),
-          label: this._resolveTreeSelectNodeLabel(includedItem, relation, fieldCfg, relationId),
+          label,
           data: {
             id: relationId,
             type: nodeType,
@@ -3630,8 +3837,8 @@ export class CRUD extends Vars implements OnChanges  /*implements OnInit*/ {
   // ]]]FI
 
   /**
-   * Convierte la selección actual de un `<p-treeSelect>` (array de TreeNodes)
-   * en un array JSON:API "rico" segun `tree.serialization`.
+  * Convierte la selección actual de un control tree-like (`p-treeSelect` o
+  * `p-listbox` agrupado) en un array JSON:API "rico" según `tree.serialization`.
    *
    * Estrategia soportada: `child_relationship_with_parent_meta`
    *   - Solo se serializan nodos seleccionables (hojas configuradas con
