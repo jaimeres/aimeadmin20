@@ -1,3 +1,4 @@
+<!-- [[[II ESC:020-01 DOC:docs/documents/2026-06-04_020_custom-draw-form-virtual-scroll-dropdowns.md#escenario-01 -->
 <!-- TEMPLATE REUTILIZABLE PARA DROPDOWN -->
 <!-- DEBO PONER TEMPLETE EN ESLO 3 PRIMEROS COMBOS -->
 <ng-template #dropdownTemplate let-fieldConfig="fieldConfig">
@@ -10,6 +11,8 @@
         [showClear]="fieldConfig.showClear !== undefined ? fieldConfig.showClear : true"
         [filter]="fieldConfig.filter_local !== undefined ? fieldConfig.filter_local : false"
         [filterBy]="fieldConfig.filter_by ? fieldConfig.filter_by : null"
+        [virtualScroll]="fieldConfig.virtual_scrolling?.active === true"
+        [virtualScrollItemSize]="fieldConfig.virtual_scrolling?.item_size || 20"
         (onChange)="onChangeDropdown($event, fieldConfig)" [appendTo]="'body'" styleClass="height-input-custom" />
 
       <button *ngIf="fieldConfig.new_icon !== undefined ? fieldConfig.new_icon : false" type="button" pButton
@@ -43,6 +46,8 @@
       [showClear]="true" [optionValue]="fieldConfig.option_value || 'id'"
       [filter]="fieldConfig.filter_local !== undefined ? fieldConfig.filter_local : false"
       [filterBy]="fieldConfig.filter_by ? fieldConfig.filter_by : null"
+      [virtualScroll]="fieldConfig.virtual_scrolling?.active === true"
+      [virtualScrollItemSize]="fieldConfig.virtual_scrolling?.item_size || 40"
       [optionLabel]="fieldConfig.option_label | joinOrSelf" display="chip" styleClass="height-input-custom"
       [appendTo]="'body'" />
 
@@ -68,22 +73,25 @@
       (onClear)="clearTreeSelect(fieldConfig.field)" (onChangeAction)="onChangeDropdown($event, fieldConfig)"
       (onNodeExpand)="onTreeNodeExpand($event, fieldConfig)" styleClass="height-input-custom"
       class="height-input-custom" [filter]="fieldConfig.filter_local !== undefined ? fieldConfig.filter_local : false"
-      [filterBy]="fieldConfig.filter_by ? fieldConfig.filter_by : null" />
+      [virtualScroll]="fieldConfig.virtual_scrolling?.active === true"
+      [virtualScrollItemSize]="fieldConfig.virtual_scrolling?.item_size || 40"
+      [filterBy]="fieldConfig.filter_by ? fieldConfig.filter_by + ',label,filter_text' : 'label,filter_text'" />
 
     <button *ngIf="fieldConfig.reload_icon !== undefined ? fieldConfig.reload_icon : false" type="button" pButton
-      icon="pi pi-replay" class="height-icon-custom"
+      icon="pi pi-replay" class="height-icon-custom" style="width: 40px !important;"
       (click)="dataDropdown(fieldConfig, true); onReloadIconDropdownAction.emit(fieldConfig.field)"></button>
-    <button *ngIf="fieldConfig.icon" type="button" pButton [icon]="fieldConfig.icon.icon"
-      class="height-icon-custom"></button>
-    <button *ngIf="fieldConfig?.icon2" type="button" pButton [icon]="fieldConfig.icon2.icon"
-      class="height-icon-custom"></button>
+    <button *ngIf="fieldConfig.icon" type="button" pButton [icon]="fieldConfig.icon.icon" class="height-icon-custom"
+      style="width: 40px !important;"></button>
+    <button *ngIf="fieldConfig?.icon2" type="button" pButton [icon]="fieldConfig.icon2.icon" class="height-icon-custom"
+      style="width: 40px !important;"></button>
     <label [for]="fieldConfig.field">
       {{ fieldConfig?.label }}
     </label>
   </p-floatlabel>
 </ng-template>
+<!-- ]]]FI -->
 
-<!-- [[[II ESC:007-01 DOC:docs/documents/2026-06-01_007_custom-draw-form-listbox.md#escenario-01 -->
+<!-- [[[II ESC:007-01 DOC:docs/documents/2026-06-01_007_custom-draw-form-listbox.md#escenario-01 ESC:020-01 DOC:docs/documents/2026-06-04_020_custom-draw-form-virtual-scroll-dropdowns.md#escenario-01 -->
 <!-- TEMPLATE REUTILIZABLE PARA LISTBOX -->
 <ng-template #listboxTemplate let-fieldConfig="fieldConfig">
   <div class="flex flex-col gap-2 w-full">
@@ -93,47 +101,63 @@
         {{ fieldConfig?.label }}
       </label>
 
-      <div class="flex items-center gap-1">
-        <button *ngIf="fieldConfig.reload_icon !== undefined ? fieldConfig.reload_icon : false" type="button" pButton
-          icon="pi pi-replay" class="height-icon-custom"
-          (click)="dataDropdown(fieldConfig, true); onReloadIconDropdownAction.emit(fieldConfig.field)"></button>
+      <!-- acciones movidas junto a la caja de búsqueda dentro del listbox -->
+      <div class="hidden md:flex items-center gap-1">
         <button *ngIf="fieldConfig.icon" type="button" pButton [icon]="fieldConfig.icon.icon"
-          class="height-icon-custom"></button>
-        <button *ngIf="fieldConfig?.icon2" type="button" pButton [icon]="fieldConfig.icon2.icon"
           class="height-icon-custom"></button>
       </div>
     </div>
 
-    <p-listbox [options]="dropdownOptionsSignal()[fieldConfig.field]" [pAutoFocus]="fieldConfig.autofocus"
-      [formControl]="$any(formGroupSignal()?.get(fieldConfig.field))" [multiple]="true" [checkbox]="true"
-      [metaKeySelection]="false" [showToggleAll]="false" [dataKey]="fieldConfig.option_value || 'id'"
-      [optionLabel]="fieldConfig.tree ? 'label' : (fieldConfig.option_label | joinOrSelf)"
-      [optionValue]="fieldConfig.tree ? null : (fieldConfig.option_value || 'id')"
-      [group]="fieldConfig.tree ? true : false" [optionGroupChildren]="'items'" [optionGroupLabel]="'label'" [filter]="fieldConfig.tree
+    <div class="listbox-container">
+      <p-listbox [options]="dropdownOptionsSignal()[fieldConfig.field]" [pAutoFocus]="fieldConfig.autofocus"
+        [formControl]="$any(formGroupSignal()?.get(fieldConfig.field))" [multiple]="true" [checkbox]="true"
+        [metaKeySelection]="false" [showToggleAll]="false" [dataKey]="fieldConfig.option_value || 'id'"
+        [optionLabel]="fieldConfig.tree ? 'label' : (fieldConfig.option_label | joinOrSelf)"
+        [optionValue]="fieldConfig.tree ? null : (fieldConfig.option_value || 'id')"
+        [group]="fieldConfig.tree ? true : false" [optionGroupChildren]="'items'" [optionGroupLabel]="'label'" [filter]="fieldConfig.tree
         ? (fieldConfig.filter_local !== undefined ? fieldConfig.filter_local : false)
-        : (fieldConfig.filter_local !== undefined ? fieldConfig.filter_local : true)" [filterBy]="fieldConfig.tree
-        ? (fieldConfig.filter_by ? fieldConfig.filter_by : 'label')
+        : (fieldConfig.filter_local !== undefined ? fieldConfig.filter_local : true)"
+        [virtualScroll]="fieldConfig.virtual_scrolling?.active === true"
+        [virtualScrollItemSize]="fieldConfig.virtual_scrolling?.item_size || 44"
+        [filterBy]="fieldConfig.tree
+        ? (fieldConfig.filter_by ? fieldConfig.filter_by + ',label,filter_text,raw.name,raw.display_name,raw.code,raw.id' : 'label,filter_text,raw.name,raw.display_name,raw.code,raw.id')
         : (fieldConfig.filter_by ? fieldConfig.filter_by : (fieldConfig.option_label | joinOrSelf))"
-      [scrollHeight]="fieldConfig.scroll_height || '120px'" class="w-full listbox-float"
-      (onChange)="onChangeDropdown($event, fieldConfig)">
+        [scrollHeight]="fieldConfig.scroll_height || '120px'" class="w-full listbox-float"
+        [ngClass]="fieldConfig.virtual_scrolling?.active === true ? 'listbox-virtual-spaced' : ''"
+        (onChange)="onChangeDropdown($event, fieldConfig)">
 
-      <ng-template #group let-group>
-        <div class="text-sm font-semibold text-color-secondary listbox-group-label floating-listbox-simple-label ">
-          {{ group.label }}
-        </div>
-      </ng-template>
+        <ng-template #group let-group>
+          <div class="text-sm font-semibold text-color-secondary listbox-group-label floating-listbox-simple-label ">
+            {{ group.label }}
+          </div>
+        </ng-template>
 
-      <ng-template #item let-option>
-        <div class="flex items-center min-h-6 ">
-          {{ fieldConfig.tree ? option.label : option[(fieldConfig.option_label | joinOrSelf)] || option.label }}
-        </div>
-      </ng-template>
-    </p-listbox>
+        <ng-template #item let-option>
+          <div class="flex items-center leading-normal"
+            [ngClass]="fieldConfig.virtual_scrolling?.active === true ? 'py-1' : 'min-h-6'"
+            [style.min-height.px]="fieldConfig.virtual_scrolling?.active === true ? (fieldConfig.virtual_scrolling?.item_size || 44) : null">
+            {{ fieldConfig.tree ? option.label : option[(fieldConfig.option_label | joinOrSelf)] || option.label }}
+          </div>
+        </ng-template>
+      </p-listbox>
+      <div class="listbox-actions">
+        <button *ngIf="fieldConfig.reload_icon !== undefined ? fieldConfig.reload_icon : false" type="button" pButton
+          icon="pi pi-replay" class="height-icon-custom" title="Recargar"
+          (click)="dataDropdown(fieldConfig, true); onReloadIconDropdownAction.emit(fieldConfig.field)"></button>
+        <button *ngIf="fieldConfig.new_icon !== undefined ? fieldConfig.new_icon : false" type="button" pButton
+          icon="pi pi-plus" class="height-icon-custom" title="Nuevo"
+          (click)="onNewIconDropdownAction.emit(fieldConfig.field)"></button>
+        <button *ngIf="fieldConfig.closable_icon !== undefined ? fieldConfig.closable_icon : false" type="button"
+          pButton icon="pi pi-times" class="height-icon-custom" title="Cerrar"
+          (click)="onClosableIconDropdownAction.emit(fieldConfig.field)"></button>
+      </div>
+    </div>
   </div>
 </ng-template>
 <!-- ]]]FI -->
 
 
+<!-- [[[II ESC:020-01 DOC:docs/documents/2026-06-04_020_custom-draw-form-virtual-scroll-dropdowns.md#escenario-01 -->
 <!-- TEMPLATE REUTILIZABLE PARA AUTO-COMPLETE -->
 <ng-template #autoCompleteTemplate let-fieldConfig="fieldConfig">
   <p-floatlabel variant="on">
@@ -142,12 +166,14 @@
       [suggestions]="suggestions()" (completeMethod)="completeMethod($event, fieldConfig)" [delay]="fieldConfig.delay"
       [optionLabel]="fieldConfig.option_label || 'name'" (onSelect)="onSelectAutoComplete($event, fieldConfig)"
       (onShow)="adjustPanelStyle(autoCompleteRef)" [panelStyle]="panelStyleSignal()"
+      [virtualScroll]="fieldConfig.virtual_scrolling?.active === true"
+      [virtualScrollItemSize]="fieldConfig.virtual_scrolling?.item_size || 20"
       [pAutoFocus]="fieldConfig.autofocus" [formControl]="$any(formGroupSignal()?.get(fieldConfig.field))"
       styleClass="height-input-custom" [appendTo]="'body'">
 
       <ng-template #header>
         <div class="grid grid-cols-12 gap-2 items-center border-bottom-1 pb-1 mb-2">
-          <div *ngFor="let field of fieldConfig.panel.fields | keyvalue"
+          <div *ngFor="let field of fieldConfig.panel.fields | keyvalue; trackBy: trackByKey"
             [ngClass]="[$any(field.value).class || 'col-span-6', $any(field.value).class_md || 'md:col-span-3']">
             <div class="text-xs font-semibold text-gray-600">
               {{ $any(field.value).header }}
@@ -158,7 +184,7 @@
 
       <ng-template let-row #item>
         <div class="grid grid-cols-12 gap-2 items-center">
-          <div *ngFor="let field of fieldConfig.panel.fields | keyvalue"
+          <div *ngFor="let field of fieldConfig.panel.fields | keyvalue; trackBy: trackByKey"
             [ngClass]="[$any(field.value).class || 'col-span-6', $any(field.value).class_md || 'md:col-span-3']"
             class="flex items-center gap-1">
             <img *ngIf="$any(field.value)?.type === 'image'" [src]="$any($any(row)[$any($any(field.value).field)])"
@@ -182,158 +208,19 @@
   <input *ngIf="fieldConfig.hidden_field" type="hidden"
     [formControl]="$any(formGroupSignal()?.get(fieldConfig.hidden_field.field))" />
 </ng-template>
+<!-- ]]]FI -->
 
 
 <!-- TEMPLATE REUTILIZABLE PARA TABLE -->
-<ng-template #tableTemplate let-tableConfig="tableConfig" let-rowData="rowData" let-rowIndex="rowIndex">
-  <!-- Table Toolbar -->
-  <div *ngIf="tableConfig?.add_row || tableConfig?.delete_row" class="table-title-toolbar">
-    <app-custom-button-crud [selected]="[]" (newAction)="addTableRow(tableConfig.field, tableConfig)"
-      style="margin: 0px;">
-    </app-custom-button-crud>
-    <h5 *ngIf="tableConfig.label">{{ tableConfig.label }}</h5>
-  </div>
-
-  <!-- Table -->
-  <p-table [value]="getTableData(tableConfig.field)" [sortMode]="tableConfig?.sort ? 'multiple' : 'single'"
-    [globalFilterFields]="getColumnFields(tableConfig.columns)" [showGridlines]="tableConfig?.show_grid_lines !== false"
-    [stripedRows]="tableConfig?.striped_rows !== false" [responsiveLayout]="tableConfig?.responsive_layout || 'scroll'"
-    [paginator]="tableConfig?.paginator || false" [rows]="10"
-    [resizableColumns]="tableConfig?.column_resizing !== false" columnResizeMode="expand"
-    [selectionMode]="tableConfig?.selection_mode || null" (onRowSelect)="onRowSelect($event, tableConfig.field)"
-    (onRowUnselect)="onRowUnselect($event, tableConfig.field)" styleClass="p-datatable-sm compact-table">
-
-    <ng-template pTemplate="header">
-      <tr>
-        <th *ngIf="tableConfig?.row_number"
-          style="width: 35px; min-width: 35px; position: sticky; left: 0; z-index: 1; background: var(--surface-ground); padding: 0.5rem 0.3rem;"
-          class="border-right-1 border-300">#</th>
-        <th *ngIf="tableConfig?.add_row || tableConfig?.delete_row"
-          style="width: 75px; min-width: 75px; position: sticky; left: 35px; z-index: 1; background: var(--surface-ground); padding: 0.2rem 0.2rem !important;"
-          class="border-right-1 border-300">Acciones</th>
-        <th *ngFor="let col of tableConfig.columns" [style]="{'width': getColumnWidth(col)}"
-          [pSortableColumn]="col.sortable !== false ? col.field : null">
-          {{ col.header }}
-          <p-sortIcon *ngIf="col.sortable !== false" [field]="col.field"></p-sortIcon>
-        </th>
-      </tr>
-    </ng-template>
-
-    <ng-template pTemplate="body" let-rowData let-rowIndex="rowIndex">
-      <tr>
-        <td *ngIf="tableConfig?.row_number"
-          style="position: sticky; left: 0; z-index: 1; background: var(--surface-0); padding: 0.4rem 0.3rem; text-align: center; font-weight: 500;"
-          class="border-right-1 border-300">
-          {{ rowIndex + 1 }}
-        </td>
-        <td *ngIf="tableConfig?.add_row || tableConfig?.delete_row"
-          style="position: sticky; left: 35px; z-index: 1; background: var(--surface-0); padding: 0.2rem 0.2rem !important;"
-          class="border-right-1 border-300">
-          <div class="flex gap-1 justify-content-center">
-            <p-button *ngIf="!isRowOrCellEditing(tableConfig.field, rowIndex)" icon="pi pi-pencil" size="small"
-              severity="secondary" [text]="true" (onClick)="startRowEdit(tableConfig.field, rowIndex)"
-              pTooltip="Editar fila" [style]="{'height': '28px', 'width': '28px'}">
-            </p-button>
-            <p-button *ngIf="isRowOrCellEditing(tableConfig.field, rowIndex)" icon="pi pi-check" size="small"
-              severity="success" [text]="true" (onClick)="finishRowEdit(tableConfig.field, rowIndex)"
-              pTooltip="Guardar cambios" [style]="{'height': '28px', 'width': '28px'}">
-            </p-button>
-            <p-button *ngIf="isRowOrCellEditing(tableConfig.field, rowIndex)" icon="pi pi-times" size="small"
-              severity="danger" [text]="true" (onClick)="cancelRowEdit(tableConfig.field, rowIndex)"
-              pTooltip="Cancelar edición" [style]="{'height': '28px', 'width': '28px'}">
-            </p-button>
-            <p-button *ngIf="tableConfig?.delete_row && !isRowOrCellEditing(tableConfig.field, rowIndex)"
-              icon="pi pi-trash" size="small" severity="danger" [text]="true"
-              (onClick)="deleteTableRow(rowIndex, tableConfig.field)" pTooltip="Eliminar fila"
-              [style]="{'height': '28px', 'width': '28px'}">
-            </p-button>
-          </div>
-        </td>
-        <td *ngFor="let col of tableConfig.columns"
-          (dblclick)="!isRowEditing(tableConfig.field, rowIndex) && !isCellEditing(tableConfig.field, rowIndex, col.field) && isColumnEditable(col) && startCellEdit(tableConfig.field, rowIndex, col.field)"
-          [class.cursor-pointer]="!isRowEditing(tableConfig.field, rowIndex) && !isCellEditing(tableConfig.field, rowIndex, col.field) && isColumnEditable(col)">
-          <div [ngSwitch]="getColumnType(col)">
-            <!-- Input Text -->
-            <div *ngSwitchCase="'input-text'">
-              <!-- Modo lectura -->
-              <span
-                *ngIf="!isRowEditing(tableConfig.field, rowIndex) && !isCellEditing(tableConfig.field, rowIndex, col.field)"
-                [class]="getCellClass(rowData[col.field], col, tableConfig.field, rowIndex)">
-                <p-tag *ngIf="col.tag?.active; else plainText" [severity]="getTagSeverity(col)"
-                  [value]="formatTagValue(rowData[col.field], col)">
-                </p-tag>
-                <ng-template #plainText>
-                  {{ formatTagValue(rowData[col.field], col) || '-' }}
-                </ng-template>
-              </span>
-
-              <!-- Modo edición de fila -->
-              <input *ngIf="isRowEditing(tableConfig.field, rowIndex) && isColumnEditable(col)" type="text" pInputText
-                [(ngModel)]="rowData[col.field]"
-                [class]="'w-full ' + getCellClass(rowData[col.field], col, tableConfig.field, rowIndex)"
-                [placeholder]="col.header" [maxlength]="col.validation?.max_length"
-                [minlength]="col.validation?.min_length" />
-
-              <!-- Modo edición de celda -->
-              <input *ngIf="isCellEditing(tableConfig.field, rowIndex, col.field)" type="text" pInputText
-                [(ngModel)]="rowData[col.field]"
-                [class]="'w-full ' + getCellClass(rowData[col.field], col, tableConfig.field, rowIndex)"
-                [placeholder]="col.header" [maxlength]="col.validation?.max_length"
-                [minlength]="col.validation?.min_length"
-                (keydown)="onCellKeydown($event, tableConfig.field, rowIndex, col.field)" [pAutoFocus]="true" />
-            </div>
-
-            <!-- Input Number -->
-            <div *ngSwitchCase="'input-number'">
-              <!-- Modo lectura -->
-              <span
-                *ngIf="!isRowEditing(tableConfig.field, rowIndex) && !isCellEditing(tableConfig.field, rowIndex, col.field)"
-                [class]="getCellClass(rowData[col.field], col, tableConfig.field, rowIndex)">
-                {{ rowData[col.field] ?? '-' }}
-              </span>
-
-              <!-- Modo edición de fila -->
-              <p-inputNumber *ngIf="isRowEditing(tableConfig.field, rowIndex) && isColumnEditable(col)"
-                [(ngModel)]="rowData[col.field]" [mode]="col.mode || 'decimal'" [min]="col.min" [max]="col.max"
-                [minFractionDigits]="col.min_fraction_digits" [maxFractionDigits]="col.max_fraction_digits"
-                class="w-full" />
-
-              <!-- Modo edición de celda -->
-              <p-inputNumber *ngIf="isCellEditing(tableConfig.field, rowIndex, col.field)"
-                [(ngModel)]="rowData[col.field]" [mode]="col.mode || 'decimal'" [min]="col.min" [max]="col.max"
-                [minFractionDigits]="col.min_fraction_digits" [maxFractionDigits]="col.max_fraction_digits"
-                (onKeyDown)="onCellKeydown($event, tableConfig.field, rowIndex, col.field)" class="w-full"
-                [pAutoFocus]="true" />
-            </div>
-
-            <!-- Default case -->
-            <div *ngSwitchDefault>
-              <!-- Modo lectura -->
-              <span
-                *ngIf="!isRowEditing(tableConfig.field, rowIndex) && !isCellEditing(tableConfig.field, rowIndex, col.field)"
-                [class]="getCellClass(rowData[col.field], col, tableConfig.field, rowIndex)">
-                {{ rowData[col.field] || '-' }}
-              </span>
-
-              <!-- Modo edición de fila -->
-              <input *ngIf="isRowEditing(tableConfig.field, rowIndex) && isColumnEditable(col)" type="text" pInputText
-                [(ngModel)]="rowData[col.field]"
-                [class]="'w-full ' + getCellClass(rowData[col.field], col, tableConfig.field, rowIndex)"
-                [placeholder]="col.header" />
-
-              <!-- Modo edición de celda -->
-              <input *ngIf="isCellEditing(tableConfig.field, rowIndex, col.field)" type="text" pInputText
-                [(ngModel)]="rowData[col.field]"
-                [class]="'w-full ' + getCellClass(rowData[col.field], col, tableConfig.field, rowIndex)"
-                [placeholder]="col.header" (keydown)="onCellKeydown($event, tableConfig.field, rowIndex, col.field)"
-                [pAutoFocus]="true" />
-            </div>
-          </div>
-        </td>
-      </tr>
-    </ng-template>
-
-  </p-table>
+<ng-template #tableTemplate let-tableConfig="tableConfig">
+  <!-- [[[II ESC:015-01 DOC:docs/documents/2026-06-02_015_dynamic-table-field-component.md#escenario-01 -->
+  <app-dynamic-table-field [tableConfig]="tableConfig" [formGroup]="$any(formGroupSignal())" [editingRows]="editingRows"
+    [editingCells]="editingCells" [tablesToValidate]="tablesToValidate" [originalRowData]="originalRowData"
+    [tableOptions]="tableOptions" [validationVersion]="tableValidationVersion"
+    (rowSelect)="onTableRowSelect.emit($event)" (rowUnselect)="onTableRowUnselect.emit($event)"
+    (addRow)="onTableAddRow.emit($event)" (editRow)="onTableEditRow.emit($event)"
+    (deleteRow)="onTableDeleteRow.emit($event)" (cellEdit)="onTableCellEdit.emit($event)" />
+  <!-- ]]]FI -->
 </ng-template>
 
 <!-- TEMPLATE REUTILIZABLE PARA INPUT-NUMBER -->
@@ -369,7 +256,8 @@
 
     <!-- Campos del área principal (siempre índice 0) -->
     <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-      <div *ngFor="let field of signatureConfig.fields" [ngClass]="{'col-span-full': field.type === 'signature-pad'}">
+      <div *ngFor="let field of signatureConfig.fields; trackBy: trackByField"
+        [ngClass]="{'col-span-full': field.type === 'signature-pad'}">
 
         <!-- Campo de texto del área principal -->
         <div *ngIf="field.type === 'input-text' && !field.hide">
@@ -487,10 +375,11 @@
   <!-- HISTORIAL DE FIRMAS -->
   <div *ngIf="signatureDataSignal()[signatureConfig.field]?.hasHistory" class="signature-history mt-6">
     <div
-      *ngFor="let historySignature of signatureDataSignal()[signatureConfig.field]?.history; let historyIndex = index"
+      *ngFor="let historySignature of signatureDataSignal()[signatureConfig.field]?.history; let historyIndex = index; trackBy: trackBySignature"
       class="history-item mb-3 p-3 border border-gray-200 rounded-lg bg-gray-50">
       <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div *ngFor="let field of signatureConfig.fields" [ngClass]="{'col-span-full': field.type === 'signature-pad'}">
+        <div *ngFor="let field of signatureConfig.fields; trackBy: trackByField"
+          [ngClass]="{'col-span-full': field.type === 'signature-pad'}">
           <div *ngIf="field.type === 'input-text' && !field.hide" class="text-sm">
             <strong>{{ field.label }}:</strong> {{ historySignature[field.field] }}
           </div>
@@ -683,7 +572,7 @@
    
   necesito 2 modificaciones, modifica el buscador de evidencias, tiene que ocupar todo el ancho del contenedor cuando escribes debe aparecer que esta buscado,ademas en lugar de mostra el id debe mostrar el nombre del archivo 2.-->
   <div *ngIf="fileSearchFields().length > 10" class="flex flex-col gap-2 mb-3 w-full" style="border: 1px solid red">
-    <p-autoComplete *ngFor="let f of fileSearchFields()" [(ngModel)]="fileSearchModel[f.field]"
+    <p-autoComplete *ngFor="let f of fileSearchFields(); trackBy: trackByField" [(ngModel)]="fileSearchModel[f.field]"
       [ngModelOptions]="{standalone: true}" [suggestions]="fileSearchResults[f.field] || []"
       (completeMethod)="onFileSearchComplete($event, f)" (onSelect)="onFileSearchSelect($event, f)"
       [forceSelection]="true" optionLabel="name"
@@ -720,7 +609,7 @@
 </div>
 
 <div *ngIf="drawFormSignal()['grid']" class="grid grid-cols-12 gap-2 "> <!-- pt-3 -->
-  <div *ngFor="let entry of drawFormSignal()['grid'] | keyvalue : keyComparator;"
+  <div *ngFor="let entry of drawFormSignal()['grid'] | keyvalue : keyComparator; trackBy: trackByKey"
     [ngClass]="[ entry.value.hide ? 'hidden' : '', entry.value.class || 'col-span-6', entry.value.class_md || 'md:col-span-3']">
 
     <!--CARD-->
@@ -729,7 +618,7 @@
     </h6>
     <p-card *ngIf="entry.value.card" class="w-full " [style]="{'padding-bottom': '3px'}">
       <div class="grid grid-cols-12 gap-2">
-        <div *ngFor="let card of entry.value.card | keyvalue : keyComparator;"
+        <div *ngFor="let card of entry.value.card | keyvalue : keyComparator; trackBy: trackByKey"
           [ngClass]="[card.value.hide ? 'hidden' : '', card.value.class || 'col-span-6', card.value.class_md || 'md:col-span-3']">
           <div [ngSwitch]="card.value?.type">
 
@@ -919,7 +808,7 @@
 
         <div class="grid grid-cols-12 gap-2">
 
-          <div *ngFor="let card of entry.value.fieldset | keyvalue : keyComparator;"
+          <div *ngFor="let card of entry.value.fieldset | keyvalue : keyComparator; trackBy: trackByKey"
             [ngClass]="[card.value.hide ? 'hidden' : '', card.value.class || 'col-span-6', card.value.class_md || 'md:col-span-3']">
 
             <div [ngSwitch]="card.value?.type">
@@ -1024,18 +913,19 @@
   <p-stepper [value]="currentStepSignal() ?? undefined" (valueChange)="currentStepSignal.set($event ?? null)"
     (onChangeAction)="onStepChange($event)" [linear]="drawFormSignal()['stepper'].linear === true">
     <p-step-list *ngIf="drawFormSignal()['stepper']?.buttons?.active">
-      <p-step *ngFor="let entry of drawFormSignal()['stepper']?.steps | keyvalue : keyComparator;" [value]="+entry.key">
+      <p-step *ngFor="let entry of drawFormSignal()['stepper']?.steps | keyvalue : keyComparator; trackBy: trackByKey"
+        [value]="+entry.key">
         {{entry.value.label}}
       </p-step>
     </p-step-list>
 
     <p-step-panels>
       <p-step-panel [value]="+entry.key"
-        *ngFor="let entry of drawFormSignal()['stepper']?.steps | keyvalue : keyComparator;">
+        *ngFor="let entry of drawFormSignal()['stepper']?.steps | keyvalue : keyComparator; trackBy: trackByKey">
         <ng-template #content let-activateCallback="activateCallback">
           <div class="grid grid-cols-12 gap-2 pt-2">
 
-            <div *ngFor="let field of entry.value.fields | keyvalue : keyComparator;"
+            <div *ngFor="let field of entry.value.fields | keyvalue : keyComparator; trackBy: trackByKey"
               [ngClass]="[ field.value.hide ? 'hidden' : '', field.value.class || 'col-span-6', field.value.class_md || 'md:col-span-3']">
 
               <div [ngSwitch]="field.value?.type">
@@ -1087,7 +977,7 @@
     <ng-container *ngTemplateOutlet="fileSearchBarsTemplate"></ng-container>
 
     <div class="flex flex-wrap gap-4" *ngIf="nonSignatureFilesSignal().length > 0">
-      <div *ngFor="let file of nonSignatureFilesSignal(); let i = index" class="relative">
+      <div *ngFor="let file of nonSignatureFilesSignal(); let i = index; trackBy: trackByFile" class="relative">
         <p-image *ngIf="file.type=='image'" [src]="file.file" alt="Imagen capturada" width="140"
           [preview]="true">...</p-image>
 
@@ -1112,7 +1002,7 @@
   <ng-container *ngTemplateOutlet="fileSearchBarsTemplate"></ng-container>
 
   <div class="flex flex-wrap gap-4" *ngIf="nonSignatureFilesSignal().length > 0">
-    <div *ngFor="let file of nonSignatureFilesSignal(); let i = index" class="relative">
+    <div *ngFor="let file of nonSignatureFilesSignal(); let i = index; trackBy: trackByFile" class="relative">
       <p-image *ngIf="file.type=='image'" [src]="file.file" alt="Imagen capturada" width="140"
         [preview]="true">...</p-image>
 

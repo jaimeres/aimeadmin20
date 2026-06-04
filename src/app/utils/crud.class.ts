@@ -30,6 +30,10 @@ export class CRUD extends Vars implements OnChanges  /*implements OnInit*/ {
 
   /** pos leído de la URL que aún no estaba configurado en this.app al momento del constructor */
   private _pendingUrlPos: string | null = null;
+  // [[[II ESC:017-04 DOC:docs/documents/2026-06-02_017_custom-draw-form-device-drawform.md#escenario-04
+  private readonly resolvedCrudDrawFormCache = new WeakMap<object, { mobile?: any; desktop?: any }>();
+  private readonly mobileTypeAppliedDrawForms = new WeakSet<object>();
+  // ]]]FI
 
   constructor(protected override crudS: CRUDService, pos = '') {
     super(crudS);
@@ -78,6 +82,135 @@ export class CRUD extends Vars implements OnChanges  /*implements OnInit*/ {
     }));
     this.fieldExport.update(exp => ({ ...exp, cols: this.cols() }));
   }
+
+  // [[[II ESC:017-04 DOC:docs/documents/2026-06-02_017_custom-draw-form-device-drawform.md#escenario-04
+  protected _drawFormForDevice(pos: any): any {
+    return this._resolveCrudDrawFormByDevice(this.drawForm()?.[pos]);
+  }
+
+  private _resolveCrudDrawFormByDevice(drawForm: any): any {
+    if (!drawForm || typeof drawForm !== 'object') return drawForm;
+
+    const hasMobileBranch = this._isDeviceDrawFormBranch(drawForm.mobile);
+    const hasDesktopBranch = this._isDeviceDrawFormBranch(drawForm.desktop);
+    const hasDeviceBranches = hasMobileBranch || hasDesktopBranch;
+    const isMobileScreen = this.generalS.isMobileScreen();
+
+    const selectedDrawForm = hasDeviceBranches
+      ? (isMobileScreen
+        ? (hasMobileBranch ? drawForm.mobile : drawForm.desktop)
+        : (hasDesktopBranch ? drawForm.desktop : drawForm.mobile))
+      : drawForm;
+
+    if (!selectedDrawForm || typeof selectedDrawForm !== 'object') return selectedDrawForm;
+
+    if (hasDeviceBranches) {
+      this._inheritRootDrawFormMetadata(drawForm, selectedDrawForm);
+    }
+
+    const cacheKey = isMobileScreen ? 'mobile' : 'desktop';
+    const cached = this.resolvedCrudDrawFormCache.get(selectedDrawForm)?.[cacheKey];
+    if (cached) return cached;
+
+    if (isMobileScreen) {
+      this._applyMobileFieldTypesInPlace(selectedDrawForm);
+    }
+
+    const cacheValue = this.resolvedCrudDrawFormCache.get(selectedDrawForm) || {};
+    cacheValue[cacheKey] = selectedDrawForm;
+    this.resolvedCrudDrawFormCache.set(selectedDrawForm, cacheValue);
+    return selectedDrawForm;
+  }
+
+  private _isDeviceDrawFormBranch(value: any): boolean {
+    return this._hasDrawFormLayout(value);
+  }
+
+  private _inheritRootDrawFormMetadata(rootDrawForm: any, selectedDrawForm: any): void {
+    ['dialog', 'fields_prefixes'].forEach((key) => {
+      if (selectedDrawForm[key] === undefined && rootDrawForm?.[key] !== undefined) {
+        selectedDrawForm[key] = rootDrawForm[key];
+      }
+    });
+  }
+
+  private _applyMobileFieldTypesInPlace(drawForm: any): void {
+    if (!drawForm || typeof drawForm !== 'object' || this.mobileTypeAppliedDrawForms.has(drawForm)) return;
+
+    const seen = new WeakSet<object>();
+    const walk = (node: any): void => {
+      if (!node || typeof node !== 'object' || seen.has(node)) return;
+      seen.add(node);
+
+      if (typeof node.type_mobile === 'string' && node.type_mobile.trim() !== '') {
+        node.type = node.type_mobile.trim();
+      }
+
+      Object.values(node).forEach((child) => {
+        if (child && typeof child === 'object') walk(child);
+      });
+    };
+
+    walk(drawForm);
+    this.mobileTypeAppliedDrawForms.add(drawForm);
+  }
+
+  private _collectDrawFormLayouts(drawForm: any): any[] {
+    if (!drawForm || typeof drawForm !== 'object') return [];
+
+    const layoutsToProcess: any[] = [];
+    const seen = new WeakSet<object>();
+    const collectFromNode = (node: any): void => {
+      if (!node || typeof node !== 'object' || seen.has(node)) return;
+      seen.add(node);
+
+      if (node.grid && typeof node.grid === 'object') {
+        layoutsToProcess.push(node.grid);
+      }
+      if (node.nested && typeof node.nested === 'object') {
+        layoutsToProcess.push(node.nested);
+      }
+
+      if (node.stepper?.steps && typeof node.stepper.steps === 'object') {
+        Object.keys(node.stepper.steps).forEach(stepKey => {
+          const step = node.stepper.steps[stepKey];
+          if (step?.fields && typeof step.fields === 'object') {
+            layoutsToProcess.push(step.fields);
+          }
+        });
+      }
+
+      Object.keys(node).forEach(nodeKey => {
+        if (nodeKey === 'dialog' || nodeKey === 'fields_prefixes') return;
+        const child = node[nodeKey];
+        if (child && typeof child === 'object') collectFromNode(child);
+      });
+    };
+
+    collectFromNode(drawForm);
+    return layoutsToProcess;
+  }
+
+  private _hasDrawFormLayout(value: any): boolean {
+    if (!value || typeof value !== 'object') return false;
+
+    const seen = new WeakSet<object>();
+    const scan = (node: any): boolean => {
+      if (!node || typeof node !== 'object' || seen.has(node)) return false;
+      seen.add(node);
+
+      if (!!node.grid || !!node.nested || !!node.stepper?.steps) return true;
+
+      return Object.keys(node).some((key) => {
+        if (key === 'dialog' || key === 'fields_prefixes') return false;
+        const child = node[key];
+        return child && typeof child === 'object' ? scan(child) : false;
+      });
+    };
+
+    return scan(value);
+  }
+  // ]]]FI
 
   showComponentLocal(pos: string, changes: any = {}) {
     this.showComponentSignal.update(value => ({
@@ -251,17 +384,34 @@ export class CRUD extends Vars implements OnChanges  /*implements OnInit*/ {
     // si no envia nada, toma los seleccionados
     const selectedColumns = arr.length > 0 ? arr : this.selectedColumns();
 
-    const fields_prefixes = this.drawForm()[posIndex]?.fields_prefixes || {};
+    console.log('????????????????????', this.drawForm()[posIndex]?.fields_prefixes || {});
+    const fields_prefixes = this._drawFormForDevice(posIndex)?.fields_prefixes || {};
+    console.log('¿¿¿¿¿¿¿¿¿¿¿¿¿¿¿¿¿¿¿¿¿¿¿¿¿', fields_prefixes);
     // Lista plana de strings para detectar si el field empieza con algún prefijo,
     // tolerando ambas formas (array de strings o objeto { prefix: config }).
     const prefixList: string[] = Array.isArray(fields_prefixes)
       ? fields_prefixes.filter((p: any) => typeof p === 'string')
       : Object.keys(fields_prefixes);
 
+    // [[[II ESC:005-04 DOC:docs/documents/2026-05-31_005_columnas-form-data-y-tree-select-nombres.md#escenario-04
+    let requiresFormData = false;
+    // ]]]FI
+
     selectedColumns.forEach((obj) => {
+      // [[[II ESC:005-04 DOC:docs/documents/2026-05-31_005_columnas-form-data-y-tree-select-nombres.md#escenario-04
+      const selectedField = typeof obj?.field === 'string' ? obj.field : '';
+      if (
+        selectedField.startsWith('form_data.form_fields_data_') ||
+        selectedField.startsWith('form_fields_data_') ||
+        selectedField.startsWith('object_form_fields_data_')
+      ) {
+        requiresFormData = true;
+        return;
+      }
+      // ]]]FI
 
       //debe saltarse el valor si el campo inicial igual que cualquieda de los valores de array fields_prefixes
-      if (prefixList.length && prefixList.some(prefix => obj.field.startsWith(prefix))) {
+      if (prefixList.length && prefixList.some(prefix => selectedField.startsWith(prefix))) {
         return;
       }
 
@@ -280,6 +430,12 @@ export class CRUD extends Vars implements OnChanges  /*implements OnInit*/ {
         fields += obj.field + ',';
       }
     });
+
+    // [[[II ESC:005-04 DOC:docs/documents/2026-05-31_005_columnas-form-data-y-tree-select-nombres.md#escenario-04
+    if (requiresFormData && !fields.split(',').includes('form_data')) {
+      fields += 'form_data,';
+    }
+    // ]]]FI
 
     this.fields[posIndex] = include + fields.slice(0, -1);
     this.include[posIndex] = include.slice(0, -1);
@@ -1121,409 +1277,384 @@ export class CRUD extends Vars implements OnChanges  /*implements OnInit*/ {
     // por eso se escanea TODO el layout una sola vez. ]]]FI
     const _childScopeRegistry = this._collectChildScopeRegistry(dynamicFields);
 
-    // Iterar sobre todos los nodos del objeto dinámico, excluyendo dialog y fields_prefixes
-    Object.keys(dynamicFields).forEach(nodeKey => {
-      //console.log(nodeKey);
+    // [[[II ESC:017-04 DOC:docs/documents/2026-06-02_017_custom-draw-form-device-drawform.md#escenario-04
+    // Procesar cada layout encontrado en formato legacy por pestañas o en una
+    // rama directa resuelta desde mobile/desktop.
+    const layoutsToProcess = this._collectDrawFormLayouts(dynamicFields);
+    // ]]]FI
+    layoutsToProcess.forEach(fieldsLayout => {
+      // Iterar sobre los campos dentro del layout (estructura 0:{field:'', ...}, 1:{field:'', ...})
+      Object.keys(fieldsLayout).forEach(key => {
+        const fieldData = fieldsLayout[key];
+        const rawFieldName = fieldData?.field;
+        const fieldName = typeof rawFieldName === 'string' && rawFieldName.startsWith('object_' + fieldPrefix)
+          ? rawFieldName.slice('object_'.length)
+          : rawFieldName;
+        if (!fieldName) return;
 
-      if (nodeKey === 'dialog' || nodeKey === 'fields_prefixes') {
-        return; // Saltar estos nodos
-      }
+        // Verificar si el campo inicia con el prefijo especificado
+        if (!fieldName.startsWith(fieldPrefix)) {
+          return; // Saltar campos que no tienen el prefijo
+        }
 
-      const node = dynamicFields[nodeKey];
-      if (!node || typeof node !== 'object') return;
+        // Obtener valores por defecto
+        const active = fieldData?.default?.active || false;
+        const value = fieldData?.default?.value || null;
+        let defaultValue = value;
+        const edit = fieldData?.default?.edit !== false; // si edit no está definido, se asume true
 
-      // Array para almacenar múltiples layouts a procesar
-      const layoutsToProcess: any[] = [];
-
-      // Buscar grid o nested dentro del nodo
-      if (node.grid && typeof node.grid === 'object') {
-        layoutsToProcess.push(node.grid);
-      } else if (node.nested && typeof node.nested === 'object') {
-        layoutsToProcess.push(node.nested);
-      }
-
-      // Buscar stepper dentro del nodo
-      if (node.stepper && typeof node.stepper === 'object' && node.stepper.steps) {
-        // Iterar sobre cada step del stepper y agregar sus fields
-        Object.keys(node.stepper.steps).forEach(stepKey => {
-          const step = node.stepper.steps[stepKey];
-          if (step && step.fields && typeof step.fields === 'object') {
-            layoutsToProcess.push(step.fields);
+        if (active && edit) {
+          if (value === 'device') {
+            defaultValue = new Date();
+          } else if (value === 'current') {
+            defaultValue = null;
+          } else {
+            defaultValue = value;
           }
+        }
+
+        // [[[II ESC:003-06 Política de obligatoriedad para children
+        // form_fields_data_* / parent_form_data_* (ver _childRequiredPolicy). ]]]FI
+        const _schemaDict = this.crudS.fieldsForm(pos) || {};
+        const _schemaEntry = _schemaDict[fieldName];
+        const _isFormFieldsChild = fieldName.startsWith('form_fields_data_');
+        const _childPolicy = this._childRequiredPolicy({
+          childKey: fieldName,
+          schemaEntry: _schemaEntry,
+          layoutNode: fieldData,
+          hasSchema: _isFormFieldsChild ? !!_schemaEntry : true,
+          scopeInfo: _childScopeRegistry.get(fieldName) ?? null,
         });
-      }
 
-      // Si no hay layouts para procesar, saltar este nodo
-      if (layoutsToProcess.length === 0) return;
+        // Si edit es false o readonly es true, el campo debe ser disabled.
+        // `_childPolicy.readOnly` fuerza solo lectura para scope=server + edit=false.
+        const disabled = fieldData.readonly || !edit || _childPolicy.readOnly;
 
-      // Procesar cada layout encontrado (grid, nested, o fields de cada step)
-      layoutsToProcess.forEach(fieldsLayout => {
-        // Iterar sobre los campos dentro del layout (estructura 0:{field:'', ...}, 1:{field:'', ...})
-        Object.keys(fieldsLayout).forEach(key => {
-          const fieldData = fieldsLayout[key];
-          const fieldName = fieldData?.field;
-          if (!fieldName) return;
+        // Guardar el estado readonly en el fieldData para que el template pueda usarlo
+        if (disabled) {
+          if (!this.initialDisabledForm[pos]) {
+            this.initialDisabledForm[pos] = {};
+          }
+          this.initialDisabledForm[pos][fieldName] = true;
+        }
 
-          // Verificar si el campo inicia con el prefijo especificado
-          if (!fieldName.startsWith(fieldPrefix)) {
-            return; // Saltar campos que no tienen el prefijo
+        const validators: any[] = [];
+
+        // Agregar validadores. Para children form_fields_data_*/parent_form_data_*
+        // la obligatoriedad la decide _childRequiredPolicy (root del schema efectivo
+        // + filter.scope/edit); para el resto, el `required` del propio campo.
+        if (_childPolicy.applyRequired) {
+          validators.push(Validators.required);
+        }
+        if (fieldData.max_length) {
+          validators.push(Validators.maxLength(fieldData.max_length));
+        }
+        if (fieldData.min_length) {
+          validators.push(Validators.minLength(fieldData.min_length));
+        }
+
+        // Procesar según el tipo de campo
+        if (DROPDOWN_TYPES_PAYLOAD.has(fieldData.type)) {
+          // Crear campo oculto para objetos completos
+          const hiddenFieldName = 'object_' + fieldName;
+          formFields[hiddenFieldName] = this.fb.control(
+            { value: defaultValue, disabled: disabled },
+            { nonNullable: false, validators: validators }
+          );
+
+          //quita expliictamente required cuando es drowpdown, auto-complete o tree-select PARA QUE LOS CAMPOS QUE NO
+          // CONTIENE object_ no se quejen si son obligatorios, pero despues de haberlo establecido al que inicio con object_
+          const requiredIndex = validators.indexOf(Validators.required);
+          if (requiredIndex >= 0) {
+            validators.splice(requiredIndex, 1);
           }
 
-          // Obtener valores por defecto
-          const active = fieldData?.default?.active || false;
-          const value = fieldData?.default?.value || null;
-          let defaultValue = value;
-          const edit = fieldData?.default?.edit !== false; // si edit no está definido, se asume true
-
-          if (active && edit) {
-            if (value === 'device') {
-              defaultValue = new Date();
-            } else if (value === 'current') {
-              defaultValue = null;
-            } else {
-              defaultValue = value;
-            }
+          // Agregar prefijo object_ al field si no lo tiene
+          const objectFieldName = 'object_' + fieldName;
+          if (fieldData.field !== objectFieldName) {
+            fieldData.field = objectFieldName;
           }
 
-          // [[[II ESC:003-06 Política de obligatoriedad para children
-          // form_fields_data_* / parent_form_data_* (ver _childRequiredPolicy). ]]]FI
-          const _schemaDict = this.crudS.fieldsForm(pos) || {};
-          const _schemaEntry = _schemaDict[fieldName];
-          const _isFormFieldsChild = fieldName.startsWith('form_fields_data_');
-          const _childPolicy = this._childRequiredPolicy({
-            childKey: fieldName,
-            schemaEntry: _schemaEntry,
-            layoutNode: fieldData,
-            hasSchema: _isFormFieldsChild ? !!_schemaEntry : true,
-            scopeInfo: _childScopeRegistry.get(fieldName) ?? null,
-          });
-
-          // Si edit es false o readonly es true, el campo debe ser disabled.
-          // `_childPolicy.readOnly` fuerza solo lectura para scope=server + edit=false.
-          const disabled = fieldData.readonly || !edit || _childPolicy.readOnly;
-
-          // Guardar el estado readonly en el fieldData para que el template pueda usarlo
-          if (disabled) {
-            if (!this.initialDisabledForm[pos]) {
-              this.initialDisabledForm[pos] = {};
-            }
-            this.initialDisabledForm[pos][fieldName] = true;
+          // Espejar choices en sharedS.data: generateJSONform guardó las choices
+          // (tipos Choice / List) bajo la clave `${pos}:${fieldName}` (sin object_),
+          // pero el renderer ahora consultará usando el field renombrado
+          // `object_${fieldName}`. Replicamos la entrada para que el dropdown
+          // encuentre las opciones sin tener que tocar generateJSONform.
+          const _sharedData = (this.sharedS as any).data;
+          const _origKey = pos + ':' + fieldName;
+          const _objectKey = pos + ':object_' + fieldName;
+          if (_sharedData && _sharedData[_origKey] !== undefined && _sharedData[_objectKey] === undefined) {
+            _sharedData[_objectKey] = _sharedData[_origKey];
           }
 
-          const validators: any[] = [];
+          // Si field trae children, recorrer el objeto para procesar campos en cascada
+          if (fieldData.children && fieldData.children.fields) {
+            // Procesar campos children que recibirán valores en cascada
 
-          // Agregar validadores. Para children form_fields_data_*/parent_form_data_*
-          // la obligatoriedad la decide _childRequiredPolicy (root del schema efectivo
-          // + filter.scope/edit); para el resto, el `required` del propio campo.
-          if (_childPolicy.applyRequired) {
-            validators.push(Validators.required);
-          }
-          if (fieldData.max_length) {
-            validators.push(Validators.maxLength(fieldData.max_length));
-          }
-          if (fieldData.min_length) {
-            validators.push(Validators.minLength(fieldData.min_length));
-          }
+            // Iterar primero por tipos: static, dynamic, derived
+            ['static', 'dynamic', 'derived'].forEach(typeKey => {
+              if (fieldData.children.fields[typeKey]) {
+                for (const [childFieldKey, childFieldValue] of Object.entries(fieldData.children.fields[typeKey])) {
+                  const typedChildFieldValue = childFieldValue as any;
 
-          // Procesar según el tipo de campo
-          if (DROPDOWN_TYPES_PAYLOAD.has(fieldData.type)) {
-            // Crear campo oculto para objetos completos
-            const hiddenFieldName = 'object_' + fieldName;
-            formFields[hiddenFieldName] = this.fb.control(
-              { value: defaultValue, disabled: disabled },
-              { nonNullable: false, validators: validators }
-            );
+                  // Solo necesita cambiar el campo de los siguientes tipos porque son los únicos que requieren cambio
+                  // para poder ser duplicados y se pueda enviar el objeto en lugar de solo el id
+                  if (DROPDOWN_TYPES_PAYLOAD.has(typedChildFieldValue.type)) {
+                    // Solo agregar object_ si no lo tiene ya
+                    const newChildFieldKey = childFieldKey.startsWith('object_' + fieldPrefix) ? childFieldKey : 'object_' + childFieldKey;
 
-            //quita expliictamente required cuando es drowpdown, auto-complete o tree-select PARA QUE LOS CAMPOS QUE NO
-            // CONTIENE object_ no se quejen si son obligatorios, pero despues de haberlo establecido al que inicio con object_
-            validators.splice(validators.indexOf(Validators.required), 1);
-
-            // Agregar prefijo object_ al field si no lo tiene
-            if (!fieldData.field.startsWith('object_')) {
-              fieldData.field = 'object_' + fieldData.field;
-            }
-
-            // Espejar choices en sharedS.data: generateJSONform guardó las choices
-            // (tipos Choice / List) bajo la clave `${pos}:${fieldName}` (sin object_),
-            // pero el renderer ahora consultará usando el field renombrado
-            // `object_${fieldName}`. Replicamos la entrada para que el dropdown
-            // encuentre las opciones sin tener que tocar generateJSONform.
-            const _sharedData = (this.sharedS as any).data;
-            const _origKey = pos + ':' + fieldName;
-            const _objectKey = pos + ':object_' + fieldName;
-            if (_sharedData && _sharedData[_origKey] !== undefined && _sharedData[_objectKey] === undefined) {
-              _sharedData[_objectKey] = _sharedData[_origKey];
-            }
-
-            // Si field trae children, recorrer el objeto para procesar campos en cascada
-            if (fieldData.children && fieldData.children.fields) {
-              // Procesar campos children que recibirán valores en cascada
-
-              // Iterar primero por tipos: static, dynamic, derived
-              ['static', 'dynamic', 'derived'].forEach(typeKey => {
-                if (fieldData.children.fields[typeKey]) {
-                  for (const [childFieldKey, childFieldValue] of Object.entries(fieldData.children.fields[typeKey])) {
-                    const typedChildFieldValue = childFieldValue as any;
-
-                    // Solo necesita cambiar el campo de los siguientes tipos porque son los únicos que requieren cambio
-                    // para poder ser duplicados y se pueda enviar el objeto en lugar de solo el id
-                    if (DROPDOWN_TYPES_PAYLOAD.has(typedChildFieldValue.type)) {
-                      // Solo agregar object_ si no lo tiene ya
-                      const newChildFieldKey = childFieldKey.startsWith('object_' + fieldPrefix) ? childFieldKey : 'object_' + childFieldKey;
-
-                      // [[[II ESC:003-02 DOC:docs/documents/2026-05-25_003_dynamic-children-field-loading.md#escenario-02
-                      // Mantiene alineados la clave del mapa children.fields y el
-                      // metadata `field` consumido por custom-draw-form.
-                      typedChildFieldValue.field = newChildFieldKey;
-                      // ]]]FI
-                      fieldData.children.fields[typeKey][newChildFieldKey] = typedChildFieldValue;
-                      delete fieldData.children.fields[typeKey][childFieldKey];
-                    }
+                    // [[[II ESC:003-02 DOC:docs/documents/2026-05-25_003_dynamic-children-field-loading.md#escenario-02
+                    // Mantiene alineados la clave del mapa children.fields y el
+                    // metadata `field` consumido por custom-draw-form.
+                    typedChildFieldValue.field = newChildFieldKey;
+                    // ]]]FI
+                    fieldData.children.fields[typeKey][newChildFieldKey] = typedChildFieldValue;
+                    delete fieldData.children.fields[typeKey][childFieldKey];
                   }
                 }
-              });
-            }
-
-          } //no lleva else para que carga el el else del if y agregue el campo normal, sin object_
-          // ya que los combos el campo normal del form que será para guardar un objeto en lugar del id
-          // y un campo que inicie con object para que guarde la referencia al campo del formulario y se pueda poner el rojo
-          //y cause los evenetos necesarios para visualizar el usuario
-
-          if (fieldData.type === 'signature') {
-            // Procesar campos de firma
-            const subFields = fieldData.fields || [];
-            const signatureFormGroup: any = {};
-
-            subFields.forEach((subField: any) => {
-              const subFieldName = subField.field;
-              const fieldType = subField.type;
-              const required = subField.required || false;
-              const maxLength = subField.max_length;
-              const subValidators: any[] = [];
-              if (required) subValidators.push(Validators.required);
-              if (maxLength) subValidators.push(Validators.maxLength(maxLength));
-
-              let subDefaultValue: any = '';
-              if (subField.default?.active && subField.default?.edit) {
-                subDefaultValue = subField.default.value === 'device' ? new Date() : (subField.default.value === 'current' ? null : subField.default.value);
-              }
-
-              // Determinar si el campo debe ser de solo lectura
-              const isReadonly = subField.default?.edit === false;
-
-
-              if (fieldType === 'login') {
-                const userField = subField.user?.field || 'username';
-                const passwordField = subField.password?.field || 'password';
-                const loginValidators: any[] = required ? [Validators.required] : [];
-                if (maxLength) loginValidators.push(Validators.maxLength(maxLength));
-
-                signatureFormGroup[userField] = this.fb.nonNullable.control({ value: '', disabled: isReadonly }, loginValidators);
-                signatureFormGroup[passwordField] = this.fb.nonNullable.control({ value: '', disabled: isReadonly }, loginValidators);
-              } else if (fieldType === 'input-text') {
-                signatureFormGroup[subFieldName] = this.fb.nonNullable.control({ value: subDefaultValue, disabled: isReadonly }, subValidators);
-              } else if (fieldType === 'date') {
-                //si subDefaultValue==current entonces inicializalo con null, hacerlo de solo lectura y quitar el validador de requerido
-                //console.log('entro a fecha222222222222222222222');
-
-                if (subDefaultValue === 'current') {
-                  //console.log("dejo en null la fecha 333333333333333");
-
-                  subDefaultValue = null;
-                  //subValidators.splice(subValidators.indexOf(Validators.required), 1);
-                }
-
-                signatureFormGroup[subFieldName] = this.fb.nonNullable.control({ value: subDefaultValue, disabled: isReadonly }, subValidators);
-              } else if (fieldType === 'signature-pad') {
-                signatureFormGroup[subFieldName] = this.fb.control<string | null>({ value: null, disabled: isReadonly }, subValidators);
-              } else if (fieldType === 'selfie') {
-                signatureFormGroup[subFieldName] = this.fb.control<File | string | null>({ value: null, disabled: isReadonly }, subValidators);
-              } else if (fieldType === 'pin_global' || fieldType === 'pin_user') {
-                signatureFormGroup[subFieldName] = this.fb.nonNullable.control({ value: '', disabled: isReadonly }, subValidators);
-              } else {
-                signatureFormGroup[subFieldName] = this.fb.control({ value: subDefaultValue, disabled: isReadonly }, subValidators);
               }
             });
-
-            formFields[fieldName] = this.fb.array<FormGroup>([this.fb.group(signatureFormGroup)]);
-
-          } else if (fieldData.type === 'table') {
-            // Procesar tipo table
-            const columns = fieldData.columns || [];
-            const initialRows = fieldData.initial_rows || 0;
-            const isRequired = fieldData.required || false;
-
-            // Validador personalizado para FormArray
-            const minLengthArrayValidator = (min: number): ValidatorFn => {
-              return (control: AbstractControl): ValidationErrors | null => {
-                if (control instanceof FormArray) {
-                  return control.length < min ? { 'minlength': { requiredLength: min, actualLength: control.length } } : null;
-                }
-                return null;
-              };
-            };
-
-            const createRowFormGroup = () => {
-              const rowGroup: any = {};
-              columns.forEach((column: any) => {
-                const columnValidators: any[] = [];
-                if (column.required && column.editable !== false) {
-                  columnValidators.push(Validators.required);
-                }
-                if (column.validation?.max_length) {
-                  columnValidators.push(Validators.maxLength(column.validation.max_length));
-                }
-                if (column.validation?.min_length) {
-                  columnValidators.push(Validators.minLength(column.validation.min_length));
-                }
-
-                let defaultColumnValue: any = '';
-                if (column.type === 'input-number') defaultColumnValue = null;
-                else if (column.type === 'date') defaultColumnValue = null;
-                else if (column.type === 'dropdown' || column.type === 'multi-select' || column.type === 'listbox') {
-                  defaultColumnValue = column.type === 'multi-select' || column.type === 'listbox' ? [] : '';
-                } else if (column.type === 'checkbox') defaultColumnValue = false;
-
-                rowGroup[column.field] = this.fb.control(defaultColumnValue, columnValidators);
-              });
-              return this.fb.group(rowGroup);
-            };
-
-            const initialRowsArray: FormGroup[] = [];
-            for (let i = 0; i < initialRows; i++) {
-              initialRowsArray.push(createRowFormGroup());
-            }
-
-            const arrayValidators: ValidatorFn[] = [];
-            if (isRequired) arrayValidators.push(minLengthArrayValidator(1));
-
-            formFields[fieldName] = this.fb.array<FormGroup>(initialRowsArray, arrayValidators);
-
-          } else if (fieldData.type === 'date') {
-            // Procesar tipo date
-            let dateDefaultValue = defaultValue;
-
-            // Si defaultValue es 'current', inicializarlo con null
-            if (dateDefaultValue === 'current') {
-              dateDefaultValue = null;
-            }
-
-            formFields[fieldName] = this.fb.control(
-              { value: dateDefaultValue, disabled: disabled },
-              { nonNullable: true, validators: validators }
-            );
-            formFields[fieldName].updateValueAndValidity();
-
-          } if (fieldData.type === 'files') {
-            // [[[II Escenario 1/2 — campo `files` (relación M2M o relación hija).
-            // Reglas confirmadas con usuario (docs/documents/2026-05-16_001):
-            //   - `{prefix}files`     → valor inicial = default.value ([]). Almacena
-            //                           [{id, type}] cuando el usuario usa subida
-            //                           directa. NO se registra como relationship
-            //                           JSON:API: el valor viaja en `attributes`.
-            //   - `{prefix}documents` → valor inicial = default.value ([]). Almacena
-            //                           base64 cuando el usuario usa "(formulario)".
-            //                           En submit, [] se transforma a null.
-            //   - root.required=true se propaga a:
-            //       · documents si upload.active (solo cuando key == field)
-            //       · files     si server_upload.active
-            //       · key ctrl  si upload.active Y key != field (per-step stepper)
-            //       (si ambos activos → ambos requeridos; appendFile y
-            //        _pushServerFileToForm limpian el opuesto al llenar uno).
-            //   - upload.required / server_upload.required SOLO endurecen su lado.
-            // Escenario multi-step (key != field): cuando dos o más steps usan el
-            //   mismo `field` pero con `key` distintos (p.e. _inicial/_final), se
-            //   crea un FormControl per-step para cada key. El sibling `*_documents`
-            //   se crea sin required (es almacenamiento compartido). Esto permite que
-            //   formErrors() valide cada step de forma independiente.
-            // Importante: las relaciones padres/hijas `relacion_data_*` NO son
-            // exclusivas de files; este bloque ataca solo cuando el field es
-            // de tipo `files`. Otros tipos (date, dropdown, etc.) caen en sus
-            // ramas correspondientes arriba/abajo. ]]]FI
-            const upload = fieldData.upload || {};
-            const serverUpload = fieldData.server_upload || {};
-            const initialValue = Array.isArray(fieldData?.default?.value)
-              ? fieldData.default.value
-              : (fieldData?.default?.value ?? []);
-
-            // Detectar si hay un key per-step (key != field → stepper multi-step)
-            const perStepKey = fieldData.key;
-            const hasPerStepKey = !!(perStepKey
-              && perStepKey !== fieldName
-              && perStepKey !== fieldPrefix + 'documents'
-              && fieldPrefix !== 'form_fields_data_');
-
-            // Reaprovechamos validators que ya trae max_length/min_length y
-            // quitamos required, para añadirlo selectivamente abajo.
-            const baseValidators = validators.filter((v: any) => v !== Validators.required);
-
-            const filesValidators: any[] = [...baseValidators];
-            const documentsValidators: any[] = [...baseValidators];
-
-            // Cuando hay control per-step, *_documents no porta required:
-            // el required va al control per-step (perStepKey).
-            if (fieldData.required && upload.active && !hasPerStepKey) {
-              documentsValidators.push(Validators.required);
-            }
-            if (fieldData.required && serverUpload.active) {
-              filesValidators.push(Validators.required);
-            }
-            if (fieldData.required && !upload.active && !serverUpload.active) {
-              // Sin sub-modos declarados: required aplica al control base files.
-              filesValidators.push(Validators.required);
-            }
-            if (upload.required && !hasPerStepKey) {
-              documentsValidators.push(Validators.required);
-            }
-            if (serverUpload.required) {
-              filesValidators.push(Validators.required);
-            }
-
-            formFields[fieldName] = this.fb.control(
-              { value: initialValue, disabled: disabled },
-              { nonNullable: false, validators: filesValidators }
-            );
-
-            // El control `{prefix}documents` solo se crea cuando NO estamos
-            // dentro de form_fields_data_ (Escenario 3 no usa documents).
-            if (fieldPrefix !== 'form_fields_data_') {
-              formFields[fieldPrefix + 'documents'] = this.fb.control(
-                { value: initialValue, disabled: disabled },
-                { nonNullable: false, validators: documentsValidators }
-              );
-            }
-
-            // Control per-step: un FormControl independiente por key distinto.
-            // Se protege con !formFields[perStepKey] para no sobreescribir si
-            // ya fue creado al procesar otro step con el mismo field.
-            if (hasPerStepKey && !formFields[perStepKey]) {
-              const perStepValidators: any[] = [...baseValidators];
-              if (fieldData.required && upload.active) {
-                perStepValidators.push(Validators.required);
-              }
-              if (upload.required) {
-                perStepValidators.push(Validators.required);
-              }
-              formFields[perStepKey] = this.fb.control(
-                { value: null, disabled: disabled },
-                { nonNullable: false, validators: perStepValidators }
-              );
-            }
-
-            formFields[fieldName].updateValueAndValidity();
-
-          } else {
-            // AQUI VUELVEN A CAER LOS dropdown, auto-complete y tree-select y agrega las validaciones al form del campo principa
-            formFields[fieldName] = this.fb.control(
-              { value: defaultValue, disabled: disabled },
-              { nonNullable: true, validators: validators }
-            );
-            formFields[fieldName].updateValueAndValidity();
-
           }
-        }); // Cierre del forEach de campos (fieldsLayout)
-      }); // Cierre del forEach de layouts (layoutsToProcess)
-    }); // Cierre del forEach de nodos (dynamicFields)
+
+        } //no lleva else para que carga el el else del if y agregue el campo normal, sin object_
+        // ya que los combos el campo normal del form que será para guardar un objeto en lugar del id
+        // y un campo que inicie con object para que guarde la referencia al campo del formulario y se pueda poner el rojo
+        //y cause los evenetos necesarios para visualizar el usuario
+
+        if (fieldData.type === 'signature') {
+          // Procesar campos de firma
+          const subFields = fieldData.fields || [];
+          const signatureFormGroup: any = {};
+
+          subFields.forEach((subField: any) => {
+            const subFieldName = subField.field;
+            const fieldType = subField.type;
+            const required = subField.required || false;
+            const maxLength = subField.max_length;
+            const subValidators: any[] = [];
+            if (required) subValidators.push(Validators.required);
+            if (maxLength) subValidators.push(Validators.maxLength(maxLength));
+
+            let subDefaultValue: any = '';
+            if (subField.default?.active && subField.default?.edit) {
+              subDefaultValue = subField.default.value === 'device' ? new Date() : (subField.default.value === 'current' ? null : subField.default.value);
+            }
+
+            // Determinar si el campo debe ser de solo lectura
+            const isReadonly = subField.default?.edit === false;
+
+
+            if (fieldType === 'login') {
+              const userField = subField.user?.field || 'username';
+              const passwordField = subField.password?.field || 'password';
+              const loginValidators: any[] = required ? [Validators.required] : [];
+              if (maxLength) loginValidators.push(Validators.maxLength(maxLength));
+
+              signatureFormGroup[userField] = this.fb.nonNullable.control({ value: '', disabled: isReadonly }, loginValidators);
+              signatureFormGroup[passwordField] = this.fb.nonNullable.control({ value: '', disabled: isReadonly }, loginValidators);
+            } else if (fieldType === 'input-text') {
+              signatureFormGroup[subFieldName] = this.fb.nonNullable.control({ value: subDefaultValue, disabled: isReadonly }, subValidators);
+            } else if (fieldType === 'date') {
+              //si subDefaultValue==current entonces inicializalo con null, hacerlo de solo lectura y quitar el validador de requerido
+              //console.log('entro a fecha222222222222222222222');
+
+              if (subDefaultValue === 'current') {
+                //console.log("dejo en null la fecha 333333333333333");
+
+                subDefaultValue = null;
+                //subValidators.splice(subValidators.indexOf(Validators.required), 1);
+              }
+
+              signatureFormGroup[subFieldName] = this.fb.nonNullable.control({ value: subDefaultValue, disabled: isReadonly }, subValidators);
+            } else if (fieldType === 'signature-pad') {
+              signatureFormGroup[subFieldName] = this.fb.control<string | null>({ value: null, disabled: isReadonly }, subValidators);
+            } else if (fieldType === 'selfie') {
+              signatureFormGroup[subFieldName] = this.fb.control<File | string | null>({ value: null, disabled: isReadonly }, subValidators);
+            } else if (fieldType === 'pin_global' || fieldType === 'pin_user') {
+              signatureFormGroup[subFieldName] = this.fb.nonNullable.control({ value: '', disabled: isReadonly }, subValidators);
+            } else {
+              signatureFormGroup[subFieldName] = this.fb.control({ value: subDefaultValue, disabled: isReadonly }, subValidators);
+            }
+          });
+
+          formFields[fieldName] = this.fb.array<FormGroup>([this.fb.group(signatureFormGroup)]);
+
+        } else if (fieldData.type === 'table') {
+          // Procesar tipo table
+          const columns = fieldData.columns || [];
+          const initialRows = fieldData.initial_rows || 0;
+          const isRequired = fieldData.required || false;
+
+          // Validador personalizado para FormArray
+          const minLengthArrayValidator = (min: number): ValidatorFn => {
+            return (control: AbstractControl): ValidationErrors | null => {
+              if (control instanceof FormArray) {
+                return control.length < min ? { 'minlength': { requiredLength: min, actualLength: control.length } } : null;
+              }
+              return null;
+            };
+          };
+
+          const createRowFormGroup = () => {
+            const rowGroup: any = {};
+            columns.forEach((column: any) => {
+              const columnValidators: any[] = [];
+              if (column.required && column.editable !== false) {
+                columnValidators.push(Validators.required);
+              }
+              if (column.validation?.max_length) {
+                columnValidators.push(Validators.maxLength(column.validation.max_length));
+              }
+              if (column.validation?.min_length) {
+                columnValidators.push(Validators.minLength(column.validation.min_length));
+              }
+
+              let defaultColumnValue: any = '';
+              if (column.type === 'input-number') defaultColumnValue = null;
+              else if (column.type === 'date') defaultColumnValue = null;
+              else if (column.type === 'dropdown' || column.type === 'multi-select' || column.type === 'listbox') {
+                defaultColumnValue = column.type === 'multi-select' || column.type === 'listbox' ? [] : '';
+              } else if (column.type === 'checkbox') defaultColumnValue = false;
+
+              rowGroup[column.field] = this.fb.control(defaultColumnValue, columnValidators);
+            });
+            return this.fb.group(rowGroup);
+          };
+
+          const initialRowsArray: FormGroup[] = [];
+          for (let i = 0; i < initialRows; i++) {
+            initialRowsArray.push(createRowFormGroup());
+          }
+
+          const arrayValidators: ValidatorFn[] = [];
+          if (isRequired) arrayValidators.push(minLengthArrayValidator(1));
+
+          formFields[fieldName] = this.fb.array<FormGroup>(initialRowsArray, arrayValidators);
+
+        } else if (fieldData.type === 'date') {
+          // Procesar tipo date
+          let dateDefaultValue = defaultValue;
+
+          // Si defaultValue es 'current', inicializarlo con null
+          if (dateDefaultValue === 'current') {
+            dateDefaultValue = null;
+          }
+
+          formFields[fieldName] = this.fb.control(
+            { value: dateDefaultValue, disabled: disabled },
+            { nonNullable: true, validators: validators }
+          );
+          formFields[fieldName].updateValueAndValidity();
+
+        } if (fieldData.type === 'files') {
+          // [[[II Escenario 1/2 — campo `files` (relación M2M o relación hija).
+          // Reglas confirmadas con usuario (docs/documents/2026-05-16_001):
+          //   - `{prefix}files`     → valor inicial = default.value ([]). Almacena
+          //                           [{id, type}] cuando el usuario usa subida
+          //                           directa. NO se registra como relationship
+          //                           JSON:API: el valor viaja en `attributes`.
+          //   - `{prefix}documents` → valor inicial = default.value ([]). Almacena
+          //                           base64 cuando el usuario usa "(formulario)".
+          //                           En submit, [] se transforma a null.
+          //   - root.required=true se propaga a:
+          //       · documents si upload.active (solo cuando key == field)
+          //       · files     si server_upload.active
+          //       · key ctrl  si upload.active Y key != field (per-step stepper)
+          //       (si ambos activos → ambos requeridos; appendFile y
+          //        _pushServerFileToForm limpian el opuesto al llenar uno).
+          //   - upload.required / server_upload.required SOLO endurecen su lado.
+          // Escenario multi-step (key != field): cuando dos o más steps usan el
+          //   mismo `field` pero con `key` distintos (p.e. _inicial/_final), se
+          //   crea un FormControl per-step para cada key. El sibling `*_documents`
+          //   se crea sin required (es almacenamiento compartido). Esto permite que
+          //   formErrors() valide cada step de forma independiente.
+          // Importante: las relaciones padres/hijas `relacion_data_*` NO son
+          // exclusivas de files; este bloque ataca solo cuando el field es
+          // de tipo `files`. Otros tipos (date, dropdown, etc.) caen en sus
+          // ramas correspondientes arriba/abajo. ]]]FI
+          const upload = fieldData.upload || {};
+          const serverUpload = fieldData.server_upload || {};
+          const initialValue = Array.isArray(fieldData?.default?.value)
+            ? fieldData.default.value
+            : (fieldData?.default?.value ?? []);
+
+          // Detectar si hay un key per-step (key != field → stepper multi-step)
+          const perStepKey = fieldData.key;
+          const hasPerStepKey = !!(perStepKey
+            && perStepKey !== fieldName
+            && perStepKey !== fieldPrefix + 'documents'
+            && fieldPrefix !== 'form_fields_data_');
+
+          // Reaprovechamos validators que ya trae max_length/min_length y
+          // quitamos required, para añadirlo selectivamente abajo.
+          const baseValidators = validators.filter((v: any) => v !== Validators.required);
+
+          const filesValidators: any[] = [...baseValidators];
+          const documentsValidators: any[] = [...baseValidators];
+
+          // Cuando hay control per-step, *_documents no porta required:
+          // el required va al control per-step (perStepKey).
+          if (fieldData.required && upload.active && !hasPerStepKey) {
+            documentsValidators.push(Validators.required);
+          }
+          if (fieldData.required && serverUpload.active) {
+            filesValidators.push(Validators.required);
+          }
+          if (fieldData.required && !upload.active && !serverUpload.active) {
+            // Sin sub-modos declarados: required aplica al control base files.
+            filesValidators.push(Validators.required);
+          }
+          if (upload.required && !hasPerStepKey) {
+            documentsValidators.push(Validators.required);
+          }
+          if (serverUpload.required) {
+            filesValidators.push(Validators.required);
+          }
+
+          formFields[fieldName] = this.fb.control(
+            { value: initialValue, disabled: disabled },
+            { nonNullable: false, validators: filesValidators }
+          );
+
+          // El control `{prefix}documents` solo se crea cuando NO estamos
+          // dentro de form_fields_data_ (Escenario 3 no usa documents).
+          if (fieldPrefix !== 'form_fields_data_') {
+            formFields[fieldPrefix + 'documents'] = this.fb.control(
+              { value: initialValue, disabled: disabled },
+              { nonNullable: false, validators: documentsValidators }
+            );
+          }
+
+          // Control per-step: un FormControl independiente por key distinto.
+          // Se protege con !formFields[perStepKey] para no sobreescribir si
+          // ya fue creado al procesar otro step con el mismo field.
+          if (hasPerStepKey && !formFields[perStepKey]) {
+            const perStepValidators: any[] = [...baseValidators];
+            if (fieldData.required && upload.active) {
+              perStepValidators.push(Validators.required);
+            }
+            if (upload.required) {
+              perStepValidators.push(Validators.required);
+            }
+            formFields[perStepKey] = this.fb.control(
+              { value: null, disabled: disabled },
+              { nonNullable: false, validators: perStepValidators }
+            );
+          }
+
+          formFields[fieldName].updateValueAndValidity();
+
+        } else {
+          // AQUI VUELVEN A CAER LOS dropdown, auto-complete y tree-select y agrega las validaciones al form del campo principa
+          formFields[fieldName] = this.fb.control(
+            { value: defaultValue, disabled: disabled },
+            { nonNullable: true, validators: validators }
+          );
+          formFields[fieldName].updateValueAndValidity();
+
+        }
+      }); // Cierre del forEach de campos (fieldsLayout)
+    }); // Cierre del forEach de layouts (layoutsToProcess)
   }
 
   // ============================================================================
@@ -1545,7 +1676,7 @@ export class CRUD extends Vars implements OnChanges  /*implements OnInit*/ {
    * Siempre garantiza que el prefijo `form_fields_data_` esté presente.
    */
   protected _normalizeFieldsPrefixes(pos: any): { prefix: string; config: any }[] {
-    const draw = this.drawForm()[pos];
+    const draw = this._drawFormForDevice(pos);
     const raw = draw?.fields_prefixes;
     const out: { prefix: string; config: any }[] = [];
     const seen = new Set<string>();
@@ -1587,7 +1718,7 @@ export class CRUD extends Vars implements OnChanges  /*implements OnInit*/ {
    * si hay que hacer GETs de relaciones secundarias (Escenario 2).
    */
   protected _prefixHasFilesField(pos: any, prefix: string): boolean {
-    const draw = this.drawForm()[pos];
+    const draw = this._drawFormForDevice(pos);
     if (!draw) return false;
     let found = false;
     const walk = (node: any) => {
@@ -1631,7 +1762,7 @@ export class CRUD extends Vars implements OnChanges  /*implements OnInit*/ {
     // Importante: `addFieldsByPrefix` renombra `fieldData.field` a `object_<field>`
     // para los dropdowns, por lo que buscamos también por ese alias.
     const typeByField: { [k: string]: string } = {};
-    const draw = this.drawForm()[pos];
+    const draw = this._drawFormForDevice(pos);
     const walk = (node: any) => {
       if (!node || typeof node !== 'object') return;
       const f = node.field;
@@ -1674,7 +1805,7 @@ export class CRUD extends Vars implements OnChanges  /*implements OnInit*/ {
    */
   protected _mergeFormDataFiles(pos: any, formData: any): void {
     if (!formData || typeof formData !== 'object') return;
-    const draw = this.drawForm()[pos];
+    const draw = this._drawFormForDevice(pos);
     if (!draw) return;
     const selectedItem = this.selected()[0];
     const previousFormData = selectedItem?.form_data || {};
@@ -1735,7 +1866,7 @@ export class CRUD extends Vars implements OnChanges  /*implements OnInit*/ {
   protected _rebuildFormDataDicts(pos: any, formData: any): void {
     if (!formData || typeof formData !== 'object') return;
 
-    const draw = this.drawForm()[pos];
+    const draw = this._drawFormForDevice(pos);
     if (!draw) return;
 
     const selectedItem = this.selected()[0];
@@ -2084,7 +2215,7 @@ export class CRUD extends Vars implements OnChanges  /*implements OnInit*/ {
    * Se usa para detectar relaciones que requieren config en fields_prefixes.
    */
   protected _collectFilesPrefixes(pos: any): string[] {
-    const draw = this.drawForm()[pos];
+    const draw = this._drawFormForDevice(pos);
     const declared = this._normalizeFieldsPrefixes(pos).map(x => x.prefix);
     const found = new Set<string>();
     const walk = (node: any) => {
@@ -2172,9 +2303,13 @@ export class CRUD extends Vars implements OnChanges  /*implements OnInit*/ {
           const val_local: any = this.searchByValueObject(field, relationshipsLocal)[0];
 
           if (val_local) {
-            relationOptions.push(val_local);
+            // [[[II ESC:005-06 DOC:docs/documents/2026-05-31_005_columnas-form-data-y-tree-select-nombres.md#escenario-06
+            relationOptions.push({ ...val_local, relationship_type: val_local.relationship_type ?? fieldObj.relationship_type });
+            // ]]]FI
           } else {
-            relationOptions.push({ id: field, field: field, type: fieldObj.relationship_resource });
+            // [[[II ESC:005-06 DOC:docs/documents/2026-05-31_005_columnas-form-data-y-tree-select-nombres.md#escenario-06
+            relationOptions.push({ id: field, field: field, type: fieldObj.relationship_resource, relationship_type: fieldObj.relationship_type });
+            // ]]]FI
           }
         }
 
@@ -2296,7 +2431,7 @@ export class CRUD extends Vars implements OnChanges  /*implements OnInit*/ {
       }
     }
 
-    const draw = this.drawForm()[posIndex];
+    const draw = this._drawFormForDevice(posIndex);
     // Normaliza fields_prefixes a una lista uniforme (compat array de strings y objeto)
     const fields_prefixes = this._normalizeFieldsPrefixes(posIndex);
 
@@ -2452,66 +2587,53 @@ export class CRUD extends Vars implements OnChanges  /*implements OnInit*/ {
     // El header se obtiene de customField()[pos] (settings/settings/me): se consideran
     // solo las claves que inician con 'form_fields_data_'.
     // Se agrega ANTES del sort para que el order de colsConfig las ubique en la posición correcta.
-    const drawForCols = this.drawForm()[pos];
+    const drawForCols = this._drawFormForDevice(pos);
     if (drawForCols) {
       const fieldsPrefixes = this._normalizeFieldsPrefixes(pos);
       for (const { prefix: pfx } of fieldsPrefixes) {
         if (pfx !== 'form_fields_data_') continue;
 
-        Object.keys(drawForCols).forEach(nodeKey => {
-          if (nodeKey === 'dialog' || nodeKey === 'fields_prefixes') return;
+        // [[[II ESC:017-04 DOC:docs/documents/2026-06-02_017_custom-draw-form-device-drawform.md#escenario-04
+        this._collectDrawFormLayouts(drawForCols).forEach(fieldsLayout => {
+          // ]]]FI
+          Object.keys(fieldsLayout).forEach(key => {
+            const fieldData = fieldsLayout[key];
+            const fieldName = fieldData?.field;
+            if (!fieldName || !fieldName.startsWith(pfx)) return;
+            // Saltar controles object_ (son duplicados UI para dropdown)
+            if (fieldName.startsWith('object_')) return;
 
-          const node = drawForCols[nodeKey];
-          if (!node || typeof node !== 'object') return;
+            // El header proviene de customField()[pos] (settings/settings/me) o del drawForm
+            const header = this.customField()[pos]?.[fieldName] || fieldData.header || fieldName;
 
-          const layoutsToProcess: any[] = [];
-          if (node.grid && typeof node.grid === 'object') {
-            layoutsToProcess.push(node.grid);
-          } else if (node.nested && typeof node.nested === 'object') {
-            layoutsToProcess.push(node.nested);
-          }
+            // En los items de la tabla, form_fields_data_* está anidado en form_data (atributo del modelo)
+            const colField = 'form_data.' + fieldName;
+            const columnObj: any = { field: colField, header };
+            // [[[II ESC:005-05 DOC:docs/documents/2026-05-31_005_columnas-form-data-y-tree-select-nombres.md#escenario-05
+            const headerKey = typeof header === 'string' ? header.trim() : '';
+            const duplicatedColumn = cols.some((col: any) =>
+              col?.field === colField ||
+              (headerKey && typeof col?.header === 'string' && col.header.trim() === headerKey)
+            );
+            if (duplicatedColumn) return;
+            // ]]]FI
 
-          if (node.stepper?.steps) {
-            Object.keys(node.stepper.steps).forEach(stepKey => {
-              const step = node.stepper.steps[stepKey];
-              if (step?.fields && typeof step.fields === 'object') {
-                layoutsToProcess.push(step.fields);
+            // Aplicar colsConfig (sortable, hide, order) igual que los campos regulares
+            if (colsConfig && colsConfig[fieldName]) {
+              const fieldConfig = colsConfig[fieldName];
+              if (fieldConfig.hasOwnProperty('sortable')) {
+                columnObj.sortable = fieldConfig.sortable;
               }
-            });
-          }
-
-          layoutsToProcess.forEach(fieldsLayout => {
-            Object.keys(fieldsLayout).forEach(key => {
-              const fieldData = fieldsLayout[key];
-              const fieldName = fieldData?.field;
-              if (!fieldName || !fieldName.startsWith(pfx)) return;
-              // Saltar controles object_ (son duplicados UI para dropdown)
-              if (fieldName.startsWith('object_')) return;
-
-              // El header proviene de customField()[pos] (settings/settings/me) o del drawForm
-              const header = this.customField()[pos]?.[fieldName] || fieldData.header || fieldName;
-
-              // En los items de la tabla, form_fields_data_* está anidado en form_data (atributo del modelo)
-              const colField = 'form_data.' + fieldName;
-              const columnObj: any = { field: colField, header };
-
-              // Aplicar colsConfig (sortable, hide, order) igual que los campos regulares
-              if (colsConfig && colsConfig[fieldName]) {
-                const fieldConfig = colsConfig[fieldName];
-                if (fieldConfig.hasOwnProperty('sortable')) {
-                  columnObj.sortable = fieldConfig.sortable;
-                }
-                if (fieldConfig.hide === true) {
-                  if (!this.itemsRemove[safePos]) this.itemsRemove[safePos] = [];
-                  this.itemsRemove[safePos].push(columnObj.field);
-                }
-                if (fieldConfig.hasOwnProperty('order')) {
-                  columnObj._order = parseInt(fieldConfig.order, 10);
-                }
+              if (fieldConfig.hide === true) {
+                if (!this.itemsRemove[safePos]) this.itemsRemove[safePos] = [];
+                this.itemsRemove[safePos].push(columnObj.field);
               }
+              if (fieldConfig.hasOwnProperty('order')) {
+                columnObj._order = parseInt(fieldConfig.order, 10);
+              }
+            }
 
-              cols.push(columnObj);
-            });
+            cols.push(columnObj);
           });
         });
       }
@@ -3461,7 +3583,7 @@ export class CRUD extends Vars implements OnChanges  /*implements OnInit*/ {
       // Rehidrata campos tree-like (`tree-select` y `listbox` con `tree`) al
       // shape real que PrimeNG compara/renderiza, conservando la relación
       // serializada para reenvío en edición.
-      const drawAtPos = this.drawForm()[pos];
+      const drawAtPos = this._drawFormForDevice(pos);
       for (const [key, value] of Object.entries(selected)) {
         if (key === 'classifiers' || key === 'included' || !Array.isArray(value)) continue;
         const fieldCfg = this._findFieldConfigInDraw(drawAtPos, key);
@@ -3548,11 +3670,55 @@ export class CRUD extends Vars implements OnChanges  /*implements OnInit*/ {
     visit(form, []);
 
     // Mensaje y salida
-    console.log(this.customField()[pos]);
+    // [[[II ESC:018-01 DOC:docs/documents/2026-06-03_018_crud-form-errors-drawform-labels.md#escenario-01
+    const formErrorLabels = this._buildFormErrorFieldLabels(pos);
+    console.log(formErrorLabels);
 
-    (this.messageS as any).changeMessage('Revise campos marcados en rojo...', errors, this.customField()[pos]);
+    (this.messageS as any).changeMessage('Revise campos marcados en rojo...', errors, formErrorLabels);
+    // ]]]FI
     return true;
   }
+
+  // [[[II ESC:018-01 DOC:docs/documents/2026-06-03_018_crud-form-errors-drawform-labels.md#escenario-01
+  private _buildFormErrorFieldLabels(pos: any): Record<string, string> {
+    const labels: Record<string, string> = { ...(this.customField()[pos] || {}) };
+    const draw = this._drawFormForDevice(pos);
+    if (!draw || typeof draw !== 'object') return labels;
+
+    const registerLabel = (fieldName: any, label: any): void => {
+      if (typeof fieldName !== 'string' || !fieldName) return;
+      if (typeof label !== 'string' || label.trim() === '') return;
+
+      const fieldLabel = label.trim();
+      labels[fieldName] = labels[fieldName] || fieldLabel;
+
+      if (fieldName.startsWith('object_')) {
+        const canonicalField = fieldName.slice('object_'.length);
+        labels[canonicalField] = labels[canonicalField] || fieldLabel;
+      } else {
+        labels['object_' + fieldName] = labels['object_' + fieldName] || fieldLabel;
+      }
+    };
+
+    const seen = new WeakSet<object>();
+    const walk = (node: any): void => {
+      if (!node || typeof node !== 'object' || seen.has(node)) return;
+      seen.add(node);
+
+      const fieldName = node.field;
+      const label = node.label || node.header || node.title;
+      registerLabel(fieldName, label);
+      registerLabel(node.key, label);
+
+      for (const child of Object.values(node)) {
+        if (child && typeof child === 'object') walk(child);
+      }
+    };
+
+    walk(draw);
+    return labels;
+  }
+  // ]]]FI
 
 
   /**
@@ -3573,7 +3739,7 @@ export class CRUD extends Vars implements OnChanges  /*implements OnInit*/ {
     //el campo se llama user ?????
 
     const formValueAll = this.currentForm(pos).value;
-    const drawAtPos = this.drawForm()[pos];
+    const drawAtPos = this._drawFormForDevice(pos);
 
     for (let element of this.crudS.relationships) {
       const rawValue = formValueAll[element.field];
@@ -3596,7 +3762,18 @@ export class CRUD extends Vars implements OnChanges  /*implements OnInit*/ {
         continue;
       }
 
+      // [[[II ESC:005-06 DOC:docs/documents/2026-05-31_005_columnas-form-data-y-tree-select-nombres.md#escenario-06
+      if (
+        element.relationship_type === 'ManyToOne' ||
+        element.relationship_type === 'OneToOne' ||
+        (element.relationship_type === undefined && Array.isArray(rawValue) && rawValue.length <= 1)
+      ) {
+        element.id = Array.isArray(rawValue) ? (rawValue[0]?.id ?? rawValue[0] ?? null) : rawValue;
+        continue;
+      }
+
       element.id = rawValue;
+      // ]]]FI
     }
   }
 
@@ -5082,7 +5259,7 @@ export class CRUD extends Vars implements OnChanges  /*implements OnInit*/ {
   searchFieldDrawForm(field: any, pos = this.pos(), del = false) {
     const safePos: any = pos ?? 0; // Asegura que pos sea un número válido, si no se envía, se usa 0
 
-    const draw = this.drawForm()[safePos];
+    const draw = this._drawFormForDevice(safePos);
 
     for (const tab in draw) {
       if (!draw.hasOwnProperty(tab) || tab === 'dialog') continue;

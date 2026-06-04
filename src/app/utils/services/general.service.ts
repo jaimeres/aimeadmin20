@@ -840,14 +840,46 @@ export class GeneralService {
   * No detecta navegador móvil ni PWA.
   * Solo detecta entorno nativo (APK/IPA).
  */
+  // [[[II ESC:019-01 DOC:docs/documents/2026-06-04_019_dropdown-cache-platform-read.md#escenario-01
   public isMobile(): boolean {
-    return !!(window && (window as any).Capacitor && (window as any).Capacitor.isNativePlatform());
+    const platform = this.getCapacitorPlatform();
+    return this.isNativePlatform() && (platform === 'android' || platform === 'ios');
   }
 
   public isDesktop(): boolean {
-    //es temporal, hasta que tenga una forma mejor de detectar si es desktop o web
+    // Se conserva como alias amplio para no romper consumidores existentes.
     return !this.isMobile();
   }
+
+  public isDesktopApp(): boolean {
+    const platform = this.getCapacitorPlatform();
+    return this.isNativePlatform() && platform !== 'android' && platform !== 'ios';
+  }
+
+  public isWeb(): boolean {
+    return !this.isNativePlatform();
+  }
+
+  public getClientPlatform(): 'mobile' | 'desktop' | 'web' {
+    if (this.isMobile()) return 'mobile';
+    if (this.isDesktopApp()) return 'desktop';
+    return 'web';
+  }
+
+  private isNativePlatform(): boolean {
+    return !!(typeof window !== 'undefined'
+      && (window as any).Capacitor
+      && (window as any).Capacitor.isNativePlatform?.());
+  }
+
+  private getCapacitorPlatform(): string {
+    if (typeof window === 'undefined' || !(window as any).Capacitor?.getPlatform) {
+      return 'web';
+    }
+
+    return String((window as any).Capacitor.getPlatform() || 'web').toLowerCase();
+  }
+  // ]]]FI
 
   /**
    * 

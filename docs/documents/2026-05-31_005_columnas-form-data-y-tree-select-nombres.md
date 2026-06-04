@@ -63,6 +63,44 @@ El valor se formatea con el nuevo helper `_formatDynamicValue`, que usa el
 objeto persistido no expone esas claves, hace fallback a
 `name/display_name/label/value/code/id`. Soporta objeto, primitivo y arreglo.
 
+<a id="escenario-04"></a>
+## Escenario 04: Solicitar `form_data` solo cuando hay columnas `form_fields_data_*`
+
+Se corrigio `iniParam()` para que, cuando las columnas seleccionadas incluyen
+`form_data.form_fields_data_*` o un campo `form_fields_data_*`, la consulta GET pida
+el atributo raiz `form_data`.
+
+La API no entrega automaticamente el diccionario `form_data` si no viene en `fields`.
+Por eso las columnas dinamicas podian existir en la tabla, pero las celdas quedaban
+vacias en recargas/listados aunque el detalle del registro en servidor si tuviera
+`attributes.form_data`.
+
+La regla queda limitada: `form_data` solo se agrega cuando alguna columna seleccionada
+lo necesita. Si no hay columnas `form_fields_data_*`, no se pide `form_data`.
+
+<a id="escenario-05"></a>
+## Escenario 05: Evitar columnas duplicadas por label o campo
+
+Se ajusto el bloque que agrega columnas `form_fields_data_*` desde `drawForm` para
+no insertar una columna dinamica si ya existe una columna con el mismo `field` o con
+el mismo encabezado visible.
+
+Esto evita duplicados como "Tipo de falla", "Componente", "Cluster" o "Region"
+cuando el schema principal ya genero una columna equivalente y el `drawForm` tambien
+declara un campo dinamico con el mismo label.
+
+<a id="escenario-06"></a>
+## Escenario 06: Preservar contrato de relaciones no-M2M
+
+Se agrego `relationship_type` al registro interno de relaciones construido desde
+OPTIONS y se normaliza en `validateRelationships()`.
+
+Si una relacion es `ManyToOne` u `OneToOne`, su `id` se fuerza a valor escalar/null
+aunque el control del formulario llegue como arreglo. Esto evita que `baseDJA()`
+interprete accidentalmente relaciones como `asset` como M2M y envie
+`relationships.asset.data` como lista, cuando el backend espera un resource identifier
+object.
+
 ## Decisiones tomadas
 
 - No se agregan columnas para campos de `form_data` que no existan en la
@@ -73,6 +111,12 @@ objeto persistido no expone esas claves, hace fallback a
   no alterar el comportamiento existente de otros campos.
 - No se modificó configuración ni `include` de forma manual: el `include` se ajusta
   solo por el cambio de campo de columna a `__name`.
+- No se pide `form_data` siempre; `iniParam()` lo agrega a `fields` solo si alguna
+  columna seleccionada usa `form_fields_data_*`.
+- La deduplicacion se limita al momento de agregar columnas dinamicas
+  `form_fields_data_*`; no cambia `DJAtoObject` ni la generacion base de columnas.
+- Solo `ManyToMany` conserva arreglos en `relationships`; `ManyToOne` y `OneToOne`
+  se normalizan a valor escalar antes de construir JSON:API.
 
 ## Validaciones aplicadas
 

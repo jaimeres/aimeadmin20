@@ -46,10 +46,19 @@ El nuevo control soporta dos modos:
   - En modo `tree`, la hidratación de edición reconstruye items enriquecidos con `id`, `label`, `parent`, `raw` y `__serialized`.
   - `validateRelationships()` reutiliza la serialización rica cuando `listbox` trae `tree.serialization`.
 
+<a id="escenario-04"></a>
+## Escenario 04: Selección en listbox agrupado sin recarga dinámica
+
+- Objetivo: cuando el `listbox` declara `tree`, seleccionar un item no debe volver a ejecutar la cascada de `children.fields`.
+- Decisión: `onChangeDropdown()` conserva la emisión del cambio y la sincronización de campos espejo, pero retorna antes de `_processChildrenFields(...)` para `listbox` con `tree`.
+- Motivo: en este modo los `children.fields.dynamic` forman parte de la carga/precarga del árbol agrupado; reutilizarlos en cada selección provoca consultas adicionales al servidor.
+
 ## Validaciones aplicadas
 
 - Revisión de la API de PrimeNG Listbox para `group`, `checkbox`, `filter`, `dataKey` y `optionValue`.
 - Validación prevista de compilación Angular con `ng build`.
+- `git diff --check` sin errores para la corrección de selección en `listbox` agrupado.
+- `npx tsc --noEmit` no completo por fallas preexistentes fuera del cambio: specs que importan `../../../testing/crud-test.helpers` inexistente y errores previos en `src/app/auth/components/biometric-setup.component.ts` por acceso a `username` sobre un `Signal`.
 
 ## Archivos modificados
 
@@ -69,3 +78,4 @@ El nuevo control soporta dos modos:
 2. Campo `type: 'listbox'` con `tree` y grupos visibles por nivel raíz.
 3. Edición de un registro existente con items ya seleccionados en `listbox` agrupado.
 4. Guardado de un campo `listbox` con `tree.serialization` y verificación del payload JSON:API resultante.
+5. Selección de items en `listbox` con `tree` sin requests adicionales por cada click.

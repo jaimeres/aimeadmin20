@@ -51,6 +51,17 @@ export class FormCacheService {
 
   constructor(private generalS: GeneralService) { }
 
+  // [[[II ESC:017-03 DOC:docs/documents/2026-06-02_017_custom-draw-form-device-drawform.md#escenario-03
+  private perfNow(): number {
+    return typeof performance !== 'undefined' ? performance.now() : Date.now();
+  }
+
+  private logPerf(label: string, start: number, extra: any = {}): void {
+    const elapsed = this.perfNow() - start;
+    console.info(`[FormCache][perf] ${label}: ${elapsed.toFixed(2)}ms`, extra);
+  }
+  // ]]]FI
+
   /**
    * Devuelve el versionCode (build.gradle `versionCode`) en nativo Android/iOS,
    * o `environment.appVersion` en web. Resultado cacheado en memoria.
@@ -73,12 +84,33 @@ export class FormCacheService {
 
   // ─────────────────────────────────────────────────
 
+  // [[[II ESC:019-03 DOC:docs/documents/2026-06-04_019_dropdown-cache-platform-read.md#escenario-03
   /** Devuelve el tipo de dispositivo actual de forma síncrona */
   getDeviceType(): 'mobile' | 'web' | 'desktop' {
+    if (typeof this.generalS.getClientPlatform === 'function') {
+      return this.generalS.getClientPlatform();
+    }
+
     if (this.generalS.isMobile()) return 'mobile';
-    // TODO: detectar Electron como 'desktop' cuando se requiera
+    if (typeof this.generalS.isDesktopApp === 'function' && this.generalS.isDesktopApp()) return 'desktop';
     return 'web';
   }
+
+  private getPlatformCacheConfig(el: any): any | null {
+    const cache = el?.cache ?? {};
+    const deviceType = this.getDeviceType();
+
+    if (deviceType === 'mobile') {
+      return cache.mobile ?? null;
+    }
+
+    if (deviceType === 'desktop') {
+      return cache.desktop ?? cache.web ?? null;
+    }
+
+    return cache.web ?? cache.desktop ?? null;
+  }
+  // ]]]FI
 
   /**
    * Escanea todos los campos del drawForm (grid + stepper) y devuelve
@@ -91,6 +123,7 @@ export class FormCacheService {
    *   field: 'name',
    *   cache: {
    *     web:    { creation: true, edition: false, encrypted: false },
+   *     desktop:{ creation: true, edition: false, encrypted: false },
    *     mobile: { creation: true, edition: true,  encrypted: true  }
    *   }
    * }
@@ -98,13 +131,12 @@ export class FormCacheService {
    * @returns objeto con los campos cacheables o `null` si ningún campo tiene caché.
    */
   getCacheConfig(drawForm: any): FormCacheConfig | null {
-    const deviceType = this.getDeviceType();
     const creationFields: string[] = [];
     const editionFields: string[] = [];
     let encrypted = false;
 
     const checkElement = (el: any) => {
-      const fieldCache = el?.cache?.[deviceType];
+      const fieldCache = this.getPlatformCacheConfig(el);
       if (!fieldCache) return;
       // Para campos de documento, el elemento puede tener tanto `field` como `key`;
       // ambos controles almacenan el mismo fileObject y deben guardarse/restaurarse.
@@ -199,10 +231,17 @@ export class FormCacheService {
    * Devuelve `null` si no existe entrada o si está vacía.
    */
   async load(key: string): Promise<any | null> {
+    // [[[II ESC:017-03 DOC:docs/documents/2026-06-02_017_custom-draw-form-device-drawform.md#escenario-03
+    const perfStart = this.perfNow();
+    let rawBytes = 0;
+    // ]]]FI
     try {
       const deviceType = this.getDeviceType();
       let raw: string | null = null;
 
+      // [[[II ESC:017-03 DOC:docs/documents/2026-06-02_017_custom-draw-form-device-drawform.md#escenario-03
+      const storageStart = this.perfNow();
+      // ]]]FI
       if (deviceType === 'mobile') {
         const { value } = await Preferences.get({ key });
         raw = value;
@@ -211,31 +250,65 @@ export class FormCacheService {
       } else {
         raw = sessionStorage.getItem(key);
       }
+      // [[[II ESC:017-03 DOC:docs/documents/2026-06-02_017_custom-draw-form-device-drawform.md#escenario-03
+      rawBytes = raw?.length || 0;
+      this.logPerf('load.storage', storageStart, { key, deviceType, bytes: rawBytes });
+      // ]]]FI
 
-      if (!raw) return null;
+      if (!raw) {
+        this.logPerf('load.total', perfStart, { key, found: false, bytes: rawBytes });
+        return null;
+      }
 
+      // [[[II ESC:017-03 DOC:docs/documents/2026-06-02_017_custom-draw-form-device-drawform.md#escenario-03
+      const parseEntryStart = this.perfNow();
+      // ]]]FI
       const entry: CacheEntry = JSON.parse(raw);
+      // [[[II ESC:017-03 DOC:docs/documents/2026-06-02_017_custom-draw-form-device-drawform.md#escenario-03
+      this.logPerf('load.parseEntry', parseEntryStart, { key });
+      // ]]]FI
 
       // Descartar si la versión de la app cambió (p.ej. deploy con cambios de formulario)
       if (entry.v && entry.v !== await this.getAppVersion()) {
         // Limpiar la entrada obsoleta de forma asíncrona (sin bloquear)
         this.clear(key).catch(() => { });
+        this.logPerf('load.total', perfStart, { key, found: false, reason: 'version-changed', bytes: rawBytes });
         return null;
       }
 
       let payload = entry.d;
 
       if (entry.e) {
+        // [[[II ESC:017-03 DOC:docs/documents/2026-06-02_017_custom-draw-form-device-drawform.md#escenario-03
+        const decryptStart = this.perfNow();
+        // ]]]FI
         const bytes = CryptoJS.AES.decrypt(payload, this.ENCRYPTION_KEY);
         payload = bytes.toString(CryptoJS.enc.Utf8);
-        if (!payload) return null; // descifrado fallido
+        // [[[II ESC:017-03 DOC:docs/documents/2026-06-02_017_custom-draw-form-device-drawform.md#escenario-03
+        this.logPerf('load.decrypt', decryptStart, { key, bytes: payload.length });
+        // ]]]FI
+        if (!payload) {
+          this.logPerf('load.total', perfStart, { key, found: false, reason: 'decrypt-empty', bytes: rawBytes });
+          return null;
+        } // descifrado fallido
       }
 
+      // [[[II ESC:017-03 DOC:docs/documents/2026-06-02_017_custom-draw-form-device-drawform.md#escenario-03
+      const parsePayloadStart = this.perfNow();
+      // ]]]FI
       const data = JSON.parse(payload);
+      // [[[II ESC:017-03 DOC:docs/documents/2026-06-02_017_custom-draw-form-device-drawform.md#escenario-03
+      this.logPerf('load.parsePayload', parsePayloadStart, { key, bytes: payload.length });
+      // ]]]FI
 
       // No restaurar si todo es null / vacío
-      return this.hasNonNullValue(data) ? data : null;
+      const result = this.hasNonNullValue(data) ? data : null;
+      this.logPerf('load.total', perfStart, { key, found: !!result, bytes: rawBytes });
+      return result;
     } catch {
+      // [[[II ESC:017-03 DOC:docs/documents/2026-06-02_017_custom-draw-form-device-drawform.md#escenario-03
+      this.logPerf('load.total', perfStart, { key, found: false, reason: 'error', bytes: rawBytes });
+      // ]]]FI
       return null;
     }
   }

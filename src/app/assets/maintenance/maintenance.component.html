@@ -25,7 +25,7 @@
 
 <p-dialog [(visible)]="formDialogVisible[$any(typeDefault)]" (onHide)="onHide($any(typeDefault))"
   (onShow)="onShow($any(typeDefault))" [styleClass]="styleClassDialog()" modal="true"
-  [style]="{'contain': 'layout style paint'}">
+  [style]="{'contain': 'layout style paint'}" maximizable="true">
 
   <ng-template #header>
     <div class="p-dialog-title">

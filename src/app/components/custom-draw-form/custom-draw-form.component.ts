@@ -1,7 +1,7 @@
 import { CommonModule, KeyValue } from '@angular/common';
 import { DROPDOWN_TYPES_PRELOAD } from '../../utils/dropdown-types.const';
 import { FormControl, FormGroup, FormsModule, ReactiveFormsModule, FormArray, Validators, FormBuilder } from '@angular/forms';
-import { Component, ChangeDetectionStrategy, ElementRef, EventEmitter, inject, Input, Output, signal, computed, SimpleChanges, ViewChild, OnDestroy } from '@angular/core';
+import { Component, ChangeDetectionStrategy, ElementRef, EventEmitter, inject, Input, Output, signal, computed, SimpleChange, SimpleChanges, ViewChild, OnDestroy } from '@angular/core';
 import { Subscription } from 'rxjs';
 import { debounceTime } from 'rxjs/operators';
 import { MenuItem } from 'primeng/api';
@@ -34,19 +34,16 @@ import { InputGroupAddonModule } from 'primeng/inputgroupaddon';
 import { AutoFocusModule } from 'primeng/autofocus';
 import { StepperModule } from 'primeng/stepper';
 import { SplitButtonModule } from 'primeng/splitbutton';
-import { TableModule } from 'primeng/table';
-import { TagModule } from 'primeng/tag';
 import { TooltipModule } from 'primeng/tooltip';
 import { CRUDService } from '../../utils/services/crud.service';
-import { SharedDynamicDataService } from '@/utils/services/shared-dynamic-data.service';
 import { GeneralService } from '@/utils/services/general.service';
-import { CustomButtonCrudComponent } from '../custom-button-crud/custom-button-crud.component';
 import { MessageService } from '../services/message.service';
 import { AuthService } from '@/auth/services/auth.service';
-import { Preferences } from '@capacitor/preferences';
 import { Capacitor } from '@capacitor/core';
 import { FormCacheConfig, FormCacheService } from '@/utils/services/form-cache.service';
 import { Pipe, PipeTransform } from '@angular/core';
+import { DynamicTableFieldComponent } from './dynamic-table-field/dynamic-table-field.component';
+import { DynamicDropdownDataContext, DynamicDropdownDataService } from './dynamic-dropdown-data.service';
 
 // Plugin nativo SafeCamera — decodifica con inSampleSize para evitar OOM
 const SafeCamera: any = Capacitor.registerPlugin('SafeCamera');
@@ -121,10 +118,8 @@ export class JoinOrSelfPipe implements PipeTransform {
     InputGroupAddonModule,
     AutoFocusModule,
     StepperModule,
-    TableModule,
-    TagModule,
     TooltipModule,
-    CustomButtonCrudComponent,
+    DynamicTableFieldComponent,
 
     SplitButtonModule
   ],
@@ -140,11 +135,11 @@ export class CustomDrawFormComponent implements OnDestroy {
 
   private crudS: any = inject(CRUDService);
   protected messageS: MessageService = inject(MessageService); // para mostrar mensajes
-  private sharedS: SharedDynamicDataService = inject(SharedDynamicDataService);
   private generalS: GeneralService = inject(GeneralService); // funciones generales
   private fb: FormBuilder = inject(FormBuilder);
   private authS: AuthService = inject(AuthService);
   private formCacheS: FormCacheService = inject(FormCacheService);
+  private dynamicDropdownDataS: DynamicDropdownDataService = inject(DynamicDropdownDataService);
 
   // Suscripción para detectar cambios en el formulario
   private formSubscription?: Subscription;
@@ -157,6 +152,22 @@ export class CustomDrawFormComponent implements OnDestroy {
   private currentCacheKey: string | null = null;
   /** Config de caché del drawForm para la plataforma actual */
   private currentCacheConfig: FormCacheConfig | null = null;
+  private handlingDrawFormChange = false;
+  private isDiscardingCacheData = false;
+  private formCacheInitVersion = 0;
+  private readonly resolvedDrawFormCache = new WeakMap<object, { mobile?: any; desktop?: any }>();
+  // [[[II ESC:017-02 DOC:docs/documents/2026-06-02_017_custom-draw-form-device-drawform.md#escenario-02 ESC:017-03 DOC:docs/documents/2026-06-02_017_custom-draw-form-device-drawform.md#escenario-03
+  private readonly PERF_LOG_THRESHOLD_MS = 8;
+  private readonly MOBILE_DROPDOWN_PRELOAD_CONCURRENCY = 2;
+  private readonly DESKTOP_DROPDOWN_PRELOAD_CONCURRENCY = 6;
+  private readonly DEFERRED_DROPDOWN_PRELOAD_DELAY_MS = 15000;
+  private dropdownPreloadQueue: any[] = [];
+  private dropdownPreloadActive = 0;
+  private dropdownPreloadQueuedFields = new Set<string>();
+  private dropdownDeferredPreloadQueue: any[] = [];
+  private dropdownDeferredPreloadTimer: ReturnType<typeof setTimeout> | null = null;
+  private readonly discardedCacheKeys = new Set<string>();
+  // ]]]FI
 
   @Input() formGroup!: FormGroup;
   @Input() drawForm: any;
@@ -203,6 +214,15 @@ export class CustomDrawFormComponent implements OnDestroy {
 
   // Signal para guardar los separators calculados de emails-chips
   emailSeparatorsSignal = signal<{ [key: string]: string | RegExp }>({ default: /[,;]/ });
+
+  // [[[II ESC:015-01 DOC:docs/documents/2026-06-02_015_dynamic-table-field-component.md#escenario-01
+  readonly tableOptions = { rows: 10 };
+  editingRows: { [key: string]: boolean } = {};
+  editingCells: { [key: string]: boolean } = {};
+  tablesToValidate: { [key: string]: boolean } = {};
+  originalRowData: { [key: string]: any } = {};
+  tableValidationVersion = 0;
+  // ]]]FI
 
   // Signal para forzar recálculo del computed signal de firmas
   private signatureUpdateTrigger = signal<number>(0);
@@ -265,166 +285,106 @@ export class CustomDrawFormComponent implements OnDestroy {
   }
   // --- FIN TEMPORAL ---
 
-  /** Construye el query string de filtro desde data_type.filter. */
-  private _buildDropdownFilter(filterConfig: { [key: string]: any } | undefined): string {
-    return this.crudS.buildDropdownFilterString(filterConfig ?? {});
-  }
-
-  /** Genera la clave namespaced por tipo para sharedS.data y sharedS.drawDropdown. */
-  private _sharedKey(field: string): string {
-    const prefix = this.typeSignal() || (this as any).type || '';
-    return prefix ? `${prefix}:${field}` : field;
+  // [[[II ESC:016-02 DOC:docs/documents/2026-06-02_016_dynamic-dropdown-data-service.md#escenario-02 ESC:017-02 DOC:docs/documents/2026-06-02_017_custom-draw-form-device-drawform.md#escenario-02
+  private getDropdownDataContext(): DynamicDropdownDataContext {
+    return {
+      type: this.typeSignal() || this.type || '',
+      isCreate: this.isCreateSignal(),
+    };
   }
 
   /**
-   * Busca en `bag` cualquier clave cuyo sufijo sea `:${field}`. Sirve de fallback
-   * para cuando `generateJSONform` escribió con prefijo namespaced (`<pos>:<field>`)
-   * pero el componente padre no propagó `[type]` al `<app-custom-draw-form>`,
-   * dejando `typeSignal()` vacío y por tanto `_sharedKey` sin prefijo.
+   * Mantiene el contrato usado por el componente y por handlers internos,
+   * pero delega la resolución de opciones/caché al servicio especializado.
    */
-  private _lookupBySuffix(bag: Record<string, any>, field: string): any {
-    if (!bag || typeof bag !== 'object') return null;
-    const suffix = `:${field}`;
-    for (const key of Object.keys(bag)) {
-      if (key.endsWith(suffix) && bag[key]) return bag[key];
-    }
-    return null;
+  async dataDropdownExists(element: any, force = false): Promise<any[] | false> {
+    return this.dynamicDropdownDataS.dataDropdownExists(
+      element,
+      this.getDropdownDataContext(),
+      force
+    );
   }
 
   /**
-   * Verifica si ya existen opciones en caché para un dropdown.
-   * Además valida que el campo calculado de `option_label` exista.
-   */
-  /*async*/ dataDropdownExists(element: any, force = false)/*: Promise<any[] | false>*/ {
-    const optionLabelField = this.getOptionLabelField(element);
-    // si tiene opciones no se consulta al servidor    
-    //aqui voy estoy revisando porque option no se inicializa con los dartos del choice y como se parseMarkerlos dropdawn en sabe al modulo
-    //no lleva force ya que no consulta al servidor //inicia cambio data_type
-    const _dt = element?.data_type ?? {};
-    if (_dt?.options && Array.isArray(_dt.options) && _dt.options.length > 0) {
-      if (optionLabelField) {
-        this.applyOptionLabelToOptions(_dt.options, element, optionLabelField);
-      }
-      return _dt.options;
-    }
-
-    // Opciones del campo con prefijo (ej. form_fields_data_*): el servidor ya no las
-    // envía vía HTTP OPTIONS sino que vienen en el array `options` del propio config
-    // del drawForm (equivalente a data_type.options pero en el nivel raíz del elemento).
-    if (element?.options && Array.isArray(element.options) && element.options.length > 0) {
-      if (optionLabelField) {
-        this.applyOptionLabelToOptions(element.options, element, optionLabelField);
-      }
-      return element.options;
-    }
-
-    //si ya existe datos para ese dropdown no se vuelve a consultar
-    // Se busca en `sharedS.data` con la clave namespaced (<pos>:<field>); si el padre
-    // no propaga `[type]` se cae al lookup sin prefijo y, como último recurso, se
-    // escanea cualquier clave que termine en `:<field>` para soportar el caso en
-    // que `generateJSONform` escribió con un prefijo distinto al typeSignal local.
-    const _dataKey = this._sharedKey(element.field);
-    const _data = this.sharedS.data[_dataKey]
-      ?? this.sharedS.data[element.field]
-      ?? this._lookupBySuffix(this.sharedS.data, element.field);
-    if (_data && !force) {
-      if (optionLabelField && !this.hasOptionLabelField(_data, optionLabelField)) {
-        return false;
-      }
-      return _data;
-    }
-
-    //si ya existe datos para ese dropdown no se vuelve a consultar, va depsues de la validación de generalS.data,
-    // porque seguramente trae los datos mas actualizados, por ejemplo cuando se agregan  o eliminan elementos
-    const _ddKey = this._sharedKey(element.field);
-    const _dd = this.sharedS.drawDropdown[_ddKey]
-      ?? this.sharedS.drawDropdown[element.field]
-      ?? this._lookupBySuffix(this.sharedS.drawDropdown, element.field);
-    if (_dd && !force) {
-      if (optionLabelField && !this.hasOptionLabelField(_dd, optionLabelField)) {
-        return false;
-      }
-      return _dd;
-    }
-
-    // Cache persistente solo para móviles usando Preferences
-    /*if (!force && this.isMobileCacheEnabled(element)) {
-      const cached = await this.readMobileCache(element, optionLabelField);
-      if (cached) {
-        this.sharedS.drawDropdown[this._sharedKey(element.field)] = cached;
-        return cached;
-      }
-    }*/
-
-    return false;
-  }
-
-  /**
-   * Carga opciones de dropdown desde servidor si no hay caché.
-   * Soporta `option_label` como string separado por coma.
+   * Punto de entrada del template. El componente conserva la reacción visual
+   * y la publicación hacia dropdownOptionsSignal; el servicio resuelve datos.
    */
   async dataDropdown(element: any, force = false) {
+    const perfStart = this.perfNow();
+    const field = element?.field || '(sin-field)';
+    const fieldType = element?.type || '(sin-type)';
+    const context = this.getDropdownDataContext();
+    const existsStart = this.perfNow();
+    const dropdownOptions = force
+      ? false
+      : await this.dynamicDropdownDataS.dataDropdownExists(element, context, force);
+    this.logPerf('dropdown.exists', existsStart, { field, type: fieldType, source: dropdownOptions === false ? 'miss' : 'cache/local' }, true);
 
-    const dropdownOptions = /*await*/ this.dataDropdownExists(element, force);
-    if (dropdownOptions && !force) {
+    if (dropdownOptions !== false && !force) {
+      const buildStart = this.perfNow();
       const resolvedOptions = await this._buildDropdownOptionsForField(element, dropdownOptions);
+      this.logPerf('dropdown.buildOptions.cached', buildStart, {
+        field,
+        type: fieldType,
+        rows: Array.isArray(dropdownOptions) ? dropdownOptions.length : 0,
+        renderedRows: Array.isArray(resolvedOptions) ? resolvedOptions.length : 0
+      }, true);
       this._updateDropdownOptions(element.field, resolvedOptions);
+      this.logPerf('dropdown.total.cached', perfStart, { field, type: fieldType }, true);
       return;
     }
+
     // Reload: invalidar cache de lazy-load del árbol para volver a consultar
     // los hijos en la próxima expansión o precarga de listbox agrupado.
     if (force && this._treeLoadedKeys?.[element.field]) {
       this._treeLoadedKeys[element.field].clear();
     }
-    //si no existe datos para ese dropdown se consulta al servidor,
-    // en lugar de poner la app y el type en cada campo de json que genera el draw se pone una referencia
-    // a un objeto que tiene la app y el type para evitar que esta info se guarde en el servidor y se pueda inyectar en el componente
-    const _dt2 = element?.data_type ?? {};
-    const app = this.crudS.getAppType(_dt2?.type)?.app;
-    const type = this.crudS.getAppType(_dt2?.type)?.type;
-    if (app && type) {
-      const filter = this._buildDropdownFilter(_dt2?.filter);
-      const sort = _dt2?.ordering || '';
-      const limit = _dt2?.limit || 0;
 
+    if (!this.dynamicDropdownDataS.canRequestServer(element)) {
+      this.logPerf('dropdown.total.noServer', perfStart, { field, type: fieldType }, true);
+      return;
+    }
 
+    const shouldBlockUi = force === true;
+    if (shouldBlockUi) {
       this.messageS.showBlocked(true);
-      this.crudS.getObject({ app, type, filter, sort, limit }).subscribe(async (data: any) => {
-        //let dataDropdown = data.data.map((item: any) => {
-        let dataDropdown = this.generalS.DJAtoObject({
-          respDJA: data,
-          //como este camo es para llenar los drow se envia la configuracion del campo
-          "fields": { [element.field]: element }
-          //option_label: element?.option_label || ''
-        });
+    }
 
-        // Verificamos si al menos un objeto tiene un 'module' diferente de null,
-        //esto es para los registros que tienen module, es decir, deferencia a que app pertenece
-        const hasNonNullModule = dataDropdown.some((item: any) => item.module !== undefined);
+    try {
+      const serverStart = this.perfNow();
+      const dataDropdown = await this.dynamicDropdownDataS.loadServerOptions(element, context, force);
+      this.logPerf('dropdown.server', serverStart, {
+        field,
+        type: fieldType,
+        rows: Array.isArray(dataDropdown) ? dataDropdown.length : 0,
+        force
+      }, true);
+      if (dataDropdown === false) {
+        this.logPerf('dropdown.total.serverSkipped', perfStart, { field, type: fieldType }, true);
+        return;
+      }
 
-        // Si existe al menos un module no nulo, filtramos solo los que sean 'MA'
-        if (hasNonNullModule) {
-          //°°° se debe definir el tema de los modulos, porque no todos necesitas filtar por module
-          dataDropdown = dataDropdown.filter((item: any) => item.module === 'MA');
-        }
-
-        this.sharedS.drawDropdown[this._sharedKey(element.field)] = dataDropdown;
-        const resolvedOptions = await this._buildDropdownOptionsForField(element, dataDropdown);
-        this._updateDropdownOptions(element.field, resolvedOptions);
-        if (!force && this.isMobileCacheEnabled(element)) {
-          await this.writeMobileCache(element, dataDropdown);
-        }
+      const buildStart = this.perfNow();
+      const resolvedOptions = await this._buildDropdownOptionsForField(element, dataDropdown);
+      this.logPerf('dropdown.buildOptions.server', buildStart, {
+        field,
+        type: fieldType,
+        rows: dataDropdown.length,
+        renderedRows: Array.isArray(resolvedOptions) ? resolvedOptions.length : 0
+      }, true);
+      this._updateDropdownOptions(element.field, resolvedOptions);
+      this.logPerf('dropdown.total.server', perfStart, { field, type: fieldType, force }, true);
+    } finally {
+      if (shouldBlockUi) {
         this.messageS.showBlocked(false);
-      });
+      }
     }
   }
 
-  /**
-   * Verifica si el cache móvil está habilitado por configuración del servidor.
-   */
-  private isMobileCacheEnabled(element: any): boolean {
-    return this.generalS.isMobile() && element?.mobile?.cache?.active === true;
+  private normalizeOptionsForField(options: any[], fieldConfig: any): any[] {
+    return this.dynamicDropdownDataS.normalizeOptionsForField(options, fieldConfig);
   }
+  // ]]]FI
 
   /**
    * Obtiene la clave del usuario para separar el cache por cuenta.
@@ -434,181 +394,6 @@ export class CustomDrawFormComponent implements OnDestroy {
     const username = this.authS.username?.() ?? null;
     return String(userId ?? username ?? 'anonymous');
   }
-
-  /**
-   * Genera la llave de cache móvil para un dropdown por usuario.
-   */
-  private getMobileCacheKey(element: any): string {
-    const _dt = element?.data_type ?? {};
-    const app = this.crudS.getAppType(_dt?.type)?.app || 'app';
-    const type = this.crudS.getAppType(_dt?.type)?.type || 'type';
-    const field = element?.field || 'field';
-    const userKey = this.getCacheUserKey();
-    return `dropdownCache:${userKey}:${app}:${type}:${field}`;
-  }
-
-  /**
-   * Lee el cache móvil y valida expiración y labelField.
-   */
-  private async readMobileCache(element: any, optionLabelField: string | null): Promise<any[] | null> {
-    try {
-      const key = this.getMobileCacheKey(element);
-      const { value } = await Preferences.get({ key });
-      if (!value) return null;
-
-      const parsed = JSON.parse(value);
-      const data = parsed?.data;
-      const savedAt = parsed?.savedAt;
-      const ttlSeconds = element?.mobile?.cache?.time ?? 0;
-      const ttlMs = Number(ttlSeconds) * 1000;
-
-      if (!Array.isArray(data) || !savedAt || ttlMs <= 0) {
-        return null;
-      }
-
-      // Descartar si la versión de la app ha cambiado (estructura del dropdown puede haber variado)
-      const appVersion = await this.formCacheS.getAppVersion();
-      if (parsed.version && parsed.version !== appVersion) {
-        await Preferences.remove({ key });
-        return null;
-      }
-
-      if (Date.now() - savedAt > ttlMs) {
-        await Preferences.remove({ key });
-        return null;
-      }
-
-      if (optionLabelField && !this.hasOptionLabelField(data, optionLabelField)) {
-        this.applyOptionLabelToOptions(data, element, optionLabelField);
-      }
-
-      return data;
-    } catch {
-      return null;
-    }
-  }
-
-  /**
-   * Guarda el cache móvil con timestamp para expiración.
-   */
-  private async writeMobileCache(element: any, data: any[]): Promise<void> {
-    try {
-      const key = this.getMobileCacheKey(element);
-      await Preferences.set({
-        key,
-        value: JSON.stringify({
-          savedAt: Date.now(),
-          version: await this.formCacheS.getAppVersion(),
-          data
-        })
-      });
-    } catch {
-      // Silencioso: cache opcional
-    }
-  }
-
-  /**
-   * Normaliza `option_label` a array de campos.
-   * Acepta array o string con comas: "name,last_name".
-   */
-  private parseOptionLabel(value: any): string[] {
-    if (Array.isArray(value)) {
-      return value.map((v) => String(v).trim()).filter((v) => v.length > 0);
-    }
-
-    if (typeof value === 'string') {
-      return value
-        .split(',')
-        .map((v) => v.trim())
-        .filter((v) => v.length > 0);
-    }
-
-    return [];
-  }
-
-  /**
-   * Obtiene el nombre del campo concatenado usado como `optionLabel`.
-   * Se concatena SIN espacios para construir el nombre de propiedad.
-   */
-  private getOptionLabelField(element: any): string | null {
-    const labels = this.parseOptionLabel(element?.option_label);
-    return labels.length > 0 ? labels.join('') : null;
-  }
-
-  /**
-   * Verifica si el primer elemento ya contiene la propiedad del label concatenado.
-   */
-  private hasOptionLabelField(options: any[], labelField: string): boolean {
-    if (!Array.isArray(options) || options.length === 0) return true;
-    return options[0]?.hasOwnProperty(labelField);
-  }
-
-  /**
-   * Aplica el label concatenado a cada opción cuando no existe.
-   */
-  private applyOptionLabelToOptions(options: any[], element: any, labelField: string): void {
-    if (!Array.isArray(options) || options.length === 0) return;
-    if (options[0]?.hasOwnProperty(labelField)) return;
-
-    const separator = element?.option_label_separator ?? ' ';
-    const labelFields = this.parseOptionLabel(element?.option_label);
-    if (labelFields.length === 0) return;
-
-    for (const opt of options) {
-      const label = labelFields
-        .map((key: string) => opt?.[key])
-        .filter((val: any) => val !== undefined && val !== null && String(val).trim() !== '')
-        .map((val: any) => String(val))
-        .join(separator);
-      opt[labelField] = label;
-    }
-  }
-
-  // [[[II ESC:003-03 DOC:docs/documents/2026-05-25_003_dynamic-children-field-loading.md#escenario-03
-  private normalizeOptionsForField(options: any[], fieldConfig: any): any[] {
-    if (!Array.isArray(options) || options.length === 0) return options || [];
-
-    const optionValue = fieldConfig?.option_value;
-    const labelFields = this.parseOptionLabel(fieldConfig?.option_label);
-    const aliases: Record<string, string[]> = {
-      'value': ['id'],
-      'id': ['value'],
-      'display_name': ['name', 'label'],
-      'name': ['display_name', 'label'],
-      'label': ['display_name', 'name'],
-    };
-
-    const normalized = options.map((option: any) => {
-      if (!option || typeof option !== 'object') return option;
-
-      const next = { ...option };
-
-      if (optionValue && next[optionValue] === undefined) {
-        const aliasKey = (aliases[optionValue] || []).find((alias) => next[alias] !== undefined);
-        if (aliasKey !== undefined) {
-          next[optionValue] = next[aliasKey];
-        }
-      }
-
-      for (const labelField of labelFields) {
-        if (next[labelField] !== undefined) continue;
-        const aliasKey = (aliases[labelField] || []).find((alias) => next[alias] !== undefined);
-        if (aliasKey !== undefined) {
-          next[labelField] = next[aliasKey];
-        }
-      }
-
-      return next;
-    });
-
-    const labelField = this.getOptionLabelField(fieldConfig);
-    if (labelField) {
-      this.applyOptionLabelToOptions(normalized, fieldConfig, labelField);
-    }
-
-    return normalized;
-  }
-  // ]]]FI
 
   // [[[II Fuente única de tipos dropdown en utils/dropdown-types.const.ts ]]]FI
   private readonly DROPDOWN_TYPES = DROPDOWN_TYPES_PRELOAD;
@@ -668,6 +453,7 @@ export class CustomDrawFormComponent implements OnDestroy {
   }
   // ]]]FI
 
+  // [[[II ESC:017-02 DOC:docs/documents/2026-06-02_017_custom-draw-form-device-drawform.md#escenario-02
   /**
    * Procesa una colección { 0: {...}, 1: {...} } o array de elementos
    */
@@ -677,11 +463,112 @@ export class CustomDrawFormComponent implements OnDestroy {
     for (const el of Object.values(collection)) {
       this.walkElement(el, (node) => {
         if (this.isDropdown(node)) {
-          this.dataDropdown(node);
+          this.enqueueDropdownPreload(node);
         }
       });
     }
   }
+
+  private enqueueDropdownPreload(element: any): void {
+    const field = element?.field;
+    if (!field) return;
+    if (this.shouldSkipDropdownPreload(element)) {
+      return;
+    }
+
+    if (this.dropdownPreloadQueuedFields.has(field)) {
+      return;
+    }
+
+    this.dropdownPreloadQueuedFields.add(field);
+    if (this.shouldDeferDropdownPreload(element)) {
+      this.dropdownDeferredPreloadQueue.push(element);
+      this.scheduleDeferredDropdownPreload();
+      return;
+    }
+
+    this.dropdownPreloadQueue.push(element);
+    this.drainDropdownPreloadQueue();
+  }
+
+  private shouldSkipDropdownPreload(element: any): boolean {
+    return element?.hidden === true
+      || element?.hide === true
+      || element?.visible === false
+      || element?.preload === false
+      || element?.preload_options === false;
+  }
+
+  private shouldDeferDropdownPreload(element: any): boolean {
+    if (element?.defer_preload === true) return true;
+
+    const field = String(element?.field || '').toLowerCase();
+    if (!field) return false;
+
+    return [
+      'created_by',
+      'modified_by',
+      'inactivated_by',
+      'deleted_by',
+      'users_authorize',
+      'tasks'
+    ].includes(field);
+  }
+
+  private scheduleDeferredDropdownPreload(): void {
+    if (this.dropdownDeferredPreloadTimer) return;
+
+    this.dropdownDeferredPreloadTimer = setTimeout(() => {
+      this.dropdownDeferredPreloadTimer = null;
+      const deferred = this.dropdownDeferredPreloadQueue.splice(0);
+
+      if (deferred.length === 0) return;
+
+      this.dropdownPreloadQueue.push(...deferred);
+      this.drainDropdownPreloadQueue();
+    }, this.DEFERRED_DROPDOWN_PRELOAD_DELAY_MS);
+  }
+
+  private resetDropdownPreloadState(): void {
+    this.dropdownPreloadQueue = [];
+    this.dropdownDeferredPreloadQueue = [];
+    this.dropdownPreloadQueuedFields.clear();
+
+    if (this.dropdownDeferredPreloadTimer) {
+      clearTimeout(this.dropdownDeferredPreloadTimer);
+      this.dropdownDeferredPreloadTimer = null;
+    }
+  }
+
+  private drainDropdownPreloadQueue(): void {
+    const concurrency = this.generalS.isMobileScreen()
+      ? this.MOBILE_DROPDOWN_PRELOAD_CONCURRENCY
+      : this.DESKTOP_DROPDOWN_PRELOAD_CONCURRENCY;
+
+    while (this.dropdownPreloadActive < concurrency && this.dropdownPreloadQueue.length > 0) {
+      const element = this.dropdownPreloadQueue.shift();
+      const field = element?.field || '(sin-field)';
+      const fieldType = element?.type || '(sin-type)';
+      const preloadStart = this.perfNow();
+
+      this.dropdownPreloadActive++;
+
+      void this.dataDropdown(element, false)
+        .catch(() => { })
+        .finally(() => {
+          this.dropdownPreloadActive--;
+          this.dropdownPreloadQueuedFields.delete(field);
+          this.logPerf('dropdown.preload.finished', preloadStart, {
+            field,
+            type: fieldType,
+            active: this.dropdownPreloadActive,
+            queued: this.dropdownPreloadQueue.length
+          }, true);
+          this.drainDropdownPreloadQueue();
+        });
+    }
+  }
+  // ]]]FI
 
   dropdownOptions(drawForm: any): void {
     // grid
@@ -705,12 +592,14 @@ export class CustomDrawFormComponent implements OnDestroy {
       for (const el of Object.values(drawForm.grid)) {
         this.walkElement(el, (node: any) => {
           if (node?.type === 'table') {
-            const control = this.getFormControl(node.field);
-            if (control && (!control.value || control.value.length === 0)) {
+            // [[[II ESC:011-01 DOC:docs/documents/2026-06-02_011_custom-draw-form-table-formarray.md#escenario-01
+            const formArray = this.getTableFormArray(node.field);
+            if (formArray && formArray.length === 0) {
               const defaultValue = node.default?.value || [];
               const initialData = defaultValue.length > 0 ? defaultValue : this.initializeTableData(node);
-              control.setValue(initialData);
+              this.updateTableFormControl(node.field, initialData, false, node);
             }
+            // ]]]FI
           }
         });
       }
@@ -881,136 +770,382 @@ export class CustomDrawFormComponent implements OnDestroy {
     return new RegExp(pattern);
   }
 
+  // [[[II ESC:017-01 DOC:docs/documents/2026-06-02_017_custom-draw-form-device-drawform.md#escenario-01
+  private perfNow(): number {
+    return typeof performance !== 'undefined' ? performance.now() : Date.now();
+  }
 
+  private logPerf(label: string, start: number, extra: any = {}, force = false): void {
+    return;
+  }
 
-  ngOnChanges(changes: SimpleChanges) {
+  private resolveDrawFormByDevice(drawForm: any): any {
+    const perfStart = this.perfNow();
+    if (!drawForm || typeof drawForm !== 'object') return drawForm;
 
-    if (changes['formGroup']) {
-      const previousValue = changes['formGroup'].previousValue;
-      const currentValue = changes['formGroup'].currentValue;
+    const hasMobileBranch = this.isDeviceDrawFormBranch(drawForm.mobile);
+    const hasDesktopBranch = this.isDeviceDrawFormBranch(drawForm.desktop);
+    const hasDeviceBranches = hasMobileBranch || hasDesktopBranch;
+    const isMobileScreen = this.generalS.isMobileScreen();
 
-      this.formGroupSignal.set(currentValue);
+    const selectedDrawForm = hasDeviceBranches
+      ? (isMobileScreen
+        ? (hasMobileBranch ? drawForm.mobile : drawForm.desktop)
+        : (hasDesktopBranch ? drawForm.desktop : drawForm.mobile))
+      : drawForm;
 
-      // Limpiar suscripciones anteriores si existen
-      if (this.formSubscription) {
-        this.formSubscription.unsubscribe();
+    if (!selectedDrawForm || typeof selectedDrawForm !== 'object') return selectedDrawForm;
+
+    const cacheKey = isMobileScreen ? 'mobile' : 'desktop';
+    const cached = this.resolvedDrawFormCache.get(selectedDrawForm)?.[cacheKey];
+    if (cached) {
+      this.logPerf('resolveDrawFormByDevice.cacheHit', perfStart, { cacheKey, hasDeviceBranches }, true);
+      return cached;
+    }
+
+    const resolvedDrawForm = isMobileScreen
+      ? this.normalizeMobileFieldTypes(selectedDrawForm)
+      : selectedDrawForm;
+    const cacheValue = this.resolvedDrawFormCache.get(selectedDrawForm) || {};
+    cacheValue[cacheKey] = resolvedDrawForm;
+    this.resolvedDrawFormCache.set(selectedDrawForm, cacheValue);
+    this.logPerf('resolveDrawFormByDevice', perfStart, { cacheKey, hasDeviceBranches }, true);
+    return resolvedDrawForm;
+  }
+
+  private isDeviceDrawFormBranch(value: any): boolean {
+    return !!value
+      && typeof value === 'object'
+      && (!!value.grid || !!value.stepper);
+  }
+
+  private normalizeMobileFieldTypes(drawForm: any): any {
+    if (!drawForm || typeof drawForm !== 'object') return drawForm;
+
+    let normalizedDrawForm: any | null = null;
+
+    if (drawForm.grid && typeof drawForm.grid === 'object') {
+      const normalizedGrid = this.normalizeFieldCollectionForMobile(drawForm.grid);
+      if (normalizedGrid !== drawForm.grid) {
+        normalizedDrawForm = { ...drawForm, grid: normalizedGrid };
       }
-      if (this.formStatusSubscription) {
-        this.formStatusSubscription.unsubscribe();
-      }
+    }
 
-      // Cuando el formulario se construye por primera vez (transición null → FormGroup),
-      // addFieldsByPrefix ya muté los nombres de campo a 'object_...' y data_type.options
-      // sigue intacto en el elemento. Re-ejecutar dropdownOptions para que el signal
-      // se popule con las claves object_ correctas (dropdown, dropdown-choice, multi-select, etc.).
-      if (!previousValue && currentValue) {
-        const _dform = this.drawFormSignal();
-        if (_dform) {
-          this.dropdownOptions(_dform);
+    const steps = drawForm.stepper?.steps;
+    if (steps && typeof steps === 'object') {
+      const normalizedSteps = this.normalizeStepperStepsForMobile(steps);
+      if (normalizedSteps !== steps) {
+        normalizedDrawForm = {
+          ...(normalizedDrawForm || drawForm),
+          stepper: {
+            ...drawForm.stepper,
+            steps: normalizedSteps
+          }
+        };
+      }
+    }
+
+    return normalizedDrawForm || drawForm;
+  }
+
+  private normalizeStepperStepsForMobile(steps: any): any {
+    if (!steps || typeof steps !== 'object') return steps;
+
+    let nextSteps: any = null;
+
+    Object.keys(steps).forEach(stepKey => {
+      const step = steps[stepKey];
+      if (!step || typeof step !== 'object') return;
+
+      const normalizedFields = this.normalizeFieldCollectionForMobile(step.fields);
+      if (normalizedFields === step.fields) return;
+
+      if (!nextSteps) {
+        nextSteps = Array.isArray(steps) ? [...steps] : { ...steps };
+      }
+      nextSteps[stepKey] = {
+        ...step,
+        fields: normalizedFields
+      };
+    });
+
+    return nextSteps || steps;
+  }
+
+  private normalizeFieldCollectionForMobile(collection: any): any {
+    if (!collection || typeof collection !== 'object') return collection;
+
+    if (Array.isArray(collection)) {
+      let normalizedArray: any[] | null = null;
+      collection.forEach((fieldConfig: any, index: number) => {
+        const normalizedField = this.normalizeFieldConfigForMobile(fieldConfig);
+        if (normalizedField === fieldConfig) {
+          if (normalizedArray) normalizedArray.push(fieldConfig);
+          return;
         }
+        if (!normalizedArray) {
+          normalizedArray = collection.slice(0, index);
+        }
+        normalizedArray.push(normalizedField);
+      });
+      return normalizedArray || collection;
+    }
+
+    let normalizedCollection: any | null = null;
+    Object.keys(collection).forEach(key => {
+      const fieldConfig = collection[key];
+      const normalizedField = this.normalizeFieldConfigForMobile(fieldConfig);
+      if (normalizedField === fieldConfig) return;
+      if (!normalizedCollection) {
+        normalizedCollection = { ...collection };
       }
+      normalizedCollection[key] = normalizedField;
+    });
 
-      // Si el formGroup cambió (reset o nuevo objeto), limpiar todos los canvas de firma Y archivos multimedia
-      if (previousValue !== currentValue && currentValue) {
-        setTimeout(() => {
-          this.clearAllSignatureCanvases();
-          this.clearAllMediaFiles();
-          // Si initFormAutoCache() ya terminó y restauró archivos desde caché,
-          // reconstruir files64Signal porque clearAllMediaFiles() los acaba de borrar
-          if (this.isCacheRestored()) {
-            this.restoreFiles64FromCache(currentValue);
-          }
-        }, 300);
-      }
+    return normalizedCollection || collection;
+  }
 
-      // Suscribirse a cambios de estado del formulario para detectar reset automático
-      if (currentValue) {
-        //console.log('📋 Inicializando suscripción al formulario');
-        this.wasDirty = currentValue.dirty;
+  private normalizeFieldConfigForMobile(fieldConfig: any): any {
+    if (!fieldConfig || typeof fieldConfig !== 'object') return fieldConfig;
 
-        // Suscribirse al estado del formulario (pristine/dirty)
-        this.formStatusSubscription = currentValue.statusChanges.subscribe(() => {
-          const isPristine = currentValue.pristine;
-          const isDirty = currentValue.dirty;
+    let normalizedField: any | null = null;
+    const setNormalizedValue = (key: string, value: any): void => {
+      if (!normalizedField) normalizedField = { ...fieldConfig };
+      normalizedField[key] = value;
+    };
+    const mobileType = typeof fieldConfig.type_mobile === 'string'
+      ? fieldConfig.type_mobile.trim()
+      : fieldConfig.type_mobile;
 
-          // Detectar reset: el formulario estaba dirty y ahora es pristine
-          if (this.wasDirty && isPristine) {
-            //console.log('🔄 Reset detectado (dirty -> pristine) - limpiando multimedia, firmas y reseteando stepper');
-            setTimeout(async () => {
-              if (this.hasMultimediaFiles()) {
-                this.clearAllMediaFiles();
-                this.clearAllSignatureCanvases();
-              }
-              // Resetear el stepper al valor inicial
-              const drawForm = this.drawFormSignal();
-              if (drawForm?.stepper) {
-                const initialStep = drawForm.stepper.value || 1;
-                this.setCurrentStep(initialStep);
-                //console.log(`📍 Stepper reseteado al step inicial: ${initialStep}`);
-              }
-              // Limpiar caché de formulario al resetear (incluye luego de guardar en servidor)
-              await this.clearFormCache();
-              // Re-inicializar el sistema de caché para el próximo uso:
-              // Si el padre reutiliza la misma instancia de FormGroup (sin cambiar la referencia),
-              // ngOnChanges no dispara, así que reiniciamos aquí para que el autoguardado
-              // quede activo en la siguiente apertura del formulario.
-              this.initFormAutoCache();
-            }, 50);
-          }
+    if (mobileType !== undefined && mobileType !== null && mobileType !== '' && fieldConfig.type !== mobileType) {
+      setNormalizedValue('type', mobileType);
+    }
 
-          // Actualizar estado
-          this.wasDirty = isDirty;
+    if (fieldConfig.card && typeof fieldConfig.card === 'object') {
+      const normalizedCard = this.normalizeFieldCollectionForMobile(fieldConfig.card);
+      if (normalizedCard !== fieldConfig.card) setNormalizedValue('card', normalizedCard);
+    }
+
+    if (fieldConfig.fieldset && typeof fieldConfig.fieldset === 'object') {
+      const normalizedFieldset = this.normalizeFieldCollectionForMobile(fieldConfig.fieldset);
+      if (normalizedFieldset !== fieldConfig.fieldset) setNormalizedValue('fieldset', normalizedFieldset);
+    }
+
+    if (fieldConfig.fields && typeof fieldConfig.fields === 'object') {
+      const normalizedFields = this.normalizeFieldCollectionForMobile(fieldConfig.fields);
+      if (normalizedFields !== fieldConfig.fields) setNormalizedValue('fields', normalizedFields);
+    }
+
+    if (Array.isArray(fieldConfig.columns)) {
+      const normalizedColumns = this.normalizeFieldCollectionForMobile(fieldConfig.columns);
+      if (normalizedColumns !== fieldConfig.columns) setNormalizedValue('columns', normalizedColumns);
+    }
+
+    if (fieldConfig.panel?.fields && typeof fieldConfig.panel.fields === 'object') {
+      const normalizedPanelFields = this.normalizeFieldCollectionForMobile(fieldConfig.panel.fields);
+      if (normalizedPanelFields !== fieldConfig.panel.fields) {
+        setNormalizedValue('panel', {
+          ...fieldConfig.panel,
+          fields: normalizedPanelFields
         });
       }
     }
-    if (changes['drawForm']) {
-      this.drawFormSignal.set(changes['drawForm'].currentValue);
 
-      this.dropdownOptions(changes['drawForm'].currentValue);
-      this.initializeTableFields(changes['drawForm'].currentValue);
-      this.initializeSignatureFields(changes['drawForm'].currentValue);
-      this.initializeEmailChipsFields(changes['drawForm'].currentValue);
-
-      // Recuperar captura de cámara pendiente si Android mató la Activity
-      this._checkPendingSafeCapture();
-
-      // Inicializar el step actual si hay un stepper
-      const drawForm = changes['drawForm'].currentValue;
-      if (drawForm?.stepper) {
-        const initialStep = drawForm.stepper.value || 1;
-        this.setCurrentStep(initialStep);
-        //console.log('📍 Step inicial del stepper:', initialStep);
-      } else {
-        // Si no hay stepper, usar null para mostrar toda la multimedia
-        this.setCurrentStep(null);
-        //console.log('📍 Sin stepper - mostrando toda la multimedia');
-      }
+    if (fieldConfig.children?.fields && typeof fieldConfig.children.fields === 'object') {
+      const normalizedChildren = this.normalizeChildrenFieldsForMobile(fieldConfig.children);
+      if (normalizedChildren !== fieldConfig.children) setNormalizedValue('children', normalizedChildren);
     }
+
+    return normalizedField || fieldConfig;
+  }
+
+  private normalizeChildrenFieldsForMobile(children: any): any {
+    const fields = children.fields || {};
+    let normalizedFields: any | null = null;
+    let normalizedByGroup = false;
+
+    ['static', 'dynamic', 'derived'].forEach(groupKey => {
+      if (fields[groupKey] && typeof fields[groupKey] === 'object') {
+        const normalizedGroup = this.normalizeFieldCollectionForMobile(fields[groupKey]);
+        if (normalizedGroup !== fields[groupKey]) {
+          if (!normalizedFields) normalizedFields = { ...fields };
+          normalizedFields[groupKey] = normalizedGroup;
+        }
+        normalizedByGroup = true;
+      }
+    });
+
+    if (!normalizedByGroup) {
+      normalizedFields = this.normalizeFieldCollectionForMobile(fields);
+    }
+
+    return normalizedFields && normalizedFields !== fields
+      ? { ...children, fields: normalizedFields }
+      : children;
+  }
+  // ]]]FI
+
+  // [[[II ESC:008-01 DOC:docs/documents/2026-06-02_008_custom-draw-form-ngonchanges-signals.md#escenario-01 ESC:017-01 DOC:docs/documents/2026-06-02_017_custom-draw-form-device-drawform.md#escenario-01
+  ngOnChanges(changes: SimpleChanges) {
+    const perfStart = this.perfNow();
+    this.syncInputSignals(changes);
+
+    this.handlingDrawFormChange = !!changes['drawForm'];
+
+    try {
+      if (changes['formGroup']) {
+        this.handleFormGroupChange(changes['formGroup']);
+      }
+
+      if (changes['drawForm']) {
+        this.handleDrawFormChange(this.drawFormSignal());
+      }
+
+      if (changes['formGroup'] || changes['drawForm'] || changes['type'] || /*changes['tabPanel'] ||*/ changes['isCreate']) {
+        this.initFormAutoCache();
+      }
+    } finally {
+      this.handlingDrawFormChange = false;
+      this.logPerf('ngOnChanges', perfStart, { changes: Object.keys(changes) }, !!changes['drawForm']);
+    }
+  }
+
+  private syncInputSignals(changes: SimpleChanges): void {
     if (changes['type']) {
       this.typeSignal.set(changes['type'].currentValue);
     }
     if (changes['tabPanel']) {
       this.tabPanelSignal.set(changes['tabPanel'].currentValue);
     }
-    /*if (changes['customField']) {
-      this.customFieldSignal.set(changes['customField'].currentValue);
-    }*/
-    /*if (changes['optionLabel']) {
-      this.optionLabelSignal.set(changes['optionLabel'].currentValue);
-    }*/
-    //if (changes['showIcon']) {
-    //  this.showIconSignal.set(changes['showIcon'].currentValue);
-    //}
-
-    if (changes['formGroup'] || changes['drawForm'] || changes['type'] || /*changes['tabPanel'] ||*/ changes['isCreate']) {
-      this.initFormAutoCache();
-    }
-
     if (changes['isCreate']) {
       this.isCreateSignal.set(changes['isCreate'].currentValue);
     }
-
+    if (changes['formGroup']) {
+      this.formGroupSignal.set(changes['formGroup'].currentValue);
+    }
+    if (changes['drawForm']) {
+      this.drawFormSignal.set(this.resolveDrawFormByDevice(changes['drawForm'].currentValue));
+    }
   }
+
+  private handleFormGroupChange(change: SimpleChange): void {
+    const previousValue = change.previousValue;
+    const currentValue = change.currentValue;
+
+    // Limpiar suscripciones anteriores si existen
+    if (this.formSubscription) {
+      this.formSubscription.unsubscribe();
+    }
+    if (this.formStatusSubscription) {
+      this.formStatusSubscription.unsubscribe();
+    }
+
+    // Cuando el formulario se construye por primera vez (transición null → FormGroup),
+    // addFieldsByPrefix ya muté los nombres de campo a 'object_...' y data_type.options
+    // sigue intacto en el elemento. Re-ejecutar dropdownOptions para que el signal
+    // se popule con las claves object_ correctas (dropdown, dropdown-choice, multi-select, etc.).
+    if (!previousValue && currentValue && !this.handlingDrawFormChange) {
+      const _dform = this.drawFormSignal();
+      if (_dform) {
+        this.dropdownOptions(_dform);
+      }
+    }
+
+    // Si el formGroup cambió (reset o nuevo objeto), limpiar todos los canvas de firma Y archivos multimedia
+    if (previousValue !== currentValue && currentValue) {
+      setTimeout(() => {
+        this.clearAllSignatureCanvases();
+        this.clearAllMediaFiles();
+        // Si initFormAutoCache() ya terminó y restauró archivos desde caché,
+        // reconstruir files64Signal porque clearAllMediaFiles() los acaba de borrar
+        if (this.isCacheRestored()) {
+          this.restoreFiles64FromCache(currentValue);
+        }
+      }, 300);
+    }
+
+    // Suscribirse a cambios de estado del formulario para detectar reset automático
+    if (currentValue) {
+      this.wasDirty = currentValue.dirty;
+
+      // Suscribirse al estado del formulario (pristine/dirty)
+      this.formStatusSubscription = currentValue.statusChanges.subscribe(() => {
+        const isPristine = currentValue.pristine;
+        const isDirty = currentValue.dirty;
+
+        if (this.isDiscardingCacheData) {
+          this.wasDirty = isDirty;
+          return;
+        }
+
+        // Detectar reset: el formulario estaba dirty y ahora es pristine
+        if (this.wasDirty && isPristine) {
+          setTimeout(async () => {
+            if (this.hasMultimediaFiles()) {
+              this.clearAllMediaFiles();
+              this.clearAllSignatureCanvases();
+            }
+            // Resetear el stepper al valor inicial
+            const drawForm = this.drawFormSignal();
+            if (drawForm?.stepper) {
+              const initialStep = drawForm.stepper.value || 1;
+              this.setCurrentStep(initialStep);
+            }
+            // Limpiar caché de formulario al resetear (incluye luego de guardar en servidor)
+            await this.clearFormCache();
+            // Re-inicializar el sistema de caché para el próximo uso:
+            // Si el padre reutiliza la misma instancia de FormGroup (sin cambiar la referencia),
+            // ngOnChanges no dispara, así que reiniciamos aquí para que el autoguardado
+            // quede activo en la siguiente apertura del formulario.
+            this.initFormAutoCache();
+          }, 50);
+        }
+
+        // Actualizar estado
+        this.wasDirty = isDirty;
+      });
+    }
+  }
+
+  private handleDrawFormChange(drawForm: any): void {
+    const perfStart = this.perfNow();
+    this._fileMenuCache = {};
+    this.resetDropdownPreloadState();
+
+    let stepStart = this.perfNow();
+    this.dropdownOptions(drawForm);
+    this.logPerf('handleDrawFormChange.dropdownOptions', stepStart);
+
+    stepStart = this.perfNow();
+    this.initializeTableFields(drawForm);
+    this.logPerf('handleDrawFormChange.initializeTableFields', stepStart);
+
+    stepStart = this.perfNow();
+    this.initializeSignatureFields(drawForm);
+    this.logPerf('handleDrawFormChange.initializeSignatureFields', stepStart);
+
+    stepStart = this.perfNow();
+    this.initializeEmailChipsFields(drawForm);
+    this.logPerf('handleDrawFormChange.initializeEmailChipsFields', stepStart);
+
+    // Recuperar captura de cámara pendiente si Android mató la Activity
+    this._checkPendingSafeCapture();
+
+    // Inicializar el step actual si hay un stepper
+    if (drawForm?.stepper) {
+      const initialStep = drawForm.stepper.value || 1;
+      this.setCurrentStep(initialStep);
+    } else {
+      // Si no hay stepper, usar null para mostrar toda la multimedia
+      this.setCurrentStep(null);
+    }
+
+    this.logPerf('handleDrawFormChange.total', perfStart, {
+      hasGrid: !!drawForm?.grid,
+      hasStepper: !!drawForm?.stepper
+    }, true);
+  }
+  // ]]]FI
 
   /**
    * Limpia las suscripciones cuando el componente se destruye.
@@ -1027,6 +1162,10 @@ export class CustomDrawFormComponent implements OnDestroy {
     if (this.cacheAutoSaveSub) {
       this.cacheAutoSaveSub.unsubscribe();
     }
+    this.resetDropdownPreloadState();
+    // [[[II ESC:014-01 DOC:docs/documents/2026-06-02_014_custom-draw-form-files64-memory.md#escenario-01
+    this.releaseAllPreviewUrls();
+    // ]]]FI
   }
 
   // ─────────────────────────────────────────────────
@@ -1040,6 +1179,8 @@ export class CustomDrawFormComponent implements OnDestroy {
    * y se suscribe a valueChanges para autoguardar.
    */
   private async initFormAutoCache(): Promise<void> {
+    const initVersion = ++this.formCacheInitVersion;
+    const perfStart = this.perfNow();
     const formGroup = this.formGroupSignal();
     const drawForm = this.drawFormSignal();
     // Usar el @Input directo como fallback porque typeSignal solo se actualiza
@@ -1051,14 +1192,20 @@ export class CustomDrawFormComponent implements OnDestroy {
       this.cacheAutoSaveSub.unsubscribe();
       this.cacheAutoSaveSub = undefined;
     }
+    this.currentCacheKey = null;
+    this.currentCacheConfig = null;
 
     if (!formGroup || !drawForm) {
+      this.logPerf('formCache.init.skip', perfStart, { reason: 'missing formGroup/drawForm' });
       return;
     }
 
     // Escanear los campos del drawForm para obtener cuáles tienen caché habilitado
+    const cacheConfigStart = this.perfNow();
     const cacheConfig = this.formCacheS.getCacheConfig(drawForm);
+    this.logPerf('formCache.getCacheConfig', cacheConfigStart);
     if (!cacheConfig) {
+      this.logPerf('formCache.init.skip', perfStart, { reason: 'no cache config' });
       return;
     }
 
@@ -1068,6 +1215,7 @@ export class CustomDrawFormComponent implements OnDestroy {
       : cacheConfig.editionFields;
 
     if (cacheableFields.length === 0) {
+      this.logPerf('formCache.init.skip', perfStart, { reason: 'no cacheable fields' });
       return;
     }
 
@@ -1078,23 +1226,49 @@ export class CustomDrawFormComponent implements OnDestroy {
       this.tabPanelSignal() || /*this.tabPanel ||*/ 'default'
     );
 
-    console.log('[FormCache] cache key:', key);
-
     this.currentCacheKey = key;
     this.currentCacheConfig = cacheConfig;
 
     // ── Restaurar borrador si existe ────────────────
-    if (this.isCreateSignal()) {
+    // [[[II ESC:017-03 DOC:docs/documents/2026-06-02_017_custom-draw-form-device-drawform.md#escenario-03
+    if (this.isCreateSignal() && !this.discardedCacheKeys.has(key)) {
+      const loadStart = this.perfNow();
       const cached = await this.formCacheS.load(key);
-      if (cached) {
-        formGroup.patchValue(cached, { emitEvent: false });
-        formGroup.markAsDirty();
-        this.wasDirty = true;
-        this.isCacheRestored.set(true);
-        // files64Signal no se restaura con patchValue (es solo memoria);
-        // reconstruirlo a partir de los valores de tipo archivo del formulario
-        this.restoreFiles64FromCache(formGroup);
+      if (initVersion !== this.formCacheInitVersion) {
+        this.logPerf('formCache.init.aborted', perfStart, { key, reason: 'stale load' }, true);
+        return;
       }
+      this.logPerf('formCache.load', loadStart, { key, found: !!cached }, true);
+      if (cached) {
+        // [[[II ESC:014-01 DOC:docs/documents/2026-06-02_014_custom-draw-form-files64-memory.md#escenario-01
+        const restoredCache = this.stripOmittedBase64FromCachedPayload(cached);
+        if (this.hasRestorableCachePayload(restoredCache)) {
+          const patchStart = this.perfNow();
+          formGroup.patchValue(restoredCache, { emitEvent: false });
+          this.logPerf('formCache.patchRestoredDraft', patchStart, { fields: Object.keys(restoredCache || {}).length }, true);
+          formGroup.markAsDirty();
+          this.wasDirty = true;
+          this.isCacheRestored.set(true);
+          // files64Signal no se restaura con patchValue (es solo memoria);
+          // reconstruirlo a partir de los valores de tipo archivo del formulario
+          const restoreFilesStart = this.perfNow();
+          this.restoreFiles64FromCache(formGroup);
+          this.logPerf('formCache.restoreFiles64FromCache', restoreFilesStart);
+        } else {
+          await this.formCacheS.clear(key);
+          this.isCacheRestored.set(false);
+        }
+        // ]]]FI
+      }
+    } else if (this.isCreateSignal()) {
+      this.isCacheRestored.set(false);
+      this.logPerf('formCache.load.skipDiscarded', perfStart, { key }, true);
+    }
+    // ]]]FI
+
+    if (initVersion !== this.formCacheInitVersion) {
+      this.logPerf('formCache.init.aborted', perfStart, { key, reason: 'stale before subscribe' }, true);
+      return;
     }
 
     // ── Autoguardado con debounce — solo campos permitidos ───────────
@@ -1102,25 +1276,32 @@ export class CustomDrawFormComponent implements OnDestroy {
       .pipe(debounceTime(1500))
       .subscribe((value) => {
         if (!this.currentCacheKey || !this.currentCacheConfig) return;
+        const saveStart = this.perfNow();
         // Filtrar solo los campos que tienen caché habilitado para evitar guardar datos sensibles
         const fields = this.isCreateSignal()
           ? this.currentCacheConfig.creationFields
           : this.currentCacheConfig.editionFields;
-        const filtered: any = {};
-        for (const f of fields) {
-          if (f in value) filtered[f] = value[f];
-          // Para dropdowns de tipo object_X, también persiste el campo derivado X
-          // (objeto completo establecido por on ChangeDropdown via setValue)
-          //esto ya no es necesario ya que  el patchValue lo debe agregaer
-          //if (f.startsWith('object_')) {
-          //  const derived = f.replace('object_', '');
-          //  if (derived in value) filtered[derived] = value[derived];
-          //}
-        }
-        this.formCacheS.save(this.currentCacheKey, filtered, this.currentCacheConfig);
+        // [[[II ESC:014-01 DOC:docs/documents/2026-06-02_014_custom-draw-form-files64-memory.md#escenario-01
+        const filtered = this.buildFormCachePayload(value, fields);
+        // ]]]FI
+        const keyToSave = this.currentCacheKey;
+        const configToSave = this.currentCacheConfig;
+        void this.formCacheS.save(keyToSave, filtered, configToSave).then(() => {
+          // [[[II ESC:017-03 DOC:docs/documents/2026-06-02_017_custom-draw-form-device-drawform.md#escenario-03
+          this.discardedCacheKeys.delete(keyToSave);
+          // ]]]FI
+          this.logPerf('formCache.autoSave', saveStart, {
+            key: keyToSave,
+            fields: Object.keys(filtered).length
+          }, true);
+        });
       });
 
-    console.log('[FormCache] ✅ autoSave subscription active, key:', key);
+    this.logPerf('formCache.init.total', perfStart, {
+      key,
+      creationFields: cacheConfig.creationFields.length,
+      editionFields: cacheConfig.editionFields.length
+    }, true);
   }
 
   /**
@@ -1134,7 +1315,8 @@ export class CustomDrawFormComponent implements OnDestroy {
     // patchValue ya restauró todos los FormControls (documents, object_, etc.).
     // Aquí solo reconstruimos files64Signal (memoria) desde lo que ya está en el form.
     // NO llamamos appendFile: eso volvería a hacer setValue y acumularía en cada llamada.
-    const seen = new Set<string>(); // dedup por base64: field y key tienen los mismos fileObjects
+    // [[[II ESC:014-02 DOC:docs/documents/2026-06-02_014_custom-draw-form-files64-memory.md#escenario-02
+    const seen = new Set<string>();
     const restoredFiles: any[] = [];
 
     Object.keys(formGroup.controls).forEach(controlName => {
@@ -1147,32 +1329,58 @@ export class CustomDrawFormComponent implements OnDestroy {
           item &&
           typeof item === 'object' &&
           typeof item.file === 'string' &&
+          item.file !== this.OMITTED_BASE64_CACHE_VALUE &&
+          !item._cache_omitted_base64 &&
           (item.type === 'image' || item.type === 'video') &&
-          //esto es exclusivo para cuando se agrega documentos por separado por ejemplo campos_inicial, campo_final
-          //esa seria la clave, pero el field seria documents
-          controlName === item.field //
+          controlName === (item.send_field || item.field)
         ) {
-          //const dedupKey = item.file.slice(0, 60);
-          //if (seen.has(dedupKey)) continue;
-          //seen.add(dedupKey);
-          restoredFiles.push(item);
+          const identity = this.buildFileIdentity({
+            field: item.send_field || item.field,
+            key: item.key,
+            file_name: item.file_name,
+            file: item.file,
+            size: item._file_size,
+            hash: item._file_hash,
+            timestamp: item._file_timestamp
+          });
+          const normalizedItem = {
+            ...item,
+            send_field: item.send_field || item.field,
+            local_field: item.local_field || item.key || item.field,
+            _file_size: identity.size,
+            _file_hash: identity.hash,
+            _file_timestamp: identity.timestamp
+          };
+          const dedupKey = this.fileDedupKey(normalizedItem);
+          if (seen.has(dedupKey)) continue;
+          seen.add(dedupKey);
+          restoredFiles.push(this.buildPreviewFileObject(normalizedItem, normalizedItem.local_field));
         }
       }
     });
 
-    this.files64Signal.set(restoredFiles);
-    this.files64Action.emit(restoredFiles);
+    this.setFiles64(restoredFiles);
+    // ]]]FI
   }
 
   /**
    * Elimina el borrador en caché y apaga el indicador de recuperación.
-   * La clave permanece activa para seguir autoguardando nuevas entradas.
+   * La clave activa se limpia para que un reset no reprograme el borrador descartado.
    */
   private async clearFormCache(): Promise<void> {
-    if (this.currentCacheKey) {
-      await this.formCacheS.clear(this.currentCacheKey);
+    this.formCacheInitVersion++;
+    const clearStart = this.perfNow();
+    const keyToClear = this.currentCacheKey;
+    if (keyToClear) {
+      // [[[II ESC:017-03 DOC:docs/documents/2026-06-02_017_custom-draw-form-device-drawform.md#escenario-03
+      this.discardedCacheKeys.add(keyToClear);
+      // ]]]FI
+      await this.formCacheS.clear(keyToClear);
     }
+    this.currentCacheKey = null;
+    this.currentCacheConfig = null;
     this.isCacheRestored.set(false);
+    this.logPerf('formCache.clear', clearStart, { key: keyToClear }, true);
   }
 
   /**
@@ -1183,15 +1391,25 @@ export class CustomDrawFormComponent implements OnDestroy {
   private _saveFormCacheNow(): void {
     const formGroup = this.formGroupSignal();
     if (!formGroup || !this.currentCacheKey || !this.currentCacheConfig) return;
+    const saveStart = this.perfNow();
     const value = formGroup.value;
     const fields = this.isCreateSignal()
       ? this.currentCacheConfig.creationFields
       : this.currentCacheConfig.editionFields;
-    const filtered: any = {};
-    for (const f of fields) {
-      if (f in value) filtered[f] = value[f];
-    }
-    this.formCacheS.save(this.currentCacheKey, filtered, this.currentCacheConfig);
+    // [[[II ESC:014-01 DOC:docs/documents/2026-06-02_014_custom-draw-form-files64-memory.md#escenario-01
+    const filtered = this.buildFormCachePayload(value, fields);
+    // ]]]FI
+    const keyToSave = this.currentCacheKey;
+    const configToSave = this.currentCacheConfig;
+    void this.formCacheS.save(keyToSave, filtered, configToSave).then(() => {
+      // [[[II ESC:017-03 DOC:docs/documents/2026-06-02_017_custom-draw-form-device-drawform.md#escenario-03
+      this.discardedCacheKeys.delete(keyToSave);
+      // ]]]FI
+      this.logPerf('formCache.saveNow', saveStart, {
+        key: keyToSave,
+        fields: Object.keys(filtered).length
+      }, true);
+    });
   }
 
   /**
@@ -1199,8 +1417,28 @@ export class CustomDrawFormComponent implements OnDestroy {
    * Llamado desde el botón "Descartar borrador" en el template.
    */
   async discardCacheData(): Promise<void> {
-    await this.clearFormCache();
-    this.formGroupSignal()?.reset();
+    const discardStart = this.perfNow();
+    this.isDiscardingCacheData = true;
+
+    if (this.cacheAutoSaveSub) {
+      this.cacheAutoSaveSub.unsubscribe();
+      this.cacheAutoSaveSub = undefined;
+    }
+
+    try {
+      await this.clearFormCache();
+      const formGroup = this.formGroupSignal();
+      formGroup?.reset(undefined, { emitEvent: false });
+      formGroup?.markAsPristine();
+      formGroup?.markAsUntouched();
+      this.wasDirty = false;
+      this.clearAllMediaFiles();
+      this.clearAllSignatureCanvases();
+    } finally {
+      this.isDiscardingCacheData = false;
+      await this.initFormAutoCache();
+      this.logPerf('formCache.discardCacheData', discardStart, {}, true);
+    }
   }
 
   /**
@@ -1313,6 +1551,35 @@ export class CustomDrawFormComponent implements OnDestroy {
   keyComparator(a: KeyValue<number, any>, b: KeyValue<number, any>): number {
     return a.key - b.key;
   }
+
+  // [[[II ESC:009-01 DOC:docs/documents/2026-06-02_009_custom-draw-form-trackby-ngfor.md#escenario-01
+  trackByIndex(index: number): number {
+    return index;
+  }
+
+  trackByField(index: number, item: any): any {
+    return item?.field ?? item?.id ?? index;
+  }
+
+  trackByKey(index: number, item: KeyValue<unknown, unknown>): any {
+    const value = item?.value as any;
+    return value?.field ?? value?.id ?? item?.key ?? index;
+  }
+
+  trackByColumnField(index: number, column: any): any {
+    return column?.field ?? column?.id ?? index;
+  }
+
+  trackByFile(index: number, file: any): any {
+    if (file?.id) return file.id;
+    if (file?.field) return `${file.field}:${file.file_name ?? file.name ?? 'file'}:${index}`;
+    return file?.file_name ?? file?.name ?? index;
+  }
+
+  trackBySignature(index: number, signature: any): any {
+    return signature?.field ?? signature?.id ?? signature?.signature_id ?? signature?.created_at ?? index;
+  }
+  // ]]]FI
 
   public suggestions = signal<any[]>([]);
 
@@ -2002,7 +2269,7 @@ export class CustomDrawFormComponent implements OnDestroy {
     });
   }
 
-  // [[[II ESC:007-03 DOC:docs/documents/2026-06-01_007_custom-draw-form-listbox.md#escenario-03
+  // [[[II ESC:007-03 DOC:docs/documents/2026-06-01_007_custom-draw-form-listbox.md#escenario-03 ESC:017-02 DOC:docs/documents/2026-06-02_017_custom-draw-form-device-drawform.md#escenario-02 ESC:020-03 DOC:docs/documents/2026-06-04_020_custom-draw-form-virtual-scroll-dropdowns.md#escenario-03
   private _isListboxTreeField(fieldConfig: any): boolean {
     return fieldConfig?.type === 'listbox' && !!fieldConfig?.tree;
   }
@@ -2011,11 +2278,77 @@ export class CustomDrawFormComponent implements OnDestroy {
     return fieldConfig?.type === 'tree-select' || this._isListboxTreeField(fieldConfig);
   }
 
+  private _parseTreeLabelFields(labelField: any): string[] {
+    if (Array.isArray(labelField)) {
+      return labelField.map((field) => String(field).trim()).filter((field) => field.length > 0);
+    }
+
+    if (typeof labelField === 'string') {
+      return labelField
+        .split(',')
+        .map((field: string) => field.trim())
+        .filter((field: string) => field.length > 0);
+    }
+
+    return [];
+  }
+
+  private _resolveTreeLabel(opt: any, labelField: any): string {
+    const labelFields = this._parseTreeLabelFields(labelField);
+    const fields = labelFields.length > 0 ? labelFields : ['name'];
+    const label = fields
+      .map((field: string) => opt?.[field])
+      .filter((value: any) => value != null && String(value).trim() !== '')
+      .map((value: any) => String(value))
+      .join(' ');
+
+    if (label.trim()) return label;
+
+    const fallback = opt?.label ?? opt?.display_name ?? opt?.name ?? opt?.code ?? opt?.id ?? '';
+    return String(fallback ?? '');
+  }
+
+  private _buildTreeFilterText(opt: any, labelField: any, label: string): string {
+    const fields = new Set<string>([
+      ...this._parseTreeLabelFields(labelField),
+      'label',
+      'name',
+      'display_name',
+      'code',
+      'id',
+    ]);
+
+    const values = [label];
+    for (const field of fields) {
+      const value = opt?.[field];
+      if (value == null || String(value).trim() === '') continue;
+      values.push(String(value));
+    }
+
+    return Array.from(new Set(values.map((value) => value.trim()).filter(Boolean))).join(' ');
+  }
+
   private async _buildDropdownOptionsForField(fieldConfig: any, options: any[]): Promise<any[]> {
+    const perfStart = this.perfNow();
     const normalizedOptions = this._toTreeNodesIfNeeded(fieldConfig, options);
     if (fieldConfig?.type === 'listbox') {
-      return this._toListboxOptionsIfNeeded(fieldConfig, normalizedOptions);
+      const listboxOptions = await this._toListboxOptionsIfNeeded(fieldConfig, normalizedOptions);
+      this.logPerf('dropdown.buildOptionsForField.listbox', perfStart, {
+        field: fieldConfig?.field,
+        type: fieldConfig?.type,
+        inputRows: Array.isArray(options) ? options.length : 0,
+        treeRows: Array.isArray(normalizedOptions) ? normalizedOptions.length : 0,
+        outputRows: Array.isArray(listboxOptions) ? listboxOptions.length : 0,
+        tree: !!fieldConfig?.tree
+      }, true);
+      return listboxOptions;
     }
+    this.logPerf('dropdown.buildOptionsForField', perfStart, {
+      field: fieldConfig?.field,
+      type: fieldConfig?.type,
+      inputRows: Array.isArray(options) ? options.length : 0,
+      outputRows: Array.isArray(normalizedOptions) ? normalizedOptions.length : 0
+    });
     return normalizedOptions;
   }
   // ]]]FI
@@ -2052,28 +2385,21 @@ export class CustomDrawFormComponent implements OnDestroy {
     const labelField = rootCfg?.label_field || fieldConfig?.option_label || 'name';
     const valueField = rootCfg?.value_field || fieldConfig?.option_value || 'id';
     const childrenField = fieldConfig?.tree_children_field || 'children';
-    const labelFromOption = (opt: any): string => {
-      if (!labelField) return String(opt?.id ?? '');
-      if (typeof labelField === 'string' && labelField.includes(',')) {
-        return labelField.split(',')
-          .map((f: string) => opt?.[f.trim()])
-          .filter((v: any) => v != null && String(v).trim() !== '')
-          .map((v: any) => String(v))
-          .join(' ');
-      }
-      return String(opt?.[labelField] ?? '');
-    };
     const toNode = (opt: any): any => {
       const kids = Array.isArray(opt?.[childrenField]) ? opt[childrenField] : [];
       const id = opt?.[valueField] ?? '';
+      const label = this._resolveTreeLabel(opt, labelField);
+      const filterText = this._buildTreeFilterText(opt, labelField, label);
       const node: any = {
         key: rootResource ? `${rootResource}:${id}` : String(id),
-        label: labelFromOption(opt),
+        label,
+        filter_text: filterText,
         data: {
           ...opt,
           id: opt?.id ?? id,
           type: rootResource || opt?.type || null,
           __level: 0,
+          filter_text: filterText,
           raw: opt,
         },
         selectable: rootSelectable,
@@ -2093,21 +2419,42 @@ export class CustomDrawFormComponent implements OnDestroy {
     return options.map(toNode);
   }
 
-  // [[[II ESC:007-02 DOC:docs/documents/2026-06-01_007_custom-draw-form-listbox.md#escenario-02
+  // [[[II ESC:007-02 DOC:docs/documents/2026-06-01_007_custom-draw-form-listbox.md#escenario-02 ESC:017-02 DOC:docs/documents/2026-06-02_017_custom-draw-form-device-drawform.md#escenario-02
   private async _toListboxOptionsIfNeeded(fieldConfig: any, options: any[]): Promise<any[]> {
     if (fieldConfig?.type !== 'listbox') return options || [];
     if (!this._isListboxTreeField(fieldConfig)) return options || [];
     if (!Array.isArray(options) || options.length === 0) return [];
     if (Array.isArray(options[0]?.items)) return options;
 
+    const ensureStart = this.perfNow();
     await this._ensureListboxTreeNodesLoaded(fieldConfig, options);
-    return this._toListboxGroups(options, fieldConfig);
+    this.logPerf('listbox.ensureTreeLoaded', ensureStart, {
+      field: fieldConfig?.field,
+      rootNodes: options.length,
+      loadedKeys: this._treeLoadedKeys[fieldConfig?.field]?.size ?? 0
+    }, true);
+
+    const groupStart = this.perfNow();
+    const groups = this._toListboxGroups(options, fieldConfig);
+    this.logPerf('listbox.toGroups', groupStart, {
+      field: fieldConfig?.field,
+      groups: groups.length,
+      items: groups.reduce((acc: number, group: any) => acc + (Array.isArray(group.items) ? group.items.length : 0), 0)
+    }, true);
+    return groups;
   }
 
   private async _ensureListboxTreeNodesLoaded(fieldConfig: any, nodes: any[]): Promise<void> {
+    const perfStart = this.perfNow();
+    let visited = 0;
     for (const node of nodes) {
+      visited++;
       await this._ensureListboxTreeNodeLoaded(fieldConfig, node);
     }
+    this.logPerf('listbox.ensureRootNodesLoaded', perfStart, {
+      field: fieldConfig?.field,
+      visited
+    }, true);
   }
 
   private async _ensureListboxTreeNodeLoaded(fieldConfig: any, node: any): Promise<void> {
@@ -2164,6 +2511,7 @@ export class CustomDrawFormComponent implements OnDestroy {
     const raw = { ...rawSource };
     const id = node?.data?.id ?? raw.id ?? node?.key ?? null;
     const label = node?.label ?? raw.label ?? '';
+    const filterText = node?.filter_text ?? node?.data?.filter_text ?? this._buildTreeFilterText(raw, fieldConfig?.option_label || 'name', label);
 
     if (raw.id === undefined) {
       raw.id = id;
@@ -2173,9 +2521,14 @@ export class CustomDrawFormComponent implements OnDestroy {
       raw.label = label;
     }
 
+    if (!raw.filter_text && filterText) {
+      raw.filter_text = filterText;
+    }
+
     return {
       id,
       label,
+      filter_text: filterText,
       type: node?.data?.type ?? raw.type ?? null,
       parent: node?.data?.parent ?? (groupNode && groupNode !== node
         ? {
@@ -2417,6 +2770,12 @@ export class CustomDrawFormComponent implements OnDestroy {
     // REFACTORIZADO: lógica de children movida a _processChildrenFields
     // El bloque original (~500 líneas) evaluaba activate, requested y filtraba
     // opciones estáticas duplicando la misma lógica de onSelectAutoComplete.
+    // [[[II ESC:007-04 DOC:docs/documents/2026-06-01_007_custom-draw-form-listbox.md#escenario-04
+    if (this._isListboxTreeField(object)) {
+      return;
+    }
+    // ]]]FI
+
     const currentDropdownOption = Array.isArray(currentValue)
       ? this._findDropdownOption(object, currentValue[0])
       : this._findDropdownOption(object, currentValue);
@@ -2474,9 +2833,11 @@ export class CustomDrawFormComponent implements OnDestroy {
 
     // REFACTORIZADO: lógica de children movida a _processChildrenFields
     // El bloque original (~400 líneas) era idéntico al de onChangeDropdown.
-    const dropdownOptions = this.dataDropdownExists(config);
+    // [[[II ESC:013-01 DOC:docs/documents/2026-06-02_013_custom-draw-form-mobile-dropdown-cache.md#escenario-01
+    const dropdownOptions = await this.dataDropdownExists(config);
+    // ]]]FI
     let currentDropdownOption: any = null;
-    if (dropdownOptions) {
+    if (dropdownOptions !== false) {
       currentDropdownOption = this.searchByValueObject(currentValue, dropdownOptions, 'id', false)[0];
     }
     this._processChildrenFields(field, currentValue, config, currentDropdownOption);
@@ -2539,9 +2900,10 @@ export class CustomDrawFormComponent implements OnDestroy {
    */
   private _treeLoadedKeys: { [field: string]: Set<string> } = {};
 
-  // [[[II ESC:007-02 DOC:docs/documents/2026-06-01_007_custom-draw-form-listbox.md#escenario-02
+  // [[[II ESC:007-02 DOC:docs/documents/2026-06-01_007_custom-draw-form-listbox.md#escenario-02 ESC:017-02 DOC:docs/documents/2026-06-02_017_custom-draw-form-device-drawform.md#escenario-02
   private _loadTreeNodeChildren(fieldConfig: any, node: any): Promise<void> {
     return new Promise((resolve) => {
+      const perfStart = this.perfNow();
       const tree = fieldConfig?.tree;
       const lazyLevels: any[] = Array.isArray(tree?.levels) ? tree.levels : [];
 
@@ -2646,13 +3008,22 @@ export class CustomDrawFormComponent implements OnDestroy {
       const limit = childCfg?.data_type?.limit || levelCfg?.data_type?.limit || 0;
 
       node.loading = true;
-      this.messageS.showBlocked(true);
+      const shouldBlockUi = fieldConfig?.type === 'tree-select';
+      if (shouldBlockUi) {
+        this.messageS.showBlocked(true);
+      }
       this.crudS.getObject({ app, type, filter, sort, limit }).subscribe({
         next: (data: any) => {
+          const parseStart = this.perfNow();
           const rows = this.generalS.DJAtoObject({
             respDJA: data,
             fields: { [fieldConfig.field]: fieldConfig },
           }) || [];
+          this.logPerf('tree.loadNodeChildren.parse', parseStart, {
+            field: fieldConfig?.field,
+            node: node?.label ?? node?.key,
+            rows: rows.length
+          }, true);
 
           const labelField = childCfg?.option_label || levelCfg.label_field || fieldConfig.option_label || 'name';
           const valueField = childCfg?.option_value || levelCfg.value_field || fieldConfig.option_value || 'id';
@@ -2662,28 +3033,21 @@ export class CustomDrawFormComponent implements OnDestroy {
             id: node?.data?.id ?? null,
             type: node?.data?.type ?? null,
           };
-          const labelFrom = (opt: any): string => {
-            if (typeof labelField === 'string' && labelField.includes(',')) {
-              return labelField.split(',')
-                .map((field: string) => opt?.[field.trim()])
-                .filter((value: any) => value != null && String(value).trim() !== '')
-                .map((value: any) => String(value))
-                .join(' ');
-            }
-            return String(opt?.[labelField] ?? '');
-          };
-
           node.children = rows.map((opt: any) => {
             const id = opt?.[valueField] ?? opt?.id ?? '';
+            const label = this._resolveTreeLabel(opt, labelField);
+            const filterText = this._buildTreeFilterText(opt, labelField, label);
             return {
               key: `${resource}:${id}`,
-              label: labelFrom(opt),
+              label,
+              filter_text: filterText,
               data: {
                 ...opt,
                 id: opt?.id ?? id,
                 type: resource,
                 __level: targetLevelIdx + 1,
                 parent: parentRef,
+                filter_text: filterText,
                 raw: opt,
               },
               selectable,
@@ -2699,12 +3063,27 @@ export class CustomDrawFormComponent implements OnDestroy {
             this._updateDropdownOptions(fieldConfig.field, [...current]);
           }
 
-          this.messageS.showBlocked(false);
+          if (shouldBlockUi) {
+            this.messageS.showBlocked(false);
+          }
+          this.logPerf('tree.loadNodeChildren.total', perfStart, {
+            field: fieldConfig?.field,
+            type: fieldConfig?.type,
+            node: node?.label ?? node?.key,
+            children: Array.isArray(node.children) ? node.children.length : 0
+          }, true);
           resolve();
         },
         error: () => {
           node.loading = false;
-          this.messageS.showBlocked(false);
+          if (shouldBlockUi) {
+            this.messageS.showBlocked(false);
+          }
+          this.logPerf('tree.loadNodeChildren.error', perfStart, {
+            field: fieldConfig?.field,
+            type: fieldConfig?.type,
+            node: node?.label ?? node?.key
+          }, true);
           resolve();
         },
       });
@@ -2970,6 +3349,327 @@ export class CustomDrawFormComponent implements OnDestroy {
   private currentCameraIndex: number = -1;
   private videoDevices: MediaDeviceInfo[] = [];
 
+  // [[[II ESC:014-01 DOC:docs/documents/2026-06-02_014_custom-draw-form-files64-memory.md#escenario-01
+  private readonly OMITTED_BASE64_CACHE_VALUE = '[cache:base64-omitted]';
+  private readonly previewObjectUrls = new Set<string>();
+
+  private isDataUrl(value: any): boolean {
+    return typeof value === 'string' && /^data:[^;]+;base64,/.test(value);
+  }
+
+  private fileSizeFromDataUrl(dataUrl: string): number {
+    const commaIndex = dataUrl.indexOf(',');
+    const b64 = commaIndex >= 0 ? dataUrl.slice(commaIndex + 1) : dataUrl;
+    const padding = b64.endsWith('==') ? 2 : (b64.endsWith('=') ? 1 : 0);
+    return Math.max(0, Math.floor((b64.length * 3) / 4) - padding);
+  }
+
+  private simpleFileHash(value: string): string {
+    const len = value.length;
+    const sample = len <= 384
+      ? value
+      : `${value.slice(0, 128)}${value.slice(Math.max(0, Math.floor(len / 2) - 64), Math.floor(len / 2) + 64)}${value.slice(-128)}`;
+    let hash = 0;
+    for (let i = 0; i < sample.length; i++) {
+      hash = ((hash << 5) - hash + sample.charCodeAt(i)) | 0;
+    }
+    return `${len}:${Math.abs(hash)}`;
+  }
+
+  private buildFileIdentity(input: {
+    field?: string;
+    key?: string;
+    file_name?: string;
+    file?: string;
+    size?: number;
+    timestamp?: number;
+    hash?: string;
+  }): { size: number; hash: string; timestamp: number } {
+    const file = input.file || '';
+    const size = input.size ?? (this.isDataUrl(file) ? this.fileSizeFromDataUrl(file) : file.length);
+    const hash = input.hash || (file ? this.simpleFileHash(file) : `${input.field || ''}:${input.key || ''}:${input.file_name || ''}`);
+    const timestamp = input.timestamp || Date.now();
+    return { size, hash, timestamp };
+  }
+
+  private fileDedupKey(file: any): string {
+    const field = file?.field || file?.send_field || '';
+    const key = file?.key || file?.local_field || '';
+    const fileName = file?.file_name || file?.name || '';
+    const size = file?._file_size ?? file?.size ?? (typeof file?.file === 'string' ? (this.isDataUrl(file.file) ? this.fileSizeFromDataUrl(file.file) : file.file.length) : 0);
+    const fingerprint = file?._file_hash || file?.relation_id || file?.id || file?.hash || file?._file_timestamp || file?.timestamp || '';
+    return `${field}|${key}|${fileName}|${size}|${fingerprint}`;
+  }
+
+  private dedupeFileList(files: any[]): any[] {
+    const seen = new Set<string>();
+    const deduped: any[] = [];
+    for (const file of files) {
+      const key = this.fileDedupKey(file);
+      if (seen.has(key)) {
+        this.releasePreviewUrl(file);
+        continue;
+      }
+      seen.add(key);
+      deduped.push(file);
+    }
+    return deduped;
+  }
+
+  private sameFileIdentity(a: any, b: any): boolean {
+    const aHash = a?._file_hash || a?.hash;
+    const bHash = b?._file_hash || b?.hash;
+    if (aHash && bHash) {
+      const sameHash = aHash === bHash;
+      const sameSize = (a?._file_size ?? a?.size ?? null) === (b?._file_size ?? b?.size ?? null);
+      const sameName = (a?.file_name || a?.name || '') === (b?.file_name || b?.name || '');
+      const aSendField = a?.send_field || a?.field || '';
+      const bSendField = b?.send_field || b?.field || '';
+      return sameHash && sameSize && sameName && (!aSendField || !bSendField || aSendField === bSendField);
+    }
+    return this.fileDedupKey(a) === this.fileDedupKey(b);
+  }
+
+  private createPreviewUrl(file: string): { file: string; previewUrl?: string } {
+    if (!this.isDataUrl(file)) {
+      return { file };
+    }
+    try {
+      const blob = this._dataUrlToBlob(file);
+      const previewUrl = URL.createObjectURL(blob);
+      this.previewObjectUrls.add(previewUrl);
+      return { file: previewUrl, previewUrl };
+    } catch {
+      return { file };
+    }
+  }
+
+  private releasePreviewUrl(file: any): void {
+    const previewUrl = file?._preview_url;
+    if (!previewUrl || !this.previewObjectUrls.has(previewUrl)) return;
+    URL.revokeObjectURL(previewUrl);
+    this.previewObjectUrls.delete(previewUrl);
+  }
+
+  private releaseAllPreviewUrls(): void {
+    for (const previewUrl of this.previewObjectUrls) {
+      URL.revokeObjectURL(previewUrl);
+    }
+    this.previewObjectUrls.clear();
+  }
+
+  private setFiles64(files: any[]): void {
+    const nextFiles = this.dedupeFileList(files);
+    const nextUrls = new Set(nextFiles.map((file: any) => file?._preview_url).filter(Boolean));
+    for (const file of this.files64Signal()) {
+      const previewUrl = file?._preview_url;
+      if (previewUrl && !nextUrls.has(previewUrl)) {
+        this.releasePreviewUrl(file);
+      }
+    }
+    this.files64Signal.set(nextFiles);
+    this.files64Action.emit(nextFiles);
+  }
+
+  private resolveDocumentsField(fieldName?: string, formGroup: FormGroup | null = this.formGroupSignal()): string | null {
+    if (!fieldName) return null;
+    const documentsCandidate = fieldName.replace(/files$/, 'documents');
+    if (documentsCandidate === fieldName) return null;
+    return formGroup?.get(documentsCandidate) ? documentsCandidate : null;
+  }
+
+  private resolveFileTargets(payload: { field?: string; fieldConfig?: any }): { sendField?: string; localField?: string; key?: string } {
+    const formGroup = this.formGroupSignal();
+    const currentKey = payload.fieldConfig?.key;
+    const documentsField = this.resolveDocumentsField(payload.field, formGroup);
+    const isFileLike = payload.fieldConfig?.type === 'files'
+      || payload.fieldConfig?.type === 'file'
+      || payload.fieldConfig?.type === 'document'
+      || !!documentsField;
+    const keyControlExists = !!(currentKey && currentKey !== payload.field && formGroup?.get(currentKey));
+    const sendField = isFileLike && documentsField ? documentsField : (keyControlExists ? currentKey : (payload.field || currentKey));
+    const localField = keyControlExists ? currentKey : sendField;
+    return { sendField, localField, key: currentKey };
+  }
+
+  private buildPreviewFileObject(fileObject: any, previewField?: string): any {
+    const preview = this.createPreviewUrl(fileObject.file);
+    return {
+      ...fileObject,
+      file: preview.file,
+      field: previewField || fileObject.local_field || fileObject.field,
+      send_field: fileObject.send_field || fileObject.field,
+      _preview_url: preview.previewUrl,
+      _preview_only: true
+    };
+  }
+
+  private buildLocalFileRef(fileObject: any, localField: string): any {
+    return {
+      type: fileObject.type,
+      file_name: fileObject.file_name,
+      file: `[ref:${fileObject._file_hash}]`,
+      step: fileObject.step,
+      field: fileObject.send_field || fileObject.field,
+      key: fileObject.send_field || fileObject.field,
+      local_field: localField,
+      send_field: fileObject.send_field || fileObject.field,
+      _file_size: fileObject._file_size,
+      _file_hash: fileObject._file_hash,
+      _file_timestamp: fileObject._file_timestamp,
+      _local_only: true
+    };
+  }
+
+  private fileControlItems(value: any): any[] {
+    if (value == null || value === '') return [];
+    return Array.isArray(value) ? value : [value];
+  }
+
+  private setFileRecordInControl(controlName: string | undefined, record: any): void {
+    if (!controlName) return;
+    const control = this.formGroupSignal()?.get(controlName);
+    if (!control) return;
+
+    const currentItems = this.fileControlItems(control.value);
+    const existingUrls = currentItems.filter((item: any) => typeof item === 'string');
+    const existingRecords = currentItems.filter((item: any) => item && typeof item === 'object');
+    const nextRecords = this.dedupeFileList([...existingRecords, record]);
+    const combined = [...existingUrls, ...nextRecords];
+    control.setValue(combined.length > 0 ? combined : null);
+    control.markAsDirty();
+  }
+
+  private removeFileRecordFromControl(controlName: string | undefined, fileToRemove: any): void {
+    if (!controlName) return;
+    const control = this.formGroupSignal()?.get(controlName);
+    if (!control) return;
+
+    const currentItems = this.fileControlItems(control.value);
+    const nextItems = currentItems.filter((item: any) => {
+      if (!item || typeof item !== 'object') return true;
+      return !this.sameFileIdentity(item, fileToRemove);
+    });
+    control.setValue(nextItems.length > 0 ? nextItems : null);
+    control.markAsDirty();
+  }
+
+  private collectServerUploadCacheFields(): Set<string> {
+    const drawForm = this.drawFormSignal();
+    const formGroup = this.formGroupSignal();
+    const fields = new Set<string>();
+
+    const visit = (node: any): void => {
+      if (!node || typeof node !== 'object') return;
+      if ((node.type === 'files' || node.type === 'file' || node.type === 'document') && node.server_upload?.active === true) {
+        if (node.field) {
+          fields.add(node.field);
+          const documentsField = this.resolveDocumentsField(node.field, formGroup);
+          if (documentsField) fields.add(documentsField);
+        }
+        if (node.key) fields.add(node.key);
+      }
+      ['grid', 'card', 'fieldset', 'fields'].forEach(key => {
+        if (node[key] && typeof node[key] === 'object') {
+          Object.values(node[key]).forEach((child: any) => visit(child));
+        }
+      });
+      if (node.stepper?.steps) {
+        Object.values(node.stepper.steps).forEach((step: any) => {
+          if (step?.fields) Object.values(step.fields).forEach((child: any) => visit(child));
+        });
+      }
+    };
+
+    visit(drawForm);
+    return fields;
+  }
+
+  private isFileRecordLike(record: any): boolean {
+    return !!(
+      record &&
+      typeof record === 'object' &&
+      ('file' in record || 'file_name' in record || '_file_hash' in record || 'relation_id' in record)
+    );
+  }
+
+  private sanitizeFileRecordForCache(record: any, omitBase64: boolean): any {
+    if (!this.isFileRecordLike(record)) return record;
+    const sanitized = { ...record };
+    delete sanitized._preview_url;
+    delete sanitized._preview_only;
+    if (omitBase64 && this.isDataUrl(sanitized.file)) {
+      sanitized.file = this.OMITTED_BASE64_CACHE_VALUE;
+      sanitized._cache_omitted_base64 = true;
+    }
+    if (omitBase64 && sanitized._local_only) {
+      sanitized._cache_omitted_base64 = true;
+    }
+    return sanitized;
+  }
+
+  private stripOmittedBase64FromCachedPayload(data: any): any {
+    if (!data || typeof data !== 'object' || Array.isArray(data)) return data;
+    const cleaned: any = {};
+    for (const [field, value] of Object.entries(data)) {
+      if (Array.isArray(value)) {
+        const next = value.filter((item: any) => {
+          if (!item || typeof item !== 'object') return true;
+          return item.file !== this.OMITTED_BASE64_CACHE_VALUE && !item._cache_omitted_base64;
+        });
+        cleaned[field] = next.length > 0 ? next : null;
+      } else if (
+        value &&
+        typeof value === 'object' &&
+        ((value as any).file === this.OMITTED_BASE64_CACHE_VALUE || (value as any)._cache_omitted_base64)
+      ) {
+        cleaned[field] = null;
+      } else {
+        cleaned[field] = value;
+      }
+    }
+    return cleaned;
+  }
+
+  private hasRestorableCachePayload(data: any): boolean {
+    const hasValue = (value: any): boolean => {
+      if (value === null || value === undefined || value === '') return false;
+      if (Array.isArray(value)) return value.some((item: any) => hasValue(item));
+      if (typeof value === 'boolean') return value === true;
+      if (typeof value === 'object') return Object.values(value).some((item: any) => hasValue(item));
+      return true;
+    };
+
+    return hasValue(data);
+  }
+
+  private sanitizeCachePayloadForFiles(data: any): any {
+    const serverUploadFields = this.collectServerUploadCacheFields();
+    const sanitized: any = {};
+    for (const [field, value] of Object.entries(data || {})) {
+      const omitBase64 = serverUploadFields.has(field);
+      if (Array.isArray(value)) {
+        const items = value.map((item: any) => this.sanitizeFileRecordForCache(item, omitBase64));
+        const hasFileRecords = items.some((item: any) => this.isFileRecordLike(item));
+        sanitized[field] = hasFileRecords ? this.dedupeFileList(items) : items;
+      } else {
+        sanitized[field] = this.sanitizeFileRecordForCache(value, omitBase64);
+      }
+    }
+    return sanitized;
+  }
+
+  private buildFormCachePayload(value: any, fields: string[]): any {
+    const filtered: any = {};
+    for (const field of fields) {
+      if (field in value) filtered[field] = value[field];
+      const documentsField = this.resolveDocumentsField(field);
+      if (documentsField && documentsField in value) filtered[documentsField] = value[documentsField];
+    }
+    return this.sanitizeCachePayloadForFiles(filtered);
+  }
+  // ]]]FI
+
   private appendFile(payload: {
     type: 'image' | 'video';
     file_name: string;
@@ -2986,40 +3686,24 @@ export class CustomDrawFormComponent implements OnDestroy {
       fileName = `${payload.fieldConfig.name_file_user}.${extension}`;
     }
 
-    // [[[II Ruteo Escenarios 1/2/3 — base64 (flujo "(formulario)"):
-    //   Prioridad 1: control key per-step (cuando key != field Y el control
-    //     existe en el formGroup). Garantiza captura independiente por step en
-    //     stepper multi-step donde distintos steps comparten el mismo `field`
-    //     pero tienen `key` distintos (p.e. _inicial/_final).
-    //   Prioridad 2: sibling *_documents (cuando no hay key per-step). Aplica
-    //     a 'files', 'file' y 'document' (deprecated) sin key per-step.
-    //   Prioridad 3 (legacy): key sin control en formGroup (type='document').
-    //   Fallback: propio field.
-    //   Ver docs/documents/2026-05-16_001 ]]]FI
+    // [[[II ESC:014-01 DOC:docs/documents/2026-06-02_014_custom-draw-form-files64-memory.md#escenario-01
+    // Ruteo de base64:
+    //   - `sendField`: control que viaja al servidor. Si existe sibling
+    //     *_documents, ahi queda el base64 completo.
+    //   - `localField`: control separado por key/step. Si difiere de sendField,
+    //     recibe solo un placeholder liviano para validar sin duplicar base64.
+    //   Ver tambien docs/documents/2026-05-16_001. ]]]FI
     const formGroup = this.formGroupSignal();
-    const currentKey = payload.fieldConfig?.key;
-    let base64TargetField: string | undefined;
-
-    // Prioridad 1: control key per-step (key != field y existe en formGroup)
-    if (currentKey && currentKey !== payload.field && formGroup?.get(currentKey)) {
-      base64TargetField = currentKey;
-    }
-    // Prioridad 2: sibling *_documents (aplica a 'files', 'file' y 'document' deprecated)
-    if (!base64TargetField && payload.field && (
-      payload.fieldConfig?.type === 'files'
-      || payload.fieldConfig?.type === 'file'
-      || payload.fieldConfig?.type === 'document'
-    )) {
-      const documentsCandidate = payload.field.replace(/files$/, 'documents');
-      if (documentsCandidate !== payload.field && formGroup?.get(documentsCandidate)) {
-        base64TargetField = documentsCandidate;
-      }
-    }
-    // Prioridad 3 (fallback legacy): key sin control en formGroup
-    if (!base64TargetField && currentKey && currentKey !== payload.field) {
-      base64TargetField = currentKey;
-    }
-    if (!base64TargetField) base64TargetField = payload.field;
+    const targets = this.resolveFileTargets(payload);
+    const base64TargetField = targets.sendField;
+    const localTargetField = targets.localField;
+    const currentKey = targets.key;
+    const fileIdentity = this.buildFileIdentity({
+      field: base64TargetField,
+      key: currentKey,
+      file_name: fileName,
+      file: payload.file
+    });
 
     const fileObject = {
       type: payload.type,
@@ -3027,30 +3711,23 @@ export class CustomDrawFormComponent implements OnDestroy {
       file: payload.file,
       step: currentStep,
       field: base64TargetField, // [[[II marcar destino real para el sweep de submitForm ]]]FI
-      key: payload.fieldConfig?.key
+      key: currentKey,
+      local_field: localTargetField,
+      send_field: base64TargetField,
+      _file_size: fileIdentity.size,
+      _file_hash: fileIdentity.hash,
+      _file_timestamp: fileIdentity.timestamp
     };
 
-    const newFiles = [
-      ...this.files64Signal(),
-      fileObject
-    ];
-
-    this.files64Signal.set(newFiles);
-    this.files64Action.emit(newFiles);
+    const previewObject = this.buildPreviewFileObject(fileObject, localTargetField || base64TargetField);
+    this.setFiles64([...this.files64Signal(), previewObject]);
 
     // Escribir base64 en el control destino
     if (base64TargetField) {
-      const control = formGroup?.get(base64TargetField);
-      if (control) {
-        const targetFiles = newFiles.filter(f => f.field === base64TargetField);
-        // Preservar URLs previas (PATCH) si las hay
-        const current = control.value;
-        const existingUrls: any[] = Array.isArray(current)
-          ? current.filter((v: any) => typeof v === 'string')
-          : (typeof current === 'string' && current ? [current] : []);
-        const combined = [...existingUrls, ...targetFiles];
-        control.setValue(combined.length > 0 ? combined : null);
-        control.markAsDirty();
+      this.setFileRecordInControl(base64TargetField, fileObject);
+
+      if (localTargetField && localTargetField !== base64TargetField) {
+        this.setFileRecordInControl(localTargetField, this.buildLocalFileRef(fileObject, localTargetField));
       }
 
       // Si la captura es de tipo `files` o `document` (deprecated) y el destino
@@ -3570,9 +4247,10 @@ export class CustomDrawFormComponent implements OnDestroy {
       server: true,
       relation_id: fileData.id
     };
-    const newFiles = [...this.files64Signal(), entry];
-    this.files64Signal.set(newFiles);
-    this.files64Action.emit(newFiles);
+    // [[[II ESC:014-03 DOC:docs/documents/2026-06-02_014_custom-draw-form-files64-memory.md#escenario-03
+    this.setFiles64([...this.files64Signal(), entry]);
+    this._saveFormCacheNow();
+    // ]]]FI
   }
 
   /**
@@ -3642,9 +4320,9 @@ export class CustomDrawFormComponent implements OnDestroy {
       const realIndex = allFiles.findIndex((f: any) => f.server && f.relation_id === entry.relation_id);
       if (realIndex !== -1) {
         const newFiles = allFiles.filter((_, idx) => idx !== realIndex);
-        this.files64Signal.set(newFiles);
-        this.files64Action.emit(newFiles);
+        this.setFiles64(newFiles);
       }
+      this._saveFormCacheNow();
       return;
     }
     // Para base64: localizamos el índice en nonSignatureFilesSignal y delegamos
@@ -3692,63 +4370,18 @@ export class CustomDrawFormComponent implements OnDestroy {
         return;
       }
 
+      // [[[II ESC:014-02 DOC:docs/documents/2026-06-02_014_custom-draw-form-files64-memory.md#escenario-02
       // Crear nueva referencia del array sin el elemento eliminado
       const newFiles = allFiles.filter((_, index) => index !== realIndex);
-      this.files64Signal.set(newFiles);
-      this.files64Action.emit(newFiles);
+      this.setFiles64(newFiles);
       //console.log(`🗑️ Archivo eliminado del step ${fileToRemove.step}`);
 
-      // Actualizar el valor del FormControl si el archivo tenía campo asociado
-      if (fileToRemove.field || fileToRemove.key) {
-        const formGroup = this.formGroupSignal();
-
-        // Actualizar el FormControl del campo "field"
-        if (fileToRemove.field) {
-          // PERF: por `field` se suman todas las imágenes aunque provengan de distintas keys
-          const remainingFieldFiles = newFiles.filter(f => f.field === fileToRemove.field);
-
-          const control = formGroup?.get(fileToRemove.field);
-          if (control) {
-            // En edición (PATCH): preservar URLs de archivos ya existentes en el servidor.
-            const current = control.value;
-            const existingUrls: any[] = Array.isArray(current)
-              ? current.filter((v: any) => typeof v === 'string')
-              : (typeof current === 'string' && current ? [current] : []);
-
-            const combined = [...existingUrls, ...remainingFieldFiles];
-            // Siempre se establece como array para que los campos tipo List reciban el formato correcto
-            control.setValue(combined.length > 0 ? combined : null);
-            control.markAsDirty();
-          }
-        }
-
-        // Actualizar el FormControl del campo "key" (si existe y es diferente de field)
-        // Mismo tratamiento ligero que en appendFile: solo placeholder para satisfacer required
-        if (fileToRemove.key && fileToRemove.key !== fileToRemove.field) {
-          const remainingKeyFiles = newFiles.filter(f => f.key === fileToRemove.key);
-
-          let valueToSet = null;
-          if (remainingKeyFiles.length >= 1) {
-            const toLightRef = (f: any) => ({
-              type: f.type,
-              file_name: f.file_name,
-              file: `[ref:${f.field}]`,
-              step: f.step,
-              field: f.field,
-              key: f.key
-            });
-            valueToSet = remainingKeyFiles.length === 1
-              ? toLightRef(remainingKeyFiles[0])
-              : remainingKeyFiles.map(toLightRef);
-          }
-
-          const keyControl = formGroup?.get(fileToRemove.key);
-          if (keyControl) {
-            keyControl.setValue(valueToSet);
-            keyControl.markAsDirty();
-          }
-        }
+      this.removeFileRecordFromControl(fileToRemove.send_field || fileToRemove.field, fileToRemove);
+      if (fileToRemove.local_field && fileToRemove.local_field !== (fileToRemove.send_field || fileToRemove.field)) {
+        this.removeFileRecordFromControl(fileToRemove.local_field, fileToRemove);
       }
+      this._saveFormCacheNow();
+      // ]]]FI
     } else if (type == 'bin') {
       this.filesAction.emit(this.files);
       this.files.splice(i, 1);
@@ -3849,8 +4482,7 @@ export class CustomDrawFormComponent implements OnDestroy {
       //console.log(`🧹 Limpiando multimedia del step ${step}`);
     }
 
-    this.files64Signal.set(filteredFiles);
-    this.files64Action.emit(filteredFiles);
+    this.setFiles64(filteredFiles);
   }
 
   /**
@@ -3858,13 +4490,13 @@ export class CustomDrawFormComponent implements OnDestroy {
    */
   clearAllMediaFiles(): void {
     //console.log('🧹 Limpiando TODOS los archivos multimedia por reset del formulario');
-    this.files64Signal.set([]);
-    this.files64Action.emit([]);
+    this.setFiles64([]);
   }
 
   /**
    * Inicializa los datos de una tabla con filas vacías
    */
+  // [[[II ESC:011-01 DOC:docs/documents/2026-06-02_011_custom-draw-form-table-formarray.md#escenario-01 ESC:015-01 DOC:docs/documents/2026-06-02_015_dynamic-table-field-component.md#escenario-01
   initializeTableData(tableConfig: any): any[] {
     const data: any[] = [];
     const initialRows = tableConfig?.initial_rows || 0;
@@ -3872,13 +4504,14 @@ export class CustomDrawFormComponent implements OnDestroy {
     for (let i = 0; i < initialRows; i++) {
       const row: any = {};
       tableConfig.columns.forEach((col: any) => {
-        row[col.field] = '';
+        row[col.field] = this.getTableColumnDefaultValue(col);
       });
       data.push(row);
     }
 
     return data;
   }
+  // ]]]FI
 
   getFormControl(field: string): FormControl | null {
     const formGroup = this.formGroupSignal();
@@ -3886,47 +4519,34 @@ export class CustomDrawFormComponent implements OnDestroy {
     return formGroup.get(field) as FormControl;
   }
 
-  getTableData(field: string): any[] {
-    const control = this.getFormControl(field);
-    const currentValue = control?.value;
-
-    if (Array.isArray(currentValue)) {
-      return currentValue;
-    }
-
-    return [];
-  }
-
-  updateTableFormControl(field: string, data: any[]): void {
-    const control = this.getFormControl(field);
-    if (control) {
-      control.setValue([...data]);
-      control.markAsDirty();
-    }
-  }
-
-  onRowSelect(event: any, field: string): void {
-    this.onTableRowSelect.emit({ event, field, data: this.getTableData(field) });
-  }
-
-  onRowUnselect(event: any, field: string): void {
-    this.onTableRowUnselect.emit({ event, field, data: this.getTableData(field) });
-  }
-
-  addTableRow(field: string, tableConfig: any): void {
+  // [[[II ESC:011-01 DOC:docs/documents/2026-06-02_011_custom-draw-form-table-formarray.md#escenario-01 ESC:015-01 DOC:docs/documents/2026-06-02_015_dynamic-table-field-component.md#escenario-01
+  getTableFormArray(field: string): FormArray | null {
     const formGroup = this.formGroupSignal();
-    if (!formGroup) return;
+    const control = formGroup?.get(field);
+    return control instanceof FormArray ? control : null;
+  }
 
-    const formArray = formGroup.get(field) as FormArray;
-    if (!formArray) return;
+  private getTableColumnDefaultValue(column: any): any {
+    if (column?.type === 'input-number' || column?.type === 'date') {
+      return null;
+    }
+    if (column?.type === 'multi-select' || column?.type === 'listbox') {
+      return [];
+    }
+    if (column?.type === 'checkbox') {
+      return false;
+    }
+    return '';
+  }
 
-    // Crear un nuevo FormGroup para la fila
-    const newRowGroup: any = {};
+  private createTableRowFormGroup(tableConfig: any, rowData: any = {}): FormGroup {
+    const rowGroup: any = {};
 
-    tableConfig.columns.forEach((col: any) => {
+    (tableConfig?.columns || []).forEach((col: any) => {
       const validators: any[] = [];
+      const editable = col.editable !== false;
 
-      if (col.required) {
+      if (col.required && editable) {
         validators.push(Validators.required);
       }
       if (col.validation?.max_length) {
@@ -3936,358 +4556,41 @@ export class CustomDrawFormComponent implements OnDestroy {
         validators.push(Validators.minLength(col.validation.min_length));
       }
 
-      let defaultValue: any = '';
-      if (col.type === 'input-number') {
-        defaultValue = null;
-      } else if (col.type === 'date') {
-        defaultValue = null;
-      } else if (col.type === 'multi-select') {
-        defaultValue = [];
-      } else if (col.type === 'checkbox') {
-        defaultValue = false;
-      }
-
-      newRowGroup[col.field] = new FormControl(defaultValue, validators);
+      rowGroup[col.field] = new FormControl(
+        rowData?.[col.field] !== undefined ? rowData[col.field] : this.getTableColumnDefaultValue(col),
+        validators
+      );
     });
 
-    formArray.push(this.fb.group(newRowGroup));
-
-    this.onTableAddRow.emit({
-      field,
-      newRow: newRowGroup,
-      data: formArray.value
-    });
+    return this.fb.group(rowGroup);
   }
 
-  editTableRow(rowData: any, field: string): void {
-    this.onTableEditRow.emit({ rowData, field, data: this.getTableData(field) });
-  }
-
-  deleteTableRow(rowIndex: number, field: string): void {
-    const formGroup = this.formGroupSignal();
-    if (!formGroup) return;
-
-    const formArray = formGroup.get(field) as FormArray;
+  updateTableFormControl(field: string, data: any[], markDirty: boolean = true, tableConfig: any = null): void {
+    const formArray = this.getTableFormArray(field);
     if (!formArray) return;
 
-    const rowToDelete = formArray.at(rowIndex)?.value;
+    while (formArray.length) {
+      formArray.removeAt(0, { emitEvent: false });
+    }
 
-    // Eliminar del FormArray
-    formArray.removeAt(rowIndex);
+    const config = tableConfig || { columns: Object.keys(data?.[0] || {}).map((columnField: string) => ({ field: columnField })) };
+    (data || []).forEach((rowData: any) => {
+      formArray.push(this.createTableRowFormGroup(config, rowData), { emitEvent: false });
+    });
 
-    // Forzar actualización de validación del FormArray
-    formArray.markAsTouched();
+    if (markDirty) {
+      formArray.markAsDirty();
+      formArray.root?.markAsDirty();
+    }
+
     formArray.updateValueAndValidity();
-
-    this.onTableDeleteRow.emit({
-      rowData: rowToDelete,
-      rowIndex,
-      field,
-      data: formArray.value
-    });
-  }
-
-  onCellEdit(event: any, field: string, rowIndex: number, colField: string): void {
-    const currentData = this.getTableData(field);
-    if (currentData[rowIndex]) {
-      currentData[rowIndex][colField] = event.target.value;
-      this.updateTableFormControl(field, currentData);
-      this.onTableCellEdit.emit({
-        event,
-        field,
-        rowIndex,
-        colField,
-        value: event.target.value,
-        data: currentData
-      });
-    }
-  }
-
-  getColumnType(column: any): string {
-    return column.type || 'input-text';
-  }
-
-  isColumnEditable(column: any): boolean {
-    return column.editable !== undefined ? column.editable : true;
-  }
-
-  isColumnRequired(column: any): boolean {
-    return column.required !== undefined ? column.required : false;
-  }
-
-  getColumnWidth(column: any): string {
-    return column.width || 'auto';
-  }
-
-  getTagSeverity(column: any): "success" | "info" | "warn" | "danger" | "secondary" | "contrast" | null | undefined {
-    return column.tag?.severity || 'info';
-  }
-
-  formatTagValue(value: any, column: any): string {
-    if (!column.tag?.active) return value;
-
-    const tagType = column.tag?.type || 'none';
-
-    switch (tagType) {
-      case 'uppercase':
-        return String(value).toUpperCase();
-      case 'lowercase':
-        return String(value).toLowerCase();
-      case 'capitalize':
-        return String(value).charAt(0).toUpperCase() + String(value).slice(1).toLowerCase();
-      case 'capitalize-words':
-        return String(value).replace(/\w\S*/g, (txt) =>
-          txt.charAt(0).toUpperCase() + txt.substr(1).toLowerCase());
-      default:
-        return value;
-    }
-  }
-
-  validateCell(value: any, column: any, showErrors: boolean = false): boolean {
-    // Siempre validar campos obligatorios
-    if (this.isColumnRequired(column) && (!value || value.toString().trim() === '')) {
-      return showErrors ? false : true; // Solo mostrar error si showErrors es true
-    }
-
-    if (column.validation) {
-      const validation = column.validation;
-      const strValue = value?.toString() || '';
-
-      if (validation.min_length && strValue.length < validation.min_length) {
-        return showErrors ? false : true;
-      }
-
-      if (validation.max_length && strValue.length > validation.max_length) {
-        return showErrors ? false : true;
-      }
-    }
-
-    return true;
-  }
-
-  getCellClass(value: any, column: any, tableField: string, rowIndex: number): string {
-    // Mostrar error si:
-    // 1. La fila está en edición completa
-    // 2. La celda específica está en edición
-    // 3. Se solicitó validación de tabla
-    const isRowEditing = this.isRowEditing(tableField, rowIndex);
-    const isCellEditing = this.isCellEditing(tableField, rowIndex, column.field);
-    const tableValidationRequested = this.tablesToValidate[tableField] || false;
-
-    const showErrors = isRowEditing || isCellEditing || tableValidationRequested;
-
-    const isValid = this.validateCell(value, column, showErrors);
-    return isValid ? '' : 'p-invalid';
-  }
-
-  isAnyRowEditing(tableField: string): boolean {
-    // Verificar si alguna fila está en edición (completa o celda)
-    const rowEditingKeys = Object.keys(this.editingRows).filter(key =>
-      key.startsWith(tableField + '_') && this.editingRows[key]
-    );
-    const cellEditingKeys = Object.keys(this.editingCells).filter(key =>
-      key.startsWith(tableField + '_') && this.editingCells[key]
-    );
-    return rowEditingKeys.length > 0 || cellEditingKeys.length > 0;
-  }
-
-  isRowOrCellEditing(tableField: string, rowIndex: number): boolean {
-    // Verificar si la fila está en edición completa o alguna de sus celdas
-    if (this.isRowEditing(tableField, rowIndex)) return true;
-
-    // Buscar si alguna celda de esta fila está en edición
-    const cellPrefix = `${tableField}_${rowIndex}_`;
-    return Object.keys(this.editingCells).some(key =>
-      key.startsWith(cellPrefix) && this.editingCells[key]
-    );
-  }  // Métodos para edición de celdas
-  editingRows: { [key: string]: boolean } = {};
-  editingCells: { [key: string]: boolean } = {};
-  tablesToValidate: { [key: string]: boolean } = {};
-  originalRowData: { [key: string]: any } = {};
-
-  startRowEdit(tableField: string, rowIndex: number): void {
-    const rowKey = `${tableField}_${rowIndex}`;
-    this.editingRows[rowKey] = true;
-
-    // Guardar datos originales para poder cancelar
-    const currentData = this.getTableData(tableField);
-    this.originalRowData[rowKey] = { ...currentData[rowIndex] };
-  }
-
-  startCellEdit(tableField: string, rowIndex: number, colField: string): void {
-    const cellKey = `${tableField}_${rowIndex}_${colField}`;
-    this.editingCells[cellKey] = true;
-
-    // Guardar dato original de la celda
-    const currentData = this.getTableData(tableField);
-    this.originalRowData[cellKey] = currentData[rowIndex]?.[colField];
-  }
-
-  finishRowEdit(tableField: string, rowIndex: number): void {
-    const rowKey = `${tableField}_${rowIndex}`;
-
-    // Validar todas las celdas de la fila antes de guardar
-    const currentData = this.getTableData(tableField);
-    const formGroup = this.formGroupSignal();
-    if (!formGroup) return;
-
-    const formArray = formGroup.get(tableField) as FormArray;
-    if (!formArray) return;
-
-    const rowFormGroup = formArray.at(rowIndex) as FormGroup;
-    if (!rowFormGroup) return;
-
-    // Primero sincronizar todos los valores del rowData con el FormGroup
-    const rowData = currentData[rowIndex];
-    Object.keys(rowData).forEach(key => {
-      const control = rowFormGroup.get(key);
-      if (control) {
-        control.setValue(rowData[key]);
-      }
-    });
-
-    // Marcar todos los controles como touched para mostrar errores
-    Object.keys(rowFormGroup.controls).forEach(key => {
-      const control = rowFormGroup.get(key);
-      control?.markAsTouched();
-      control?.updateValueAndValidity();
-    });
-
-    // Verificar si es válido
-    if (rowFormGroup.valid) {
-      this.editingRows[rowKey] = false;
-      delete this.originalRowData[rowKey];
-
-      // Limpiar también cualquier edición de celda activa de esta fila
-      const cellPrefix = `${tableField}_${rowIndex}_`;
-      Object.keys(this.editingCells).forEach(cellKey => {
-        if (cellKey.startsWith(cellPrefix)) {
-          this.editingCells[cellKey] = false;
-          delete this.originalRowData[cellKey];
-        }
-      });
-
-      this.onTableCellEdit.emit({
-        field: tableField,
-        rowIndex,
-        data: currentData
-      });
-    }
-  }
-
-  finishCellEdit(tableField: string, rowIndex: number, colField: string): void {
-    const cellKey = `${tableField}_${rowIndex}_${colField}`;
-
-    // Obtener el FormGroup de la fila para validar
-    const formGroup = this.formGroupSignal();
-    if (!formGroup) return;
-
-    const formArray = formGroup.get(tableField) as FormArray;
-    if (!formArray) return;
-
-    const rowFormGroup = formArray.at(rowIndex) as FormGroup;
-    if (!rowFormGroup) return;
-
-    const cellControl = rowFormGroup.get(colField);
-    if (cellControl) {
-      // Primero obtener el valor actual de rowData (que ya fue actualizado por ngModel)
-      const currentData = this.getTableData(tableField);
-      const currentValue = currentData[rowIndex]?.[colField];
-
-      // Actualizar el FormControl con el valor actual
-      cellControl.setValue(currentValue);
-
-      // Marcar el control como touched para mostrar errores
-      cellControl.markAsTouched();
-
-      // Validar el control
-      cellControl.updateValueAndValidity();
-
-      // Solo guardar si es válido
-      if (cellControl.valid) {
-        this.editingCells[cellKey] = false;
-        delete this.originalRowData[cellKey];
-
-        this.onTableCellEdit.emit({
-          field: tableField,
-          rowIndex,
-          colField,
-          data: currentData
-        });
-      }
-      // Si no es válido, no cerramos el modo edición para que el usuario corrija
-    }
-  }
-
-  cancelRowEdit(tableField: string, rowIndex: number): void {
-    const rowKey = `${tableField}_${rowIndex}`;
-
-    // Restaurar datos originales
-    if (this.originalRowData[rowKey]) {
-      const currentData = this.getTableData(tableField);
-      currentData[rowIndex] = { ...this.originalRowData[rowKey] };
-      this.updateTableFormControl(tableField, currentData);
-      delete this.originalRowData[rowKey];
-    }
-
-    this.editingRows[rowKey] = false;
-
-    // Limpiar también cualquier edición de celda activa de esta fila
-    const cellPrefix = `${tableField}_${rowIndex}_`;
-    Object.keys(this.editingCells).forEach(cellKey => {
-      if (cellKey.startsWith(cellPrefix)) {
-        this.editingCells[cellKey] = false;
-        delete this.originalRowData[cellKey];
-      }
-    });
-  }
-
-  cancelCellEdit(tableField: string, rowIndex: number, colField: string): void {
-    const cellKey = `${tableField}_${rowIndex}_${colField}`;
-
-    // Restaurar dato original
-    if (this.originalRowData[cellKey] !== undefined) {
-      const currentData = this.getTableData(tableField);
-      currentData[rowIndex][colField] = this.originalRowData[cellKey];
-      this.updateTableFormControl(tableField, currentData);
-      delete this.originalRowData[cellKey];
-    }
-
-    this.editingCells[cellKey] = false;
-  }
-
-  isRowEditing(tableField: string, rowIndex: number): boolean {
-    const rowKey = `${tableField}_${rowIndex}`;
-    return this.editingRows[rowKey] || false;
-  }
-
-  isCellEditing(tableField: string, rowIndex: number, colField: string): boolean {
-    const cellKey = `${tableField}_${rowIndex}_${colField}`;
-    return this.editingCells[cellKey] || false;
-  }
-
-  onCellKeydown(event: KeyboardEvent, tableField: string, rowIndex: number, colField: string): void {
-    if (event.key === 'Enter') {
-      event.preventDefault();
-      this.finishCellEdit(tableField, rowIndex, colField);
-    } else if (event.key === 'Escape') {
-      event.preventDefault();
-      this.cancelCellEdit(tableField, rowIndex, colField);
-    }
   }
 
   validateTable(tableField: string): void {
     this.tablesToValidate[tableField] = true;
+    this.tableValidationVersion++;
   }
-
-  trackByFn(index: number, item: any): any {
-    return item.field || index;
-  }
-
-  getColumnFields(columns: any[]): string[] {
-    return columns?.map(col => col.field) || [];
-  }
+  // ]]]FI
 
   /**
    * Obtiene archivos que no sean firmas para mostrar en la sección de archivos
@@ -4886,8 +5189,7 @@ export class CustomDrawFormComponent implements OnDestroy {
           step: currentStep
         }
       ];
-      this.files64Signal.set(newFiles);
-      this.files64Action.emit(newFiles);
+      this.setFiles64(newFiles);
     }
   }
 
