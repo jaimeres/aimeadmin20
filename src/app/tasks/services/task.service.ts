@@ -16,7 +16,6 @@ export class TaskService extends CRUDService {
     ensurePlaceholderCrudConfigs(this.authS.config, this.placeholderModules);
 
 
-    //console.log('takssssssssssssss', this.authS.config);
     this.customField.set({
       'task': this.authS.config['task']['cols'],
       'task-detail': this.authS.config['task-detail']['cols'],

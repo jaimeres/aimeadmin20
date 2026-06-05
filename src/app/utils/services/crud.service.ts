@@ -310,14 +310,10 @@ export class CRUDService {
   }
 
   configCols(module: string) {
-    console.log(module,);
-    console.log(this.authS.config[module]);
-
     return this.authS.config[module]['config_cols'];
   }
 
   drawForm(module: string) {
-    console.log(module,);
     return this.authS.config[module]['draw'];
   }
 

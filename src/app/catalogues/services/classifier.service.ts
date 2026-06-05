@@ -10,7 +10,6 @@ export class ClassifierService extends CRUDService {
   constructor() {
     super();
 
-    console.log(this.authS.config);
     this.customField.set({
       'classifier': this.authS.config['classifier']['cols'],
       'classifier-level': this.authS.config['classifier-level']['cols'],

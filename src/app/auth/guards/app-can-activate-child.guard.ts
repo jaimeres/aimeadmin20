@@ -1,6 +1,7 @@
 import { inject } from '@angular/core';
 import { CanActivateFn } from '@angular/router';
-import { take, map } from 'rxjs/operators';
+import { of } from 'rxjs';
+import { take, map, switchMap } from 'rxjs/operators';
 import { AuthService } from '../services/auth.service';
 import { MessageService } from '../../components/services/message.service';
 
@@ -14,6 +15,15 @@ export const appCanActivateGuardChild: CanActivateFn = (route, state) => {
 
   return authS.tokenValidate().pipe(
     take(1),
+    // [[[II ESC:001-02 DOC:docs/documents/2026-06-04-001-token-config-cache.md#escenario-02
+    switchMap(valid => {
+      if (!valid) {
+        authS.redirectMP();
+        return of(false);
+      }
+      return authS.ensureConfigForUrl(state.url, route.data?.['configModules'] || []).pipe(take(1));
+    }),
+    // ]]]FI
     map(valid => {
       if (!valid) {
         authS.redirectMP();

@@ -4536,9 +4536,29 @@ export class CRUD extends Vars implements OnChanges  /*implements OnInit*/ {
    * Evento que se dispara al mostrar un dialogo de una app, normalmente tiene que inicializar formularios antes de abrirse
    * @param app app que se va a mostrar
    */
-  onShow(app: string = '') {
+  // [[[II ESC:021-01 DOC:docs/documents/2026-06-05_021_crud-onshow-maximize-small-screens.md#escenario-01
+  onShow(app: string = '', dialog: any = null) {
 
+    // Solo maximiza automáticamente cuando se abre desde pantallas pequeñas.
+    if (dialog && this.generalS.isMobileScreen()) {
+      const maximizeDialog = () => {
+        const dialogAny = dialog as any;
+        if (!dialogAny?.maximized && typeof dialogAny?.maximize === 'function') {
+          dialogAny.maximize();
+          dialogAny.cd?.detectChanges?.();
+        }
+      };
+
+      setTimeout(() => {
+        if (typeof requestAnimationFrame === 'function') {
+          requestAnimationFrame(maximizeDialog);
+        } else {
+          maximizeDialog();
+        }
+      });
+    }
   }
+  // ]]]FI
 
   // aqui voy debo quitar el documernts 
   isShowDocumentsTab = signal<any[]>([]);

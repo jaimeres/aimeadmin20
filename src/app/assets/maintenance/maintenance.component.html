@@ -24,8 +24,8 @@
 <app-custom-actions-selection [visible]="actionsSelectionDialogVisible" (visibleChange)="onVisibleChange($event)" />
 
 <p-dialog [(visible)]="formDialogVisible[$any(typeDefault)]" (onHide)="onHide($any(typeDefault))"
-  (onShow)="onShow($any(typeDefault))" [styleClass]="styleClassDialog()" modal="true"
-  [style]="{'contain': 'layout style paint'}" maximizable="true">
+  (onShow)="onShow($any(typeDefault), $any(maintenanceRef))" [styleClass]="styleClassDialog()" modal="true"
+  [style]="{'contain': 'layout style paint'}" #maintenanceRef [maximizable]="true">
 
   <ng-template #header>
     <div class="p-dialog-title">

@@ -11,20 +11,6 @@
   overflow-x: hidden;
 }*/
 
-/*
-Estilos para componente de firma digital
-*/
-.signature-item {
-  background: var(--surface-ground) !important;
-  border: 1px solid var(--surface-border) !important;
-  border-radius: 8px !important;
-  transition: all 0.2s ease !important;
-
-  &:hover {
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1) !important;
-  }
-}
-
 .signature-canvas-container {
   .signature-canvas-wrapper {
     display: flex;
@@ -55,40 +41,6 @@ Estilos para componente de firma digital
       outline-offset: 2px;
     }
   }
-}
-
-.signature-buttons {
-  display: flex;
-  gap: 0.5rem;
-  justify-content: flex-start;
-  align-items: center;
-  flex-wrap: wrap;
-
-  .p-button {
-    min-width: auto;
-  }
-}
-
-.signature-preview {
-  border: 1px solid var(--surface-border);
-  border-radius: 4px;
-  padding: 0.5rem;
-  background: var(--surface-0);
-
-  img {
-    border-radius: 4px;
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-  }
-}
-
-// Estilos específicos para imágenes de firma
-.signature-preview-img {
-  max-width: 100%;
-  height: auto;
-  max-height: 100px;
-  width: auto;
-  display: block;
-  object-fit: contain;
 }
 
 .signature-history-img {
@@ -159,7 +111,6 @@ small.text-red-500 {
   width: 100% !important;
 }
 
-/* Forzar que el header también tenga el mismo padding */
 ::ng-deep .p-autocomplete-list-container .p-autocomplete-list-header {
   padding: 0 !important;
 }
@@ -202,15 +153,53 @@ small.text-red-500 {
   padding: 0.3rem 0.5rem 0 0.8rem !important;
 }
 
+// [[[II ESC:020-01 DOC:docs/documents/2026-06-04_020_custom-draw-form-virtual-scroll-dropdowns.md#escenario-01
+:host ::ng-deep .listbox-virtual-fixed .p-listbox-list {
+  margin: 0 !important;
+  overflow-anchor: none;
+  padding-top: 0 !important;
+  padding-bottom: 0 !important;
+}
+
+:host ::ng-deep .listbox-virtual-fixed .p-listbox-list-container,
+:host ::ng-deep .listbox-virtual-fixed .p-virtualscroller,
+:host ::ng-deep .listbox-virtual-fixed .p-virtualscroller-content,
+:host ::ng-deep .listbox-virtual-fixed .p-virtualscroller-spacer {
+  overflow-anchor: none;
+}
+
+:host ::ng-deep .listbox-virtual-fixed .p-listbox-option,
+:host ::ng-deep .listbox-virtual-fixed .p-listbox-option-group {
+  align-items: center !important;
+  box-sizing: border-box !important;
+  display: flex !important;
+  height: 40px !important;
+  max-height: 40px !important;
+  min-height: 40px !important;
+  overflow: hidden;
+  padding-top: 0 !important;
+  padding-bottom: 0 !important;
+}
+
+:host ::ng-deep .listbox-virtual-fixed .p-listbox-option-check-icon {
+  align-items: center !important;
+  display: inline-flex !important;
+  justify-content: center !important;
+}
+
+:host ::ng-deep .listbox-virtual-fixed .listbox-virtual-option-content,
+:host ::ng-deep .listbox-virtual-fixed .floating-listbox-simple-label {
+  align-items: center;
+  display: flex;
+  height: 100%;
+  line-height: 1.2;
+  min-height: 0 !important;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+// ]]]FI
+
 :host ::ng-deep .floating-listbox-simple-label {
   font-weight: bold !important;
 }
-
-/* [[[II ESC:020-01 DOC:docs/documents/2026-06-04_020_custom-draw-form-virtual-scroll-dropdowns.md#escenario-01 */
-:host ::ng-deep p-listbox.listbox-virtual-spaced .p-listbox-option {
-  min-height: 44px;
-  align-items: center;
-  padding-top: 0.35rem !important;
-  padding-bottom: 0.35rem !important;
-}
-/* ]]]FI */

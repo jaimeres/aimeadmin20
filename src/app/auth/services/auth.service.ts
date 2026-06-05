@@ -4,7 +4,7 @@ import { LoggedUser } from '../../types/logged-user';
 import { CookieOptions, CookieService } from 'ngx-cookie-service';
 import { environment } from '../../../environments/environment';
 import { HttpClient } from '@angular/common/http';
-import { catchError, map, Observable, of, switchMap, tap, throwError } from 'rxjs';
+import { catchError, firstValueFrom, from, map, Observable, of, switchMap, tap, throwError } from 'rxjs';
 import { jwtDecode } from "jwt-decode";
 import { MessageService } from '../../components/services/message.service';
 import { Router } from '@angular/router';
@@ -27,6 +27,12 @@ export class AuthService {
   private _tokenRefresh: string = '';
   private _base_url: String = environment.base_url;
   private _config: any = {};
+  // [[[II ESC:001-01 DOC:docs/documents/2026-06-04-001-token-config-cache.md#escenario-01
+  private readonly _configCachePrefix = 'bos_config_module';
+  private readonly _configCacheIndex = 'bos_config_module_index';
+  private readonly _configCacheAppIndex = 'bos_config_module_app_index';
+  private _configFetchPromise: Promise<Record<string, any>> | null = null;
+  // ]]]FI
   private _storageReady: Promise<void> = Promise.resolve();
   private _cookieOptions: CookieOptions = {
     expires: 1, // la cookie expirará en 1 día
@@ -221,10 +227,13 @@ export class AuthService {
     const performTokenValidate = async () => {
       await this._storageReady;
 
+      // [[[II ESC:001-01 DOC:docs/documents/2026-06-04-001-token-config-cache.md#escenario-01
       //si el token de acceso el valido no necesita refrescar el token
-      //if (this.getTimeUntilTokenExpiration > 20) {
-      //  return of(true);
-      //}
+      if (this.getTimeUntilTokenExpiration > 20) {
+        this.setLoggedin(true);
+        return of(true);
+      }
+      // ]]]FI
 
       if (!this.refresh) {
         this.messageS.showLoginDialog();
@@ -259,26 +268,7 @@ export class AuthService {
           this.setLoggedin(true);
           await this.saveTokensToStorage(); // Guardar tokens actualizados
         }),
-        switchMap((resp: any) => {
-          // Si no existe config, consultar settings/me
-          if (!this._config || Object.keys(this._config).length === 0) {
-            return this.http.get(`${this._base_url}/settings/settings/me/`).pipe(
-              tap((config: any) => {
-                //console.log('refresh', config);
-                this.config = config; // Asignar la configuración
-              }),
-              map(() => true), // Retornar true para indicar éxito
-              catchError((configError) => {
-                //console.warn('Warning: Could not load configuration after refresh:', configError);
-                // No fallar el refresh si la configuración falla, solo advertir
-                return of(true);
-              })
-            );
-          } else {
-            // Si ya existe config, solo retornar true
-            return of(true);
-          }
-        }),
+        map(() => true),
         catchError(resp => {
           this.messageS.changeMessage('Su sesión ha terminado');
           this.setLoggedin(false);
@@ -429,11 +419,8 @@ export class AuthService {
         switchMap((resp: any) => {
           // Hacer llamada a configuración después del login exitoso
           return this.http.get(`${this._base_url}/settings/settings/me/`).pipe(
-            tap((config: any) => {
-              console.log('login', config);
-
-              this.config = config; // Guardar la configuración en el servicio
-
+            switchMap((config: any) => {
+              return from(this.replaceConfigResponse(config));
             }),
             map(() => resp.data.user), // Retornar el usuario original
             catchError((configError) => {
@@ -531,13 +518,435 @@ export class AuthService {
   }
 
   get config(): any {
-    return this._config
+    // [[[II ESC:001-04 DOC:docs/documents/2026-06-04-001-token-config-cache.md#escenario-04
+    return new Proxy(this._config, {
+      get: (target: Record<string, any>, property: string | symbol) => {
+        if (typeof property !== 'string') {
+          return (target as any)[property];
+        }
+
+        if (!(property in target)) {
+          const cachedModule = this.readConfigModuleFromStorageSync(property);
+          if (cachedModule) {
+            target[property] = cachedModule;
+          }
+        }
+
+        return target[property] ?? this.buildTransientEmptyConfigModule();
+      },
+    });
+    // ]]]FI
   }
 
   set config(value: any) {
-    // Recorrer recursivamente la estructura de attributes
-    this._config = this.getCustomField(value?.data?.attributes);
+    // [[[II ESC:001-02 DOC:docs/documents/2026-06-04-001-token-config-cache.md#escenario-02
+    this.cacheConfigResponse(value).catch((error) => {
+      console.warn('Warning: Could not cache configuration:', error);
+    });
+    // ]]]FI
   }
+
+  // [[[II ESC:001-02 DOC:docs/documents/2026-06-04-001-token-config-cache.md#escenario-02
+  /**
+   * Asegura la configuración necesaria para una navegación sin declarar módulos en rutas.
+   * Primero intenta resolver por índice local; si falta, actualiza la configuración desde servidor.
+   */
+  ensureConfigForUrl(url: string, modules: string[] = []): Observable<boolean> {
+    return from(this.ensureConfigForUrlAsync(url, modules)).pipe(
+      map(() => true),
+      catchError((error) => {
+        console.warn('Warning: Could not ensure route configuration:', error);
+        return of(false);
+      })
+    );
+  }
+
+  /**
+   * Asegura que los módulos de configuración requeridos estén disponibles en memoria.
+   * La memoria se limita a los módulos solicitados; el resto queda separado en storage local.
+   */
+  ensureConfigModules(modules: string[] = []): Observable<boolean> {
+    return from(this.ensureConfigModulesAsync(modules)).pipe(
+      map(() => true),
+      catchError((error) => {
+        console.warn('Warning: Could not ensure configuration modules:', error);
+        return of(false);
+      })
+    );
+  }
+
+  private async ensureConfigForUrlAsync(url: string, modules: string[] = []): Promise<void> {
+    const explicitModules = this.normalizeConfigModules(modules);
+    if (explicitModules.length) {
+      await this.ensureConfigModulesAsync(explicitModules);
+      return;
+    }
+
+    await this._storageReady;
+
+    let routeModules = await this.resolveConfigModulesForUrl(url);
+    const hasAppIndex = Object.keys(await this.readConfigAppIndexFromStorage()).length > 0;
+    if (!routeModules.length || !hasAppIndex) {
+      await this.fetchAndCacheFullConfig();
+      routeModules = await this.resolveConfigModulesForUrl(url);
+    }
+
+    if (!routeModules.length) {
+      return;
+    }
+
+    await this.ensureConfigModulesAsync(routeModules);
+  }
+
+  private async ensureConfigModulesAsync(modules: string[] = []): Promise<void> {
+    const requestedModules = this.normalizeConfigModules(modules);
+    if (!requestedModules.length) {
+      this._config = {};
+      return;
+    }
+
+    await this._storageReady;
+
+    const activeConfig: Record<string, any> = {};
+    const missingModules: string[] = [];
+
+    for (const module of requestedModules) {
+      if (this._config?.[module]) {
+        activeConfig[module] = this._config[module];
+        continue;
+      }
+
+      const cachedModule = await this.readConfigModuleFromStorage(module);
+      if (cachedModule) {
+        activeConfig[module] = cachedModule;
+      } else {
+        missingModules.push(module);
+      }
+    }
+
+    if (missingModules.length) {
+      const processedConfig = await this.fetchAndCacheFullConfig();
+      for (const module of requestedModules) {
+        if (processedConfig[module]) {
+          activeConfig[module] = processedConfig[module];
+        }
+      }
+    }
+
+    this._config = activeConfig;
+  }
+
+  private normalizeConfigModules(modules: string[] = []): string[] {
+    return Array.from(new Set(
+      modules
+        .map(module => String(module || '').trim())
+        .filter(module => module.length > 0)
+    ));
+  }
+
+  private async fetchAndCacheFullConfig(): Promise<Record<string, any>> {
+    if (!this._configFetchPromise) {
+      this._configFetchPromise = firstValueFrom(
+        this.http.get(`${this._base_url}/settings/settings/me/`).pipe(
+          map((config: any) => this.processConfigResponse(config))
+        )
+      ).then(async ({ processedConfig, appIndex }) => {
+        await this.writeConfigModulesToStorage(processedConfig, appIndex);
+        return processedConfig;
+      }).finally(() => {
+        this._configFetchPromise = null;
+      });
+    }
+
+    return this._configFetchPromise;
+  }
+
+  private async replaceConfigResponse(value: any, activeModules: string[] = []): Promise<void> {
+    await this.clearConfigStorageForCurrentUser();
+    await this.cacheConfigResponse(value, activeModules);
+  }
+
+  private async cacheConfigResponse(value: any, activeModules: string[] = []): Promise<void> {
+    const { processedConfig, appIndex } = this.processConfigResponse(value);
+    await this.writeConfigModulesToStorage(processedConfig, appIndex);
+
+    const requestedModules = this.normalizeConfigModules(activeModules);
+    this._config = requestedModules.reduce((acc: Record<string, any>, module) => {
+      if (processedConfig[module]) {
+        acc[module] = processedConfig[module];
+      }
+      return acc;
+    }, {});
+  }
+
+  private processConfigResponse(value: any): { processedConfig: Record<string, any>; appIndex: Record<string, string[]> } {
+    const attributes = value?.data?.attributes;
+    return {
+      processedConfig: this.getCustomField(attributes),
+      appIndex: this.buildConfigAppIndex(attributes),
+    };
+  }
+
+  private async writeConfigModulesToStorage(config: Record<string, any>, appIndex: Record<string, string[]> = {}): Promise<void> {
+    const modules = Object.keys(config || {});
+    const existingIndex = await this.readConfigIndexFromStorage();
+    const nextIndex = Array.from(new Set([...existingIndex, ...modules]));
+
+    for (const module of modules) {
+      await this.writeConfigModuleToStorage(module, config[module]);
+    }
+
+    await this.writeConfigIndexToStorage(nextIndex);
+    if (Object.keys(appIndex).length) {
+      await this.writeConfigAppIndexToStorage(appIndex);
+    }
+  }
+
+  private configStorageScope(): string {
+    return String(this.userId() ?? this.username() ?? 'anonymous');
+  }
+
+  private configStorageKey(module: string): string {
+    return `${this._configCachePrefix}:${this.configStorageScope()}:${module}`;
+  }
+
+  private configIndexStorageKey(): string {
+    return `${this._configCacheIndex}:${this.configStorageScope()}`;
+  }
+
+  private configAppIndexStorageKey(): string {
+    return `${this._configCacheAppIndex}:${this.configStorageScope()}`;
+  }
+
+  private async resolveConfigModulesForUrl(url: string): Promise<string[]> {
+    const routeKeys = this.extractConfigRouteKeys(url);
+    if (!routeKeys.length) return [];
+
+    const [moduleIndex, appIndex] = await Promise.all([
+      this.readConfigIndexFromStorage(),
+      this.readConfigAppIndexFromStorage()
+    ]);
+    const resolvedModules = new Set<string>();
+
+    for (const routeKey of routeKeys) {
+      const routeAliases = this.configKeyAliases(routeKey);
+
+      for (const alias of routeAliases) {
+        for (const module of appIndex[alias] || []) {
+          resolvedModules.add(module);
+        }
+      }
+
+      const indexedModule = this.findIndexedConfigModule(routeAliases, moduleIndex);
+      if (indexedModule) {
+        resolvedModules.add(indexedModule);
+        for (const modules of Object.values(appIndex)) {
+          if (modules.includes(indexedModule)) {
+            modules.forEach(module => resolvedModules.add(module));
+          }
+        }
+      }
+    }
+
+    return this.normalizeConfigModules(Array.from(resolvedModules));
+  }
+
+  private extractConfigRouteKeys(url: string): string[] {
+    const rawUrl = String(url || '');
+    const [pathPart, queryPart = ''] = rawUrl.split('?');
+    const segments = pathPart
+      .split('#')[0]
+      .split('/')
+      .map(segment => segment.trim())
+      .filter(Boolean);
+    const query = queryPart.split('#')[0];
+    const keys = [...segments];
+
+    if (query) {
+      const params = new URLSearchParams(query);
+      ['pos', 'type', 'module'].forEach(param => {
+        const value = params.get(param);
+        if (value) keys.push(value);
+      });
+    }
+
+    return this.normalizeConfigModules(keys);
+  }
+
+  private findIndexedConfigModule(routeAliases: string[], modules: string[]): string | null {
+    const aliasSet = new Set(routeAliases);
+    return modules.find(module => this.configKeyAliases(module).some(alias => aliasSet.has(alias))) || null;
+  }
+
+  private buildConfigAppIndex(data: any): Record<string, string[]> {
+    const appIndex: Record<string, string[]> = {};
+    if (!data || typeof data !== 'object') return appIndex;
+
+    for (const [appKey, appConfig] of Object.entries(data)) {
+      if (!appConfig || typeof appConfig !== 'object') continue;
+      const modules = Object.keys(appConfig as Record<string, any>);
+      if (!modules.length) continue;
+
+      for (const alias of this.configKeyAliases(appKey)) {
+        appIndex[alias] = this.normalizeConfigModules([...(appIndex[alias] || []), ...modules]);
+      }
+    }
+
+    return appIndex;
+  }
+
+  private configKeyAliases(key: string): string[] {
+    const normalized = String(key || '').trim().toLowerCase();
+    if (!normalized) return [];
+
+    const baseVariants = new Set<string>([
+      normalized,
+      normalized.replace(/_/g, '-'),
+      normalized.replace(/-/g, '_')
+    ]);
+
+    for (const variant of Array.from(baseVariants)) {
+      if (variant.endsWith('ies') && variant.length > 3) {
+        baseVariants.add(`${variant.slice(0, -3)}y`);
+      } else if (variant.endsWith('y') && variant.length > 1) {
+        baseVariants.add(`${variant.slice(0, -1)}ies`);
+      }
+
+      if (variant.endsWith('s') && variant.length > 1) {
+        baseVariants.add(variant.slice(0, -1));
+      } else {
+        baseVariants.add(`${variant}s`);
+      }
+    }
+
+    const aliases = new Set<string>();
+    for (const variant of baseVariants) {
+      aliases.add(variant);
+      aliases.add(variant.replace(/_/g, '-'));
+      aliases.add(variant.replace(/-/g, '_'));
+    }
+
+    return Array.from(aliases).filter(Boolean);
+  }
+
+  private async readConfigModuleFromStorage(module: string): Promise<any | null> {
+    try {
+      const key = this.configStorageKey(module);
+      const raw = this.generalS.isMobile()
+        ? (await Preferences.get({ key })).value
+        : localStorage.getItem(key);
+      return raw ? JSON.parse(raw) : null;
+    } catch {
+      return null;
+    }
+  }
+
+  private readConfigModuleFromStorageSync(module: string): any | null {
+    try {
+      if (this.generalS.isMobile() || typeof localStorage === 'undefined') return null;
+
+      const raw = localStorage.getItem(this.configStorageKey(module));
+      return raw ? JSON.parse(raw) : null;
+    } catch {
+      return null;
+    }
+  }
+
+  private buildTransientEmptyConfigModule(): any {
+    return {
+      cols: {},
+      config_cols: {},
+      draw: {},
+      general: {},
+      fields: {}
+    };
+  }
+
+  private async writeConfigModuleToStorage(module: string, value: any): Promise<void> {
+    const key = this.configStorageKey(module);
+    const raw = JSON.stringify(value ?? {});
+    if (this.generalS.isMobile()) {
+      await Preferences.set({ key, value: raw });
+    } else {
+      localStorage.setItem(key, raw);
+    }
+  }
+
+  private async readConfigIndexFromStorage(): Promise<string[]> {
+    try {
+      const key = this.configIndexStorageKey();
+      const raw = this.generalS.isMobile()
+        ? (await Preferences.get({ key })).value
+        : localStorage.getItem(key);
+      const parsed = raw ? JSON.parse(raw) : [];
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
+    }
+  }
+
+  private async readConfigAppIndexFromStorage(): Promise<Record<string, string[]>> {
+    try {
+      const key = this.configAppIndexStorageKey();
+      const raw = this.generalS.isMobile()
+        ? (await Preferences.get({ key })).value
+        : localStorage.getItem(key);
+      const parsed = raw ? JSON.parse(raw) : {};
+      if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return {};
+
+      return Object.entries(parsed).reduce((acc: Record<string, string[]>, [key, modules]) => {
+        acc[key] = this.normalizeConfigModules(Array.isArray(modules) ? modules : []);
+        return acc;
+      }, {});
+    } catch {
+      return {};
+    }
+  }
+
+  private async writeConfigIndexToStorage(modules: string[]): Promise<void> {
+    const key = this.configIndexStorageKey();
+    const raw = JSON.stringify(this.normalizeConfigModules(modules));
+    if (this.generalS.isMobile()) {
+      await Preferences.set({ key, value: raw });
+    } else {
+      localStorage.setItem(key, raw);
+    }
+  }
+
+  private async writeConfigAppIndexToStorage(appIndex: Record<string, string[]>): Promise<void> {
+    const normalizedIndex = Object.entries(appIndex || {}).reduce((acc: Record<string, string[]>, [key, modules]) => {
+      acc[key] = this.normalizeConfigModules(modules);
+      return acc;
+    }, {});
+    const key = this.configAppIndexStorageKey();
+    const raw = JSON.stringify(normalizedIndex);
+    if (this.generalS.isMobile()) {
+      await Preferences.set({ key, value: raw });
+    } else {
+      localStorage.setItem(key, raw);
+    }
+  }
+
+  private async removeConfigStorageKey(key: string): Promise<void> {
+    if (this.generalS.isMobile()) {
+      await Preferences.remove({ key });
+    } else {
+      localStorage.removeItem(key);
+    }
+  }
+
+  private async clearConfigStorageForCurrentUser(): Promise<void> {
+    const modules = await this.readConfigIndexFromStorage();
+    for (const module of modules) {
+      await this.removeConfigStorageKey(this.configStorageKey(module));
+    }
+
+    await this.removeConfigStorageKey(this.configIndexStorageKey());
+    await this.removeConfigStorageKey(this.configAppIndexStorageKey());
+    this._config = {};
+  }
+
+  // ]]]FI
 
   /**
    * Procesa la configuración de draw para una aplicación específica
@@ -774,10 +1183,8 @@ export class AuthService {
         // Cargar configuración después del login biométrico
         if (!this._config || Object.keys(this._config).length === 0) {
           return this.http.get(`${this._base_url}/settings/settings/me/`).pipe(
-            tap((config: any) => {
-              console.log('biometric', config);
-
-              this.config = config;
+            switchMap((config: any) => {
+              return from(this.replaceConfigResponse(config));
             }),
             map(() => resp.user),
             catchError((configError) => {

@@ -32,7 +32,15 @@ virtual_scrolling: {
 
 Los templates reutilizables de `custom-draw-form` leen `fieldConfig.virtual_scrolling.active` para habilitar virtual scroll y `fieldConfig.virtual_scrolling.item_size` para definir el alto de item.
 
-Si `item_size` no viene configurado se usa `20` para `p-select` y `p-autoComplete`, y `32` para controles con fila mas alta (`p-multiSelect`, `p-treeSelect`, `p-listbox`).
+Si `item_size` no viene configurado, o viene por debajo del alto real minimo de las filas de PrimeNG, se usa `38` para mantener sincronizado el calculo del virtual scroller con el alto efectivo de cada opcion.
+
+En `p-listbox`, cuando `virtual_scrolling.active === true`, se fija `virtualScrollItemSize` en `40` y se agrega una clase local que elimina padding vertical de la lista virtualizada y fuerza `box-sizing: border-box` en filas y grupos. Los listbox sin virtual scroll no reciben esa clase ni cambian su comportamiento visual.
+
+El `item_size` generico de `fieldConfig.virtual_scrolling` no se usa para `p-listbox` con checkbox porque valores altos separan las filas y valores bajos desincronizan el scroller. En este caso el contrato seguro es que el scroller y la fila renderizada midan ambos `40px`, permitiendo conservar el tamano real del checkbox definido por PrimeNG o los estilos globales.
+
+Para evitar que el scroll lento se recalcule y parezca ciclarse, el `p-listbox` virtualizado tambien pasa `virtualScrollOptions` estable al `p-scroller` interno: `autoSize: false`, `delay: 0`, `numToleratedItems: 16` y `resizeDelay: 80`. Esto evita recrear opciones desde el template y reduce los cambios de rango durante movimientos pequenos de rueda o touchpad.
+
+Ademas se desactiva `overflow-anchor` solo dentro del listbox virtualizado. Esto evita que el navegador reajuste automaticamente el `scrollTop` cuando PrimeNG cambia el rango de nodos renderizados, que era perceptible como salto o retorno al hacer scroll pequeno/despacio.
 
 Esta configuracion solo afecta el render del panel/lista; no cambia la estructura de datos ni el contrato de opciones.
 
@@ -50,6 +58,13 @@ Los campos `tree-select` y `listbox` con `tree` transforman respuestas planas en
 
 Los templates de `tree-select` y `listbox` incluyen `filter_text` dentro de `filterBy`, conservando cualquier `filter_by` declarado en el draw.
 
+<a id="escenario-04"></a>
+## Escenario 04: Primer render de opciones virtualizadas
+
+Se retiro el parche visual `listbox-virtual-spaced` y los `min-height`/padding agregados al item template. El componente ahora publica las opciones en `dropdownOptionsSignal` y activa el virtual scroll del campo despues de un ciclo de render, mediante `virtualOptionsReadySignal`.
+
+Esto evita que `p-listbox`, `p-select`, `p-multiSelect`, `p-treeSelect` y `p-autoComplete` creen el `p-scroller` mientras sus opciones aun estan vacias o acaban de cambiar, que era el origen del primer render sin elementos o con filas no consecutivas.
+
 ## Decisiones tomadas
 
 - No se agrego paginacion remota ni lazy loading de servidor; el virtual scroll solicitado virtualiza el render local de opciones ya cargadas.
@@ -57,11 +72,18 @@ Los templates de `tree-select` y `listbox` incluyen `filter_text` dentro de `fil
 - `force=true` sigue saltando caches de lectura y fuerza servidor desde `dataDropdown`.
 - Se conservaron las opciones locales declaradas en el draw como prioridad principal porque no requieren servidor ni persistencia.
 - El virtual scroll no cambia la carga lazy por niveles del arbol: solo virtualiza las filas que ya estan en el panel. Las consultas de nivel/hijos siguen ocurriendo igual.
+- No se usan reglas CSS artificiales para separar filas del listbox; el alto lo controla `virtualScrollItemSize`.
+- La normalizacion CSS del listbox solo aplica cuando el campo declara `virtual_scrolling.active === true`, para no cambiar listbox no virtualizados.
 
 ## Validaciones aplicadas
 
 - `git diff --check` sin errores.
 - `npm run build` exitoso. Se mantienen warnings propios del proyecto sobre budgets, CommonJS y stylesheet no localizado.
+- Corrección posterior validada con `npm run build`: sin errores de TypeScript/template; solo warnings existentes de budgets, CommonJS y stylesheet no localizado.
+- Correccion de altura real de `p-listbox` virtualizado validada con `npm run build`: sin errores; se mantienen warnings existentes de budgets, CommonJS y stylesheet no localizado.
+- Correccion adicional del espaciado visible en `p-listbox`: `virtualScrollItemSize` y CSS de filas quedan fijos en `40px` para impedir huecos cuando `fieldConfig.virtual_scrolling.item_size` venga alto. Validada con `git diff --check` y `npm run build`.
+- Correccion de scroll lento en `p-listbox`: se desactiva `autoSize` del `p-scroller` interno mediante `virtualScrollOptions` estable, se aumenta la tolerancia de items renderizados y se desactiva `overflow-anchor` en el contenedor virtualizado.
+- Ajuste posterior: se restauro el tamano real del checkbox y se subio la fila virtual a `40px`; ademas, los campos sin `virtual_scrolling` vuelven a publicar sus opciones sin copia de array para evitar costo extra de carga.
 
 ## Archivos modificados
 

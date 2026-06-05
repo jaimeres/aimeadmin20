@@ -211,6 +211,17 @@ export class CustomDrawFormComponent implements OnDestroy {
   readonly isCacheRestored = signal<boolean>(false);
 
   dropdownOptionsSignal = signal<any>({});
+  // [[[II ESC:020-04 DOC:docs/documents/2026-06-04_020_custom-draw-form-virtual-scroll-dropdowns.md#escenario-04
+  virtualOptionsReadySignal = signal<Record<string, boolean>>({});
+  // ]]]FI
+  // [[[II ESC:020-01 DOC:docs/documents/2026-06-04_020_custom-draw-form-virtual-scroll-dropdowns.md#escenario-01
+  readonly listboxVirtualScrollOptions = {
+    autoSize: false,
+    delay: 0,
+    numToleratedItems: 16,
+    resizeDelay: 80
+  };
+  // ]]]FI
 
   // Signal para guardar los separators calculados de emails-chips
   emailSeparatorsSignal = signal<{ [key: string]: string | RegExp }>({ default: /[,;]/ });
@@ -329,7 +340,7 @@ export class CustomDrawFormComponent implements OnDestroy {
         rows: Array.isArray(dropdownOptions) ? dropdownOptions.length : 0,
         renderedRows: Array.isArray(resolvedOptions) ? resolvedOptions.length : 0
       }, true);
-      this._updateDropdownOptions(element.field, resolvedOptions);
+      this._updateDropdownOptions(element.field, resolvedOptions, element);
       this.logPerf('dropdown.total.cached', perfStart, { field, type: fieldType }, true);
       return;
     }
@@ -341,6 +352,7 @@ export class CustomDrawFormComponent implements OnDestroy {
     }
 
     if (!this.dynamicDropdownDataS.canRequestServer(element)) {
+      this._updateDropdownOptions(element.field, [], element);
       this.logPerf('dropdown.total.noServer', perfStart, { field, type: fieldType }, true);
       return;
     }
@@ -372,7 +384,7 @@ export class CustomDrawFormComponent implements OnDestroy {
         rows: dataDropdown.length,
         renderedRows: Array.isArray(resolvedOptions) ? resolvedOptions.length : 0
       }, true);
-      this._updateDropdownOptions(element.field, resolvedOptions);
+      this._updateDropdownOptions(element.field, resolvedOptions, element);
       this.logPerf('dropdown.total.server', perfStart, { field, type: fieldType, force }, true);
     } finally {
       if (shouldBlockUi) {
@@ -533,6 +545,7 @@ export class CustomDrawFormComponent implements OnDestroy {
     this.dropdownPreloadQueue = [];
     this.dropdownDeferredPreloadQueue = [];
     this.dropdownPreloadQueuedFields.clear();
+    this.virtualOptionsReadySignal.set({});
 
     if (this.dropdownDeferredPreloadTimer) {
       clearTimeout(this.dropdownDeferredPreloadTimer);
@@ -1974,7 +1987,7 @@ export class CustomDrawFormComponent implements OnDestroy {
     const editable = fieldConfig?.edit === true;
 
     // No mostramos opciones: la resolución es responsabilidad del servidor.
-    this._updateDropdownOptions(targetField, []);
+    this._updateDropdownOptions(targetField, [], fieldConfig);
 
     const reset = (ctrl: any) => {
       if (!ctrl) return;
@@ -2119,7 +2132,7 @@ export class CustomDrawFormComponent implements OnDestroy {
   }): void {
     const { fieldConfig, targetField, targetFieldConfig, formControl, rows, depth } = ctx;
     const normalized = this.normalizeOptionsForField(rows, targetFieldConfig);
-    this._updateDropdownOptions(targetField, this._toTreeNodesIfNeeded(targetFieldConfig, normalized));
+    this._updateDropdownOptions(targetField, this._toTreeNodesIfNeeded(targetFieldConfig, normalized), targetFieldConfig);
 
     const optionValue = fieldConfig?.option_value || 'id';
     const autoSelect = fieldConfig?.auto_select === true || fieldConfig?.selected === true;
@@ -2164,7 +2177,7 @@ export class CustomDrawFormComponent implements OnDestroy {
       parentField, parentOption, parentValue, childFilterGroup, isActive, depth } = ctx;
 
     if (!isActive) {
-      this._updateDropdownOptions(targetField, []);
+      this._updateDropdownOptions(targetField, [], targetFieldConfig);
       formControl?.setValue(null);
       return;
     }
@@ -2261,13 +2274,44 @@ export class CustomDrawFormComponent implements OnDestroy {
   }
   // ]]]FI
 
+  // [[[II ESC:020-04 DOC:docs/documents/2026-06-04_020_custom-draw-form-virtual-scroll-dropdowns.md#escenario-04
   /** Helper: actualiza una entrada de dropdownOptionsSignal sin repetir el spread. */
-  private _updateDropdownOptions(field: string, options: any[]): void {
+  private _updateDropdownOptions(field: string, options: any[], fieldConfig?: any): void {
+    const virtualActive = fieldConfig?.virtual_scrolling?.active === true;
+    const nextOptions = options || [];
+    if (virtualActive) {
+      this.virtualOptionsReadySignal.set({
+        ...this.virtualOptionsReadySignal(),
+        [field]: false
+      });
+    }
+
     this.dropdownOptionsSignal.set({
       ...this.dropdownOptionsSignal(),
-      [field]: options
+      [field]: virtualActive ? [...nextOptions] : nextOptions
     });
+
+    if (virtualActive) {
+      this.markVirtualOptionsReady(field);
+    }
   }
+
+  private markVirtualOptionsReady(field: string): void {
+    const setReady = () => {
+      this.virtualOptionsReadySignal.set({
+        ...this.virtualOptionsReadySignal(),
+        [field]: true
+      });
+    };
+
+    if (typeof requestAnimationFrame === 'function') {
+      requestAnimationFrame(() => requestAnimationFrame(setReady));
+      return;
+    }
+
+    setTimeout(setReady, 0);
+  }
+  // ]]]FI
 
   // [[[II ESC:007-03 DOC:docs/documents/2026-06-01_007_custom-draw-form-listbox.md#escenario-03 ESC:017-02 DOC:docs/documents/2026-06-02_017_custom-draw-form-device-drawform.md#escenario-02 ESC:020-03 DOC:docs/documents/2026-06-04_020_custom-draw-form-virtual-scroll-dropdowns.md#escenario-03
   private _isListboxTreeField(fieldConfig: any): boolean {
@@ -2747,6 +2791,8 @@ export class CustomDrawFormComponent implements OnDestroy {
     const formValues = this.formGroupSignal()?.value;
     //const eventValue = event.value; // ID/valor seleccionado del dropdown
 
+    console.log('onChangeDropdown ------------------ field:', field);
+
     //asigna el valor del campo object_parent_form_data_X al objeto completo
     if (field.startsWith('object_')) {
       const newField = field.replace('object_', '');
@@ -3060,7 +3106,7 @@ export class CustomDrawFormComponent implements OnDestroy {
 
           if (fieldConfig?.type === 'tree-select') {
             const current = this.dropdownOptionsSignal()[fieldConfig.field] || [];
-            this._updateDropdownOptions(fieldConfig.field, [...current]);
+            this._updateDropdownOptions(fieldConfig.field, [...current], fieldConfig);
           }
 
           if (shouldBlockUi) {

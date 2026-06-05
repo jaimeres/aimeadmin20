@@ -14,8 +14,5 @@ export class ProductService extends CRUDService {
 
     });
 
-    console.log(this.authS.config['product']);
-
-
   }
 }
