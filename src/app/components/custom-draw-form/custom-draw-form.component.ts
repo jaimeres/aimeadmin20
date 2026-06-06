@@ -998,7 +998,7 @@ export class CustomDrawFormComponent implements OnDestroy {
   }
   // ]]]FI
 
-  // [[[II ESC:008-01 DOC:docs/documents/2026-06-02_008_custom-draw-form-ngonchanges-signals.md#escenario-01 ESC:017-01 DOC:docs/documents/2026-06-02_017_custom-draw-form-device-drawform.md#escenario-01
+  // [[[II ESC:008-01 DOC:docs/documents/2026-06-02_008_custom-draw-form-ngonchanges-signals.md#escenario-01 ESC:017-01 DOC:docs/documents/2026-06-02_017_custom-draw-form-device-drawform.md#escenario-01 ESC:007-06 DOC:docs/documents/2026-06-01_007_custom-draw-form-listbox.md#escenario-06
   ngOnChanges(changes: SimpleChanges) {
     const perfStart = this.perfNow();
     this.syncInputSignals(changes);
@@ -1062,6 +1062,13 @@ export class CustomDrawFormComponent implements OnDestroy {
       if (_dform) {
         this.dropdownOptions(_dform);
       }
+    }
+
+    if (currentValue) {
+      this.normalizeListboxControlValues(this.drawFormSignal(), currentValue);
+      this.formSubscription = currentValue.valueChanges.subscribe(() => {
+        this.normalizeListboxControlValues();
+      });
     }
 
     // Si el formGroup cambió (reset o nuevo objeto), limpiar todos los canvas de firma Y archivos multimedia
@@ -1129,6 +1136,8 @@ export class CustomDrawFormComponent implements OnDestroy {
     this.dropdownOptions(drawForm);
     this.logPerf('handleDrawFormChange.dropdownOptions', stepStart);
 
+    this.normalizeListboxControlValues(drawForm);
+
     stepStart = this.perfNow();
     this.initializeTableFields(drawForm);
     this.logPerf('handleDrawFormChange.initializeTableFields', stepStart);
@@ -1157,6 +1166,40 @@ export class CustomDrawFormComponent implements OnDestroy {
       hasGrid: !!drawForm?.grid,
       hasStepper: !!drawForm?.stepper
     }, true);
+  }
+
+  private normalizeListboxControlValues(drawForm = this.drawFormSignal(), formGroup = this.formGroupSignal()): void {
+    if (!drawForm || !formGroup) return;
+
+    const normalizeNode = (node: any): void => {
+      if (node?.type !== 'listbox' || !node?.field) return;
+
+      const control = formGroup.get(node.field);
+      if (!control) return;
+
+      const value = control.value;
+      if (Array.isArray(value)) return;
+
+      const nextValue = value === null || value === undefined || value === '' ? [] : [value];
+      control.setValue(nextValue, { emitEvent: false });
+    };
+
+    const scanCollection = (collection: any): void => {
+      if (!collection || typeof collection !== 'object') return;
+
+      for (const element of Object.values(collection)) {
+        this.walkElement(element, normalizeNode);
+      }
+    };
+
+    scanCollection(drawForm.grid);
+
+    const steps = drawForm.stepper?.steps;
+    if (steps && typeof steps === 'object') {
+      for (const step of Object.values(steps)) {
+        scanCollection((step as any)?.fields);
+      }
+    }
   }
   // ]]]FI
 
@@ -1258,6 +1301,7 @@ export class CustomDrawFormComponent implements OnDestroy {
         if (this.hasRestorableCachePayload(restoredCache)) {
           const patchStart = this.perfNow();
           formGroup.patchValue(restoredCache, { emitEvent: false });
+          this.normalizeListboxControlValues(drawForm, formGroup);
           this.logPerf('formCache.patchRestoredDraft', patchStart, { fields: Object.keys(restoredCache || {}).length }, true);
           formGroup.markAsDirty();
           this.wasDirty = true;

@@ -15,7 +15,7 @@ export interface DynamicDropdownDataContext {
 @Injectable({
   providedIn: 'root',
 })
-// [[[II ESC:016-01 DOC:docs/documents/2026-06-02_016_dynamic-dropdown-data-service.md#escenario-01 ESC:017-02 DOC:docs/documents/2026-06-02_017_custom-draw-form-device-drawform.md#escenario-02 ESC:019-02 DOC:docs/documents/2026-06-04_019_dropdown-cache-platform-read.md#escenario-02 ESC:020-02 DOC:docs/documents/2026-06-04_020_custom-draw-form-virtual-scroll-dropdowns.md#escenario-02
+// [[[II ESC:016-01 DOC:docs/documents/2026-06-02_016_dynamic-dropdown-data-service.md#escenario-01 ESC:017-02 DOC:docs/documents/2026-06-02_017_custom-draw-form-device-drawform.md#escenario-02 ESC:019-02 DOC:docs/documents/2026-06-04_019_dropdown-cache-platform-read.md#escenario-02 ESC:020-02 DOC:docs/documents/2026-06-04_020_custom-draw-form-virtual-scroll-dropdowns.md#escenario-02 ESC:012-02 DOC:docs/documents/2026-06-02_012_custom-draw-form-dropdown-inflight-cache.md#escenario-02
 export class DynamicDropdownDataService {
   private readonly crudS = inject(CRUDService);
   private readonly sharedS = inject(SharedDynamicDataService);
@@ -23,7 +23,7 @@ export class DynamicDropdownDataService {
   private readonly authS = inject(AuthService);
   private readonly formCacheS = inject(FormCacheService);
 
-  private readonly dropdownInFlight = new Map<string, Promise<any[]>>();
+  private readonly dropdownInFlight = new Map<string, { request: Promise<any[]>; version: number }>();
   private readonly dropdownRequestVersion = new Map<string, number>();
 
   private perfNow(): number {
@@ -89,14 +89,16 @@ export class DynamicDropdownDataService {
     if (!this.canRequestServer(element)) return false;
 
     const requestKey = this.getDropdownRequestKey(element);
-    const requestVersion = this.nextDropdownRequestVersion(element.field);
-    let request = force ? undefined : this.dropdownInFlight.get(requestKey);
+    const inFlight = force ? undefined : this.dropdownInFlight.get(requestKey);
+    let request = inFlight?.request;
+    let requestVersion = inFlight?.version;
     const reusedInFlight = !!request;
 
     if (!request) {
+      requestVersion = this.nextDropdownRequestVersion(element.field);
       request = this.fetchDropdownRows(element);
       if (!force) {
-        this.dropdownInFlight.set(requestKey, request);
+        this.dropdownInFlight.set(requestKey, { request, version: requestVersion });
         const activeRequest = request;
         activeRequest.then(
           () => this.clearInFlightRequest(requestKey, activeRequest),
@@ -113,7 +115,7 @@ export class DynamicDropdownDataService {
       force,
       reusedInFlight
     });
-    if (!this.isCurrentDropdownRequest(element.field, requestVersion)) {
+    if (!this.isCurrentDropdownRequest(element.field, requestVersion ?? 0)) {
       return false;
     }
 
@@ -302,7 +304,7 @@ export class DynamicDropdownDataService {
   }
 
   private clearInFlightRequest(requestKey: string, request: Promise<any[]>): void {
-    if (this.dropdownInFlight.get(requestKey) === request) {
+    if (this.dropdownInFlight.get(requestKey)?.request === request) {
       this.dropdownInFlight.delete(requestKey);
     }
   }

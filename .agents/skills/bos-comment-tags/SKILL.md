@@ -71,6 +71,27 @@ Si estos cambios pertenecen a un cambio funcional ya documentado, se debe reutil
 
 ---
 
+## Regla estricta contra documentos duplicados
+
+Antes de crear cualquier archivo nuevo en `docs/documents/`, se debe buscar documentación existente relacionada con el mismo flujo, componente, servicio, bug o unidad funcional.
+
+La búsqueda debe considerar, como mínimo:
+
+- Slugs y palabras clave del cambio.
+- Nombre del componente, servicio o módulo afectado.
+- Tipo de control o flujo funcional afectado.
+- Documentos anteriores aunque tengan otra fecha.
+
+Si existe documentación relacionada, NO crear un `.md` nuevo. Se debe actualizar el documento existente.
+
+Si existen varios documentos relacionados o duplicados, se debe usar el documento más viejo como fuente principal, sin importar la fecha actual. El contenido útil de documentos más recientes debe migrarse o resumirse en el documento más viejo cuando sea necesario.
+
+Las referencias de código y comentarios deben apuntar al documento más viejo conservado. No se deben agregar referencias a documentos duplicados o recién creados cuando ya existe uno anterior aplicable.
+
+Si durante la tarea se creó por error un documento nuevo duplicado, se debe quitar ese documento y mover la documentación útil al documento más viejo aplicable, siempre que el documento nuevo haya sido creado por la IA en la misma tarea.
+
+---
+
 ## Trazabilidad documental obligatoria de cambios funcionales
 
 Cuando una tarea implique un cambio funcional de código, se debe crear o actualizar un documento de trazabilidad en:
@@ -91,7 +112,7 @@ Si una solicitud posterior continúa, corrige, ajusta o amplía el mismo cambio 
 
 ### Cuándo crear un archivo nuevo
 
-Crear un archivo nuevo solo cuando exista una unidad funcional nueva.
+Crear un archivo nuevo solo cuando exista una unidad funcional nueva y se haya confirmado que no existe documentación anterior relacionada.
 
 Ejemplos:
 
@@ -113,6 +134,8 @@ Reutilizar el documento existente cuando:
 - Se cambia el nombre de algo dentro de la misma tarea.
 - Se corrige un bug encontrado durante la misma unidad funcional.
 - El cambio es una continuación clara de un documento anterior.
+- Existe cualquier documento anterior sobre el mismo componente, servicio, control, flujo o bug, aunque tenga otra fecha o un consecutivo más viejo.
+- El cambio toca una implementación ya documentada y solo agrega un escenario nuevo.
 
 ---
 

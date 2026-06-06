@@ -53,12 +53,21 @@ El nuevo control soporta dos modos:
 - Decisión: `onChangeDropdown()` conserva la emisión del cambio y la sincronización de campos espejo, pero retorna antes de `_processChildrenFields(...)` para `listbox` con `tree`.
 - Motivo: en este modo los `children.fields.dynamic` forman parte de la carga/precarga del árbol agrupado; reutilizarlos en cada selección provoca consultas adicionales al servidor.
 
+<a id="escenario-06"></a>
+## Escenario 06: Normalizar valor multiple antes de renderizar
+
+- Objetivo: evitar que PrimeNG `p-listbox` reciba un valor escalar u objeto cuando el template lo configura con `multiple=true` y `checkbox=true`.
+- Problema observado: en edición, algunos campos `listbox` podían restaurarse desde el backend como objeto o id suelto; PrimeNG espera array y ejecuta `.some()` internamente, provocando `TypeError: ... some is not a function`.
+- Decisión: `custom-draw-form` normaliza los controles `type: 'listbox'` a array en tres momentos: cambio de `FormGroup`, cambio de `drawForm` y cambios de valor del formulario. La corrección usa `emitEvent:false` para no disparar cascadas ni autoguardado innecesario.
+- Alcance: no se cambia `CRUD`, no se cambia el payload final y no se modifica la estructura del formulario; solo se garantiza el contrato esperado por el componente visual de PrimeNG.
+
 ## Validaciones aplicadas
 
 - Revisión de la API de PrimeNG Listbox para `group`, `checkbox`, `filter`, `dataKey` y `optionValue`.
 - Validación prevista de compilación Angular con `ng build`.
 - `git diff --check` sin errores para la corrección de selección en `listbox` agrupado.
 - `npx tsc --noEmit` no completo por fallas preexistentes fuera del cambio: specs que importan `../../../testing/crud-test.helpers` inexistente y errores previos en `src/app/auth/components/biometric-setup.component.ts` por acceso a `username` sobre un `Signal`.
+- Corrección de valor no-array en edición: pendiente validar manualmente en navegador; debe eliminar el error `some is not a function` de `primeng-listbox`.
 
 ## Archivos modificados
 

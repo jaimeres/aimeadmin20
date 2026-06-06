@@ -30,6 +30,10 @@ Si existe conflicto entre una práctica genérica y estas reglas, seguir siempre
 - Si el HTML necesita estado mutable, crear un `signal`.
 - Si el HTML consume datos derivados de otro estado, usar `computed`.
 - Si se necesita reaccionar a cambios de estado, usar `effect` con cuidado y solo para efectos secundarios.
+- Al corregir bugs o agregar funciones, revisar si el cambio puede mejorar rendimiento usando `signal`, `computed`, `effect`, estado memoizado o suscripciones acotadas.
+- Agregar `signal` o `computed` cuando evite recalculos repetidos, llamadas desde template, recreacion de arrays/objetos en cada ciclo de deteccion o estados derivados calculados de forma imperativa.
+- No agregar signals decorativos: solo usarlos cuando ordenen el estado, eviten trabajo repetido o hagan mas clara la relacion entre datos y UI.
+- En componentes con formularios dinamicos, normalizar datos en TypeScript y publicar estado estable al template; evitar que el HTML ejecute transformaciones costosas o cree objetos/arrays inline.
 
 ## ngModel
 no uses ngModel, en su lugar usa formularios reactivos con FormControl, FormGroup o FormArray.

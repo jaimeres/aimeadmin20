@@ -1,5 +1,5 @@
 import { TestBed } from '@angular/core/testing';
-import { of } from 'rxjs';
+import { of, Subject } from 'rxjs';
 import { AuthService } from '@/auth/services/auth.service';
 import { CRUDService } from '@/utils/services/crud.service';
 import { FormCacheService } from '@/utils/services/form-cache.service';
@@ -146,6 +146,37 @@ describe('DynamicDropdownDataService', () => {
     };
 
     expect((service as any).isMobileCacheEnabled(element, { isCreate: false })).toBeTrue();
+  });
+  // ]]]FI
+
+  // [[[II ESC:012-02 DOC:docs/documents/2026-06-02_012_custom-draw-form-dropdown-inflight-cache.md#escenario-02
+  it('should reuse in-flight dropdown response without marking shared callers as stale', async () => {
+    const response$ = new Subject<any>();
+    crudS.getAppType.and.returnValue({ app: 'people/person', type: 'person' });
+    crudS.getObject.and.returnValue(response$.asObservable() as any);
+    generalS.DJAtoObject = () => [{ id: 1, name: 'Ada' }];
+
+    const element = {
+      field: 'responsible',
+      type: 'listbox',
+      option_label: 'name',
+      option_value: 'id',
+      data_type: { type: 'person' },
+    };
+
+    const first = service.loadServerOptions(element, { type: 'maintenance', isCreate: false });
+    const second = service.loadServerOptions(element, { type: 'maintenance', isCreate: false });
+
+    response$.next({});
+    response$.complete();
+
+    const [firstOptions, secondOptions] = await Promise.all([first, second]);
+
+    expect(crudS.getObject).toHaveBeenCalledTimes(1);
+    expect(firstOptions).not.toBeFalse();
+    expect(secondOptions).not.toBeFalse();
+    expect(firstOptions as any[]).toEqual(secondOptions as any[]);
+    expect((firstOptions as any[])[0]).toEqual(jasmine.objectContaining({ id: 1, name: 'Ada' }));
   });
   // ]]]FI
 });
