@@ -40,13 +40,67 @@
 	- **Edición visual:** el control colapsado muestra labels y, al cargar/expandir nodos lazy, la comparación por `key` permite marcar las hojas correctas.
 	- **Edición guardado:** si no se toca el campo, se reenvía la relación ya serializada con `meta`; si se modifica, se serializa a partir de los nodos vivos seleccionados.
 
+<a id="escenario-08"></a>
+## Escenario 08: Normalizar valores de `tree-select` y FormArray de clasificadores
+
+- **Objetivo:** corregir los errores de consola `Cannot find control with name: 'classifiers'` y `value.map is not a function` en `p-treeSelect`.
+- **Causa raíz:** el tab de clasificadores usa `formArrayName="classifiers"`, pero algunos formularios no garantizaban ese `FormArray`. Además, `p-treeSelect` en `selectionMode="checkbox"` ejecuta `value.map(...)`; si el control llega como `null`, string, id suelto u objeto, PrimeNG falla al renderizar chips.
+- **Cambio aplicado:**
+	- `CRUD.generateJSONform()` garantiza que `classifiers` exista como `FormArray`, preservando valores iniciales si el servidor entregó una relación previa.
+	- `CRUD.addFieldsByPrefix()` inicializa `tree-select` y `multi-select` dinámicos con arreglo (`[]` o `[valor]`) en lugar de valores escalares.
+	- `CustomDrawFormComponent` normaliza controles `tree-select` y `multi-select` a arreglo cuando cambia el `FormGroup`, el `drawForm` o se restaura caché.
+	- `CrudPageShellComponent` evita renderizar el panel de clasificadores si el formulario parcial aún no tiene el control.
+- **Validación esperada:** abrir formularios con campos `tree-select` vacíos o restaurados no debe disparar `value.map is not a function`; abrir el tab de clasificadores no debe disparar `Cannot find control with name: 'classifiers'`.
+
+<a id="escenario-09"></a>
+## Escenario 09: Nuevo tipo `multi-choice` con opciones locales del formulario
+
+- **Fecha de ajuste:** 2026-06-13.
+- **Objetivo:** agregar un tipo `multi-choice` visualmente equivalente a `multi-select`, pero alimentado por opciones locales declaradas en el formulario (`options` o `data_type.options`) y por las opciones que `generateJSONform()` guarda en `sharedS.data` para campos `Choice`/`List`.
+- **Decisión de carga:** `multi-choice` entra en `DROPDOWN_TYPES_PAYLOAD` y `DROPDOWN_TYPES_PRELOAD` para reutilizar `object_<field>`, normalización, espejo de valores y precarga; sin embargo, `DynamicDropdownDataService.canRequestServer()` devuelve `false` para este tipo, de modo que nunca consulta catálogo remoto aunque exista `data_type.type`.
+- **Render:** `custom-draw-form` usa el template existente de `multi-select` y agrega fallback directo a `data_type.options`/`options` mientras se llena `dropdownOptionsSignal`.
+- **Valores:** se normaliza como arreglo igual que `multi-select` en `CRUD.addFieldsByPrefix()`, `CustomDrawFormComponent` y defaults de columnas/tablas.
+- **Inicialización de `List`:** cuando OPTIONS devuelve `initial: "<class 'list'>"`, `CRUD.generateJSONform()` lo trata como lista vacía (`[]`) para evitar chips vacíos; si un `List` con `child.type: "Choice"` llega como valor simple real, por ejemplo `"LU"`, se conserva como arreglo de una selección (`["LU"]`).
+- **Recarga manual:** si se fuerza recarga en `multi-choice`, el componente vuelve a leer opciones locales/shared sin vaciar el control por no tener servidor.
+- **Editor local:** se agrega schema avanzado propio para configurar opciones locales JSON, `option_value`, `option_label`, filtro local y `selection_limit`, evitando sugerir un recurso remoto.
+
+<a id="escenario-10"></a>
+## Escenario 10: Evitar carga de clasificadores con módulo indefinido
+
+- **Fecha de ajuste:** 2026-06-13.
+- **Objetivo:** corregir la request móvil a `classifiers/classifier` que salía con `filter[classifier_level.classifier_type]=undefined` y provocaba `400 invalid_choice`.
+- **Causa raíz:** después de garantizar el `FormArray` `classifiers`, algunos formularios sin módulo de clasificadores entraban a `classifierLevelsDropdown()` y armaban el filtro con `this.module[pos]` indefinido.
+- **Cambio aplicado:** `classifierLevelsDropdown()` resuelve el módulo desde `this.module[pos]` con respaldo a `this.module[this.typeDefault]`; si el resultado sigue vacío, `undefined` o `null`, restaura el formulario y no consulta el endpoint.
+- **Compatibilidad:** los módulos que sí declaran `this.module[...]` conservan la carga normal de clasificadores; la corrección solo evita enviar filtros inválidos al backend.
+- **Referencia:** en el commit `706972f372c422d292d56bc5f3b88f28f40eae43` no fallaba porque el flujo no forzaba la carga de clasificadores en estos formularios sin módulo.
+
+<a id="escenario-11"></a>
+## Escenario 11: Respetar `read_only` en Boolean/toggle-button del OPTIONS
+
+- **Fecha de ajuste:** 2026-06-14.
+- **Objetivo:** asegurar que campos booleanos como `sys` lleguen solo lectura cuando el OPTIONS del servidor entrega `read_only: true`.
+- **Causa raíz:** `CRUD.generateJSONform()` agregaba el campo a `initialDisabledForm`, pero creaba el `FormControl` con `disabled: false`. En componentes como `p-toggleButton`, el control nacía interactivo y podía ignorar el estado de solo lectura inicial.
+- **Cambio aplicado:** se calcula `disabled` desde `fieldObj.read_only === true`, se registra en `initialDisabledForm` usando el nombre real del control (`field_prefix + field`) y el `FormControl` se crea ya deshabilitado.
+- **Validación esperada:** un schema como `sys: { type: "Boolean", read_only: true, initial: false }` debe renderizarse como toggle deshabilitado y mantenerse deshabilitado al reactivar el formulario.
+
 ## Pendientes
 
-- °°° Revisar por qué varios campos del formulario se vuelven `null` después de inicializarse con `default.value` distinto de `null`.
+- °°° Revisar por qué varios campos del formulario se vuelven `null` después de inicializarse con `default.value` distinto de `null`. SOLUCIONADO parcialmente para `tree-select`, `multi-select` y `classifiers` en el escenario 08.
 - °°° Revisar específicamente rutas de `reset()` reutilizando `formTempo[pos]`, activación condicional en `custom-draw-form.component.ts` y limpieza de multimedia al remover el último archivo.
+- Validar manualmente `multi-choice` en navegador con opciones desde `data_type.options`, desde `options` y desde `sharedS.data` proveniente de un campo `List`/`Choice`.
 
 ## Archivos modificados
 
 - `src/app/utils/services/crud.service.ts`
 - `src/app/utils/services/general.service.ts`
 - `src/app/utils/crud.class.ts`
+- `src/app/components/custom-draw-form/custom-draw-form.component.ts`
+- `src/app/components/custom-draw-form/custom-draw-form.component.html`
+- `src/app/components/custom-draw-form/dynamic-dropdown-data.service.ts`
+- `src/app/components/custom-draw-form/dynamic-dropdown-data.service.spec.ts`
+- `src/app/components/custom-draw-form/dynamic-table-field/dynamic-table-field.component.ts`
+- `src/app/components/custom-local-settings/custom-local-settings.component.ts`
+- `src/app/components/custom-local-settings/type-schemas.ts`
+- `src/app/tasks/task/task.component.ts`
+- `src/app/utils/dropdown-types.const.ts`
+- `src/app/shared/crud-page-shell.component.ts`

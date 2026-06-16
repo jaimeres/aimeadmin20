@@ -115,8 +115,10 @@ export class Login {
         if (resp.erp.is_active_ERP) {
           this.cookieS.delete('configuration');
           // Restaurar el último módulo visitado o ir al inicio
-          const lastUrl = localStorage.getItem('lastModuleUrl') || '/';
-          this.router.navigateByUrl(lastUrl.startsWith('/auth') ? '/' : lastUrl);
+          // [[[II ESC:001-05 DOC:docs/documents/2026-06-04-001-token-config-cache.md#escenario-05
+          const lastUrl = this.authS.normalizeLastModuleUrl(localStorage.getItem('lastModuleUrl'));
+          this.router.navigateByUrl(lastUrl);
+          // ]]]FI
         } else {
           this.authS.redirectMP();
         }

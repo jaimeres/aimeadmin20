@@ -65,6 +65,30 @@ Se retiro el parche visual `listbox-virtual-spaced` y los `min-height`/padding a
 
 Esto evita que `p-listbox`, `p-select`, `p-multiSelect`, `p-treeSelect` y `p-autoComplete` creen el `p-scroller` mientras sus opciones aun estan vacias o acaban de cambiar, que era el origen del primer render sin elementos o con filas no consecutivas.
 
+<a id="escenario-05"></a>
+## Escenario 05: Panel y evento de cambio en tree-select
+
+Se corrige una regresion del `tree-select` despues de los ajustes de limites de seleccion: el panel podia quedar demasiado pequeno en campos con filtro, y algunos `tree-select` sin configuracion `tree` dejaban de enviar el `id` requerido por JSON:API.
+
+Decisiones:
+
+- `tree-select` vuelve a usar el evento de cambio que ya tenia el template (`onChangeAction`) para conservar el contrato de valor sincronizado del control.
+- No se modifica la serializacion de relaciones en `CRUD`; esa logica ya espera `TreeNode.data.id` cuando el campo usa arbol.
+- Se agrega `scrollHeight` al `tree-select`, con default `220px`, respetando `fieldConfig.scroll_height` si existe.
+- Se agrega un `signal` estable para el estilo del panel, evitando crear objetos inline en template.
+
+<a id="escenario-06"></a>
+## Escenario 06: Overlay real de tree-select con appendTo body
+
+PrimeNG renderiza el panel de `p-treeSelect` fuera del componente cuando se usa `appendTo="body"`. Por eso los estilos locales del componente no siempre alcanzan el overlay.
+
+Decisiones:
+
+- Se usa `containerStyleClass` para aplicar la clase de alto al control y no al panel.
+- Se usa `panelStyleClass="custom-tree-select-panel"` para identificar el overlay real.
+- El CSS del panel vive en `src/assets/styles.scss`, con ancho minimo y altura minima para el arbol interno.
+- El evento visual de seleccion usa `onNodeSelect/onNodeUnselect`, pero se emite hacia la logica de dropdown en microtarea para leer el valor ya sincronizado por PrimeNG.
+
 ## Decisiones tomadas
 
 - No se agrego paginacion remota ni lazy loading de servidor; el virtual scroll solicitado virtualiza el render local de opciones ya cargadas.
@@ -74,6 +98,8 @@ Esto evita que `p-listbox`, `p-select`, `p-multiSelect`, `p-treeSelect` y `p-aut
 - El virtual scroll no cambia la carga lazy por niveles del arbol: solo virtualiza las filas que ya estan en el panel. Las consultas de nivel/hijos siguen ocurriendo igual.
 - No se usan reglas CSS artificiales para separar filas del listbox; el alto lo controla `virtualScrollItemSize`.
 - La normalizacion CSS del listbox solo aplica cuando el campo declara `virtual_scrolling.active === true`, para no cambiar listbox no virtualizados.
+- En `tree-select`, el alto default del panel queda en `220px` y el ancho minimo en `260px` para evitar paneles demasiado pequenos con filtro local.
+- El panel de `tree-select` se corrige en CSS global porque el overlay se monta en `body`.
 
 ## Validaciones aplicadas
 
@@ -90,6 +116,7 @@ Esto evita que `p-listbox`, `p-select`, `p-multiSelect`, `p-treeSelect` y `p-aut
 - `src/app/components/custom-draw-form/custom-draw-form.component.html`
 - `src/app/components/custom-draw-form/custom-draw-form.component.ts`
 - `src/app/components/custom-draw-form/dynamic-dropdown-data.service.ts`
+- `src/assets/styles.scss`
 - `docs/documents/2026-06-04_020_custom-draw-form-virtual-scroll-dropdowns.md`
 
 ## Pendientes
@@ -101,5 +128,6 @@ Esto evita que `p-listbox`, `p-select`, `p-multiSelect`, `p-treeSelect` y `p-aut
 
 - Confirmar que un `dropdown` grande no renderiza todos los items visibles al abrir.
 - Confirmar que `multi-select`, `listbox`, `tree-select` y `auto-complete` siguen seleccionando valores correctamente.
+- Confirmar que un `tree-select` sin `tree` envia relaciones con `id`, no solo `{ type }`.
 - Confirmar que con cache persistente habilitada se lee primero persistencia valida.
 - Confirmar que `force=true` consulta servidor y actualiza cache.

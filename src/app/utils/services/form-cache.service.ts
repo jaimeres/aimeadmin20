@@ -58,7 +58,7 @@ export class FormCacheService {
 
   private logPerf(label: string, start: number, extra: any = {}): void {
     const elapsed = this.perfNow() - start;
-    console.info(`[FormCache][perf] ${label}: ${elapsed.toFixed(2)}ms`, extra);
+    //console.info(`[FormCache][perf] ${label}: ${elapsed.toFixed(2)}ms`, extra);
   }
   // ]]]FI
 

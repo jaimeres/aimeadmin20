@@ -40,14 +40,14 @@ export class AppMenu {
       ]
     },
 
-    {
+    /*{
       items: [
         {
           label: 'Social',
           routerLink: ['/social/post']
         }
       ]
-    },
+    },*/
     /* 
       {
         items: [
@@ -81,119 +81,121 @@ export class AppMenu {
         {
           label: 'Diesel',
           items: [
-            { label: 'Cargar consumo', routerLink: ['/warehouses/fuel-consumption'] },
+            // [[[II ESC:001-05 DOC:docs/documents/2026-06-04-001-token-config-cache.md#escenario-05
+            { label: 'Cargar consumo', routerLink: ['/warehouses/fuel-consumption'], queryParams: { pos: 'inventory-movement-detail' } },
+            // ]]]FI
           ]
         }
       ]
     },
-
-    {
-      label: 'Compras',
-      items: [
+    /*
         {
           label: 'Compras',
           items: [
-            { label: 'Solicitudes', routerLink: ['/purchases/requests'] },
-            { label: 'Pedidos', routerLink: ['/purchases/supplier-request'] },
-
-            { label: 'Ofertas y precios', routerLink: ['/purchases/offers-prices'] },
-            { label: 'Subastas', routerLink: ['/purchases/auctions'] },
-            { label: 'Remisiones', routerLink: ['/purchases/delivery-notes'] },
-            { label: 'Facturas', routerLink: ['/purchases/bills'] },
-            { label: 'Facturas factura directa', routerLink: ['/purchases/direct-invoices'] },
-            { label: 'Pagar', routerLink: ['/purchases/payments'] },
-
-          ]
-        },
-      ]
-    },
-
-    {
-      label: 'RRHH',
-      items: [
-        {
-          label: 'RRHH',
-          items: [
-            { label: 'Trabajadores', routerLink: ['/hr/employees'] },
-            { label: 'Reclutamiento', routerLink: ['/hr/recruitment'] },
-            { label: 'Asistencia', routerLink: ['/hr/attendance'] },
-            { label: 'Organigrama', routerLink: ['/hr/organization-chart'] },
-            { label: 'Departamentos', routerLink: ['/hr/job-title'] },
-            { label: 'Horarios de trabajo', routerLink: ['/hr/work-schedule'] },
-            { label: 'Contratos', routerLink: ['/hr/contract'] },
-
-          ]
-        },
-      ]
-    },
-    {
-      label: 'Viáticos',
-      items: [
-
-        {
-          label: 'Viáticos',
-          items: [
-            { label: 'Gastos', routerLink: ['/travel-expenses/expenses'] },
-            { label: 'Banco', routerLink: ['/travel-expenses/bank'] },
-            { label: 'Comprobar', routerLink: ['/travel-expenses/verification'] },
-            { label: 'Solicitar', routerLink: ['/travel-expenses/requests'] },
-            { label: 'Reembolsar', routerLink: ['/travel-expenses/reimbursements'] },
-            { label: 'Viajes', routerLink: ['/travel-expenses/trips'] },
-          ]
-        }
-      ]
-    },
-    {
-      label: 'Catálogos',
-      items: [
-        {
-          label: 'Catálogos',
-          items: [
-            { label: 'Productos', routerLink: ['/catalogues/product'] },
-            { label: 'Monedas', routerLink: ['/catalogues/currency'] },
-            { label: 'Clasificadores', routerLink: ['/catalogues/classifier'] },
-            { label: 'Impuestos', routerLink: ['/catalogues/tax'] },
             {
-              label: 'Empresas',
+              label: 'Compras',
               items: [
-                { label: 'Grupos', routerLink: ['/catalogues/company'], queryParams: { pos: 'group' } },
-                { label: 'Empresas', routerLink: ['/catalogues/company'], queryParams: { pos: 'company' } },
-                { label: 'Sucursales', routerLink: ['/catalogues/company'], queryParams: { pos: 'subsidiary' } },
-                { label: 'Almacenes', routerLink: ['/catalogues/company'], queryParams: { pos: 'warehouse' } },
-                { label: 'Secciones', routerLink: ['/catalogues/company'], queryParams: { pos: 'section' } },
-                { label: 'Anaqueles', routerLink: ['/catalogues/company'], queryParams: { pos: 'rack' } },
-                { label: 'Ubicaciones', routerLink: ['/catalogues/company'], queryParams: { pos: 'slot' } },
+                { label: 'Solicitudes', routerLink: ['/purchases/requests'] },
+                { label: 'Pedidos', routerLink: ['/purchases/supplier-request'] },
+    
+                { label: 'Ofertas y precios', routerLink: ['/purchases/offers-prices'] },
+                { label: 'Subastas', routerLink: ['/purchases/auctions'] },
+                { label: 'Remisiones', routerLink: ['/purchases/delivery-notes'] },
+                { label: 'Facturas', routerLink: ['/purchases/bills'] },
+                { label: 'Facturas factura directa', routerLink: ['/purchases/direct-invoices'] },
+                { label: 'Pagar', routerLink: ['/purchases/payments'] },
+    
               ]
             },
           ]
-        }
-      ]
-    },
-
-
-    {
-      label: 'Marketplace',
-      items: [
+        },
+    
+        {
+          label: 'RRHH',
+          items: [
+            {
+              label: 'RRHH',
+              items: [
+                { label: 'Trabajadores', routerLink: ['/hr/employees'] },
+                { label: 'Reclutamiento', routerLink: ['/hr/recruitment'] },
+                { label: 'Asistencia', routerLink: ['/hr/attendance'] },
+                { label: 'Organigrama', routerLink: ['/hr/organization-chart'] },
+                { label: 'Departamentos', routerLink: ['/hr/job-title'] },
+                { label: 'Horarios de trabajo', routerLink: ['/hr/work-schedule'] },
+                { label: 'Contratos', routerLink: ['/hr/contract'] },
+    
+              ]
+            },
+          ]
+        },
+        {
+          label: 'Viáticos',
+          items: [
+    
+            {
+              label: 'Viáticos',
+              items: [
+                { label: 'Gastos', routerLink: ['/travel-expenses/expenses'] },
+                { label: 'Banco', routerLink: ['/travel-expenses/bank'] },
+                { label: 'Comprobar', routerLink: ['/travel-expenses/verification'] },
+                { label: 'Solicitar', routerLink: ['/travel-expenses/requests'] },
+                { label: 'Reembolsar', routerLink: ['/travel-expenses/reimbursements'] },
+                { label: 'Viajes', routerLink: ['/travel-expenses/trips'] },
+              ]
+            }
+          ]
+        },
+        {
+          label: 'Catálogos',
+          items: [
+            {
+              label: 'Catálogos',
+              items: [
+                { label: 'Productos', routerLink: ['/catalogues/product'] },
+                { label: 'Monedas', routerLink: ['/catalogues/currency'] },
+                { label: 'Clasificadores', routerLink: ['/catalogues/classifier'] },
+                { label: 'Impuestos', routerLink: ['/catalogues/tax'] },
+                {
+                  label: 'Empresas',
+                  items: [
+                    { label: 'Grupos', routerLink: ['/catalogues/company'], queryParams: { pos: 'group' } },
+                    { label: 'Empresas', routerLink: ['/catalogues/company'], queryParams: { pos: 'company' } },
+                    { label: 'Sucursales', routerLink: ['/catalogues/company'], queryParams: { pos: 'subsidiary' } },
+                    { label: 'Almacenes', routerLink: ['/catalogues/company'], queryParams: { pos: 'warehouse' } },
+                    { label: 'Secciones', routerLink: ['/catalogues/company'], queryParams: { pos: 'section' } },
+                    { label: 'Anaqueles', routerLink: ['/catalogues/company'], queryParams: { pos: 'rack' } },
+                    { label: 'Ubicaciones', routerLink: ['/catalogues/company'], queryParams: { pos: 'slot' } },
+                  ]
+                },
+              ]
+            }
+          ]
+        },
+    
+    
         {
           label: 'Marketplace',
           items: [
-            { label: 'Productos', routerLink: ['/ecommerce/product-list'] },
-            { label: 'Carrito', routerLink: ['/ecommerce/shopping-cart'] },
-            { label: 'Historial', routerLink: ['/ecommerce/order-history'] },
+            {
+              label: 'Marketplace',
+              items: [
+                { label: 'Productos', routerLink: ['/ecommerce/product-list'] },
+                { label: 'Carrito', routerLink: ['/ecommerce/shopping-cart'] },
+                { label: 'Historial', routerLink: ['/ecommerce/order-history'] },
+              ]
+            }
           ]
-        }
-      ]
-    },
-
+        },
+    */
     {
-      label: 'Tareas y automatizaciones',
+      label: 'Automatizaciones',
       items: [
 
         {
-          label: 'Tareas y automatizaciones',
+          label: 'Automatizaciones',
           items: [
             {
-              label: 'Tareas', routerLink: ['/tasks/task']
+              label: 'Tareas/formularios', routerLink: ['/tasks/task']
             },
             {
               label: 'Formularios', routerLink: ['/tasks/workflow']
@@ -201,40 +203,40 @@ export class AppMenu {
           ]
         }]
     },
-
-    {
-      label: 'Academia',
-      items: [
+    /*
         {
           label: 'Academia',
           items: [
-            { label: 'Inicio', routerLink: ['/academy/home'] },
-            { label: 'Cursos', routerLink: ['/academy/courses'] },
-            { label: 'Evaluaciones', routerLink: ['/academy/evaluations'] },
+            {
+              label: 'Academia',
+              items: [
+                { label: 'Inicio', routerLink: ['/academy/home'] },
+                { label: 'Cursos', routerLink: ['/academy/courses'] },
+                { label: 'Evaluaciones', routerLink: ['/academy/evaluations'] },
+              ]
+            }
           ]
-        }
-      ]
-    },
-
-    {
-      label: 'Comunicaciones',
-      items: [
-
+        },
+    
         {
           label: 'Comunicaciones',
           items: [
-            { label: 'Comunicaciones', routerLink: ['/communications/communication'], queryParams: { pos: 'communication' } },
-            { label: 'Destinatarios', routerLink: ['/communications/communication'], queryParams: { pos: 'communication-recipient' } },
-            { label: 'Mensajes', routerLink: ['/communications/communication'], queryParams: { pos: 'communication-message' } },
-            { label: 'Adjuntos', routerLink: ['/communications/communication'], queryParams: { pos: 'communication-attachment' } },
-            { label: 'Plantillas', routerLink: ['/communications/communication'], queryParams: { pos: 'communication-template' } },
-            { label: 'Canales', routerLink: ['/communications/communication'], queryParams: { pos: 'communication-channel' } },
+    
+            {
+              label: 'Comunicaciones',
+              items: [
+                { label: 'Comunicaciones', routerLink: ['/communications/communication'], queryParams: { pos: 'communication' } },
+                { label: 'Destinatarios', routerLink: ['/communications/communication'], queryParams: { pos: 'communication-recipient' } },
+                { label: 'Mensajes', routerLink: ['/communications/communication'], queryParams: { pos: 'communication-message' } },
+                { label: 'Adjuntos', routerLink: ['/communications/communication'], queryParams: { pos: 'communication-attachment' } },
+                { label: 'Plantillas', routerLink: ['/communications/communication'], queryParams: { pos: 'communication-template' } },
+                { label: 'Canales', routerLink: ['/communications/communication'], queryParams: { pos: 'communication-channel' } },
+              ]
+            }
+    
           ]
-        }
-
-      ]
-    },
-
+        },
+        */
 
 
 

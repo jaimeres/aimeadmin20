@@ -10,7 +10,7 @@ import { TagModule } from 'primeng/tag';
 import { TooltipModule } from 'primeng/tooltip';
 import { CustomButtonCrudComponent } from '../../custom-button-crud/custom-button-crud.component';
 
-// [[[II ESC:015-01 DOC:docs/documents/2026-06-02_015_dynamic-table-field-component.md#escenario-01
+// [[[II ESC:015-01 DOC:docs/documents/2026-06-02_015_dynamic-table-field-component.md#escenario-01 ESC:001-09 DOC:docs/documents/2026-05-16_001_consolidacion_dropdown_types_y_fix_escenarios.md#escenario-09
 @Component({
   selector: 'app-dynamic-table-field',
   standalone: true,
@@ -539,7 +539,7 @@ export class DynamicTableFieldComponent implements OnChanges {
     if (column?.type === 'input-number' || column?.type === 'date') {
       return null;
     }
-    if (column?.type === 'multi-select' || column?.type === 'listbox') {
+    if (column?.type === 'multi-select' || column?.type === 'multi-choice' || column?.type === 'listbox') {
       return [];
     }
     if (column?.type === 'checkbox') {

@@ -53,10 +53,10 @@ export class WarehouseMovementComponent extends CRUD implements OnInit {
     //this.module[this.typeDefault] = 'MA';
     //this.columns[this.typeDefault] = ['id', 'quantity']
 
-    this.timeZone[this.typeDefault] = ['inventory_movement']
+    //this.timeZone[this.typeDefault] = ['inventory_movement']
 
 
-    this.relationships[this.typeDefault] = [{ id: 'asset', field: 'asset', type: 'asset' }]
+    //this.relationships[this.typeDefault] = [{ id: 'asset', field: 'asset', type: 'asset' }]
 
     this.initCRUD();
 

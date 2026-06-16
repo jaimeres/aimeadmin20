@@ -23,8 +23,9 @@
 <app-custom-actions-selection [visible]="actionsSelectionDialogVisible" (visibleChange)="onVisibleChange($event)" />
 
 
-<p-dialog [(visible)]="formDialogVisible[$any(typeDefault)]" (onHide)="onHide($any(typeDefault))"
-  (onShow)="onShow($any(typeDefault))" [styleClass]="styleClassDialog()" modal="true">
+<p-dialog #taskRef [(visible)]="formDialogVisible[$any(typeDefault)]" (onHide)="onHide($any(typeDefault))"
+  (onShow)="onShow($any(typeDefault),$any(taskRef))" [styleClass]="styleClassDialog()" modal="true"
+  [maximizable]="true">
 
   <ng-template #header>
     <div class="p-dialog-title">
@@ -34,11 +35,13 @@
       </button>
     </div>
   </ng-template>
+
   <form [formGroup]="form()[$any(typeDefault)]" *ngIf="form()[$any(typeDefault)]">
     <p-tabs [scrollable]="true" [value]="tabVisible()">
 
       <p-tablist>
         <p-tab [value]="0">General</p-tab>
+        <p-tab [value]="5" [disabled]="!personalizedTask()">Personalizar</p-tab>
         <p-tab [value]="1">Clasificadores</p-tab>
         <!-- <p-tab [value]="2">Responsable</p-tab> -->
         <p-tab [value]="3">Auditoría</p-tab>
@@ -47,7 +50,7 @@
 
       <p-tabpanels>
         <p-tabpanel [value]="0">
-
+          {{personalizedTask()}}
           <app-custom-draw-form *ngIf="form()[$any(typeDefault)] && drawForm()[typeDefault]"
             [drawForm]="drawForm()[typeDefault]['general']" [formGroup]="form()[$any(typeDefault)]"
             (onSelectAutoCompleteAction)="onSelectAutoComplete($event)"
@@ -57,6 +60,13 @@
             (onClosableIconDropdownAction)="onClosableIconDropdown($event)" (files64Action)="onFiles64($event)"
             (filesAction)="onFiles($event)" />
 
+        </p-tabpanel>
+
+        <p-tabpanel [value]="5">
+          <!-- [[[II ESC:023-02 DOC:docs/documents/2026-06-14_023_task-personalized-opennew.md#escenario-02 -->
+          <app-child-form-fields-builder [value]="childFormFieldsDraft()"
+            (valueChange)="onChildFormFieldsChange($event)" />
+          <!-- ]]]FI -->
         </p-tabpanel>
 
         <p-tabpanel [value]="1">

@@ -40,24 +40,24 @@ export class UpdateManagerService {
 
     // Solo inicializar en móviles
     if (!this.generalService.isMobile()) {
-      console.log('📱 UpdateManager: No inicializando en web');
+      //console.log('📱 UpdateManager: No inicializando en web');
       return;
     }
 
     try {
       // Obtener versión actual
       const appInfo = await this.updateService.getCurrentAppInfo();
-      console.log(appInfo);
+      //console.log(appInfo);
       this.currentVersion$.next(`${appInfo.versionCode} (${appInfo.versionName})`);
 
-      console.log('🚀 UpdateManager inicializado');
+      //console.log('🚀 UpdateManager inicializado');
       this.isInitialized = true;
 
       // Verificar actualizaciones al iniciar
       await this.checkForUpdatesAndShow();
 
     } catch (error) {
-      console.error('💥 Error inicializando UpdateManager:', error);
+      //console.error('💥 Error inicializando UpdateManager:', error);
     }
   }
 
@@ -68,7 +68,7 @@ export class UpdateManagerService {
     if (!this.generalService.isMobile()) return;
 
     try {
-      console.log('🔍 Verificando actualizaciones...');
+      //console.log('🔍 Verificando actualizaciones...');
 
       // Detectar estado de conexión
       const isOnline = navigator.onLine;
@@ -77,7 +77,7 @@ export class UpdateManagerService {
       // Verificar actualizaciones
       const result = await this.updateService.checkForUpdates('qa', forceCheck);
 
-      console.log('📊 Resultado verificación:', result);
+      //console.log('📊 Resultado verificación:', result);
 
       if (result.updateRequired) {
         this.currentUpdateResult$.next(result);
@@ -87,7 +87,7 @@ export class UpdateManagerService {
       }
 
     } catch (error) {
-      console.error('💥 Error verificando actualizaciones:', error);
+      //console.error('💥 Error verificando actualizaciones:', error);
     }
   }
 
@@ -113,14 +113,14 @@ export class UpdateManagerService {
     if (!result?.url) return;
 
     try {
-      console.log('📥 Iniciando descarga...');
+      //console.log('📥 Iniciando descarga...');
       await this.updateService.openDownload(result.url, result.versionName);
 
       // Ocultar diálogo después de abrir descarga
       this.hideUpdateDialog();
 
     } catch (error) {
-      console.error('💥 Error abriendo descarga:', error);
+      //console.error('💥 Error abriendo descarga:', error);
       // Aquí podrías mostrar un toast de error
     }
   }
@@ -132,10 +132,10 @@ export class UpdateManagerService {
     try {
       // Posponer por 24 horas
       await this.updateService.snoozeUpdate(24);
-      console.log('😴 Actualización pospuesta por 24 horas');
+      //console.log('😴 Actualización pospuesta por 24 horas');
 
     } catch (error) {
-      console.error('💥 Error posponiendo actualización:', error);
+      //console.error('💥 Error posponiendo actualización:', error);
     }
   }
 
@@ -143,7 +143,7 @@ export class UpdateManagerService {
    * Maneja el clic en "Usar sin actualizar" (solo offline)
    */
   public handleSkipOfflineClick(): void {
-    console.log('📱 Usuario continuó sin actualizar (offline)');
+    //console.log('📱 Usuario continuó sin actualizar (offline)');
     // Aquí podrías registrar este evento para analítica
   }
 
@@ -157,7 +157,7 @@ export class UpdateManagerService {
       // Listener para cuando la app vuelve al foreground
       App.addListener('appStateChange', (state) => {
         if (state.isActive) {
-          console.log('📱 App volvió al foreground, verificando actualizaciones...');
+          //console.log('📱 App volvió al foreground, verificando actualizaciones...');
           setTimeout(() => {
             this.checkForUpdatesAndShow();
           }, 2000); // Esperar 2 segundos para que la app se estabilice
@@ -166,7 +166,7 @@ export class UpdateManagerService {
 
       // Listener para cambios de conectividad
       window.addEventListener('online', () => {
-        console.log('🌐 Conexión restaurada');
+        //console.log('🌐 Conexión restaurada');
         this.isOffline$.next(false);
         setTimeout(() => {
           this.checkForUpdatesAndShow();
@@ -174,14 +174,14 @@ export class UpdateManagerService {
       });
 
       window.addEventListener('offline', () => {
-        console.log('📡 Conexión perdida');
+        //console.log('📡 Conexión perdida');
         this.isOffline$.next(true);
       });
 
-      console.log('👂 Event listeners configurados');
+      //console.log('👂 Event listeners configurados');
 
     } catch (error) {
-      console.error('💥 Error configurando event listeners:', error);
+      //console.error('💥 Error configurando event listeners:', error);
     }
   }
 
@@ -195,7 +195,7 @@ export class UpdateManagerService {
       await this.checkForUpdatesAndShow(true);
       return true;
     } catch (error) {
-      console.error('💥 Error en verificación forzada:', error);
+      //console.error('💥 Error en verificación forzada:', error);
       return false;
     }
   }
@@ -228,7 +228,7 @@ export class UpdateManagerService {
     await this.updateService.clearUpdateCache();
     this.currentUpdateResult$.next(null);
     this.hideUpdateDialog();
-    console.log('🧹 Cache del UpdateManager limpiado');
+    //console.log('🧹 Cache del UpdateManager limpiado');
   }
 
   /**
@@ -253,6 +253,6 @@ export class UpdateManagerService {
   public destroy(): void {
     // Limpiar subscripciones si las hubiera
     this.isInitialized = false;
-    console.log('🗑️ UpdateManager destruido');
+    //console.log('🗑️ UpdateManager destruido');
   }
 }

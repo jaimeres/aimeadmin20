@@ -204,6 +204,27 @@ const FK_LIKE_SCHEMA: AdvancedSection[] = [
   { title: 'Columna en tabla', icon: 'pi pi-table', defs: COLS_BLOCK },
 ];
 
+// [[[II ESC:001-09 DOC:docs/documents/2026-05-16_001_consolidacion_dropdown_types_y_fix_escenarios.md#escenario-09
+const MULTI_CHOICE_SCHEMA: AdvancedSection[] = [
+  { title: 'General', icon: 'pi pi-cog', defs: COMMON_BASE },
+  {
+    title: 'Opciones locales', icon: 'pi pi-list', defs: [
+      {
+        path: 'data_type.options', label: 'Opciones (JSON)', kind: 'json',
+        hint: 'Array de objetos. P.ej. [{"id":"A","name":"Activo"},{"id":"I","name":"Inactivo"}]'
+      },
+      { path: 'option_value', label: 'option_value', kind: 'text', placeholder: 'id' },
+      { path: 'option_label', label: 'option_label', kind: 'text', placeholder: 'name' },
+      { path: 'filter_local', label: 'Filtro local', kind: 'boolean' },
+      { path: 'filter_by', label: 'Filtrar por (campos)', kind: 'text', placeholder: 'name' },
+      { path: 'selection_limit', label: 'Límite de selección', kind: 'number', min: 0 },
+    ],
+  },
+  { title: 'Valor por defecto', icon: 'pi pi-bolt', defs: DEFAULT_BLOCK },
+  { title: 'Columna en tabla', icon: 'pi pi-table', defs: COLS_BLOCK },
+];
+// ]]]FI
+
 const AUTOCOMPLETE_SCHEMA: AdvancedSection[] = [
   ...FK_LIKE_SCHEMA,
   {
@@ -344,6 +365,9 @@ export const TYPE_SCHEMAS: Record<string, AdvancedSection[]> = {
   'dropdown': FK_LIKE_SCHEMA,
   'dropdown-choice': FK_LIKE_SCHEMA,
   'multi-select': FK_LIKE_SCHEMA,
+  // [[[II ESC:001-09 DOC:docs/documents/2026-05-16_001_consolidacion_dropdown_types_y_fix_escenarios.md#escenario-09
+  'multi-choice': MULTI_CHOICE_SCHEMA,
+  // ]]]FI
   'tree-select': FK_LIKE_SCHEMA,
   'listbox': FK_LIKE_SCHEMA,
   'auto-complete': AUTOCOMPLETE_SCHEMA,

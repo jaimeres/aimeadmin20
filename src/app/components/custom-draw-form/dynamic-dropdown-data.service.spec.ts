@@ -1,6 +1,7 @@
 import { TestBed } from '@angular/core/testing';
 import { of, Subject } from 'rxjs';
 import { AuthService } from '@/auth/services/auth.service';
+import { Preferences } from '@capacitor/preferences';
 import { CRUDService } from '@/utils/services/crud.service';
 import { FormCacheService } from '@/utils/services/form-cache.service';
 import { GeneralService } from '@/utils/services/general.service';
@@ -104,6 +105,34 @@ describe('DynamicDropdownDataService', () => {
   });
   // ]]]FI
 
+  // [[[II ESC:013-03 DOC:docs/documents/2026-06-02_013_custom-draw-form-mobile-dropdown-cache.md#escenario-03
+  it('should not reuse legacy drawDropdown memory for server fields without the current query scope', async () => {
+    crudS.getAppType.and.returnValue({ app: 'assets', type: 'asset' });
+    crudS.buildDropdownFilterString.and.returnValue('status=active');
+    generalS.DJAtoObject = () => [{ id: 2, name: 'Current' }];
+    sharedS.drawDropdown['maintenance:asset'] = [{ id: 1, name: 'Stale' }];
+
+    const element = {
+      field: 'asset',
+      option_label: 'name',
+      option_value: 'id',
+      data_type: {
+        type: 'asset',
+        filter: { status: 'active' },
+      },
+    };
+
+    const legacyMemory = await service.dataDropdownExists(element, { type: 'maintenance' });
+    expect(legacyMemory).toBeFalse();
+
+    const loaded = await service.loadServerOptions(element, { type: 'maintenance' });
+    expect((loaded as any[])[0]).toEqual(jasmine.objectContaining({ id: 2, name: 'Current' }));
+
+    const scopedMemory = await service.dataDropdownExists(element, { type: 'maintenance' });
+    expect((scopedMemory as any[])[0]).toEqual(jasmine.objectContaining({ id: 2, name: 'Current' }));
+  });
+  // ]]]FI
+
   // [[[II ESC:019-02 DOC:docs/documents/2026-06-04_019_dropdown-cache-platform-read.md#escenario-02
   it('should prefer platform read config and require positive ttl', () => {
     currentPlatform = 'web';
@@ -130,7 +159,7 @@ describe('DynamicDropdownDataService', () => {
 
     currentPlatform = 'web';
     expect((service as any).isMobileCacheEnabled(element, { isCreate: true })).toBeTrue();
-    expect((service as any).isMobileCacheEnabled(element, { isCreate: false })).toBeFalse();
+    expect((service as any).isMobileCacheEnabled(element, { isCreate: false })).toBeTrue();
 
     currentPlatform = 'desktop';
     expect((service as any).isMobileCacheEnabled(element, { isCreate: true })).toBeTrue();
@@ -146,6 +175,39 @@ describe('DynamicDropdownDataService', () => {
     };
 
     expect((service as any).isMobileCacheEnabled(element, { isCreate: false })).toBeTrue();
+  });
+  // ]]]FI
+
+  // [[[II ESC:013-04 DOC:docs/documents/2026-06-02_013_custom-draw-form-mobile-dropdown-cache.md#escenario-04
+  it('should not use creation or edition flags to disable dropdown options cache', () => {
+    currentPlatform = 'mobile';
+
+    const element = {
+      cache: {
+        mobile: { read: true, creation: false, edition: false, time: 10 },
+      },
+    };
+
+    expect((service as any).isMobileCacheEnabled(element, { isCreate: true })).toBeTrue();
+    expect((service as any).isMobileCacheEnabled(element, { isCreate: false })).toBeTrue();
+  });
+
+  it('should read shared memory before persistent preferences cache', async () => {
+    currentPlatform = 'mobile';
+    sharedS.data['maintenance:asset'] = [{ id: 1, name: 'Memoria' }];
+    const preferencesGet = spyOn(Preferences, 'get').and.returnValue(Promise.resolve({ value: null }));
+
+    const options = await service.dataDropdownExists({
+      field: 'asset',
+      option_label: 'name',
+      option_value: 'id',
+      cache: {
+        mobile: { read: true, time: 10 },
+      },
+    }, { type: 'maintenance' });
+
+    expect((options as any[])[0]).toEqual(jasmine.objectContaining({ id: 1, name: 'Memoria' }));
+    expect(preferencesGet).not.toHaveBeenCalled();
   });
   // ]]]FI
 

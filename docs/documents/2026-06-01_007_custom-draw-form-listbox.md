@@ -61,13 +61,24 @@ El nuevo control soporta dos modos:
 - Decisión: `custom-draw-form` normaliza los controles `type: 'listbox'` a array en tres momentos: cambio de `FormGroup`, cambio de `drawForm` y cambios de valor del formulario. La corrección usa `emitEvent:false` para no disparar cascadas ni autoguardado innecesario.
 - Alcance: no se cambia `CRUD`, no se cambia el payload final y no se modifica la estructura del formulario; solo se garantiza el contrato esperado por el componente visual de PrimeNG.
 
+<a id="escenario-07"></a>
+## Escenario 07: Límite de selección por configuración
+
+- Objetivo: respetar `selection_limit` en campos de selección múltiple del formulario dinámico sin modificar `crud.class.ts`.
+- Regla: `selection_limit` `0`, `null`, vacío o inválido significa sin límite. `dropdown` y `dropdown-choice` ignoran esta propiedad porque su template es de selección única.
+- Listbox: cuando `selection_limit` es `1`, el template usa `[multiple]="false"` y `[checkbox]="false"` para que PrimeNG aplique la restricción nativa; si el valor restaurado venía como array, se conserva el primer elemento. Cuando el límite es mayor que `1`, el componente recorta selecciones excedentes y avisa que se alcanzó el límite.
+- Multi-select: mantiene el control múltiple y aplica el recorte en `onChangeDropdown()` para mostrar aviso cuando el usuario intenta superar el límite.
+- Tree-select con `tree`: el límite se aplica por nivel (`data.__level`/`__level`), de modo que puede seleccionar hasta `selection_limit` nodos en cada nivel del árbol.
+- Estado de UI: `selectionMultipleSignal` publica el modo de selección por campo para evitar llamadas de métodos desde el template y mantener el render estable.
+
 ## Validaciones aplicadas
 
 - Revisión de la API de PrimeNG Listbox para `group`, `checkbox`, `filter`, `dataKey` y `optionValue`.
-- Validación prevista de compilación Angular con `ng build`.
+- Compilación Angular con `npm run build` correcta; solo quedan warnings existentes de presupuesto, CommonJS y stylesheet no localizado.
 - `git diff --check` sin errores para la corrección de selección en `listbox` agrupado.
 - `npx tsc --noEmit` no completo por fallas preexistentes fuera del cambio: specs que importan `../../../testing/crud-test.helpers` inexistente y errores previos en `src/app/auth/components/biometric-setup.component.ts` por acceso a `username` sobre un `Signal`.
 - Corrección de valor no-array en edición: pendiente validar manualmente en navegador; debe eliminar el error `some is not a function` de `primeng-listbox`.
+- Límite `selection_limit`: pendiente validar manualmente en navegador con listbox `1`, listbox `2`, multi-select `2` y tree-select con límite por nivel.
 
 ## Archivos modificados
 

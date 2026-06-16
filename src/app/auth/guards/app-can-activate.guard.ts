@@ -1,7 +1,7 @@
 import { inject } from '@angular/core';
 import { CanActivateFn } from '@angular/router';
 import { of } from 'rxjs';
-import { take, map, switchMap } from 'rxjs/operators';
+import { finalize, take, map, switchMap } from 'rxjs/operators';
 import { AuthService } from '../services/auth.service';
 import { MessageService } from '../../components/services/message.service';
 
@@ -33,6 +33,9 @@ export const appCanActivateGuard: CanActivateFn = (route, state) => {
         return false;
       }
       return true;
-    })
+    }),
+    // [[[II ESC:001-07 DOC:docs/documents/2026-06-04-001-token-config-cache.md#escenario-07
+    finalize(() => messageS.showBlocked(false))
+    // ]]]FI
   );
 };

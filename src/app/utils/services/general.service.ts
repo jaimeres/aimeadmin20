@@ -422,7 +422,7 @@ export class GeneralService {
    * Equivalente al pipe `joinOrSelf` del formulario: ambas capas quedan armonizadas.
    *
    * ## Campos NO relación (loop final)
-   * Los tipos FK (`dropdown`, `multi-select`, `tree-select`, `auto-complete`) se saltan
+   * Los tipos FK (`dropdown`, `multi-select`, `multi-choice`, `tree-select`, `auto-complete`) se saltan
    * para no contaminar data si el campo no vino en `dja.relationships`.
    *
    * @param respDJA    Respuesta JSON:API del servidor
@@ -481,9 +481,9 @@ export class GeneralService {
       if (!field || !field.option_label) continue;
 
       const optionLabel = String(field.option_label).trim();
-      // [[[II ESC:007-03 DOC:docs/documents/2026-06-01_007_custom-draw-form-listbox.md#escenario-03
+      // [[[II ESC:007-03 DOC:docs/documents/2026-06-01_007_custom-draw-form-listbox.md#escenario-03 ESC:001-09 DOC:docs/documents/2026-05-16_001_consolidacion_dropdown_types_y_fix_escenarios.md#escenario-09
       const isTreeSelect = field.type === 'tree-select' || field.type === 'listbox';
-      const isMultiSelect = field.type === 'multi-select';
+      const isMultiSelect = field.type === 'multi-select' || field.type === 'multi-choice';
       // ]]]FI
 
       // Para tree-select, 'label' se maneja nativamente; para campos simples (no multi),

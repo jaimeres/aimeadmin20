@@ -16,4 +16,8 @@ export const TASK_MODULE_REGISTRY: Record<string, TaskModuleEntry> = {
   //WarehouseMovementComponent
   'EP': () => import('../warehouses/warehouse-movement/warehouse-movement.component').then(m => m.WarehouseMovementComponent),
 
+  // [[[II ESC:024-09 Codigo reservado para abrir la tarea-detalle (General + Datos)
+  // dentro de cualquier modulo consumidor cuando la tarea trae is_detail_required=true.
+  // Ver docs/documents/2026-06-15_024_open-tasks-detail-render-child-form.md ]]]FI
+  'TASK_DETAIL': () => import('../tasks/task-detail/task-detail.component').then(m => m.TaskDetailComponent),
 };

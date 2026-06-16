@@ -8,7 +8,8 @@
  * Sí incluirlo cuando solo se necesite saber que el control tiene la dualidad
  * `object_<field>` / `<field>` (renombrado por addFieldsByPrefix).
  * Referencia histórica: docs/documents/2025-XX-XX_consolidacion_dropdown_types.md
- * Referencia adicional: docs/documents/2026-06-01_007_custom-draw-form-listbox.md#escenario-03 ]]]FI
+ * Referencia adicional: docs/documents/2026-06-01_007_custom-draw-form-listbox.md#escenario-03
+ * ESC:001-09 DOC:docs/documents/2026-05-16_001_consolidacion_dropdown_types_y_fix_escenarios.md#escenario-09 ]]]FI
  */
 export const DROPDOWN_TYPES_PAYLOAD: ReadonlySet<string> = new Set([
   'dropdown',
@@ -17,6 +18,7 @@ export const DROPDOWN_TYPES_PAYLOAD: ReadonlySet<string> = new Set([
   'listbox',
   'dropdown-choice',
   'multi-select',
+  'multi-choice',
   'select-button',
 ]);
 
@@ -26,5 +28,6 @@ export const DROPDOWN_TYPES_PRELOAD: ReadonlySet<string> = new Set([
   'listbox',
   'dropdown-choice',
   'multi-select',
+  'multi-choice',
   'select-button',
 ]);

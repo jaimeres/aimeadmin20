@@ -14,8 +14,16 @@ import { FormCacheService } from '../../utils/services/form-cache.service';
 import { Preferences } from '@capacitor/preferences';
 import { App } from '@capacitor/app';
 import { PermissionsService } from './permissions.service';
+import { ClientCacheStorageService } from '../../utils/services/client-cache-storage.service';
 // [[[II ESC:004-01 DOC:docs/documents/2026-05-30_004_sistema-avisos-socket.md#escenario-01
 import { NotificationSocketService } from '../../utils/services/notification-socket.service';
+// ]]]FI
+
+// [[[II ESC:001-07 DOC:docs/documents/2026-06-04-001-token-config-cache.md#escenario-07
+interface ConfigVisitEntry {
+  module: string;
+  lastVisitedAt: number;
+}
 // ]]]FI
 
 @Injectable({
@@ -31,7 +39,10 @@ export class AuthService {
   private readonly _configCachePrefix = 'bos_config_module';
   private readonly _configCacheIndex = 'bos_config_module_index';
   private readonly _configCacheAppIndex = 'bos_config_module_app_index';
-  private _configFetchPromise: Promise<Record<string, any>> | null = null;
+  private readonly _configVisitMap = 'bos_config_module_visit_map';
+  private readonly _configVisitWindowMs = 30 * 24 * 60 * 60 * 1000;
+  private _configFetchPromise: Promise<{ processedConfig: Record<string, any>; appIndex: Record<string, string[]> }> | null = null;
+  private _configVisitMemory: Record<string, ConfigVisitEntry> | null = null;
   // ]]]FI
   private _storageReady: Promise<void> = Promise.resolve();
   private _cookieOptions: CookieOptions = {
@@ -63,6 +74,9 @@ export class AuthService {
   /** Servicio de avisos/alertas en tiempo real (Socket.IO). */
   private notificationSocketS = inject(NotificationSocketService);
   // ]]]FI
+  // [[[II ESC:001-07 DOC:docs/documents/2026-06-04-001-token-config-cache.md#escenario-07
+  private clientCacheS = inject(ClientCacheStorageService);
+  // ]]]FI
 
   constructor(private http: HttpClient, private cookieS: CookieService, private messageS: MessageService, private router: Router, private generalS: GeneralService, public biometricAuthS: BiometricAuthService, private formCacheS: FormCacheService) {
     // Servicio de permisos (inject para evitar romper la firma del constructor existente)
@@ -82,11 +96,21 @@ export class AuthService {
       });
     }
 
-    // Evento unload: guardar tokens antes de cerrar/recargar
-    // WEB: guarda en cookie temporal por 30s para reload
-    // MÓVIL: guarda en Preferences persistente
-    window.addEventListener('unload', () => {
-      this.saveTokensToStorage();
+    // pagehide: único momento en que web escribe al relay sessionStorage.
+    // Para móvil delega a saveTokensToStorage (Preferences).
+    // Se usa pagehide en lugar de unload: unload está deprecado y no
+    // dispara con BFCache (F5 en Chrome/Firefox).
+    window.addEventListener('pagehide', () => {
+      if (this.generalS.isMobile()) {
+        this.saveTokensToStorage();
+      } else if (typeof sessionStorage !== 'undefined' && this._tokenRefresh) {
+        // Relay F5: escribe solo en pagehide, se borra en loadTokensFromStorage
+        sessionStorage.setItem('_bos_rt', this._tokenRefresh);
+        const u = this._user();
+        if (u && Object.keys(u).length > 0) {
+          sessionStorage.setItem('_bos_ud', JSON.stringify(u));
+        }
+      }
     });
 
     this.messageS.currentLogin.subscribe(
@@ -109,6 +133,9 @@ export class AuthService {
    */
   setUser(userData: LoggedUser | null) {
     this._user.set(userData);
+    // [[[II ESC:001-07 DOC:docs/documents/2026-06-04-001-token-config-cache.md#escenario-07
+    this._configVisitMemory = null;
+    // ]]]FI
 
     console.log(this._user());
     // Persistir en cookie para web (por si hay reload)
@@ -151,6 +178,30 @@ export class AuthService {
   redirectMP() {
     this.router.navigateByUrl('/ecommerce/product-list');
   }
+
+  // [[[II ESC:001-05 DOC:docs/documents/2026-06-04-001-token-config-cache.md#escenario-05
+  normalizeLastModuleUrl(url: string | null | undefined): string {
+    const rawUrl = String(url || '').trim();
+    if (!rawUrl || !rawUrl.startsWith('/') || rawUrl.startsWith('/auth')) return '/';
+
+    const [pathPart, hashPart = ''] = rawUrl.split('#');
+    const [pathname, queryPart = ''] = pathPart.split('?');
+
+    if (pathname === '/warehouses/fuel-consumption') {
+      const params = new URLSearchParams(queryPart);
+      const pos = params.get('pos');
+
+      if (!pos || pos === 'inventory-movement') {
+        params.set('pos', 'inventory-movement-detail');
+      }
+
+      const query = params.toString();
+      return `${pathname}${query ? `?${query}` : ''}${hashPart ? `#${hashPart}` : ''}`;
+    }
+
+    return rawUrl;
+  }
+  // ]]]FI
 
   /**Redireccionar a login */
   redirectLogin() {
@@ -531,7 +582,7 @@ export class AuthService {
             target[property] = cachedModule;
           }
         }
-
+        console.log('Accessing config propert::::::::::::::y:', property, 'Value:', target[property]);
         return target[property] ?? this.buildTransientEmptyConfigModule();
       },
     });
@@ -563,7 +614,7 @@ export class AuthService {
 
   /**
    * Asegura que los módulos de configuración requeridos estén disponibles en memoria.
-   * La memoria se limita a los módulos solicitados; el resto queda separado en storage local.
+   * Los módulos ya visitados se conservan en memoria; el resto queda separado en storage local.
    */
   ensureConfigModules(modules: string[] = []): Observable<boolean> {
     return from(this.ensureConfigModulesAsync(modules)).pipe(
@@ -575,19 +626,39 @@ export class AuthService {
     );
   }
 
+  // [[[II ESC:001-06 DOC:docs/documents/2026-06-04-001-token-config-cache.md#escenario-06
+  isConfigModuleLoaded(module: string): boolean {
+    const [normalizedModule] = this.normalizeConfigModules([module]);
+    return !!(normalizedModule && this._config?.[normalizedModule]);
+  }
+  // ]]]FI
+
+  // [[[II ESC:001-07 DOC:docs/documents/2026-06-04-001-token-config-cache.md#escenario-07
+  recordConfigModuleVisit(module: string): void {
+    const [normalizedModule] = this.normalizeConfigModules([module]);
+    if (!normalizedModule) return;
+
+    this.recordConfigModulesVisitAsync([normalizedModule]).catch((error) => {
+      console.warn('Warning: Could not record configuration module visit:', error);
+    });
+  }
+  // ]]]FI
+
   private async ensureConfigForUrlAsync(url: string, modules: string[] = []): Promise<void> {
     const explicitModules = this.normalizeConfigModules(modules);
     if (explicitModules.length) {
+      await this.recordConfigModulesVisitAsync(explicitModules);
       await this.ensureConfigModulesAsync(explicitModules);
       return;
     }
 
     await this._storageReady;
 
+    const routeKeys = this.extractConfigRouteKeys(url);
     let routeModules = await this.resolveConfigModulesForUrl(url);
     const hasAppIndex = Object.keys(await this.readConfigAppIndexFromStorage()).length > 0;
     if (!routeModules.length || !hasAppIndex) {
-      await this.fetchAndCacheFullConfig();
+      await this.fetchAndCacheFullConfig(routeKeys);
       routeModules = await this.resolveConfigModulesForUrl(url);
     }
 
@@ -595,19 +666,20 @@ export class AuthService {
       return;
     }
 
+    await this.recordConfigModulesVisitAsync(routeModules);
     await this.ensureConfigModulesAsync(routeModules);
   }
 
   private async ensureConfigModulesAsync(modules: string[] = []): Promise<void> {
     const requestedModules = this.normalizeConfigModules(modules);
-    if (!requestedModules.length) {
-      this._config = {};
-      return;
-    }
+    if (!requestedModules.length) return;
 
     await this._storageReady;
+    await this.recordConfigModulesVisitAsync(requestedModules);
 
-    const activeConfig: Record<string, any> = {};
+    // [[[II ESC:001-06 DOC:docs/documents/2026-06-04-001-token-config-cache.md#escenario-06
+    const activeConfig: Record<string, any> = { ...(this._config || {}) };
+    // ]]]FI
     const missingModules: string[] = [];
 
     for (const module of requestedModules) {
@@ -625,7 +697,7 @@ export class AuthService {
     }
 
     if (missingModules.length) {
-      const processedConfig = await this.fetchAndCacheFullConfig();
+      const processedConfig = await this.fetchAndCacheFullConfig(requestedModules);
       for (const module of requestedModules) {
         if (processedConfig[module]) {
           activeConfig[module] = processedConfig[module];
@@ -644,21 +716,21 @@ export class AuthService {
     ));
   }
 
-  private async fetchAndCacheFullConfig(): Promise<Record<string, any>> {
+  private async fetchAndCacheFullConfig(activeModules: string[] = []): Promise<Record<string, any>> {
     if (!this._configFetchPromise) {
       this._configFetchPromise = firstValueFrom(
         this.http.get(`${this._base_url}/settings/settings/me/`).pipe(
           map((config: any) => this.processConfigResponse(config))
         )
-      ).then(async ({ processedConfig, appIndex }) => {
-        await this.writeConfigModulesToStorage(processedConfig, appIndex);
-        return processedConfig;
-      }).finally(() => {
+      ).finally(() => {
         this._configFetchPromise = null;
       });
     }
 
-    return this._configFetchPromise;
+    const { processedConfig, appIndex } = await this._configFetchPromise;
+    const modulesToPersist = await this.getConfigModulesToPersist(processedConfig, activeModules);
+    await this.writeConfigModulesToStorage(processedConfig, appIndex, modulesToPersist);
+    return processedConfig;
   }
 
   private async replaceConfigResponse(value: any, activeModules: string[] = []): Promise<void> {
@@ -668,15 +740,17 @@ export class AuthService {
 
   private async cacheConfigResponse(value: any, activeModules: string[] = []): Promise<void> {
     const { processedConfig, appIndex } = this.processConfigResponse(value);
-    await this.writeConfigModulesToStorage(processedConfig, appIndex);
+    const modulesToPersist = await this.getConfigModulesToPersist(processedConfig, activeModules);
+    await this.writeConfigModulesToStorage(processedConfig, appIndex, modulesToPersist);
 
-    const requestedModules = this.normalizeConfigModules(activeModules);
-    this._config = requestedModules.reduce((acc: Record<string, any>, module) => {
+    // [[[II ESC:001-06 DOC:docs/documents/2026-06-04-001-token-config-cache.md#escenario-06
+    this._config = modulesToPersist.reduce((acc: Record<string, any>, module) => {
       if (processedConfig[module]) {
         acc[module] = processedConfig[module];
       }
       return acc;
-    }, {});
+    }, modulesToPersist.length ? { ...(this._config || {}) } : {});
+    // ]]]FI
   }
 
   private processConfigResponse(value: any): { processedConfig: Record<string, any>; appIndex: Record<string, string[]> } {
@@ -687,18 +761,127 @@ export class AuthService {
     };
   }
 
-  private async writeConfigModulesToStorage(config: Record<string, any>, appIndex: Record<string, string[]> = {}): Promise<void> {
-    const modules = Object.keys(config || {});
-    const existingIndex = await this.readConfigIndexFromStorage();
-    const nextIndex = Array.from(new Set([...existingIndex, ...modules]));
+  // [[[II ESC:001-07 DOC:docs/documents/2026-06-04-001-token-config-cache.md#escenario-07
+  private async getConfigModulesToPersist(config: Record<string, any>, activeModules: string[] = []): Promise<string[]> {
+    const recentModules = await this.getRecentConfigModules();
+    return this.resolveConfigModulesFromAvailable(config, [
+      ...recentModules,
+      ...this.normalizeConfigModules(activeModules),
+    ]);
+  }
 
-    for (const module of modules) {
-      await this.writeConfigModuleToStorage(module, config[module]);
+  private resolveConfigModulesFromAvailable(config: Record<string, any>, requestedModules: string[] = []): string[] {
+    const requestedAliases = new Set<string>();
+    this.normalizeConfigModules(requestedModules).forEach((module) => {
+      this.configKeyAliases(module).forEach((alias) => requestedAliases.add(alias));
+    });
+
+    if (!requestedAliases.size) return [];
+
+    return Object.keys(config || {}).filter((module) => {
+      return this.configKeyAliases(module).some((alias) => requestedAliases.has(alias));
+    });
+  }
+
+  private async recordConfigModulesVisitAsync(modules: string[]): Promise<void> {
+    const normalizedModules = this.normalizeConfigModules(modules);
+    if (!normalizedModules.length) return;
+
+    const map = await this.readConfigVisitMapFromStorage();
+    const now = Date.now();
+    normalizedModules.forEach((module) => {
+      map[module] = { module, lastVisitedAt: now };
+    });
+
+    const prunedMap = this.pruneConfigVisitMap(map);
+    this._configVisitMemory = prunedMap;
+    try {
+      await this.writeConfigVisitMapToStorage(prunedMap);
+    } catch (error) {
+      console.warn('Warning: Could not persist configuration visit map:', error);
+    }
+  }
+
+  private async getRecentConfigModules(): Promise<string[]> {
+    const map = await this.readConfigVisitMapFromStorage();
+    const prunedMap = this.pruneConfigVisitMap(map);
+
+    if (Object.keys(prunedMap).length !== Object.keys(map).length) {
+      this._configVisitMemory = prunedMap;
+      try {
+        await this.writeConfigVisitMapToStorage(prunedMap);
+      } catch (error) {
+        console.warn('Warning: Could not persist pruned configuration visit map:', error);
+      }
     }
 
-    await this.writeConfigIndexToStorage(nextIndex);
+    return this.normalizeConfigModules(Object.keys(prunedMap));
+  }
+
+  private pruneConfigVisitMap(map: Record<string, ConfigVisitEntry>): Record<string, ConfigVisitEntry> {
+    const cutoff = Date.now() - this._configVisitWindowMs;
+
+    return Object.values(map || {}).reduce((acc: Record<string, ConfigVisitEntry>, entry) => {
+      const [module] = this.normalizeConfigModules([entry?.module]);
+      const lastVisitedAt = Number(entry?.lastVisitedAt);
+
+      if (module && Number.isFinite(lastVisitedAt) && lastVisitedAt >= cutoff) {
+        acc[module] = { module, lastVisitedAt };
+      }
+
+      return acc;
+    }, {});
+  }
+
+  private async readConfigVisitMapFromStorage(): Promise<Record<string, ConfigVisitEntry>> {
+    if (this._configVisitMemory) return { ...this._configVisitMemory };
+
+    try {
+      const raw = await this.clientCacheS.getItem(this.configVisitMapStorageKey());
+      const parsed = raw ? JSON.parse(raw) : {};
+      if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return {};
+
+      this._configVisitMemory = this.pruneConfigVisitMap(parsed as Record<string, ConfigVisitEntry>);
+      return { ...this._configVisitMemory };
+    } catch {
+      this._configVisitMemory = {};
+      return {};
+    }
+  }
+
+  private async writeConfigVisitMapToStorage(map: Record<string, ConfigVisitEntry>): Promise<void> {
+    await this.clientCacheS.setItem(this.configVisitMapStorageKey(), JSON.stringify(map || {}));
+  }
+  // ]]]FI
+
+  private async writeConfigModulesToStorage(
+    config: Record<string, any>,
+    appIndex: Record<string, string[]> = {},
+    modulesToPersist: string[] = []
+  ): Promise<void> {
+    const modules = Object.keys(config || {});
+    const persistedModules = this.resolveConfigModulesFromAvailable(config, modulesToPersist);
+
+    for (const module of persistedModules) {
+      try {
+        await this.writeConfigModuleToStorage(module, config[module]);
+      } catch (error) {
+        console.warn(`Warning: Could not persist configuration module ${module}:`, error);
+      }
+    }
+
+    try {
+      await this.writeConfigIndexToStorage(modules);
+    } catch (error) {
+      console.warn('Warning: Could not persist configuration module index:', error);
+    }
+
     if (Object.keys(appIndex).length) {
-      await this.writeConfigAppIndexToStorage(appIndex);
+      try {
+        await this.writeConfigAppIndexToStorage(appIndex);
+      } catch (error) {
+        console.warn('Warning: Could not persist configuration app index:', error);
+      }
     }
   }
 
@@ -718,6 +901,12 @@ export class AuthService {
     return `${this._configCacheAppIndex}:${this.configStorageScope()}`;
   }
 
+  // [[[II ESC:001-07 DOC:docs/documents/2026-06-04-001-token-config-cache.md#escenario-07
+  private configVisitMapStorageKey(): string {
+    return `${this._configVisitMap}:${this.configStorageScope()}`;
+  }
+  // ]]]FI
+
   private async resolveConfigModulesForUrl(url: string): Promise<string[]> {
     const routeKeys = this.extractConfigRouteKeys(url);
     if (!routeKeys.length) return [];
@@ -731,19 +920,17 @@ export class AuthService {
     for (const routeKey of routeKeys) {
       const routeAliases = this.configKeyAliases(routeKey);
 
-      for (const alias of routeAliases) {
-        for (const module of appIndex[alias] || []) {
-          resolvedModules.add(module);
-        }
-      }
-
+      // [[[II ESC:001-06 DOC:docs/documents/2026-06-04-001-token-config-cache.md#escenario-06
       const indexedModule = this.findIndexedConfigModule(routeAliases, moduleIndex);
       if (indexedModule) {
         resolvedModules.add(indexedModule);
-        for (const modules of Object.values(appIndex)) {
-          if (modules.includes(indexedModule)) {
-            modules.forEach(module => resolvedModules.add(module));
-          }
+        continue;
+      }
+      // ]]]FI
+
+      for (const alias of routeAliases) {
+        for (const module of appIndex[alias] || []) {
+          resolvedModules.add(module);
         }
       }
     }
@@ -760,17 +947,22 @@ export class AuthService {
       .map(segment => segment.trim())
       .filter(Boolean);
     const query = queryPart.split('#')[0];
-    const keys = [...segments];
+    const queryKeys: string[] = [];
 
     if (query) {
       const params = new URLSearchParams(query);
       ['pos', 'type', 'module'].forEach(param => {
         const value = params.get(param);
-        if (value) keys.push(value);
+        if (value) queryKeys.push(value);
       });
     }
 
-    return this.normalizeConfigModules(keys);
+    // [[[II ESC:001-06 DOC:docs/documents/2026-06-04-001-token-config-cache.md#escenario-06
+    if (queryKeys.length) return this.normalizeConfigModules(queryKeys);
+
+    const lastSegment = segments[segments.length - 1];
+    return this.normalizeConfigModules(lastSegment ? [lastSegment] : []);
+    // ]]]FI
   }
 
   private findIndexedConfigModule(routeAliases: string[], modules: string[]): string | null {
@@ -799,11 +991,31 @@ export class AuthService {
     const normalized = String(key || '').trim().toLowerCase();
     if (!normalized) return [];
 
+    // [[[II ESC:001-05 DOC:docs/documents/2026-06-04-001-token-config-cache.md#escenario-05 ESC:001-06 DOC:docs/documents/2026-06-04-001-token-config-cache.md#escenario-06
+    const explicitAliases: Record<string, string[]> = {
+      'fuel-consumption': ['inventory-movement-detail'],
+      'inventory-movement': ['inventory-movement-detail'],
+      'pumps-utilities': ['asset'],
+      'tools-and-spares': ['asset-tools-and-spares'],
+      'tool_spare': ['asset-tools-and-spares'],
+      'locations': ['asset-locations'],
+      'responsibilities-custodies': ['employee-asset-document']
+    };
+    // ]]]FI
+
     const baseVariants = new Set<string>([
       normalized,
       normalized.replace(/_/g, '-'),
       normalized.replace(/-/g, '_')
     ]);
+
+    // [[[II ESC:001-05 DOC:docs/documents/2026-06-04-001-token-config-cache.md#escenario-05 ESC:001-06 DOC:docs/documents/2026-06-04-001-token-config-cache.md#escenario-06
+    (explicitAliases[normalized] || []).forEach(alias => {
+      baseVariants.add(alias);
+      baseVariants.add(alias.replace(/_/g, '-'));
+      baseVariants.add(alias.replace(/-/g, '_'));
+    });
+    // ]]]FI
 
     for (const variant of Array.from(baseVariants)) {
       if (variant.endsWith('ies') && variant.length > 3) {
@@ -832,9 +1044,10 @@ export class AuthService {
   private async readConfigModuleFromStorage(module: string): Promise<any | null> {
     try {
       const key = this.configStorageKey(module);
-      const raw = this.generalS.isMobile()
-        ? (await Preferences.get({ key })).value
-        : localStorage.getItem(key);
+      let raw = await this.clientCacheS.getItem(key);
+      if (!raw && !this.generalS.isMobile() && typeof localStorage !== 'undefined') {
+        raw = localStorage.getItem(key);
+      }
       return raw ? JSON.parse(raw) : null;
     } catch {
       return null;
@@ -865,19 +1078,16 @@ export class AuthService {
   private async writeConfigModuleToStorage(module: string, value: any): Promise<void> {
     const key = this.configStorageKey(module);
     const raw = JSON.stringify(value ?? {});
-    if (this.generalS.isMobile()) {
-      await Preferences.set({ key, value: raw });
-    } else {
-      localStorage.setItem(key, raw);
-    }
+    await this.clientCacheS.setItem(key, raw);
   }
 
   private async readConfigIndexFromStorage(): Promise<string[]> {
     try {
       const key = this.configIndexStorageKey();
-      const raw = this.generalS.isMobile()
-        ? (await Preferences.get({ key })).value
-        : localStorage.getItem(key);
+      let raw = await this.clientCacheS.getItem(key);
+      if (!raw && !this.generalS.isMobile() && typeof localStorage !== 'undefined') {
+        raw = localStorage.getItem(key);
+      }
       const parsed = raw ? JSON.parse(raw) : [];
       return Array.isArray(parsed) ? parsed : [];
     } catch {
@@ -888,9 +1098,10 @@ export class AuthService {
   private async readConfigAppIndexFromStorage(): Promise<Record<string, string[]>> {
     try {
       const key = this.configAppIndexStorageKey();
-      const raw = this.generalS.isMobile()
-        ? (await Preferences.get({ key })).value
-        : localStorage.getItem(key);
+      let raw = await this.clientCacheS.getItem(key);
+      if (!raw && !this.generalS.isMobile() && typeof localStorage !== 'undefined') {
+        raw = localStorage.getItem(key);
+      }
       const parsed = raw ? JSON.parse(raw) : {};
       if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return {};
 
@@ -906,11 +1117,7 @@ export class AuthService {
   private async writeConfigIndexToStorage(modules: string[]): Promise<void> {
     const key = this.configIndexStorageKey();
     const raw = JSON.stringify(this.normalizeConfigModules(modules));
-    if (this.generalS.isMobile()) {
-      await Preferences.set({ key, value: raw });
-    } else {
-      localStorage.setItem(key, raw);
-    }
+    await this.clientCacheS.setItem(key, raw);
   }
 
   private async writeConfigAppIndexToStorage(appIndex: Record<string, string[]>): Promise<void> {
@@ -920,17 +1127,12 @@ export class AuthService {
     }, {});
     const key = this.configAppIndexStorageKey();
     const raw = JSON.stringify(normalizedIndex);
-    if (this.generalS.isMobile()) {
-      await Preferences.set({ key, value: raw });
-    } else {
-      localStorage.setItem(key, raw);
-    }
+    await this.clientCacheS.setItem(key, raw);
   }
 
   private async removeConfigStorageKey(key: string): Promise<void> {
-    if (this.generalS.isMobile()) {
-      await Preferences.remove({ key });
-    } else {
+    await this.clientCacheS.removeItem(key);
+    if (!this.generalS.isMobile() && typeof localStorage !== 'undefined') {
       localStorage.removeItem(key);
     }
   }
@@ -941,6 +1143,7 @@ export class AuthService {
       await this.removeConfigStorageKey(this.configStorageKey(module));
     }
 
+    await this.clientCacheS.removeByPrefix(`${this._configCachePrefix}:${this.configStorageScope()}:`);
     await this.removeConfigStorageKey(this.configIndexStorageKey());
     await this.removeConfigStorageKey(this.configAppIndexStorageKey());
     this._config = {};
@@ -1335,13 +1538,10 @@ export class AuthService {
           await Preferences.set({ key: 'user_data', value: JSON.stringify(currentUser) });
         }
       } else {
-        // WEB: Cookie temporal de 30s (diseño original por seguridad)
-        this._cookieOptions.expires = new Date(new Date().getTime() + 30000); // 30 segundos
-        this.cookieS.set('refresh', this._tokenRefresh, this._cookieOptions);
-        // También guardar user en cookie para reloads
-        if (currentUser && Object.keys(currentUser).length > 0) {
-          this.cookieS.set('user', JSON.stringify(currentUser), this._cookieOptions);
-        }
+        // WEB: los tokens viven solo en memoria (_tokenRefresh / _tokenAccess).
+        // sessionStorage se escribe únicamente desde el handler pagehide.
+        // Esta función no toca sessionStorage para evitar que quede expuesto
+        // entre llamadas normales (login, refresh del interceptor, etc.).
       }
     } catch (error) {
       console.warn('Error saving tokens to storage:', error);
@@ -1365,26 +1565,42 @@ export class AuthService {
         if (access.value) this._tokenAccess = access.value;
         if (userData.value) {
           try {
-            this._user.set(JSON.parse(userData.value));
+            const parsedUser = JSON.parse(userData.value);
+            this._user.set(parsedUser);
+            this.permissionsS?.loadFromLogin(parsedUser);
           } catch (e) {
             console.warn('Error parsing user data:', e);
           }
         }
+        // Marcar sesión activa si hay refresh token cargado
+        if (this._tokenRefresh) this._loggedin.set(true);
       } else {
-        // WEB: Cargar desde cookie temporal (solo existe si hubo reload)
-        const refreshCookie = this.cookieS.get('refresh');
-        if (refreshCookie) {
-          this._tokenRefresh = refreshCookie;
-        }
-        // Cargar usuario desde cookie si existe
-        const userCookie = this.cookieS.get('user');
-        if (userCookie) {
-          try {
-            this._user.set(JSON.parse(userCookie));
-          } catch (e) {
-            console.warn('Error parsing user cookie:', e);
+        // WEB: leer sessionStorage (puente temporal para F5) y borrar inmediatamente.
+        // El token VIVE en memoria (_tokenRefresh/_tokenAccess/_user signal).
+        // sessionStorage es solo un relay: escribe en pagehide → lee aquí → se elimina.
+        if (typeof sessionStorage !== 'undefined') {
+          const refreshToken = sessionStorage.getItem('_bos_rt');
+          const rawUserData = sessionStorage.getItem('_bos_ud');
+
+          // Borrar inmediatamente — el token ya no debe existir fuera de memoria
+          sessionStorage.removeItem('_bos_rt');
+          sessionStorage.removeItem('_bos_ud');
+
+          if (refreshToken) {
+            this._tokenRefresh = refreshToken;
+            this._loggedin.set(true);
+          }
+          if (rawUserData) {
+            try {
+              const userData = JSON.parse(rawUserData);
+              this._user.set(userData);
+              this.permissionsS?.loadFromLogin(userData);
+            } catch (e) {
+              console.warn('Error parsing user data from sessionStorage:', e);
+            }
           }
         }
+        // Nota: cookieS.delete de 'refresh'/'user' eliminado — ya no se usan cookies para tokens.
       }
     } catch (error) {
       console.warn('Error loading tokens from storage:', error);
@@ -1400,6 +1616,12 @@ export class AuthService {
         await Preferences.remove({ key: 'refresh_token' });
         await Preferences.remove({ key: 'access_token' });
         await Preferences.remove({ key: 'user_data' });
+      } else {
+        // WEB: limpiar sessionStorage
+        if (typeof sessionStorage !== 'undefined') {
+          sessionStorage.removeItem('_bos_rt');
+          sessionStorage.removeItem('_bos_ud');
+        }
       }
       // Limpiar el signal del usuario
       this._user.set(null);

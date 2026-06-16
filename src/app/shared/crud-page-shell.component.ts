@@ -116,7 +116,9 @@ export interface ShellSaveConfig {
         <p-tabs [scrollable]="true" [value]="crud.tabVisible()" (valueChange)="crud.onTabChange($event)">
           <p-tablist>
             <p-tab [value]="0">General</p-tab>
-            <p-tab [value]="1">Clasificadores</p-tab>
+            <!-- [[[II ESC:001-08 DOC:docs/documents/2026-05-16_001_consolidacion_dropdown_types_y_fix_escenarios.md#escenario-08 -->
+            <p-tab [value]="1" *ngIf="crud.form()[$any(crud.typeDefault)]?.get('classifiers')">Clasificadores</p-tab>
+            <!-- ]]]FI -->
             <p-tab *ngFor="let tab of tabs" [value]="tab.value">{{ tab.label }}</p-tab>
             <p-tab [value]="3">Auditoría</p-tab>
           </p-tablist>
@@ -140,7 +142,8 @@ export interface ShellSaveConfig {
               />
             </p-tabpanel>
 
-            <p-tabpanel [value]="1">
+            <!-- [[[II ESC:001-08 DOC:docs/documents/2026-05-16_001_consolidacion_dropdown_types_y_fix_escenarios.md#escenario-08 -->
+            <p-tabpanel [value]="1" *ngIf="crud.form()[$any(crud.typeDefault)]?.get('classifiers')">
               <div formArrayName="classifiers" class="pt-3">
                 <div
                   class="p-fluid grid separator-form-small pl-2"
@@ -165,6 +168,7 @@ export interface ShellSaveConfig {
                 </div>
               </div>
             </p-tabpanel>
+            <!-- ]]]FI -->
 
             <!-- Tabs dinámicos -->
             <ng-container *ngFor="let tab of tabs">

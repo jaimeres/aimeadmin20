@@ -1,4 +1,4 @@
-<!-- [[[II ESC:020-01 DOC:docs/documents/2026-06-04_020_custom-draw-form-virtual-scroll-dropdowns.md#escenario-01 ESC:020-04 DOC:docs/documents/2026-06-04_020_custom-draw-form-virtual-scroll-dropdowns.md#escenario-04 -->
+<!-- [[[II ESC:007-07 DOC:docs/documents/2026-06-01_007_custom-draw-form-listbox.md#escenario-07 ESC:020-01 DOC:docs/documents/2026-06-04_020_custom-draw-form-virtual-scroll-dropdowns.md#escenario-01 ESC:020-04 DOC:docs/documents/2026-06-04_020_custom-draw-form-virtual-scroll-dropdowns.md#escenario-04 ESC:020-05 DOC:docs/documents/2026-06-04_020_custom-draw-form-virtual-scroll-dropdowns.md#escenario-05 ESC:001-09 DOC:docs/documents/2026-05-16_001_consolidacion_dropdown_types_y_fix_escenarios.md#escenario-09 -->
 <!-- TEMPLATE REUTILIZABLE PARA DROPDOWN -->
 <!-- DEBO PONER TEMPLETE EN ESLO 3 PRIMEROS COMBOS -->
 <ng-template #dropdownTemplate let-fieldConfig="fieldConfig">
@@ -13,7 +13,7 @@
         [filterBy]="fieldConfig.filter_by ? fieldConfig.filter_by : null"
         [virtualScroll]="fieldConfig.virtual_scrolling?.active === true && virtualOptionsReadySignal()[fieldConfig.field] === true"
         [virtualScrollItemSize]="60" (onChange)="onChangeDropdown($event, fieldConfig)" [appendTo]="'body'"
-        styleClass="height-input-custom" />
+        styleClass="height-input-custom" [scrollHeight]="fieldConfig.scroll_height || '120px'" />
       <!-- DEJO virtualScrollItemSize EN 60 PORQUE CON VALORES MAS GRANDE EMPIEZA A COMPORTARSE EXTRAÑO,
          NO CARGA TODOLOS LOS COMPONENTE EN LA LISTA O EL ALTA ES MUY GRANDE -->
 
@@ -44,7 +44,7 @@
 <ng-template #multiSelectTemplate let-fieldConfig="fieldConfig">
   <p-floatlabel variant="on">
     <p-multiSelect [formControl]="$any(formGroupSignal()?.get(fieldConfig.field))" [pAutoFocus]="fieldConfig.autofocus"
-      [options]="dropdownOptionsSignal()[fieldConfig.field] || []" (onChange)="onChangeDropdown($event, fieldConfig)"
+      [options]="dropdownOptionsSignal()[fieldConfig.field] || fieldConfig?.data_type?.options || fieldConfig?.options || []" (onChange)="onChangeDropdown($event, fieldConfig)"
       [showClear]="true" [optionValue]="fieldConfig.option_value || 'id'"
       [filter]="fieldConfig.filter_local !== undefined ? fieldConfig.filter_local : false"
       [filterBy]="fieldConfig.filter_by ? fieldConfig.filter_by : null"
@@ -71,11 +71,14 @@
     <p-treeSelect display="chip" [metaKeySelection]="false" selectionMode="checkbox"
       [options]="dropdownOptionsSignal()[fieldConfig.field] || []" [pAutoFocus]="fieldConfig.autofocus"
       [formControl]="$any(formGroupSignal()?.get(fieldConfig.field))" key="id" [appendTo]="'body'" [showClear]="true"
-      (onClear)="clearTreeSelect(fieldConfig.field)" (onChangeAction)="onChangeDropdown($event, fieldConfig)"
-      (onNodeExpand)="onTreeNodeExpand($event, fieldConfig)" styleClass="height-input-custom"
-      class="height-input-custom" [filter]="fieldConfig.filter_local !== undefined ? fieldConfig.filter_local : false"
+      (onClear)="clearTreeSelect(fieldConfig.field)" (onNodeSelect)="onTreeSelectNodeChange($event, fieldConfig)"
+      (onNodeUnselect)="onTreeSelectNodeChange($event, fieldConfig)"
+      (onNodeExpand)="onTreeNodeExpand($event, fieldConfig)" [containerStyleClass]="'height-input-custom'"
+      [panelStyleClass]="'custom-tree-select-panel'" class="height-input-custom"
+      [filter]="fieldConfig.filter_local !== undefined ? fieldConfig.filter_local : false"
       [virtualScroll]="fieldConfig.virtual_scrolling?.active === true && virtualOptionsReadySignal()[fieldConfig.field] === true"
-      [virtualScrollItemSize]="60"
+      [virtualScrollItemSize]="60" [scrollHeight]="fieldConfig.scroll_height || '220px'"
+      [panelStyle]="treeSelectPanelStyleSignal()"
       [filterBy]="fieldConfig.filter_by ? fieldConfig.filter_by + ',label,filter_text' : 'label,filter_text'" />
 
     <button *ngIf="fieldConfig.reload_icon !== undefined ? fieldConfig.reload_icon : false" type="button" pButton
@@ -92,7 +95,7 @@
 </ng-template>
 <!-- ]]]FI -->
 
-<!-- [[[II ESC:007-01 DOC:docs/documents/2026-06-01_007_custom-draw-form-listbox.md#escenario-01 ESC:020-01 DOC:docs/documents/2026-06-04_020_custom-draw-form-virtual-scroll-dropdowns.md#escenario-01 ESC:020-04 DOC:docs/documents/2026-06-04_020_custom-draw-form-virtual-scroll-dropdowns.md#escenario-04 -->
+<!-- [[[II ESC:007-01 DOC:docs/documents/2026-06-01_007_custom-draw-form-listbox.md#escenario-01 ESC:007-07 DOC:docs/documents/2026-06-01_007_custom-draw-form-listbox.md#escenario-07 ESC:020-01 DOC:docs/documents/2026-06-04_020_custom-draw-form-virtual-scroll-dropdowns.md#escenario-01 ESC:020-04 DOC:docs/documents/2026-06-04_020_custom-draw-form-virtual-scroll-dropdowns.md#escenario-04 -->
 <!-- TEMPLATE REUTILIZABLE PARA LISTBOX -->
 <ng-template #listboxTemplate let-fieldConfig="fieldConfig">
   <div class="flex flex-col gap-2 w-full">
@@ -111,8 +114,10 @@
 
     <div class="listbox-container">
       <p-listbox [options]="dropdownOptionsSignal()[fieldConfig.field] || []" [pAutoFocus]="fieldConfig.autofocus"
-        [formControl]="$any(formGroupSignal()?.get(fieldConfig.field))" [multiple]="true" [checkbox]="true"
-        [metaKeySelection]="false" [showToggleAll]="false" [dataKey]="fieldConfig.option_value || 'id'"
+        [formControl]="$any(formGroupSignal()?.get(fieldConfig.field))"
+        [multiple]="selectionMultipleSignal()[fieldConfig.field] !== false"
+        [checkbox]="selectionMultipleSignal()[fieldConfig.field] !== false" [metaKeySelection]="false"
+        [showToggleAll]="false" [dataKey]="fieldConfig.option_value || 'id'"
         [optionLabel]="fieldConfig.tree ? 'label' : (fieldConfig.option_label | joinOrSelf)"
         [optionValue]="fieldConfig.tree ? null : (fieldConfig.option_value || 'id')"
         [group]="fieldConfig.tree ? true : false" [optionGroupChildren]="'items'" [optionGroupLabel]="'label'" [filter]="fieldConfig.tree
@@ -606,8 +611,10 @@
   </button>
 </div>
 
-<div *ngIf="drawFormSignal()['grid']" class="grid grid-cols-12 gap-2 "> <!-- pt-3 -->
-  <div *ngFor="let entry of drawFormSignal()['grid'] | keyvalue : keyComparator; trackBy: trackByKey"
+<!-- [[[II ESC:021-04 DOC:docs/documents/2026-06-05_021_crud-onshow-maximize-small-screens.md#escenario-04 -->
+<div *ngIf="drawFormSignal()?.grid as drawGrid" class="grid grid-cols-12 gap-2 "> <!-- pt-3 -->
+  <!-- ]]]FI -->
+  <div *ngFor="let entry of drawGrid | keyvalue : keyComparator; trackBy: trackByKey"
     [ngClass]="[ entry.value.hide ? 'hidden' : '', entry.value.class || 'col-span-6', entry.value.class_md || 'md:col-span-3']">
 
     <!--CARD-->
@@ -644,6 +651,12 @@
             <div class="p-inputgroup" *ngSwitchCase="'multi-select'">
               <ng-container *ngTemplateOutlet="multiSelectTemplate; context: {fieldConfig: card.value}"></ng-container>
             </div>
+
+            <!-- [[[II ESC:001-09 DOC:docs/documents/2026-05-16_001_consolidacion_dropdown_types_y_fix_escenarios.md#escenario-09 -->
+            <div class="p-inputgroup" *ngSwitchCase="'multi-choice'">
+              <ng-container *ngTemplateOutlet="multiSelectTemplate; context: {fieldConfig: card.value}"></ng-container>
+            </div>
+            <!-- ]]]FI -->
 
             <div class="p-inputgroup" *ngSwitchCase="'auto-complete'">
               <ng-container *ngTemplateOutlet="autoCompleteTemplate; context: {fieldConfig: card.value}"></ng-container>
@@ -769,6 +782,14 @@
         </p-inputgroup>
       </div>
 
+      <!-- [[[II ESC:001-09 DOC:docs/documents/2026-05-16_001_consolidacion_dropdown_types_y_fix_escenarios.md#escenario-09 -->
+      <div *ngSwitchCase="'multi-choice'">
+        <p-inputgroup>
+          <ng-container *ngTemplateOutlet="multiSelectTemplate; context: {fieldConfig: entry.value}"></ng-container>
+        </p-inputgroup>
+      </div>
+      <!-- ]]]FI -->
+
       <div *ngSwitchCase="'select-button'">
         <ng-container *ngTemplateOutlet="selectButtonTemplate; context: {fieldConfig: entry.value}"></ng-container>
       </div>
@@ -827,6 +848,13 @@
                 <ng-container
                   *ngTemplateOutlet="multiSelectTemplate; context: {fieldConfig: card.value}"></ng-container>
               </div>
+
+              <!-- [[[II ESC:001-09 DOC:docs/documents/2026-05-16_001_consolidacion_dropdown_types_y_fix_escenarios.md#escenario-09 -->
+              <div *ngSwitchCase="'multi-choice'">
+                <ng-container
+                  *ngTemplateOutlet="multiSelectTemplate; context: {fieldConfig: card.value}"></ng-container>
+              </div>
+              <!-- ]]]FI -->
 
               <div *ngSwitchCase="'toggle-button'">
                 <ng-container
@@ -906,12 +934,12 @@
 </div>
 
 
-<div *ngIf="drawFormSignal()['stepper']" class="justify-center">
+<div *ngIf="drawFormSignal()?.['stepper']" class="justify-center">
 
   <p-stepper [value]="currentStepSignal() ?? undefined" (valueChange)="currentStepSignal.set($event ?? null)"
-    (onChangeAction)="onStepChange($event)" [linear]="drawFormSignal()['stepper'].linear === true">
-    <p-step-list *ngIf="drawFormSignal()['stepper']?.buttons?.active">
-      <p-step *ngFor="let entry of drawFormSignal()['stepper']?.steps | keyvalue : keyComparator; trackBy: trackByKey"
+    (onChangeAction)="onStepChange($event)" [linear]="drawFormSignal()?.['stepper']?.linear === true">
+    <p-step-list *ngIf="drawFormSignal()?.['stepper']?.buttons?.active">
+      <p-step *ngFor="let entry of drawFormSignal()?.['stepper']?.steps | keyvalue : keyComparator; trackBy: trackByKey"
         [value]="+entry.key">
         {{entry.value.label}}
       </p-step>
@@ -919,7 +947,7 @@
 
     <p-step-panels>
       <p-step-panel [value]="+entry.key"
-        *ngFor="let entry of drawFormSignal()['stepper']?.steps | keyvalue : keyComparator; trackBy: trackByKey">
+        *ngFor="let entry of drawFormSignal()?.['stepper']?.steps | keyvalue : keyComparator; trackBy: trackByKey">
         <ng-template #content let-activateCallback="activateCallback">
           <div class="grid grid-cols-12 gap-2 pt-2">
 
@@ -932,6 +960,10 @@
                 <!-- <div *ngSwitchCase="'document'" class="w-full">
                   <ng-container *ngTemplateOutlet="fileTemplate; context: {fieldConfig: field.value}"></ng-container>
                 </div> -->
+
+                <div *ngSwitchCase="'listbox'">
+                  <ng-container *ngTemplateOutlet="listboxTemplate; context: {fieldConfig: field.value}"></ng-container>
+                </div>
 
                 <div *ngSwitchCase="'files'" class="w-full">
                   <ng-container *ngTemplateOutlet="fileTemplate; context: {fieldConfig: field.value}"></ng-container>
@@ -946,6 +978,13 @@
                   <ng-container
                     *ngTemplateOutlet="dropdownTemplate; context: {fieldConfig: field.value}"></ng-container>
                 </div>
+
+                <!-- [[[II ESC:001-09 DOC:docs/documents/2026-05-16_001_consolidacion_dropdown_types_y_fix_escenarios.md#escenario-09 -->
+                <div class="p-inputgroup" *ngSwitchCase="'multi-choice'">
+                  <ng-container
+                    *ngTemplateOutlet="multiSelectTemplate; context: {fieldConfig: field.value}"></ng-container>
+                </div>
+                <!-- ]]]FI -->
 
                 <div *ngSwitchCase="'input-number'" class="p-inputgroup">
                   <ng-container
@@ -994,8 +1033,10 @@
 </div>
 
 
+<!-- [[[II ESC:021-04 DOC:docs/documents/2026-06-05_021_crud-onshow-maximize-small-screens.md#escenario-04 -->
 <div class="w-full" style="overflow: auto; padding-top: 10px;"
-  *ngIf="(nonSignatureFilesSignal().length > 0 || fileSearchFields().length > 0) && drawFormSignal()['grid']">
+  *ngIf="(nonSignatureFilesSignal().length > 0 || fileSearchFields().length > 0) && drawFormSignal()?.grid">
+  <!-- ]]]FI -->
 
   <ng-container *ngTemplateOutlet="fileSearchBarsTemplate"></ng-container>
 

@@ -131,7 +131,7 @@ export class CustomButtonFooterComponent {
     });
 
     this.buttonConfig.set(newConfig);
-    console.log('🔧 Configuración de botones aplicada:', newConfig);
+    //console.log('🔧 Configuración de botones aplicada:', newConfig);
   }
 
   help() {

@@ -26,7 +26,7 @@ import { GeneralService } from '../../utils/services/general.service';
     <div app-menu-profile #menuProfileStart *ngIf="menuProfilePosition() === 'start'"></div>
     <div #menuContainer class="layout-menu-container">
       <div app-menu></div>
-      <label class="pl-8"> <strong>Beta 1.0.6</strong></label>
+      <label class="pl-8"> <strong>Beta 1.0.7</strong></label>
       <div *ngIf="deviceIdSuffix()" class="pl-8" style="font-size: 0.7rem; color: #94a3b8;">
         ID: {{deviceIdSuffix()}}
       </div>

@@ -8,7 +8,7 @@
 
 ## Resumen
 
-Se adapto la cache persistente de dropdowns para resolver configuracion por plataforma (`mobile`, `desktop`, `web`) y usar `cache.<platform>.read` como propiedad preferida, conservando compatibilidad con `active` cuando `read` aun no exista.
+Se adapto la cache persistente de dropdowns para resolver configuracion por plataforma (`mobile`, `desktop`, `web`) y usar `cache.<platform>.load/read` como propiedades de activacion, conservando compatibilidad con `active` cuando no existan.
 
 ## Alcance
 
@@ -30,7 +30,9 @@ Se adapto la cache persistente de dropdowns para resolver configuracion por plat
 
 `DynamicDropdownDataService` selecciona la configuracion de cache segun la plataforma actual. En movil usa `cache.mobile`; en desktop usa `cache.desktop` con fallback a `cache.web`; en web usa `cache.web` con fallback a `cache.desktop`.
 
-La propiedad `read` queda como preferida para activar cache persistente. Si falta, se usa `active` como fallback retrocompatible. Cuando `read` es objeto, puede contener flags por modo (`creation`, `edition`) y `active`/`enabled`; si no los contiene, se respetan los flags legacy del nivel de plataforma.
+La propiedad `load` queda como activador preferente para opciones de dropdown; si falta, se usa `read` y despues `active` como fallback retrocompatible. Cuando el activador es objeto, `active`, `enabled`, `load` o `read` pueden apagarlo o encenderlo explicitamente.
+
+Corrección posterior: la persistencia de opciones de dropdown usa `ClientCacheStorageService`. En web/desktop se guarda en IndexedDB y en móvil se conserva Preferences hasta la etapa de SQLite. La lógica de activación por `load/read/active + time` no cambia.
 
 <a id="escenario-03"></a>
 ## Escenario 03: Resolver plataforma en autoguardado de formulario
@@ -42,6 +44,7 @@ El almacenamiento sigue separado por plataforma: movil usa Capacitor Preferences
 ## Decisiones tomadas
 
 - No se cambio `getMobileCacheKey(...)` ni el formato guardado en Capacitor Preferences.
+- La llave de dropdown se conserva, pero el storage fisico ya no es Preferences en web/desktop.
 - No se cambio la validacion de version de app en lectura.
 - El TTL sigue convirtiendose desde segundos a milisegundos mediante `getMobileCacheTtlMs(element)`.
 - Sin TTL valido no se lee ni se escribe cache persistente.
@@ -55,7 +58,8 @@ El almacenamiento sigue separado por plataforma: movil usa Capacitor Preferences
 
 ## Notas importantes
 
-- `read` gobierna tanto lectura como escritura persistente porque el flujo existente usa el mismo habilitador para ambas operaciones.
+- `load/read` gobierna tanto lectura como escritura persistente de opciones porque el flujo existente usa el mismo habilitador para ambas operaciones.
+- `creation` y `edition` no se usan para opciones de dropdown; esos flags pertenecen al autoguardado/restauracion de borradores de formulario.
 - `active` queda solo como compatibilidad para configuraciones existentes.
 
 ## Archivos modificados
@@ -64,15 +68,16 @@ El almacenamiento sigue separado por plataforma: movil usa Capacitor Preferences
 - `src/app/components/custom-draw-form/dynamic-dropdown-data.service.spec.ts`
 - `src/app/utils/services/form-cache.service.ts`
 - `src/app/utils/services/general.service.ts`
+- `src/app/utils/services/client-cache-storage.service.ts`
 - `docs/documents/2026-06-04_019_dropdown-cache-platform-read.md`
 
 ## Pendientes
 
-- Validar manualmente en APK/IPA y navegador un dropdown con `cache.mobile.read`, `cache.web.read` y fallback `desktop`/`web`.
+- Validar manualmente en APK/IPA y navegador un dropdown con `cache.mobile.load/read`, `cache.web.load/read` y fallback `desktop`/`web`.
 
 ## Pruebas sugeridas
 
-- Confirmar que `cache.mobile.read === true` con `time > 0` lee y escribe Preferences en movil nativo.
-- Confirmar que `cache.web.read === true` con `time > 0` habilita cache en navegador.
+- Confirmar que `cache.mobile.load/read === true` con `time > 0` lee y escribe Preferences en movil nativo.
+- Confirmar que `cache.web.load/read === true` con `time > 0` habilita cache en navegador.
 - Confirmar que `cache.desktop` se usa como fallback cuando falta `cache.web`.
 - Confirmar que `active === true` sigue funcionando cuando `read` no existe.

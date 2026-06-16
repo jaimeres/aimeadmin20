@@ -1,0 +1,112 @@
+.child-builder {
+  display: block;
+  padding: 0.5rem;
+}
+
+.builder-toolbar,
+.row-header,
+.row-detail {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.builder-toolbar {
+  justify-content: space-between;
+  margin-bottom: 0.5rem;
+}
+
+.builder-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.builder-row {
+  border: 1px solid var(--surface-border);
+  border-radius: 6px;
+  padding: 0.5rem;
+  background: var(--surface-card);
+}
+
+.row-detail {
+  justify-content: space-between;
+  padding-top: 0.5rem;
+}
+
+.order-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.4rem;
+  height: 1.4rem;
+  border-radius: 999px;
+  background: var(--primary-100);
+  color: var(--primary-700);
+  font-size: 0.75rem;
+  font-weight: 600;
+  flex: 0 0 auto;
+}
+
+.label-input {
+  width: min(18rem, 100%) !important;
+}
+
+.type-select {
+  width: 12rem !important;
+}
+
+.small-toggle {
+  width: 5.25rem !important;
+}
+
+.field-name {
+  display: flex;
+  align-items: center;
+  min-width: min(100%, 24rem);
+  flex: 1 1 18rem;
+}
+
+.prefix {
+  background: var(--surface-100);
+  border: 1px solid var(--surface-border);
+  border-right: 0;
+  padding: 0.42rem 0.5rem;
+  height: 32px;
+  font-size: 0.75rem;
+  white-space: nowrap;
+}
+
+.suffix-input {
+  border-top-left-radius: 0;
+  border-bottom-left-radius: 0;
+  min-width: 8rem;
+}
+
+.span-controls,
+.row-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  flex-wrap: wrap;
+}
+
+.span-input {
+  width: 7rem !important;
+}
+
+.json-output {
+  width: 100%;
+  font-family: monospace;
+  font-size: 0.75rem;
+}
+
+.empty-state {
+  border: 1px dashed var(--surface-border);
+  border-radius: 6px;
+  color: var(--text-color-secondary);
+  padding: 1rem;
+  text-align: center;
+  margin-bottom: 0.5rem;
+}

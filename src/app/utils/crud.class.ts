@@ -3,7 +3,7 @@ import { Location } from '@angular/common';
 import { AbstractControl, FormArray, FormControl, FormGroup, ValidationErrors, ValidatorFn, Validators } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
-import { forkJoin, of } from 'rxjs';
+import { firstValueFrom, forkJoin, of } from 'rxjs';
 import { catchError, map } from 'rxjs/operators';
 import { MenuItem, TreeNode } from 'primeng/api';
 import { CRUDService } from './services/crud.service';
@@ -68,6 +68,72 @@ export class CRUD extends Vars implements OnChanges  /*implements OnInit*/ {
     const isMobile = this.generalS.isMobileScreen();
     return isMobile ? !!loadConfig.load_on_start_mobile : !!loadConfig.load_on_start;
   }
+
+  // [[[II ESC:001-06 DOC:docs/documents/2026-06-04-001-token-config-cache.md#escenario-06 ESC:001-07 DOC:docs/documents/2026-06-04-001-token-config-cache.md#escenario-07
+  private isNonEmptyConfigSection(value: any): boolean {
+    return !!value && typeof value === 'object' && Object.keys(value).length > 0;
+  }
+
+  private ensureConfigForPos(pos: any, onReady: () => void): boolean {
+    const module = String(pos ?? '').trim();
+    if (!module || this.crudS.authS.isConfigModuleLoaded(module)) return true;
+
+    let continued = false;
+    this.showBlocked();
+    firstValueFrom(this.crudS.authS.ensureConfigModules([module]))
+      .then((loaded) => {
+        if (loaded && this.crudS.authS.isConfigModuleLoaded(module)) {
+          this.syncCustomFieldForPos(module);
+          continued = true;
+          onReady();
+          return;
+        }
+
+        this.messageS.changeMessage(`No se pudo cargar la configuración de ${module}.`, null, {}, 'warn');
+      })
+      .catch((error) => {
+        this.messageS.changeMessage(`Hay un error al cargar la configuración de ${module}.`, error);
+      })
+      .finally(() => {
+        if (!continued) this.showBlocked(false);
+      });
+
+    return false;
+  }
+
+  private syncCustomFieldForPos(pos: any): void {
+    const module = String(pos ?? '').trim();
+    if (!module) return;
+
+    const cols = this.crudS.authS.config[module]?.cols;
+    if (!cols || typeof cols !== 'object' || Object.keys(cols).length === 0) return;
+
+    this.crudS.customField.update((current: any) => ({
+      ...(current || {}),
+      [module]: cols
+    }));
+  }
+  // ]]]FI
+
+  // [[[II ESC:021-05 DOC:docs/documents/2026-06-05_021_crud-onshow-maximize-small-screens.md#escenario-05
+  private resolveRoutePos(requestedPos: any): any {
+    if (requestedPos && this.app[requestedPos]) return requestedPos;
+
+    const fallbackPos = this.typeDefault || this.pos();
+    return fallbackPos && this.app[fallbackPos] ? fallbackPos : null;
+  }
+
+  private replaceRoutePos(pos: any): void {
+    if (!this.router || !pos) return;
+
+    const currentUrl = this._location.path() || this.router.url;
+    const urlWithoutParams = currentUrl.split('?')[0];
+    const newUrl = `${urlWithoutParams}?pos=${pos}`;
+
+    this._location.replaceState(newUrl);
+    try { localStorage.setItem('lastModuleUrl', newUrl); } catch (_) { }
+  }
+  // ]]]FI
 
   private syncColumnsState(pos: any): void {
     const safePos = pos ?? 0;
@@ -301,10 +367,16 @@ export class CRUD extends Vars implements OnChanges  /*implements OnInit*/ {
   initCRUD(options: { node?: boolean; filter?: string } = {}): void {
 
     // Resolver pos pendiente de la URL (el constructor lo guardó porque this.app aún no estaba listo)
-    if (this._pendingUrlPos && this.app[this._pendingUrlPos]) {
-      this.changePos(this._pendingUrlPos);
+    // [[[II ESC:021-05 DOC:docs/documents/2026-06-05_021_crud-onshow-maximize-small-screens.md#escenario-05
+    if (this._pendingUrlPos) {
+      const resolvedPos = this.resolveRoutePos(this._pendingUrlPos);
       this._pendingUrlPos = null;
+      if (resolvedPos) {
+        this.changePos(resolvedPos);
+        this.replaceRoutePos(resolvedPos);
+      }
     }
+    // ]]]FI
 
     const node = options.node ?? false;
     const filter = options.filter ?? '';
@@ -339,35 +411,54 @@ export class CRUD extends Vars implements OnChanges  /*implements OnInit*/ {
     // o por shouldLoad arriba), y solo reaccionar a navegaciones posteriores.
     let _firstEmit = true;
     this._route.queryParams.pipe(takeUntilDestroyed(this._destroyRef)).subscribe(params => {
-      const newPos = params['pos'];
+      // [[[II ESC:021-05 DOC:docs/documents/2026-06-05_021_crud-onshow-maximize-small-screens.md#escenario-05
+      const requestedPos = params['pos'];
+      const newPos = this.resolveRoutePos(requestedPos);
+      // ]]]FI
       if (_firstEmit) {
         _firstEmit = false;
         // Si shouldLoad fue false y el pos de la URL difiere del typeDefault,
         // forzar la carga ahora (el usuario navegó explícitamente a esta URL).
-        if (!shouldLoad && newPos && this.app[newPos] && newPos === pos) {
+        if (!shouldLoad && requestedPos && newPos && newPos === pos) {
           this.getAll({ pos: newPos, node, filter });
         }
         return;
       }
       // Navegaciones posteriores dentro del mismo componente
-      if (newPos && newPos !== this.pos() && this.app[newPos]) {
+      if (newPos && newPos !== this.pos()) {
         this.changePos(newPos);
         this.getAll({ pos: newPos });
+      } else if (requestedPos && newPos && requestedPos !== newPos) {
+        this.replaceRoutePos(newPos);
       }
     });
   }
 
+  // [[[II ESC:021-02 DOC:docs/documents/2026-06-05_021_crud-onshow-maximize-small-screens.md#escenario-02
+  private readonly crudDialogStyleClass = 'crud-form-dialog';
+  private readonly defaultCrudDialogClass = `width-650px-custom min-height-550px-custom ${this.crudDialogStyleClass}`;
+
+  private withCrudDialogClass(dialogClass: string): string {
+    const classes = (dialogClass || '').split(/\s+/).filter(Boolean);
+
+    if (!classes.includes(this.crudDialogStyleClass)) {
+      classes.push(this.crudDialogStyleClass);
+    }
+
+    return classes.join(' ');
+  }
   dialogSizeClass(drawFormData: any): string {
     // Verificar que drawFormData existe y tiene dialog
     if (!drawFormData || !drawFormData['dialog']) {
-      return 'width-650px-custom min-height-550px-custom'; // Valores por defecto
+      return this.defaultCrudDialogClass; // Valores por defecto
     }
 
     const dialog = drawFormData['dialog'];
     let width = dialog['height'] ? dialog['height'] : 'width-650px-custom';
     let height = dialog['width'] ? dialog['width'] : 'min-height-550px-custom';
-    return `${width} ${height}`;
+    return this.withCrudDialogClass(`${width} ${height}`);
   }
+  // ]]]FI
 
   /**
      * Inicializa los parametros del get
@@ -384,9 +475,9 @@ export class CRUD extends Vars implements OnChanges  /*implements OnInit*/ {
     // si no envia nada, toma los seleccionados
     const selectedColumns = arr.length > 0 ? arr : this.selectedColumns();
 
-    console.log('????????????????????', this.drawForm()[posIndex]?.fields_prefixes || {});
+    //console.log('????????????????????', this.drawForm()[posIndex]?.fields_prefixes || {});
     const fields_prefixes = this._drawFormForDevice(posIndex)?.fields_prefixes || {};
-    console.log('¿¿¿¿¿¿¿¿¿¿¿¿¿¿¿¿¿¿¿¿¿¿¿¿¿', fields_prefixes);
+    //console.log('¿¿¿¿¿¿¿¿¿¿¿¿¿¿¿¿¿¿¿¿¿¿¿¿¿', fields_prefixes);
     // Lista plana de strings para detectar si el field empieza con algún prefijo,
     // tolerando ambas formas (array de strings o objeto { prefix: config }).
     const prefixList: string[] = Array.isArray(fields_prefixes)
@@ -441,7 +532,9 @@ export class CRUD extends Vars implements OnChanges  /*implements OnInit*/ {
     this.include[posIndex] = include.slice(0, -1);
   }
 
-  styleClassDialog = signal<string>('width-650px-custom min-height-550px-custom');
+  // [[[II ESC:021-02 DOC:docs/documents/2026-06-05_021_crud-onshow-maximize-small-screens.md#escenario-02
+  styleClassDialog = signal<string>(this.defaultCrudDialogClass);
+  // ]]]FI
   //hideDialogMobile = signal<boolean>(this.generalS.isMobileScreen());
 
   /**
@@ -451,18 +544,25 @@ export class CRUD extends Vars implements OnChanges  /*implements OnInit*/ {
   changePos(pos: any): void {
 
     this.pos.set(pos);
-    if (!this.drawForm()[pos]) {
+    this.crudS.authS.recordConfigModuleVisit(String(pos ?? ''));
+    this.syncCustomFieldForPos(pos);
+    if (!this.isNonEmptyConfigSection(this.drawForm()[pos])) {
       const drawForm = this.crudS.drawForm(pos);
-      this.drawForm()[pos] = drawForm;
-      this.type[pos] = pos;
-      this.unifyDialog(pos, drawForm?.dialog);
+      if (this.isNonEmptyConfigSection(drawForm)) {
+        this.drawForm()[pos] = drawForm;
+        this.type[pos] = pos;
+        this.unifyDialog(pos, drawForm?.dialog);
+      }
     }
 
-    if (!this.configGeneral()[pos]) {
-      this.configGeneral.set({
-        ... this.configGeneral(),
-        [pos]: this.crudS.configGeneral(pos)
-      });
+    if (!this.isNonEmptyConfigSection(this.configGeneral()[pos])) {
+      const generalConfig = this.crudS.configGeneral(pos);
+      if (this.isNonEmptyConfigSection(generalConfig)) {
+        this.configGeneral.set({
+          ... this.configGeneral(),
+          [pos]: generalConfig
+        });
+      }
     }
 
     const safePos = pos ?? 0; // Crear una variable segura para usar como índice
@@ -479,8 +579,9 @@ export class CRUD extends Vars implements OnChanges  /*implements OnInit*/ {
       // Actualizar la URL silenciosamente solo cuando no estamos resolviendo un pendingUrlPos
       // (en ese caso la URL ya tiene el ?pos correcto porque el usuario navegó a ella)
       if (this.router && pos && !this._pendingUrlPos) {
-        this._location.replaceState(newUrl);
-        try { localStorage.setItem('lastModuleUrl', newUrl); } catch (_) { }
+        // [[[II ESC:021-05 DOC:docs/documents/2026-06-05_021_crud-onshow-maximize-small-screens.md#escenario-05
+        this.replaceRoutePos(pos);
+        // ]]]FI
       }
 
       // Guardar icono en historial de breadcrumb siempre (incluso al resolver pendingUrlPos)
@@ -500,8 +601,10 @@ export class CRUD extends Vars implements OnChanges  /*implements OnInit*/ {
       this.syncColumnsState(pos);
 
       // Asegurar que dialogSizeClass devuelve un string válido
+      // [[[II ESC:021-02 DOC:docs/documents/2026-06-05_021_crud-onshow-maximize-small-screens.md#escenario-02
       const dialogClass = this.dialogSizeClass(this.drawForm()[pos]);
-      this.styleClassDialog.set(dialogClass || 'width-650px-custom min-height-550px-custom');
+      this.styleClassDialog.set(dialogClass || this.defaultCrudDialogClass);
+      // ]]]FI
       /*const pos_shareable = pos.toString().replace(/-/g, '_');
       this.crudS.registerVisit(pos_shareable);*/
 
@@ -772,6 +875,103 @@ export class CRUD extends Vars implements OnChanges  /*implements OnInit*/ {
    * @param options 
    */
   openTasksDetail(options: { pos: any, formFields: any, childFormFields: any, parentField: any }) {
+    // [[[II ESC:024-01 DOC:docs/documents/2026-06-15_024_open-tasks-detail-render-child-form.md#escenario-01
+    // Reactivacion del detalle de la tarea: construye los controles del child_form
+    // (parent_form_data_) reutilizando el helper unificado _applyDynamicFieldToForm
+    // y publica un draw REPRESENTABLE en drawForm()[pos + '_child_form_fields'] para
+    // que <app-custom-draw-form> lo renderice (grid / stepper / device). ]]]FI
+    const pos = options.pos;
+    const formFields = options.formFields;
+    const draw = options.childFormFields?.draw;
+    const fields = options.childFormFields?.fields || {};
+    if (!draw) return;
+
+    // [[[II ESC:024-02 Conservar la combinacion del registry del draw hijo con el
+    // draw principal: el filter.scope del PADRE puede vivir en cualquiera de los
+    // dos arboles. Se prioriza scope server. ]]]FI
+    const _childScopeRegistry = this._collectChildScopeRegistry(draw);
+    const _mainDraw = this.drawForm()?.[pos];
+    if (_mainDraw) {
+      for (const [k, v] of this._collectChildScopeRegistry(_mainDraw)) {
+        const prev = _childScopeRegistry.get(k);
+        if (!prev || (v.scope === 'server' && prev.scope !== 'server')) {
+          _childScopeRegistry.set(k, v);
+        }
+      }
+    }
+
+    Object.keys(draw).forEach(keyBase => {
+      if (keyBase === 'dialog' || keyBase === '') return;
+      const drawSection = draw[keyBase];
+      if (!drawSection || typeof drawSection !== 'object') return;
+
+      // [[[II ESC:024-03 Soportar layout plano {1:{},2:{}} (builder) y layouts con
+      // grid / nested / stepper (device). _collectDrawFormLayouts devuelve [] para
+      // el layout plano, por eso se cae al propio drawSection. ]]]FI
+      const layouts = this._hasDrawFormLayout(drawSection)
+        ? this._collectDrawFormLayouts(drawSection)
+        : [drawSection];
+
+      layouts.forEach(layout => {
+        Object.keys(layout).forEach(key => {
+          const node = layout[key];
+          if (!node || typeof node !== 'object' || typeof node.field !== 'string' || !node.field) return;
+
+          const rawFieldName = node.field;
+          const fieldName = rawFieldName.startsWith('object_' + options.parentField)
+            ? rawFieldName.slice('object_'.length)
+            : rawFieldName;
+
+          // [[[II ESC:024-04 Fusionar el schema del field (fields[]) sobre el nodo de
+          // layout para que el helper y el render dispongan de type/label/options. ]]]FI
+          const schemaEntry = fields?.[fieldName] ?? fields?.[rawFieldName];
+          if (schemaEntry && typeof schemaEntry === 'object') {
+            layout[key] = { ...schemaEntry, ...node };
+          }
+
+          this._applyDynamicFieldToForm({
+            formFields,
+            node: layout[key],
+            fieldName,
+            fieldPrefix: options.parentField,
+            pos,
+            schemaEntry,
+            hasSchema: !!schemaEntry,
+            scopeInfo: _childScopeRegistry.get(fieldName) ?? null,
+          });
+        });
+      });
+    });
+
+    // [[[II ESC:024-05 Publicar el draw del child como estructura representable.
+    // Tres formas posibles del draw que llega en child_form_fields.draw:
+    //  A) { general: { grid: {...} }, dialog: {...} }  → draw.general tiene layout   → publicar draw.general
+    //  B) { grid: {...}, dialog: {...} }               → draw tiene layout directo    → publicar draw
+    //  C) { '0': {...field...}, '1': {...field...} }   → layout plano (builder)       → envolver en { grid: draw }
+    // draw.general NO siempre existe; asumir que si no existe hay que publicar draw
+    // completo. Publicar undefined o { grid: undefined } deja la pestana Datos vacia. ]]]FI
+    if (options.parentField === 'parent_form_data_') {
+      const general = draw.general;
+      let drawToPublish: any;
+      if (this._hasDrawFormLayout(general)) {
+        drawToPublish = general;          // caso A
+      } else if (this._hasDrawFormLayout(draw)) {
+        drawToPublish = draw;             // caso B
+      } else {
+        drawToPublish = { grid: general ?? draw }; // caso C
+      }
+      this.drawForm()[pos + '_' + 'child_form_fields'] = drawToPublish;
+    }
+  }
+
+  /**
+   * [[[II ESC:024-01 CODIGO MUERTO (no invocado). Implementacion legacy de
+   * openTasksDetail conservada como referencia: construia un array plano draw_child
+   * por pestania y solo poblaba controles, sin emitir un draw representable. Fue
+   * sustituida por la nueva openTasksDetail + _applyDynamicFieldToForm. No eliminar
+   * sin validar que el detalle de la tarea sigue renderizando. ]]]FI
+   */
+  private _openTasksDetailLegacyDead(options: { pos: any, formFields: any, childFormFields: any, parentField: any }) {
 
     const pos = options.pos;
     const formFields = options.formFields;
@@ -1297,365 +1497,466 @@ export class CRUD extends Vars implements OnChanges  /*implements OnInit*/ {
           return; // Saltar campos que no tienen el prefijo
         }
 
-        // Obtener valores por defecto
-        const active = fieldData?.default?.active || false;
-        const value = fieldData?.default?.value || null;
-        let defaultValue = value;
-        const edit = fieldData?.default?.edit !== false; // si edit no está definido, se asume true
-
-        if (active && edit) {
-          if (value === 'device') {
-            defaultValue = new Date();
-          } else if (value === 'current') {
-            defaultValue = null;
-          } else {
-            defaultValue = value;
-          }
-        }
-
-        // [[[II ESC:003-06 Política de obligatoriedad para children
-        // form_fields_data_* / parent_form_data_* (ver _childRequiredPolicy). ]]]FI
+        // [[[II ESC:003-06 El schema canónico vive en this.crudS.fieldsForm(pos)
+        // (form_fields_data_*) o se asume presente para relacion_data_*/otros. ]]]FI
         const _schemaDict = this.crudS.fieldsForm(pos) || {};
         const _schemaEntry = _schemaDict[fieldName];
         const _isFormFieldsChild = fieldName.startsWith('form_fields_data_');
-        const _childPolicy = this._childRequiredPolicy({
-          childKey: fieldName,
+
+        // [[[II Helper unificado: arma el/los control(es) del campo y muta el nodo
+        // de layout (object_<field>) para que el draw sea representable. ]]]FI
+        this._applyDynamicFieldToForm({
+          formFields,
+          node: fieldData,
+          fieldName,
+          fieldPrefix,
+          pos,
           schemaEntry: _schemaEntry,
-          layoutNode: fieldData,
           hasSchema: _isFormFieldsChild ? !!_schemaEntry : true,
           scopeInfo: _childScopeRegistry.get(fieldName) ?? null,
         });
-
-        // Si edit es false o readonly es true, el campo debe ser disabled.
-        // `_childPolicy.readOnly` fuerza solo lectura para scope=server + edit=false.
-        const disabled = fieldData.readonly || !edit || _childPolicy.readOnly;
-
-        // Guardar el estado readonly en el fieldData para que el template pueda usarlo
-        if (disabled) {
-          if (!this.initialDisabledForm[pos]) {
-            this.initialDisabledForm[pos] = {};
-          }
-          this.initialDisabledForm[pos][fieldName] = true;
-        }
-
-        const validators: any[] = [];
-
-        // Agregar validadores. Para children form_fields_data_*/parent_form_data_*
-        // la obligatoriedad la decide _childRequiredPolicy (root del schema efectivo
-        // + filter.scope/edit); para el resto, el `required` del propio campo.
-        if (_childPolicy.applyRequired) {
-          validators.push(Validators.required);
-        }
-        if (fieldData.max_length) {
-          validators.push(Validators.maxLength(fieldData.max_length));
-        }
-        if (fieldData.min_length) {
-          validators.push(Validators.minLength(fieldData.min_length));
-        }
-
-        // Procesar según el tipo de campo
-        if (DROPDOWN_TYPES_PAYLOAD.has(fieldData.type)) {
-          // Crear campo oculto para objetos completos
-          const hiddenFieldName = 'object_' + fieldName;
-          formFields[hiddenFieldName] = this.fb.control(
-            { value: defaultValue, disabled: disabled },
-            { nonNullable: false, validators: validators }
-          );
-
-          //quita expliictamente required cuando es drowpdown, auto-complete o tree-select PARA QUE LOS CAMPOS QUE NO
-          // CONTIENE object_ no se quejen si son obligatorios, pero despues de haberlo establecido al que inicio con object_
-          const requiredIndex = validators.indexOf(Validators.required);
-          if (requiredIndex >= 0) {
-            validators.splice(requiredIndex, 1);
-          }
-
-          // Agregar prefijo object_ al field si no lo tiene
-          const objectFieldName = 'object_' + fieldName;
-          if (fieldData.field !== objectFieldName) {
-            fieldData.field = objectFieldName;
-          }
-
-          // Espejar choices en sharedS.data: generateJSONform guardó las choices
-          // (tipos Choice / List) bajo la clave `${pos}:${fieldName}` (sin object_),
-          // pero el renderer ahora consultará usando el field renombrado
-          // `object_${fieldName}`. Replicamos la entrada para que el dropdown
-          // encuentre las opciones sin tener que tocar generateJSONform.
-          const _sharedData = (this.sharedS as any).data;
-          const _origKey = pos + ':' + fieldName;
-          const _objectKey = pos + ':object_' + fieldName;
-          if (_sharedData && _sharedData[_origKey] !== undefined && _sharedData[_objectKey] === undefined) {
-            _sharedData[_objectKey] = _sharedData[_origKey];
-          }
-
-          // Si field trae children, recorrer el objeto para procesar campos en cascada
-          if (fieldData.children && fieldData.children.fields) {
-            // Procesar campos children que recibirán valores en cascada
-
-            // Iterar primero por tipos: static, dynamic, derived
-            ['static', 'dynamic', 'derived'].forEach(typeKey => {
-              if (fieldData.children.fields[typeKey]) {
-                for (const [childFieldKey, childFieldValue] of Object.entries(fieldData.children.fields[typeKey])) {
-                  const typedChildFieldValue = childFieldValue as any;
-
-                  // Solo necesita cambiar el campo de los siguientes tipos porque son los únicos que requieren cambio
-                  // para poder ser duplicados y se pueda enviar el objeto en lugar de solo el id
-                  if (DROPDOWN_TYPES_PAYLOAD.has(typedChildFieldValue.type)) {
-                    // Solo agregar object_ si no lo tiene ya
-                    const newChildFieldKey = childFieldKey.startsWith('object_' + fieldPrefix) ? childFieldKey : 'object_' + childFieldKey;
-
-                    // [[[II ESC:003-02 DOC:docs/documents/2026-05-25_003_dynamic-children-field-loading.md#escenario-02
-                    // Mantiene alineados la clave del mapa children.fields y el
-                    // metadata `field` consumido por custom-draw-form.
-                    typedChildFieldValue.field = newChildFieldKey;
-                    // ]]]FI
-                    fieldData.children.fields[typeKey][newChildFieldKey] = typedChildFieldValue;
-                    delete fieldData.children.fields[typeKey][childFieldKey];
-                  }
-                }
-              }
-            });
-          }
-
-        } //no lleva else para que carga el el else del if y agregue el campo normal, sin object_
-        // ya que los combos el campo normal del form que será para guardar un objeto en lugar del id
-        // y un campo que inicie con object para que guarde la referencia al campo del formulario y se pueda poner el rojo
-        //y cause los evenetos necesarios para visualizar el usuario
-
-        if (fieldData.type === 'signature') {
-          // Procesar campos de firma
-          const subFields = fieldData.fields || [];
-          const signatureFormGroup: any = {};
-
-          subFields.forEach((subField: any) => {
-            const subFieldName = subField.field;
-            const fieldType = subField.type;
-            const required = subField.required || false;
-            const maxLength = subField.max_length;
-            const subValidators: any[] = [];
-            if (required) subValidators.push(Validators.required);
-            if (maxLength) subValidators.push(Validators.maxLength(maxLength));
-
-            let subDefaultValue: any = '';
-            if (subField.default?.active && subField.default?.edit) {
-              subDefaultValue = subField.default.value === 'device' ? new Date() : (subField.default.value === 'current' ? null : subField.default.value);
-            }
-
-            // Determinar si el campo debe ser de solo lectura
-            const isReadonly = subField.default?.edit === false;
-
-
-            if (fieldType === 'login') {
-              const userField = subField.user?.field || 'username';
-              const passwordField = subField.password?.field || 'password';
-              const loginValidators: any[] = required ? [Validators.required] : [];
-              if (maxLength) loginValidators.push(Validators.maxLength(maxLength));
-
-              signatureFormGroup[userField] = this.fb.nonNullable.control({ value: '', disabled: isReadonly }, loginValidators);
-              signatureFormGroup[passwordField] = this.fb.nonNullable.control({ value: '', disabled: isReadonly }, loginValidators);
-            } else if (fieldType === 'input-text') {
-              signatureFormGroup[subFieldName] = this.fb.nonNullable.control({ value: subDefaultValue, disabled: isReadonly }, subValidators);
-            } else if (fieldType === 'date') {
-              //si subDefaultValue==current entonces inicializalo con null, hacerlo de solo lectura y quitar el validador de requerido
-              //console.log('entro a fecha222222222222222222222');
-
-              if (subDefaultValue === 'current') {
-                //console.log("dejo en null la fecha 333333333333333");
-
-                subDefaultValue = null;
-                //subValidators.splice(subValidators.indexOf(Validators.required), 1);
-              }
-
-              signatureFormGroup[subFieldName] = this.fb.nonNullable.control({ value: subDefaultValue, disabled: isReadonly }, subValidators);
-            } else if (fieldType === 'signature-pad') {
-              signatureFormGroup[subFieldName] = this.fb.control<string | null>({ value: null, disabled: isReadonly }, subValidators);
-            } else if (fieldType === 'selfie') {
-              signatureFormGroup[subFieldName] = this.fb.control<File | string | null>({ value: null, disabled: isReadonly }, subValidators);
-            } else if (fieldType === 'pin_global' || fieldType === 'pin_user') {
-              signatureFormGroup[subFieldName] = this.fb.nonNullable.control({ value: '', disabled: isReadonly }, subValidators);
-            } else {
-              signatureFormGroup[subFieldName] = this.fb.control({ value: subDefaultValue, disabled: isReadonly }, subValidators);
-            }
-          });
-
-          formFields[fieldName] = this.fb.array<FormGroup>([this.fb.group(signatureFormGroup)]);
-
-        } else if (fieldData.type === 'table') {
-          // Procesar tipo table
-          const columns = fieldData.columns || [];
-          const initialRows = fieldData.initial_rows || 0;
-          const isRequired = fieldData.required || false;
-
-          // Validador personalizado para FormArray
-          const minLengthArrayValidator = (min: number): ValidatorFn => {
-            return (control: AbstractControl): ValidationErrors | null => {
-              if (control instanceof FormArray) {
-                return control.length < min ? { 'minlength': { requiredLength: min, actualLength: control.length } } : null;
-              }
-              return null;
-            };
-          };
-
-          const createRowFormGroup = () => {
-            const rowGroup: any = {};
-            columns.forEach((column: any) => {
-              const columnValidators: any[] = [];
-              if (column.required && column.editable !== false) {
-                columnValidators.push(Validators.required);
-              }
-              if (column.validation?.max_length) {
-                columnValidators.push(Validators.maxLength(column.validation.max_length));
-              }
-              if (column.validation?.min_length) {
-                columnValidators.push(Validators.minLength(column.validation.min_length));
-              }
-
-              let defaultColumnValue: any = '';
-              if (column.type === 'input-number') defaultColumnValue = null;
-              else if (column.type === 'date') defaultColumnValue = null;
-              else if (column.type === 'dropdown' || column.type === 'multi-select' || column.type === 'listbox') {
-                defaultColumnValue = column.type === 'multi-select' || column.type === 'listbox' ? [] : '';
-              } else if (column.type === 'checkbox') defaultColumnValue = false;
-
-              rowGroup[column.field] = this.fb.control(defaultColumnValue, columnValidators);
-            });
-            return this.fb.group(rowGroup);
-          };
-
-          const initialRowsArray: FormGroup[] = [];
-          for (let i = 0; i < initialRows; i++) {
-            initialRowsArray.push(createRowFormGroup());
-          }
-
-          const arrayValidators: ValidatorFn[] = [];
-          if (isRequired) arrayValidators.push(minLengthArrayValidator(1));
-
-          formFields[fieldName] = this.fb.array<FormGroup>(initialRowsArray, arrayValidators);
-
-        } else if (fieldData.type === 'date') {
-          // Procesar tipo date
-          let dateDefaultValue = defaultValue;
-
-          // Si defaultValue es 'current', inicializarlo con null
-          if (dateDefaultValue === 'current') {
-            dateDefaultValue = null;
-          }
-
-          formFields[fieldName] = this.fb.control(
-            { value: dateDefaultValue, disabled: disabled },
-            { nonNullable: true, validators: validators }
-          );
-          formFields[fieldName].updateValueAndValidity();
-
-        } if (fieldData.type === 'files') {
-          // [[[II Escenario 1/2 — campo `files` (relación M2M o relación hija).
-          // Reglas confirmadas con usuario (docs/documents/2026-05-16_001):
-          //   - `{prefix}files`     → valor inicial = default.value ([]). Almacena
-          //                           [{id, type}] cuando el usuario usa subida
-          //                           directa. NO se registra como relationship
-          //                           JSON:API: el valor viaja en `attributes`.
-          //   - `{prefix}documents` → valor inicial = default.value ([]). Almacena
-          //                           base64 cuando el usuario usa "(formulario)".
-          //                           En submit, [] se transforma a null.
-          //   - root.required=true se propaga a:
-          //       · documents si upload.active (solo cuando key == field)
-          //       · files     si server_upload.active
-          //       · key ctrl  si upload.active Y key != field (per-step stepper)
-          //       (si ambos activos → ambos requeridos; appendFile y
-          //        _pushServerFileToForm limpian el opuesto al llenar uno).
-          //   - upload.required / server_upload.required SOLO endurecen su lado.
-          // Escenario multi-step (key != field): cuando dos o más steps usan el
-          //   mismo `field` pero con `key` distintos (p.e. _inicial/_final), se
-          //   crea un FormControl per-step para cada key. El sibling `*_documents`
-          //   se crea sin required (es almacenamiento compartido). Esto permite que
-          //   formErrors() valide cada step de forma independiente.
-          // Importante: las relaciones padres/hijas `relacion_data_*` NO son
-          // exclusivas de files; este bloque ataca solo cuando el field es
-          // de tipo `files`. Otros tipos (date, dropdown, etc.) caen en sus
-          // ramas correspondientes arriba/abajo. ]]]FI
-          const upload = fieldData.upload || {};
-          const serverUpload = fieldData.server_upload || {};
-          const initialValue = Array.isArray(fieldData?.default?.value)
-            ? fieldData.default.value
-            : (fieldData?.default?.value ?? []);
-
-          // Detectar si hay un key per-step (key != field → stepper multi-step)
-          const perStepKey = fieldData.key;
-          const hasPerStepKey = !!(perStepKey
-            && perStepKey !== fieldName
-            && perStepKey !== fieldPrefix + 'documents'
-            && fieldPrefix !== 'form_fields_data_');
-
-          // Reaprovechamos validators que ya trae max_length/min_length y
-          // quitamos required, para añadirlo selectivamente abajo.
-          const baseValidators = validators.filter((v: any) => v !== Validators.required);
-
-          const filesValidators: any[] = [...baseValidators];
-          const documentsValidators: any[] = [...baseValidators];
-
-          // Cuando hay control per-step, *_documents no porta required:
-          // el required va al control per-step (perStepKey).
-          if (fieldData.required && upload.active && !hasPerStepKey) {
-            documentsValidators.push(Validators.required);
-          }
-          if (fieldData.required && serverUpload.active) {
-            filesValidators.push(Validators.required);
-          }
-          if (fieldData.required && !upload.active && !serverUpload.active) {
-            // Sin sub-modos declarados: required aplica al control base files.
-            filesValidators.push(Validators.required);
-          }
-          if (upload.required && !hasPerStepKey) {
-            documentsValidators.push(Validators.required);
-          }
-          if (serverUpload.required) {
-            filesValidators.push(Validators.required);
-          }
-
-          formFields[fieldName] = this.fb.control(
-            { value: initialValue, disabled: disabled },
-            { nonNullable: false, validators: filesValidators }
-          );
-
-          // El control `{prefix}documents` solo se crea cuando NO estamos
-          // dentro de form_fields_data_ (Escenario 3 no usa documents).
-          if (fieldPrefix !== 'form_fields_data_') {
-            formFields[fieldPrefix + 'documents'] = this.fb.control(
-              { value: initialValue, disabled: disabled },
-              { nonNullable: false, validators: documentsValidators }
-            );
-          }
-
-          // Control per-step: un FormControl independiente por key distinto.
-          // Se protege con !formFields[perStepKey] para no sobreescribir si
-          // ya fue creado al procesar otro step con el mismo field.
-          if (hasPerStepKey && !formFields[perStepKey]) {
-            const perStepValidators: any[] = [...baseValidators];
-            if (fieldData.required && upload.active) {
-              perStepValidators.push(Validators.required);
-            }
-            if (upload.required) {
-              perStepValidators.push(Validators.required);
-            }
-            formFields[perStepKey] = this.fb.control(
-              { value: null, disabled: disabled },
-              { nonNullable: false, validators: perStepValidators }
-            );
-          }
-
-          formFields[fieldName].updateValueAndValidity();
-
-        } else {
-          // AQUI VUELVEN A CAER LOS dropdown, auto-complete y tree-select y agrega las validaciones al form del campo principa
-          formFields[fieldName] = this.fb.control(
-            { value: defaultValue, disabled: disabled },
-            { nonNullable: true, validators: validators }
-          );
-          formFields[fieldName].updateValueAndValidity();
-
-        }
       }); // Cierre del forEach de campos (fieldsLayout)
     }); // Cierre del forEach de layouts (layoutsToProcess)
   }
+
+  /**
+   * [[[II ESC:003-06 Helper unificado de construccion de control dinamico por campo.
+   * Reutilizado por addFieldsByPrefix (form_fields_data_ / relacion_data_) y por
+   * openTasksDetail (parent_form_data_ de child_form_fields). Ambos comparten la
+   * misma estructura de field; solo cambian el origen del schema y el prefijo.
+   *
+   * Muta `node` en su lugar (rename object_field para dropdown-like y cascada de
+   * children) para que el draw resultante sea representable por custom-draw-form.
+   * `schemaEntry`/`hasSchema`/`scopeInfo` los provee el llamador. ]]]FI
+   */
+  private _applyDynamicFieldToForm(params: {
+    formFields: any;
+    node: any;
+    fieldName: string;
+    fieldPrefix: string;
+    pos: string;
+    schemaEntry: any;
+    hasSchema: boolean;
+    scopeInfo: { scope: string; edit: boolean } | null;
+  }): void {
+    const { formFields, node, fieldName, fieldPrefix, pos, schemaEntry, hasSchema, scopeInfo } = params;
+    const fieldData = node;
+
+    // Obtener valores por defecto
+    const active = fieldData?.default?.active || false;
+    const value = fieldData?.default?.value || null;
+    let defaultValue = value;
+    const edit = fieldData?.default?.edit !== false; // si edit no está definido, se asume true
+
+    if (active && edit) {
+      if (value === 'device') {
+        defaultValue = new Date();
+      } else if (value === 'current') {
+        defaultValue = null;
+      } else {
+        defaultValue = value;
+      }
+    }
+    // [[[II ESC:001-08 DOC:docs/documents/2026-05-16_001_consolidacion_dropdown_types_y_fix_escenarios.md#escenario-08
+    defaultValue = this.normalizeCollectionControlDefault(fieldData?.type, defaultValue);
+    // ]]]FI
+
+    // [[[II ESC:003-06 Política de obligatoriedad para children
+    // form_fields_data_* / parent_form_data_* (ver _childRequiredPolicy). ]]]FI
+    const _childPolicy = this._childRequiredPolicy({
+      childKey: fieldName,
+      schemaEntry: schemaEntry,
+      layoutNode: fieldData,
+      hasSchema: hasSchema,
+      scopeInfo: scopeInfo,
+    });
+
+    // Si edit es false o readonly es true, el campo debe ser disabled.
+    // `_childPolicy.readOnly` fuerza solo lectura para scope=server + edit=false.
+    const disabled = fieldData.readonly || !edit || _childPolicy.readOnly;
+
+    // Guardar el estado readonly en el fieldData para que el template pueda usarlo
+    if (disabled) {
+      if (!this.initialDisabledForm[pos]) {
+        this.initialDisabledForm[pos] = {};
+      }
+      this.initialDisabledForm[pos][fieldName] = true;
+    }
+
+    const validators: any[] = [];
+
+    // Agregar validadores. Para children form_fields_data_*/parent_form_data_*
+    // la obligatoriedad la decide _childRequiredPolicy (root del schema efectivo
+    // + filter.scope/edit); para el resto, el `required` del propio campo.
+    if (_childPolicy.applyRequired) {
+      validators.push(Validators.required);
+    }
+    if (fieldData.max_length) {
+      validators.push(Validators.maxLength(fieldData.max_length));
+    }
+    if (fieldData.min_length) {
+      validators.push(Validators.minLength(fieldData.min_length));
+    }
+
+    // Procesar según el tipo de campo
+    if (DROPDOWN_TYPES_PAYLOAD.has(fieldData.type)) {
+      // Crear campo oculto para objetos completos
+      const hiddenFieldName = 'object_' + fieldName;
+      formFields[hiddenFieldName] = this.fb.control(
+        { value: defaultValue, disabled: disabled },
+        { nonNullable: false, validators: validators }
+      );
+
+      //quita expliictamente required cuando es drowpdown, auto-complete o tree-select PARA QUE LOS CAMPOS QUE NO
+      // CONTIENE object_ no se quejen si son obligatorios, pero despues de haberlo establecido al que inicio con object_
+      const requiredIndex = validators.indexOf(Validators.required);
+      if (requiredIndex >= 0) {
+        validators.splice(requiredIndex, 1);
+      }
+
+      // Agregar prefijo object_ al field si no lo tiene
+      const objectFieldName = 'object_' + fieldName;
+      if (fieldData.field !== objectFieldName) {
+        fieldData.field = objectFieldName;
+      }
+
+      // Espejar choices en sharedS.data: generateJSONform guardó las choices
+      // (tipos Choice / List) bajo la clave `${pos}:${fieldName}` (sin object_),
+      // pero el renderer ahora consultará usando el field renombrado
+      // `object_${fieldName}`. Replicamos la entrada para que el dropdown
+      // encuentre las opciones sin tener que tocar generateJSONform.
+      const _sharedData = (this.sharedS as any).data;
+      const _origKey = pos + ':' + fieldName;
+      const _objectKey = pos + ':object_' + fieldName;
+      if (_sharedData && _sharedData[_origKey] !== undefined && _sharedData[_objectKey] === undefined) {
+        _sharedData[_objectKey] = _sharedData[_origKey];
+      }
+
+      // Si field trae children, recorrer el objeto para procesar campos en cascada
+      if (fieldData.children && fieldData.children.fields) {
+        // Procesar campos children que recibirán valores en cascada
+
+        // Iterar primero por tipos: static, dynamic, derived
+        ['static', 'dynamic', 'derived'].forEach(typeKey => {
+          if (fieldData.children.fields[typeKey]) {
+            for (const [childFieldKey, childFieldValue] of Object.entries(fieldData.children.fields[typeKey])) {
+              const typedChildFieldValue = childFieldValue as any;
+
+              // Solo necesita cambiar el campo de los siguientes tipos porque son los únicos que requieren cambio
+              // para poder ser duplicados y se pueda enviar el objeto en lugar de solo el id
+              if (DROPDOWN_TYPES_PAYLOAD.has(typedChildFieldValue.type)) {
+                // Solo agregar object_ si no lo tiene ya
+                const newChildFieldKey = childFieldKey.startsWith('object_' + fieldPrefix) ? childFieldKey : 'object_' + childFieldKey;
+
+                // [[[II ESC:003-02 DOC:docs/documents/2026-05-25_003_dynamic-children-field-loading.md#escenario-02
+                // Mantiene alineados la clave del mapa children.fields y el
+                // metadata `field` consumido por custom-draw-form.
+                typedChildFieldValue.field = newChildFieldKey;
+                // ]]]FI
+                fieldData.children.fields[typeKey][newChildFieldKey] = typedChildFieldValue;
+                delete fieldData.children.fields[typeKey][childFieldKey];
+              }
+            }
+          }
+        });
+      }
+
+    } //no lleva else para que carga el el else del if y agregue el campo normal, sin object_
+    // ya que los combos el campo normal del form que será para guardar un objeto en lugar del id
+    // y un campo que inicie con object para que guarde la referencia al campo del formulario y se pueda poner el rojo
+    //y cause los evenetos necesarios para visualizar el usuario
+
+    if (fieldData.type === 'signature') {
+      // Procesar campos de firma
+      const subFields = fieldData.fields || [];
+      const signatureFormGroup: any = {};
+
+      subFields.forEach((subField: any) => {
+        const subFieldName = subField.field;
+        const fieldType = subField.type;
+        const required = subField.required || false;
+        const maxLength = subField.max_length;
+        const subValidators: any[] = [];
+        if (required) subValidators.push(Validators.required);
+        if (maxLength) subValidators.push(Validators.maxLength(maxLength));
+
+        let subDefaultValue: any = '';
+        if (subField.default?.active && subField.default?.edit) {
+          subDefaultValue = subField.default.value === 'device' ? new Date() : (subField.default.value === 'current' ? null : subField.default.value);
+        }
+
+        // Determinar si el campo debe ser de solo lectura
+        const isReadonly = subField.default?.edit === false;
+
+
+        if (fieldType === 'login') {
+          const userField = subField.user?.field || 'username';
+          const passwordField = subField.password?.field || 'password';
+          const loginValidators: any[] = required ? [Validators.required] : [];
+          if (maxLength) loginValidators.push(Validators.maxLength(maxLength));
+
+          signatureFormGroup[userField] = this.fb.nonNullable.control({ value: '', disabled: isReadonly }, loginValidators);
+          signatureFormGroup[passwordField] = this.fb.nonNullable.control({ value: '', disabled: isReadonly }, loginValidators);
+        } else if (fieldType === 'input-text') {
+          signatureFormGroup[subFieldName] = this.fb.nonNullable.control({ value: subDefaultValue, disabled: isReadonly }, subValidators);
+        } else if (fieldType === 'date') {
+          //si subDefaultValue==current entonces inicializalo con null, hacerlo de solo lectura y quitar el validador de requerido
+          //console.log('entro a fecha222222222222222222222');
+
+          if (subDefaultValue === 'current') {
+            //console.log("dejo en null la fecha 333333333333333");
+
+            subDefaultValue = null;
+            //subValidators.splice(subValidators.indexOf(Validators.required), 1);
+          }
+
+          signatureFormGroup[subFieldName] = this.fb.nonNullable.control({ value: subDefaultValue, disabled: isReadonly }, subValidators);
+        } else if (fieldType === 'signature-pad') {
+          signatureFormGroup[subFieldName] = this.fb.control<string | null>({ value: null, disabled: isReadonly }, subValidators);
+        } else if (fieldType === 'selfie') {
+          signatureFormGroup[subFieldName] = this.fb.control<File | string | null>({ value: null, disabled: isReadonly }, subValidators);
+        } else if (fieldType === 'pin_global' || fieldType === 'pin_user') {
+          signatureFormGroup[subFieldName] = this.fb.nonNullable.control({ value: '', disabled: isReadonly }, subValidators);
+        } else {
+          signatureFormGroup[subFieldName] = this.fb.control({ value: subDefaultValue, disabled: isReadonly }, subValidators);
+        }
+      });
+
+      formFields[fieldName] = this.fb.array<FormGroup>([this.fb.group(signatureFormGroup)]);
+
+    } else if (fieldData.type === 'table') {
+      // Procesar tipo table
+      const columns = fieldData.columns || [];
+      const initialRows = fieldData.initial_rows || 0;
+      const isRequired = fieldData.required || false;
+
+      // Validador personalizado para FormArray
+      const minLengthArrayValidator = (min: number): ValidatorFn => {
+        return (control: AbstractControl): ValidationErrors | null => {
+          if (control instanceof FormArray) {
+            return control.length < min ? { 'minlength': { requiredLength: min, actualLength: control.length } } : null;
+          }
+          return null;
+        };
+      };
+
+      const createRowFormGroup = () => {
+        const rowGroup: any = {};
+        columns.forEach((column: any) => {
+          const columnValidators: any[] = [];
+          if (column.required && column.editable !== false) {
+            columnValidators.push(Validators.required);
+          }
+          if (column.validation?.max_length) {
+            columnValidators.push(Validators.maxLength(column.validation.max_length));
+          }
+          if (column.validation?.min_length) {
+            columnValidators.push(Validators.minLength(column.validation.min_length));
+          }
+
+          let defaultColumnValue: any = '';
+          if (column.type === 'input-number') defaultColumnValue = null;
+          else if (column.type === 'date') defaultColumnValue = null;
+          // [[[II ESC:001-09 DOC:docs/documents/2026-05-16_001_consolidacion_dropdown_types_y_fix_escenarios.md#escenario-09
+          else if (column.type === 'dropdown' || column.type === 'multi-select' || column.type === 'multi-choice' || column.type === 'listbox') {
+            defaultColumnValue = column.type === 'multi-select' || column.type === 'multi-choice' || column.type === 'listbox' ? [] : '';
+            // ]]]FI
+          } else if (column.type === 'checkbox') defaultColumnValue = false;
+
+          rowGroup[column.field] = this.fb.control(defaultColumnValue, columnValidators);
+        });
+        return this.fb.group(rowGroup);
+      };
+
+      const initialRowsArray: FormGroup[] = [];
+      for (let i = 0; i < initialRows; i++) {
+        initialRowsArray.push(createRowFormGroup());
+      }
+
+      const arrayValidators: ValidatorFn[] = [];
+      if (isRequired) arrayValidators.push(minLengthArrayValidator(1));
+
+      formFields[fieldName] = this.fb.array<FormGroup>(initialRowsArray, arrayValidators);
+
+    } else if (fieldData.type === 'date') {
+      // Procesar tipo date
+      let dateDefaultValue = defaultValue;
+
+      // Si defaultValue es 'current', inicializarlo con null
+      if (dateDefaultValue === 'current') {
+        dateDefaultValue = null;
+      }
+
+      formFields[fieldName] = this.fb.control(
+        { value: dateDefaultValue, disabled: disabled },
+        { nonNullable: true, validators: validators }
+      );
+      formFields[fieldName].updateValueAndValidity();
+
+    } else if (fieldData.type === 'files') {
+      // [[[II Escenario 1/2 — campo `files` (relación M2M o relación hija).
+      // Reglas confirmadas con usuario (docs/documents/2026-05-16_001):
+      //   - `{prefix}files`     → valor inicial = default.value ([]). Almacena
+      //                           [{id, type}] cuando el usuario usa subida
+      //                           directa. NO se registra como relationship
+      //                           JSON:API: el valor viaja en `attributes`.
+      //   - `{prefix}documents` → valor inicial = default.value ([]). Almacena
+      //                           base64 cuando el usuario usa "(formulario)".
+      //                           En submit, [] se transforma a null.
+      //   - root.required=true se propaga a:
+      //       · documents si upload.active (solo cuando key == field)
+      //       · files     si server_upload.active
+      //       · key ctrl  si upload.active Y key != field (per-step stepper)
+      //       (si ambos activos → ambos requeridos; appendFile y
+      //        _pushServerFileToForm limpian el opuesto al llenar uno).
+      //   - upload.required / server_upload.required SOLO endurecen su lado.
+      // Escenario multi-step (key != field): cuando dos o más steps usan el
+      //   mismo `field` pero con `key` distintos (p.e. _inicial/_final), se
+      //   crea un FormControl per-step para cada key. El sibling `*_documents`
+      //   se crea sin required (es almacenamiento compartido). Esto permite que
+      //   formErrors() valide cada step de forma independiente.
+      // Importante: las relaciones padres/hijas `relacion_data_*` NO son
+      // exclusivas de files; este bloque ataca solo cuando el field es
+      // de tipo `files`. Otros tipos (date, dropdown, etc.) caen en sus
+      // ramas correspondientes arriba/abajo. ]]]FI
+      const upload = fieldData.upload || {};
+      const serverUpload = fieldData.server_upload || {};
+      const initialValue = Array.isArray(fieldData?.default?.value)
+        ? fieldData.default.value
+        : (fieldData?.default?.value ?? []);
+
+      // Detectar si hay un key per-step (key != field → stepper multi-step)
+      const perStepKey = fieldData.key;
+      const hasPerStepKey = !!(perStepKey
+        && perStepKey !== fieldName
+        && perStepKey !== fieldPrefix + 'documents'
+        && fieldPrefix !== 'form_fields_data_');
+
+      // Reaprovechamos validators que ya trae max_length/min_length y
+      // quitamos required, para añadirlo selectivamente abajo.
+      const baseValidators = validators.filter((v: any) => v !== Validators.required);
+
+      const filesValidators: any[] = [...baseValidators];
+      const documentsValidators: any[] = [...baseValidators];
+
+      // Cuando hay control per-step, *_documents no porta required:
+      // el required va al control per-step (perStepKey).
+      if (fieldData.required && upload.active && !hasPerStepKey) {
+        documentsValidators.push(Validators.required);
+      }
+      if (fieldData.required && serverUpload.active) {
+        filesValidators.push(Validators.required);
+      }
+      if (fieldData.required && !upload.active && !serverUpload.active) {
+        // Sin sub-modos declarados: required aplica al control base files.
+        filesValidators.push(Validators.required);
+      }
+      if (upload.required && !hasPerStepKey) {
+        documentsValidators.push(Validators.required);
+      }
+      if (serverUpload.required) {
+        filesValidators.push(Validators.required);
+      }
+
+      formFields[fieldName] = this.fb.control(
+        { value: initialValue, disabled: disabled },
+        { nonNullable: false, validators: filesValidators }
+      );
+
+      // El control `{prefix}documents` solo se crea cuando NO estamos
+      // dentro de form_fields_data_ (Escenario 3 no usa documents).
+      if (fieldPrefix !== 'form_fields_data_') {
+        formFields[fieldPrefix + 'documents'] = this.fb.control(
+          { value: initialValue, disabled: disabled },
+          { nonNullable: false, validators: documentsValidators }
+        );
+      }
+
+      // Control per-step: un FormControl independiente por key distinto.
+      // Se protege con !formFields[perStepKey] para no sobreescribir si
+      // ya fue creado al procesar otro step con el mismo field.
+      if (hasPerStepKey && !formFields[perStepKey]) {
+        const perStepValidators: any[] = [...baseValidators];
+        if (fieldData.required && upload.active) {
+          perStepValidators.push(Validators.required);
+        }
+        if (upload.required) {
+          perStepValidators.push(Validators.required);
+        }
+        formFields[perStepKey] = this.fb.control(
+          { value: null, disabled: disabled },
+          { nonNullable: false, validators: perStepValidators }
+        );
+      }
+
+      formFields[fieldName].updateValueAndValidity();
+
+    } else {
+      // AQUI VUELVEN A CAER LOS dropdown, auto-complete y tree-select y agrega las validaciones al form del campo principa
+      formFields[fieldName] = this.fb.control(
+        { value: defaultValue, disabled: disabled },
+        { nonNullable: true, validators: validators }
+      );
+      formFields[fieldName].updateValueAndValidity();
+
+    }
+  }
+
+  // [[[II ESC:001-08 DOC:docs/documents/2026-05-16_001_consolidacion_dropdown_types_y_fix_escenarios.md#escenario-08 ESC:001-09 DOC:docs/documents/2026-05-16_001_consolidacion_dropdown_types_y_fix_escenarios.md#escenario-09
+  private normalizeCollectionControlDefault(fieldType: any, value: any): any {
+    if (fieldType !== 'tree-select' && fieldType !== 'multi-select' && fieldType !== 'multi-choice') return value;
+    if (Array.isArray(value)) return value;
+    return value === null || value === undefined || value === '' ? [] : [value];
+  }
+
+  // [[[II ESC:001-09 DOC:docs/documents/2026-05-16_001_consolidacion_dropdown_types_y_fix_escenarios.md#escenario-09
+  private normalizeListFieldInitial(fieldObj: any): any {
+    const initial = fieldObj?.initial;
+
+    if (Array.isArray(initial)) return initial;
+    if (initial && typeof initial === 'object') return initial;
+    if (initial === null || initial === undefined) return [];
+
+    if (typeof initial !== 'string') return initial;
+
+    const trimmedInitial = initial.trim();
+    if (!trimmedInitial || this.isPythonListClassInitial(trimmedInitial)) return [];
+
+    try {
+      const parsed = JSON.parse(trimmedInitial);
+      return parsed === null || parsed === undefined ? [] : parsed;
+    } catch {
+      return fieldObj?.child?.type === 'Choice' ? [trimmedInitial] : trimmedInitial;
+    }
+  }
+
+  private isPythonListClassInitial(value: string): boolean {
+    return /^<class\s+['"]list['"]>$/.test(value);
+  }
+  // ]]]FI
+
+  private ensureClassifiersFormArray(formFields: any): void {
+    const current = formFields?.classifiers;
+    if (current instanceof FormArray) return;
+
+    const sourceControl = current instanceof FormControl ? current : null;
+    const rawValue = sourceControl?.value;
+    const values = Array.isArray(rawValue)
+      ? rawValue
+      : (rawValue === null || rawValue === undefined || rawValue === '' ? [] : [rawValue]);
+    const options = sourceControl
+      ? {
+        validators: sourceControl.validator,
+        asyncValidators: sourceControl.asyncValidator
+      }
+      : undefined;
+
+    formFields.classifiers = this.fb.array(
+      values.map((value: any) => this.fb.control(value)),
+      options
+    );
+  }
+  // ]]]FI
 
   // ============================================================================
   // HELPERS para escenarios de campos `files` (1, 2 y 3)
@@ -1742,7 +2043,7 @@ export class CRUD extends Vars implements OnChanges  /*implements OnInit*/ {
    *
     * Reglas (basadas en cómo `addFieldsByPrefix` genera los controles):
    *   - Dropdowns y derivados (`dropdown`, `auto-complete`, `tree-select`,
-    *     `dropdown-choice`, `multi-select`, `select-button`) crean DOS controles:
+    *     `dropdown-choice`, `multi-select`, `multi-choice`, `select-button`) crean DOS controles:
     *       · `object_<field>` → control enlazado al dropdown (debe recibir el id).
     *       · `<field>`        → control espejo para payload.
     *     En edit dejamos ambos con el id escalar; si el usuario cambia la
@@ -2131,7 +2432,7 @@ export class CRUD extends Vars implements OnChanges  /*implements OnInit*/ {
           // relación). DJAtoObject aplanaría a URLs y perderíamos el `type`.
           map((resp: any) => resp),
           catchError(err => {
-            console.warn(`[_loadChildPrefixData] fallo prefijo ${prefix}`, err);
+            //console.warn(`[_loadChildPrefixData] fallo prefijo ${prefix}`, err);
             return of({ data: [] });
           })
         )
@@ -2254,7 +2555,6 @@ export class CRUD extends Vars implements OnChanges  /*implements OnInit*/ {
     const boolLocal = this.fieldsBool[0][posIndex] ? [...this.fieldsBool][0][posIndex] : [];
     const relationshipsLocal = this.relationships[posIndex] ? [...this.relationships[posIndex]] : [];
 
-    // lo utilizo para abrir los campos hijos solo una vez
     let auxParentSelect = true;
     const parentSelect = this.selected()[0];
     //console.log(jsonFields);
@@ -2283,16 +2583,22 @@ export class CRUD extends Vars implements OnChanges  /*implements OnInit*/ {
           this.generateJSONform(fieldObj.children, pos, formFields, relationOptions, field + '_');
         }
 
+        // [[[II ESC:001-11 DOC:docs/documents/2026-05-16_001_consolidacion_dropdown_types_y_fix_escenarios.md#escenario-11
+        // Los campos read_only del OPTIONS deben nacer deshabilitados, incluyendo Boolean/toggle-button.
+        const fieldControlName = field_prefix + field;
+        const disabled = fieldObj.read_only === true;
+
         // los componentes de solo lectura no se incluyen en el formulario
-        if (fieldObj.read_only) {
+        if (disabled) {
           //para el caso de los campos solo lectura deben ser deshabilitados
           if (!this.initialDisabledForm[posIndex]) {
             this.initialDisabledForm[posIndex] = {};
           }
-          this.initialDisabledForm[posIndex][field] = true;
+          this.initialDisabledForm[posIndex][fieldControlName] = true;
           //°°°PROBANDO
           //continue;
         }
+        // ]]]FI
 
         // carga las relaciones antes de los excludeFieldsForm ya que esto no afecta al formulario, afecta al standar json api
         if (fieldObj.relationship_type == 'ManyToMany' || fieldObj.relationship_type == 'ManyToOne' || fieldObj.relationship_type == 'OneToOne'
@@ -2347,7 +2653,7 @@ export class CRUD extends Vars implements OnChanges  /*implements OnInit*/ {
           val = fieldObj.initial !== undefined && fieldObj.initial !== null ? fieldObj.initial : null;
 
         } else if (fieldObj.type == 'DateTime') {
-          console.log('¿¿¿¿¿¿¿¿¿¿¿¿¿¿¿¿¿¿', fieldObj.initial);
+          //console.log('¿¿¿¿¿¿¿¿¿¿¿¿¿¿¿¿¿¿', fieldObj.initial);
 
           val = fieldObj.initial !== undefined && fieldObj.initial !== null ? fieldObj.initial : null;
 
@@ -2409,25 +2715,16 @@ export class CRUD extends Vars implements OnChanges  /*implements OnInit*/ {
             }
           }
 
-          if (Array.isArray(fieldObj.initial)) {
-            val = fieldObj.initial;
-          } else if (fieldObj.initial && typeof fieldObj.initial === 'object') {
-            val = fieldObj.initial;
-          } else if (typeof fieldObj.initial === 'string' && fieldObj.initial.trim() !== '') {
-            try {
-              val = JSON.parse(fieldObj.initial);
-            } catch {
-              // Algunos List (p.ej. choices locales) llegan como valor simple, no como JSON.
-              val = fieldObj.initial;
-            }
-          } else {
-            val = [];
-          }
+          // [[[II ESC:001-09 DOC:docs/documents/2026-05-16_001_consolidacion_dropdown_types_y_fix_escenarios.md#escenario-09
+          val = this.normalizeListFieldInitial(fieldObj);
+          // ]]]FI
           //val = fieldObj.initial ? JSON.parse(fieldObj.initial) : [];
         }
 
         // se agrega nonNullable para que se restablezca al valor por defecto
-        formFields[field_prefix + field] = this.fb.control({ value: val, disabled: false }, { nonNullable: true, validators: validators });
+        // [[[II ESC:001-11 DOC:docs/documents/2026-05-16_001_consolidacion_dropdown_types_y_fix_escenarios.md#escenario-11
+        formFields[fieldControlName] = this.fb.control({ value: val, disabled }, { nonNullable: true, validators: validators });
+        // ]]]FI
       }
     }
 
@@ -2436,10 +2733,14 @@ export class CRUD extends Vars implements OnChanges  /*implements OnInit*/ {
     const fields_prefixes = this._normalizeFieldsPrefixes(posIndex);
 
     for (const { prefix: field_prefix } of fields_prefixes) {
-      console.log('?????????????????????????', field_prefix);
+      //console.log('?????????????????????????', field_prefix);
 
       this.addFieldsByPrefix(formFields, draw, field_prefix, posIndex);
     }
+
+    // [[[II ESC:001-08 DOC:docs/documents/2026-05-16_001_consolidacion_dropdown_types_y_fix_escenarios.md#escenario-08
+    this.ensureClassifiersFormArray(formFields);
+    // ]]]FI
 
     this.relationships[posIndex] = relationOptions;
     console.log('formmmmmmmmmmmmmmmmmm', formFields);
@@ -2777,6 +3078,8 @@ export class CRUD extends Vars implements OnChanges  /*implements OnInit*/ {
     console.log('inicio getAll----------------------------', filter, options);
 
     const safePos = pos as any; // Type assertion para índices de array
+    if (!this.ensureConfigForPos(safePos, () => this.getAll(options))) return;
+
     this.pos.set(safePos);
 
     if (this.columns[safePos]) {
@@ -2817,7 +3120,7 @@ export class CRUD extends Vars implements OnChanges  /*implements OnInit*/ {
     //hay un error entre la carga de los elementos y la carga de los elementos con node
     // el detalle es que muestra un parpadeo en la tabla cuando se recarga sobre la misma app
     //this.items.set([]);
-    console.log('llama a change pos');
+    //console.log('llama a change pos');
 
     this.changePos(safePos); // actualice la posición y los valores correspondientes a la app
     this.showBlocked(); // muestra el bloqueo de la pantalla
@@ -2832,7 +3135,17 @@ export class CRUD extends Vars implements OnChanges  /*implements OnInit*/ {
     //const include = this.include; // incluir todas las relaciones para que se muestren en la tabla
     const include = this.include[safePos];
     sort = sort || this.sort; // ordenar por defecto por id
-    const fields = this.fields[safePos]; // incluir todos los campos para que se muestren en la tabla
+    let fields = this.fields[safePos]; // incluir todos los campos para que se muestren en la tabla
+
+    // [[[II ESC:024-06 Concatenar campos fijos del pos (no ligados a columnas) para
+    // garantizar que viajen en la consulta de lista aunque iniParam los haya
+    // sobreescrito (ej: is_detail_required en tareas). ]]]FI
+    const _fixedFields = this.fixedFields[safePos];
+    if (_fixedFields) {
+      const _base = fields || '';
+      const _sep = _base && !_base.endsWith(',') ? ',' : '';
+      fields = `${_base}${_sep}${_fixedFields}`;
+    }
 
     filter = filter || this.filter; // por el momento solo ocupo de filter sea se envie por parametro
     this.offset[safePos] = this.offset[safePos] ? this.offset[safePos] : this.offset[0]; // si no se envia el offset, se toma el offset por defecto
@@ -2947,7 +3260,7 @@ export class CRUD extends Vars implements OnChanges  /*implements OnInit*/ {
 
   onReloadIconDropdown($event: any) {
     const timestamp = new Date().toISOString();
-    console.log(`🔄 [${timestamp}] CRUD onReloadIconDropdown`, { event: $event });
+    //console.log(`🔄 [${timestamp}] CRUD onReloadIconDropdown`, { event: $event });
   }
 
   /**
@@ -2968,7 +3281,7 @@ export class CRUD extends Vars implements OnChanges  /*implements OnInit*/ {
       data = data.filter((item) => {
         // Variable para indicar si se encontró una coincidencia en alguna columna
         let isMatch = false;
-        console.log('3 selected Columns');
+        //console.log('3 selected Columns');
         this.selectedColumns().forEach((col) => {
           let fieldValue = item[col.field];
           switch (matchMode) {
@@ -3219,7 +3532,7 @@ export class CRUD extends Vars implements OnChanges  /*implements OnInit*/ {
         // dropdowns/files encuentre `form_fields_data_xxx` en la raíz del item.
         this._flattenFormData(data, pos);
 
-        console.log('000*****', additionalFieldsAppCols, data);
+        //console.log('000*****', additionalFieldsAppCols, data);
 
         //obtener los campos classifers del formulario form()
         this.classifierLevelsDropdown(data);
@@ -3264,6 +3577,7 @@ export class CRUD extends Vars implements OnChanges  /*implements OnInit*/ {
     const pos: any = options?.pos ?? this.pos();
     const node = options?.node ?? false;
     const filter = options?.filter ?? '';
+    if (!this.ensureConfigForPos(pos, () => this.openNew(options))) return;
 
     // para que las apps principales no tengan que poner la tipo en cada llamada
     //this.pos = pos;
@@ -3377,9 +3691,11 @@ export class CRUD extends Vars implements OnChanges  /*implements OnInit*/ {
     const tab = dialog?.tab;
 
     //los principales tienen su propia  width y height, ESTO CASI ES EXLUCIVO PARA child_form_fields
+    // [[[II ESC:021-02 DOC:docs/documents/2026-06-05_021_crud-onshow-maximize-small-screens.md#escenario-02
     if (width && height && priority == 'secundary') {
-      this.styleClassSecundaryDialog.set(width + ' ' + height);
+      this.styleClassSecundaryDialog.set(this.withCrudDialogClass(width + ' ' + height));
     }
+    // ]]]FI
 
     if (singular) {
       this.singular[pos] = singular;
@@ -3421,7 +3737,9 @@ export class CRUD extends Vars implements OnChanges  /*implements OnInit*/ {
   itemsSecundary = signal<any[]>([]);
   totalRecordsSecundary = signal(0);
   // tiene la función de mantener en memoria los datos de las apps secundarias, para que no se consulten nuevamente
-  styleClassSecundaryDialog = signal('width-650px-custom min-height-550px-custom');
+  // [[[II ESC:021-02 DOC:docs/documents/2026-06-05_021_crud-onshow-maximize-small-screens.md#escenario-02
+  styleClassSecundaryDialog = signal(this.defaultCrudDialogClass);
+  // ]]]FI
   tabVisibleSecundary = signal(1);
   tabVisible = signal(1);
 
@@ -3436,14 +3754,68 @@ export class CRUD extends Vars implements OnChanges  /*implements OnInit*/ {
     // tengo que inicializar los valores correspondientes a la app secundaria
     this.isCreateSecundary = true;
     const parentSelect = this.selected()[0];
-    const child_form_fields = parentSelect?.child_form_fields || {};
-    console.log('child_form_fields', parentSelect, child_form_fields);
-    if (!parentSelect.is_detail_required) {
+    if (!parentSelect?.is_detail_required) {
       this.messageS.changeMessage(`${parentSelect?.name} no requiere detalle.`, null, {}, 'info');
       return;
     }
 
-    if (!this.drawForm()[pos]) {
+    // [[[II ESC:024-07 child_form_fields YA NO viaja en la lista (puede ser un JSON
+    // grande). Se obtiene on-demand antes de construir los dinamicos. Es opcional:
+    // si no existe o viene vacio, el detalle igual se abre solo con los campos del
+    // OPTIONS de task-detail. ]]]FI
+    this._ensureParentChildFormFields(parentSelect, parent_id).subscribe(() => {
+      this._buildSecundaryDetail(pos, parent_id, parentSelect);
+    });
+  }
+
+  /**
+   * [[[II ESC:024-07 this.selected()[0] es la UNICA fuente de verdad de
+   * child_form_fields. No se hace ninguna llamada al servidor aqui.
+   *
+   * Regla:
+   *   - Si selected()[0].child_form_fields ya existe (con cualquier valor,
+   *     incluso {}) → se usa tal cual.
+   *   - Si no existe (undefined) → se normaliza a {} para que openTasksDetail
+   *     reciba un objeto y salga limpiamente en su guard `if (!draw) return`.
+   *
+   * Consecuencia directa: si la tarea no trajo child_form_fields en el listado
+   * (porque el campo no esta en la query o el servidor no lo devuelve), la
+   * pestana "Datos" simplemente no se rellena. Es el comportamiento correcto:
+   * no hay datos dinamicos que mostrar. NO se intenta recuperarlos on-demand
+   * porque eso introducia llamadas innecesarias y rompia la sincronizacion de
+   * referencia con el selected que lee generateJSONform mas tarde. ]]]FI
+   */
+  private _ensureParentChildFormFields(parentSelect: any, _parentPos: any) {
+    if (!parentSelect) return of(void 0);
+    // Normalizar a {} si nunca llegó, para que openTasksDetail salga con !draw
+    if (parentSelect.child_form_fields === undefined || parentSelect.child_form_fields === null) {
+      parentSelect.child_form_fields = {};
+    }
+    return of(void 0);
+  }
+
+  /**
+   * [[[II ESC:024-07 Construye y muestra el dialogo del detalle secundario
+   * (task-detail). Reutiliza generateJSONform (que dispara openTasksDetail para los
+   * dinamicos parent_form_data_) y unifyDialog. parentSelect ya trae
+   * child_form_fields resuelto por _ensureParentChildFormFields. ]]]FI
+   */
+  private _buildSecundaryDetail(pos: any, parent_id: any, parentSelect: any) {
+    const child_form_fields = parentSelect?.child_form_fields || {};
+
+    // [[[II ESC:024-10 DOC:docs/documents/2026-06-15_024_open-tasks-detail-render-child-form.md
+    // Garantizar que la config del modulo (draw, singular, etc.) este cargada ANTES
+    // de leer crudS.drawForm. Si ya esta en memoria → true inmediato sin overhead ni
+    // llamada al servidor (cache preservada). Si no → carga async y reintenta via
+    // callback cuando termina. Sin este guard, crudS.drawForm devuelve el objeto
+    // transient vacio { draw:{} } del Proxy y drawForm()[pos] queda como {}, que es
+    // truthy pero sin 'general', por lo que custom-draw-form no renderiza nada. ]]]FI
+    if (!this.ensureConfigForPos(pos, () => this._buildSecundaryDetail(pos, parent_id, parentSelect))) return;
+
+    // Corregido: isNonEmptyConfigSection detecta {} (transient vacio del Proxy) como
+    // vacio, evitando que una asignacion previa de {} bloquee la carga real en la
+    // siguiente apertura del dialogo.
+    if (!this.isNonEmptyConfigSection(this.drawForm()[pos])) {
       // divide pos __, debido a que this.crudS.drawForm requiere el type de la app, solo puede haber una clave por app,
       //normalmente las app que llaman a la función openNewSecundary son app secundaria y se le pone diferenciador __ y type, ejemplo,
       // task--task-detail
@@ -3458,6 +3830,17 @@ export class CRUD extends Vars implements OnChanges  /*implements OnInit*/ {
     //if (!this.formTempo[pos]) {
     // si ya se consulto al servidor, no se vuelve a consultar
     if (this.optionsFields[pos]) {
+      // [[[II ESC:024-10 Sincronizar child_form_fields sobre selected()[0] antes de
+      // llamar a generateJSONform. generateJSONform lee this.selected()[0] internamente
+      // (no recibe child_form_fields como parametro). Entre los saltos async de
+      // _ensureParentChildFormFields y ensureConfigForPos, la referencia en
+      // selected()[0] puede ser un objeto diferente al que fue mutado originalmente,
+      // por lo que la mutacion no seria visible. Se copia el valor del closure
+      // (ya resuelto) sobre el selected()[0] actual. ]]]FI
+      const _sel0 = this.selected()[0];
+      if (_sel0 && child_form_fields && Object.keys(child_form_fields).length > 0) {
+        _sel0.child_form_fields = child_form_fields;
+      }
       this.formTempo[pos] = this.generateJSONform(this.optionsFields[pos], pos);
       this.form.set(this.formTempo);
       this.resetFormDialog({ pos });
@@ -3472,12 +3855,23 @@ export class CRUD extends Vars implements OnChanges  /*implements OnInit*/ {
       //si no entra a  if (child_form_fields?.draw) this.singular[pos] traeria los valores de if (!this.drawForm()[pos]), sino los del padre
       this.headerDialogSecundary.set(`Alta de ${this.singular[pos] || parentSelect?.name}`);
       this.showFormDialog(pos);
+      // ensureConfigForPos llama showBlocked() con continued=true por lo que su
+      // finally NO llama showBlocked(false). El fast path debe desbloquear aqui.
+      // Llamar showBlocked(false) cuando ya es false es inocuo (boolean simple).
+      this.showBlocked(false);
     } else {
       this.showBlocked();
       // se crear el formulario, se envia la app secundaria para que se consulte el formulario correspondiente, en lugar de this.app
       this.crudS.options(this.app[pos]).subscribe({
         next: (resp: any) => {
           this.optionsFields[pos] = resp.data.actions.POST;
+          // [[[II ESC:024-10 Misma sincronizacion en el slow path (OPTIONS async).
+          // El salto adicional de la peticion OPTIONS aumenta la probabilidad de
+          // divergencia de referencia. ]]]FI
+          const _sel0Slow = this.selected()[0];
+          if (_sel0Slow && child_form_fields && Object.keys(child_form_fields).length > 0) {
+            _sel0Slow.child_form_fields = child_form_fields;
+          }
           this.formTempo[pos] = this.generateJSONform(this.optionsFields[pos], pos);
           this.form.set(this.formTempo);
           this.resetFormDialog({ pos });
@@ -3672,7 +4066,7 @@ export class CRUD extends Vars implements OnChanges  /*implements OnInit*/ {
     // Mensaje y salida
     // [[[II ESC:018-01 DOC:docs/documents/2026-06-03_018_crud-form-errors-drawform-labels.md#escenario-01
     const formErrorLabels = this._buildFormErrorFieldLabels(pos);
-    console.log(formErrorLabels);
+    //console.log(formErrorLabels);
 
     (this.messageS as any).changeMessage('Revise campos marcados en rojo...', errors, formErrorLabels);
     // ]]]FI
@@ -3762,13 +4156,22 @@ export class CRUD extends Vars implements OnChanges  /*implements OnInit*/ {
         continue;
       }
 
+      // [[[II ESC:005-07 DOC:docs/documents/2026-05-31_005_columnas-form-data-y-tree-select-nombres.md#escenario-07
+      if (fieldCfg?.type === 'tree-select' && Array.isArray(rawValue)) {
+        element.id = rawValue
+          .map((value: any) => this._extractRelationshipIdFromControlValue(value))
+          .filter((id: any) => id !== null && id !== undefined && id !== '');
+        continue;
+      }
+      // ]]]FI
+
       // [[[II ESC:005-06 DOC:docs/documents/2026-05-31_005_columnas-form-data-y-tree-select-nombres.md#escenario-06
       if (
         element.relationship_type === 'ManyToOne' ||
         element.relationship_type === 'OneToOne' ||
         (element.relationship_type === undefined && Array.isArray(rawValue) && rawValue.length <= 1)
       ) {
-        element.id = Array.isArray(rawValue) ? (rawValue[0]?.id ?? rawValue[0] ?? null) : rawValue;
+        element.id = Array.isArray(rawValue) ? this._extractRelationshipIdFromControlValue(rawValue[0]) : this._extractRelationshipIdFromControlValue(rawValue);
         continue;
       }
 
@@ -3776,6 +4179,16 @@ export class CRUD extends Vars implements OnChanges  /*implements OnInit*/ {
       // ]]]FI
     }
   }
+
+  // [[[II ESC:005-07 DOC:docs/documents/2026-05-31_005_columnas-form-data-y-tree-select-nombres.md#escenario-07
+  private _extractRelationshipIdFromControlValue(value: any): any {
+    return value?.data?.id
+      ?? value?.id
+      ?? value?.value
+      ?? (typeof value?.key === 'string' ? value.key.split(':').pop() : value)
+      ?? null;
+  }
+  // ]]]FI
 
   /**
    * Busca recursivamente en la config `drawForm[pos]` el primer objeto cuyo
@@ -4365,7 +4778,7 @@ export class CRUD extends Vars implements OnChanges  /*implements OnInit*/ {
 
     // Validar que el formulario existe antes de proceder
     if (!form) {
-      console.log('Formulario no existe para la posición:', safePos);
+      //console.log('Formulario no existe para la posición:', safePos);
       return;
     }
 
@@ -4382,7 +4795,7 @@ export class CRUD extends Vars implements OnChanges  /*implements OnInit*/ {
 
       //form.get('maintenance_document_data_documents')?.setValue(this.files64);
 
-      console.log('save else', data, form.get('documents'), form.get('maintenance_document_data_documents'), this.files64)
+      //console.log('save else', data, form.get('documents'), form.get('maintenance_document_data_documents'), this.files64)
       //form.get('documents')?.setValue(this.files64);
       this.submitForm({ pos, hide, reset, is_file, node, selected, update_item, data, custom_user });
     }
@@ -4430,6 +4843,11 @@ export class CRUD extends Vars implements OnChanges  /*implements OnInit*/ {
 
           // comportamiento a la visibilidad del dialogo y al reseteo del formulario
           this.commonVisibilityDialog(options);
+
+          // [[[II ESC:024-08 Hook extensible tras crear un registro secundario.
+          // Default vacio; TaskDetailComponent lo sobreescribe para hacer el PATCH
+          // de retorno al modulo consumidor con el task-detail generado. ]]]FI
+          this.afterSecundaryCreateSuccess(resp, safePos);
         },
         error: (e: any) => {
           this.messageS.changeMessage(`No fue posible crear ${this.singularIndefiniteArticle[safePos] || this.singularIndefiniteArticle[0]}.`, e, this.customField()[safePos]);
@@ -4449,6 +4867,12 @@ export class CRUD extends Vars implements OnChanges  /*implements OnInit*/ {
   cancel() {
     //cancela la accion y elimina lo registrado en la bd
   }
+
+  // [[[II ESC:024-08 Hook extensible: se ejecuta tras crear con exito un registro
+  // secundario (saveSecundary). Default vacio; las subclases (TaskDetailComponent)
+  // lo sobreescriben para encadenar acciones, p.ej. el PATCH de retorno al modulo
+  // consumidor con el id del task-detail recien creado. ]]]FI
+  protected afterSecundaryCreateSuccess(_resp: any, _pos: any): void { }
 
   delete(pos: any = null, node = false) {
     pos = pos || this.pos();
@@ -4563,7 +4987,7 @@ export class CRUD extends Vars implements OnChanges  /*implements OnInit*/ {
   // aqui voy debo quitar el documernts 
   isShowDocumentsTab = signal<any[]>([]);
   onTabChange(e: any) {
-    console.log('onTabChangeonTabChangeonTabChangeonTabChange', e);
+    //console.log('onTabChangeonTabChangeonTabChangeonTabChange', e);
 
     //const tab = e.originalEvent.target.innerText;
     //si se pica sobre la pestaña de documentos y si se esta en modo edición, carga los archivos
@@ -4713,7 +5137,7 @@ export class CRUD extends Vars implements OnChanges  /*implements OnInit*/ {
     //inicializa el select de las columnas visibles de cada app cuando se abre la configuración local,
     //tambien puedo poner una funcion que se ejecute cuando se dispare el evento de mostrar la pantalla de configuracion local
     //this.configForm.controls['columns'].setValue(this.selected Columns().map(column => column.field));
-    console.log('4 selected Columns');
+    //console.log('4 selected Columns');
     this.configForm.patchValue({
       columns: this.selectedColumns().map((column) => column.field)
     });
@@ -4748,7 +5172,7 @@ export class CRUD extends Vars implements OnChanges  /*implements OnInit*/ {
     }*/
 
   onFiles64(event: any[]) {
-    console.log('event', event);
+    //console.log('event', event);
 
     this.files64 = event;
   }
@@ -4790,7 +5214,7 @@ export class CRUD extends Vars implements OnChanges  /*implements OnInit*/ {
   }
 
   onExportDialogVisible(event: any) {
-    console.log(event);
+    //console.log(event);
 
     this.exportDialogVisible = event;
   }
@@ -4953,8 +5377,20 @@ export class CRUD extends Vars implements OnChanges  /*implements OnInit*/ {
       return;
     }
 
+    // [[[II ESC:001-10 DOC:docs/documents/2026-05-16_001_consolidacion_dropdown_types_y_fix_escenarios.md#escenario-10
+    const classifierModule = this.module[pos] ?? (pos !== this.typeDefault ? this.module[this.typeDefault] : null);
+    const classifierModuleValue = classifierModule === null || classifierModule === undefined
+      ? ''
+      : String(classifierModule).trim();
+
+    if (!classifierModuleValue || classifierModuleValue === 'undefined' || classifierModuleValue === 'null') {
+      this.unifyRestoreForm(data);
+      return;
+    }
+    // ]]]FI
+
     const include = 'classifier_level';
-    const filter = `filter[classifier_level.classifier_type]=${this.module[pos]}`; //'filter[classifier_level.classifier_type.in]=' + classifiers_type
+    const filter = `filter[classifier_level.classifier_type]=${classifierModuleValue}`; //'filter[classifier_level.classifier_type.in]=' + classifiers_type
     const fields = 'classifier_level,name,is_required';
     const app = 'classifiers/classifier';
     const type = 'classifier';
@@ -5145,9 +5581,19 @@ export class CRUD extends Vars implements OnChanges  /*implements OnInit*/ {
     const id = this.selected()[0]?.id;
     const type = this.type[safePos];
     const app = this.app[safePos];
+    // [[[II ESC:022-01 DOC:docs/documents/2026-06-08_022_crud-set-status-time-zone.md#escenario-01
+    const locationSnapshot = this.generalS.getLocationSnapshot();
+    const formData = {
+      //latitude: locationSnapshot?.latitude ?? null,
+      //longitude: locationSnapshot?.longitude ?? null,
+      //time_zone: locationSnapshot?.time_zone || ''
+    };
     const relationships = [{ field: 'status', type: 'status', id: status }];
+    // ]]]FI
 
-    this.crudS.edit({ id, app, type, relationships, include: this.include[safePos] }).subscribe({
+    console.log('setStatus..................', { id, app, type, formData, relationships, include: this.include[safePos] });
+
+    this.crudS.edit({ id, app, type, formData, relationships, include: this.include[safePos] }).subscribe({
       next: (resp: any) => {
         this.updateRecord(resp, id, pos);
         this.showBlocked(false);
@@ -5167,6 +5613,28 @@ export class CRUD extends Vars implements OnChanges  /*implements OnInit*/ {
 
   runTask(options: any = {}) {
     this.tasksModule.set(options);
+  }
+
+  // [[[II ESC:024-09 Lanza la tarea-detalle dentro del modulo consumidor.
+  // Reusa el mecanismo loader+registry (TASK_MODULE_REGISTRY['TASK_DETAIL']) y
+  // entrega el contexto del consumidor para que, al guardar el task-detail, se
+  // pueda hacer el PATCH de retorno (relacion task_detail) al registro actual.
+  // is_detail_required es EXCLUSIVO de tareas: solo activa este flujo. ]]]FI
+  runTaskDetail(task: any) {
+    const consumerPos: any = this.pos();
+    const consumerId = this.selected()[0]?.id;
+    if (consumerId == null) {
+      this.messageS.changeMessage(`Seleccione el registro al que desea agregar la tarea.`, null, {}, 'info');
+      return;
+    }
+    this.tasksModule.set({
+      'TASK_DETAIL': {
+        task,
+        consumerApp: this.app[consumerPos],
+        consumerType: this.type[consumerPos] || consumerPos,
+        consumerId,
+      }
+    });
   }
 
 
@@ -5191,11 +5659,24 @@ export class CRUD extends Vars implements OnChanges  /*implements OnInit*/ {
 
         //dejo shared porque task siempre se consulta con todos los campos y se comparte  en todos los lugares
         if (exists) {
-          const action_app = (this.sharedS as any).data['task'][i].action_app;
           const tas = (this.sharedS as any).data['task'][i];
+          const action_app = tas.action_app;
+          // [[[II ESC:024-09 Decision de la accion de la tarea:
+          //  - is_detail_required === true  -> abre la tarea-detalle (General + Datos)
+          //  - en caso contrario, si hay action_app -> lanza el modulo configurado
+          //  - si no hay nada configurado -> mensaje controlado.
+          // is_detail_required NO afecta el resto de modulos (solo decide aqui). ]]]FI
           task.push({
             label: tas.name,
-            command: () => this.runTask(action_app)
+            command: () => {
+              if (tas.is_detail_required === true) {
+                this.runTaskDetail(tas);
+              } else if (action_app && (Array.isArray(action_app) ? action_app.length : Object.keys(action_app || {}).length)) {
+                this.runTask(action_app);
+              } else {
+                this.messageS.changeMessage(`${tas.name} no tiene acción configurada.`, null, {}, 'info');
+              }
+            }
           });
         }
       }
@@ -5206,6 +5687,8 @@ export class CRUD extends Vars implements OnChanges  /*implements OnInit*/ {
 
   getTask(options: getTaskOptions = {}) {
     const { module = '', ids_task, force } = options;
+
+    console.log('getTask getTask getTask----', { module, ids_task, force });
 
     if (ids_task == null || ids_task.length === 0) {
       return;
@@ -5220,14 +5703,14 @@ export class CRUD extends Vars implements OnChanges  /*implements OnInit*/ {
       return;
     }
 
-    this.crudS.getObject({ app: 'tasks/task' }).subscribe({
+    this.crudS.getObject({ app: 'tasks/task', type: 'task', fields: 'name,modules,action_app,is_detail_required,' }).subscribe({
       next: (resp: any) => {
         let task = this.DJAtoObject({ resp });
 
         // dejo shared porque task siempre se consulta con todos los campos y se comparte  en todos los lugares
         (this.sharedS as any).data['task'] = task;
         task = this.taskModule(task, module, ids_task);
-        console.log('*************', task);
+        //console.log('*************', task);
 
         this.startMenu.update((current) => [...current, { separator: true }, ...task]);
       },
@@ -5352,11 +5835,11 @@ export class CRUD extends Vars implements OnChanges  /*implements OnInit*/ {
   onChangeDropdown(e: any) {
     const startTime = performance.now();
     const timestamp = new Date().toISOString();
-    console.log(`🔄 [${timestamp}] CRUD onChangeDropdown INICIO`, {
+    /*console.log(`🔄 [${timestamp}] CRUD onChangeDropdown INICIO`, {
       field: e?.field,
       eventValue: e?.event?.value,
       hasObject: !!e?.object
-    });
+    });*/
 
     const field = e?.field;
     const id = e?.event.value;
@@ -5397,10 +5880,10 @@ export class CRUD extends Vars implements OnChanges  /*implements OnInit*/ {
     const endTime = performance.now();
     const duration = endTime - startTime;
     const endTimestamp = new Date().toISOString();
-    console.log(`✅ [${endTimestamp}] CRUD onChangeDropdown FIN`, {
+    /*console.log(`✅ [${endTimestamp}] CRUD onChangeDropdown FIN`, {
       field: e?.field,
       durationMs: duration.toFixed(2)
-    });
+    });*/
   }
 
   onKeydownEnter(e: any) {
@@ -5430,7 +5913,7 @@ export class CRUD extends Vars implements OnChanges  /*implements OnInit*/ {
       // En autocomplete, el event ya es el objeto completo seleccionado
       if (selectedObject && this.currentForm()?.get(hiddenFieldName)) {
         this.currentForm()?.get(hiddenFieldName)?.setValue(selectedObject);
-        console.log(`Campo oculto ${hiddenFieldName} actualizado con:`, selectedObject);
+        //console.log(`Campo oculto ${hiddenFieldName} actualizado con:`, selectedObject);
       }
     }
   }
@@ -5490,15 +5973,15 @@ export class CRUD extends Vars implements OnChanges  /*implements OnInit*/ {
                 }
               }
 
-              console.log(`✅ [CRUD] Campo "${fieldName}" reseteado:`, {
+              /*console.log(`✅ [CRUD] Campo "${fieldName}" reseteado:`, {
                 value: fieldSettings.value,
                 required: fieldSettings.required,
                 disabled: fieldSettings.disabled
-              });
+              });*/
             }
-          } else {
+          } /*else {
             console.warn(`⚠️ [CRUD] Campo "${fieldName}" no encontrado en el formulario`);
-          }
+          }*/
         });
       }
     }
@@ -5508,7 +5991,7 @@ export class CRUD extends Vars implements OnChanges  /*implements OnInit*/ {
     // ============================================
     if (config.fields_disable && Array.isArray(config.fields_disable)) {
       if (formGroup) {
-        console.log('🔒 [CRUD] Deshabilitando campos específicos:', config.fields_disable);
+        //console.log('🔒 [CRUD] Deshabilitando campos específicos:', config.fields_disable);
 
 
         config.fields_disable.forEach((fieldName: string) => {
@@ -5519,11 +6002,11 @@ export class CRUD extends Vars implements OnChanges  /*implements OnInit*/ {
             if (control) {
               control.disable();
               object_control?.disable();
-              console.log(`✅ [CRUD] Campo "${fieldName}" deshabilitado`);
+              //console.log(`✅ [CRUD] Campo "${fieldName}" deshabilitado`);
             }
-          } else {
+          } /*else {
             console.warn(`⚠️ [CRUD] Campo "${fieldName}" no encontrado en el formulario`);
-          }
+          }*/
         });
       }
     }
@@ -5540,7 +6023,7 @@ export class CRUD extends Vars implements OnChanges  /*implements OnInit*/ {
     const formGroup = this.currentForm();
     const currentPos: any = this.pos();
 
-    console.log('🔘 [CRUD] Botón clickeado::::', buttonInfo);
+    //console.log('🔘 [CRUD] Botón clickeado::::', buttonInfo);
 
     // ============================================
     // LÓGICA CRUD SEGÚN LA ACCIÓN
@@ -5557,11 +6040,11 @@ export class CRUD extends Vars implements OnChanges  /*implements OnInit*/ {
 
     // EDITAR/ACTUALIZAR - Modificar registro existente
     if (action === 'edit') {
-      console.log('✏️ [CRUD] Acción: EDITAR/ACTUALIZAR');
+      //console.log('✏️ [CRUD] Acción: EDITAR/ACTUALIZAR');
 
       // Validar formulario antes de editar
       if (formGroup?.invalid) {
-        console.warn('⚠️ [CRUD] Formulario inválido, no se puede editar');
+        //console.warn('⚠️ [CRUD] Formulario inválido, no se puede editar');
         // TODO: Mostrar mensaje de error al usuario
         return;
       }
@@ -5574,7 +6057,7 @@ export class CRUD extends Vars implements OnChanges  /*implements OnInit*/ {
 
     // ELIMINAR - Borrar registro
     if (action === 'delete') {
-      console.log('🗑️ [CRUD] Acción: ELIMINAR');
+      //console.log('🗑️ [CRUD] Acción: ELIMINAR');
 
       // TODO: Agregar confirmación antes de eliminar
       // TODO: Agregar lógica para eliminar registro
@@ -5585,7 +6068,7 @@ export class CRUD extends Vars implements OnChanges  /*implements OnInit*/ {
 
     // RESTABLECER/RESETEAR - Limpiar formulario
     if (action === 'reset') {
-      console.log('🔄 [CRUD] Acción: RESTABLECER/RESETEAR');
+      //console.log('🔄 [CRUD] Acción: RESTABLECER/RESETEAR');
 
       // Resetear todo el formulario
       formGroup?.reset();
@@ -5596,7 +6079,7 @@ export class CRUD extends Vars implements OnChanges  /*implements OnInit*/ {
 
     // CANCELAR - Cancelar operación
     if (action === 'cancel') {
-      console.log('❌ [CRUD] Acción: CANCELAR');
+      //console.log('❌ [CRUD] Acción: CANCELAR');
 
       // Restablecer formulario a valores originales
       formGroup?.reset();
@@ -5607,7 +6090,7 @@ export class CRUD extends Vars implements OnChanges  /*implements OnInit*/ {
 
     // BUSCAR - Buscar registros
     if (action === 'search' || action === 'find') {
-      console.log('🔍 [CRUD] Acción: BUSCAR');
+      //console.log('🔍 [CRUD] Acción: BUSCAR');
 
       // TODO: Agregar lógica de búsqueda
       // Ejemplo: llamar servicio con filtros del formulario

@@ -109,6 +109,9 @@ function colTypeToFilterType(colType: string): FilterFieldType {
     case 'dropdown':
     case 'dropdown-choice':
     case 'multi-select':
+    // [[[II ESC:001-09 DOC:docs/documents/2026-05-16_001_consolidacion_dropdown_types_y_fix_escenarios.md#escenario-09
+    case 'multi-choice':
+    // ]]]FI
     case 'auto-complete':
     case 'tree-select':
     // [[[II ESC:007-03 DOC:docs/documents/2026-06-01_007_custom-draw-form-listbox.md#escenario-03

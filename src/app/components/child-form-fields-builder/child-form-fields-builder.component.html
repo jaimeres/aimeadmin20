@@ -1,0 +1,168 @@
+<div class="child-builder">
+  <div class="builder-toolbar">
+    <div>
+      <h6 class="m-0">Campos del detalle</h6>
+      <small class="text-color-secondary">
+        Se guardan como <code>child_form_fields</code> y el detalle los captura en <code>parent_form_data</code>.
+      </small>
+    </div>
+
+    <div class="flex gap-2 flex-wrap justify-content-end">
+      <p-button label="Agregar campo" icon="pi pi-plus" size="small" (onClick)="addField()" />
+      <p-button label="Vista previa" icon="pi pi-eye" size="small" severity="secondary" [outlined]="true"
+        (onClick)="openPreview()" />
+    </div>
+  </div>
+
+  @if (rows().length === 0) {
+  <div class="empty-state">
+    <i class="pi pi-sliders-h text-2xl mb-2"></i>
+    <p class="m-0 text-sm">Agrega campos para construir el formulario del detalle.</p>
+  </div>
+  }
+
+  <div class="builder-rows">
+    @for (row of rows(); track row.id; let i = $index) {
+    <div class="builder-row">
+      <div class="row-header">
+        <span class="order-badge">{{ i + 1 }}</span>
+        <input pInputText [ngModel]="row.label" (ngModelChange)="updateRow(row.id, { label: $event })"
+          class="height-input-custom label-input" placeholder="Etiqueta" />
+
+        <p-select [options]="fieldTypes" optionLabel="label" optionValue="value" [ngModel]="row.type"
+          (ngModelChange)="updateRow(row.id, { type: $event })" appendTo="body" styleClass="height-input-custom type-select" />
+
+        <p-toggleButton [ngModel]="row.required" (ngModelChange)="updateRow(row.id, { required: $event })"
+          onIcon="pi pi-asterisk" offIcon="pi pi-asterisk" onLabel="Req" offLabel="Req"
+          styleClass="height-input-custom small-toggle" />
+
+        <p-toggleButton [ngModel]="row.readonly" (ngModelChange)="updateRow(row.id, { readonly: $event })"
+          onIcon="pi pi-lock" offIcon="pi pi-lock-open" onLabel="Lect" offLabel="Lect"
+          styleClass="height-input-custom small-toggle" />
+
+        <p-toggleButton [ngModel]="row.hide" (ngModelChange)="updateRow(row.id, { hide: $event })"
+          onIcon="pi pi-eye-slash" offIcon="pi pi-eye" onLabel="Oculto" offLabel="Visible"
+          styleClass="height-input-custom small-toggle" />
+      </div>
+
+      <div class="row-detail">
+        <div class="field-name">
+          <span class="prefix">{{ 'parent_form_data_' }}</span>
+          <input pInputText [ngModel]="row.suffix" (ngModelChange)="updateRow(row.id, { suffix: $event })"
+            class="height-input-custom suffix-input" placeholder="nombre_campo" />
+        </div>
+
+        <div class="span-controls">
+          <i class="pi pi-desktop text-xs text-color-secondary"></i>
+          <p-inputNumber [ngModel]="row.gridSpan" (ngModelChange)="updateRow(row.id, { gridSpan: $event })"
+            [min]="1" [max]="12" [showButtons]="true" buttonLayout="horizontal" decrementButtonIcon="pi pi-minus"
+            incrementButtonIcon="pi pi-plus" styleClass="span-input" inputStyleClass="text-center text-xs" />
+
+          <i class="pi pi-mobile text-xs text-color-secondary"></i>
+          <p-inputNumber [ngModel]="row.gridSpanMd" (ngModelChange)="updateRow(row.id, { gridSpanMd: $event })"
+            [min]="1" [max]="12" [showButtons]="true" buttonLayout="horizontal" decrementButtonIcon="pi pi-minus"
+            incrementButtonIcon="pi pi-plus" styleClass="span-input" inputStyleClass="text-center text-xs" />
+        </div>
+
+        <div class="row-actions">
+          <p-button icon="pi pi-arrow-up" size="small" severity="secondary" [text]="true" [disabled]="i === 0"
+            (onClick)="moveField(row.id, -1)" />
+          <p-button icon="pi pi-arrow-down" size="small" severity="secondary" [text]="true"
+            [disabled]="i === rows().length - 1" (onClick)="moveField(row.id, 1)" />
+          <p-button icon="pi pi-sliders-h" size="small" severity="secondary" [outlined]="true"
+            (onClick)="openAdvanced(row.id)" />
+          <p-button icon="pi pi-trash" size="small" severity="danger" [text]="true" (onClick)="removeField(row.id)" />
+        </div>
+      </div>
+    </div>
+    }
+  </div>
+
+  <p-divider />
+
+  <label class="block text-xs text-color-secondary mb-1">JSON generado</label>
+  <textarea pTextarea rows="8" [ngModel]="generatedJson()" readonly class="json-output"></textarea>
+</div>
+
+<p-dialog [visible]="previewVisible()" (visibleChange)="previewVisible.set($event)" header="Vista previa del detalle"
+  [modal]="true" [resizable]="true" [maximizable]="true" styleClass="width-800px-custom min-height-550px-custom"
+  appendTo="body">
+  <app-custom-draw-form [drawForm]="previewDraw()" [formGroup]="previewForm()" />
+</p-dialog>
+
+<p-dialog [visible]="advancedRowId() !== null" (visibleChange)="$event ? null : closeAdvanced()"
+  header="Configuración avanzada del campo" styleClass="width-800px-custom min-height-550px-custom" [modal]="true"
+  [resizable]="true" [maximizable]="true" appendTo="body">
+  @if (advancedRowId() !== null) {
+  <p-accordion [multiple]="true" [value]="['0']">
+    @for (section of advancedSchema(); track section.title; let sIdx = $index) {
+    <p-accordion-panel [value]="sIdx.toString()">
+      <p-accordion-header>
+        @if (section.icon) {
+        <i [class]="section.icon" class="mr-2"></i>
+        }
+        <span>{{ section.title }}</span>
+      </p-accordion-header>
+      <p-accordion-content>
+        <div class="grid grid-cols-12 gap-2 pt-2">
+          @for (def of section.defs; track def.path) {
+          @if (advShouldShow(def)) {
+          <div class="col-span-12 md:col-span-6">
+            <label class="block text-xs text-color-secondary mb-1">{{ def.label }}</label>
+
+            @switch (def.kind) {
+            @case ('boolean') {
+            <p-toggleButton [ngModel]="advValue(def.path) === true" (ngModelChange)="advSet(def.path, $event)"
+              onIcon="pi pi-check" offIcon="pi pi-times" onLabel="Sí" offLabel="No" styleClass="height-input-custom" />
+            }
+            @case ('number') {
+            <p-inputNumber [ngModel]="advValue(def.path)" (ngModelChange)="advSet(def.path, $event)"
+              [min]="def.min ?? null" [max]="def.max ?? null" [useGrouping]="false" styleClass="w-full" />
+            }
+            @case ('select') {
+            <p-select [options]="def.options ?? []" optionLabel="label" optionValue="value"
+              [ngModel]="advValue(def.path)" (ngModelChange)="advSet(def.path, $event)" [showClear]="true"
+              appendTo="body" styleClass="w-full" />
+            }
+            @case ('multiselect') {
+            <p-select [options]="def.options ?? []" optionLabel="label" optionValue="value"
+              [ngModel]="advValue(def.path)" (ngModelChange)="advSet(def.path, $event)" [showClear]="true"
+              appendTo="body" styleClass="w-full" />
+            }
+            @case ('textarea') {
+            <textarea pTextarea rows="3" [ngModel]="advValue(def.path)" (ngModelChange)="advSet(def.path, $event)"
+              [placeholder]="def.placeholder ?? ''" class="w-full"></textarea>
+            }
+            @case ('json') {
+            <textarea pTextarea rows="5" [ngModel]="advValueAsJson(def.path)"
+              (ngModelChange)="advSetJson(def.path, $event)" [placeholder]="def.placeholder ?? '[]'"
+              class="w-full font-mono text-xs"></textarea>
+            }
+            @default {
+            <input pInputText [ngModel]="advValue(def.path) ?? ''" (ngModelChange)="advSet(def.path, $event)"
+              [placeholder]="def.placeholder ?? ''" class="w-full p-inputtext-sm" />
+            }
+            }
+
+            @if (def.hint) {
+            <small class="text-color-secondary text-xs">
+              <i class="pi pi-info-circle mr-1"></i>{{ def.hint }}
+            </small>
+            }
+          </div>
+          }
+          }
+        </div>
+      </p-accordion-content>
+    </p-accordion-panel>
+    }
+  </p-accordion>
+  }
+
+  <ng-template #footer>
+    <div class="flex justify-content-end gap-2">
+      <p-button label="Cancelar" severity="secondary" [outlined]="true" (click)="closeAdvanced()" />
+      <p-button label="Aplicar" icon="pi pi-check" (click)="applyAdvanced()" />
+    </div>
+  </ng-template>
+</p-dialog>

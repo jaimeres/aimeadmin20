@@ -27,8 +27,9 @@
 <app-custom-actions-selection [visible]="actionsSelectionDialogVisible" (visibleChange)="onVisibleChange($event)" />
 
 <p-dialog [(visible)]="formDialogVisible[$any(typeDefault)]" (onHide)="onHide($any(typeDefault))"
-  (onShow)="onShow($any(typeDefault))" [styleClass]="styleClassDialog()" [resizable]="true" [draggable]="true"
-  modal="true" [style]="{'contain': 'layout style paint'}">
+  (onShow)="onShow($any(typeDefault), $any(inventoryMovementDetail))" [styleClass]="styleClassDialog()"
+  [resizable]="true" [draggable]="true" modal="true" [style]="{'contain': 'layout style paint'}"
+  #inventoryMovementDetail [maximizable]="true">
   <!-- [style]="{'contain': 'layout style paint'}" es para mejorrar el dendimiento pero afecta a los componentes anidados -->
 
   <ng-template #header>

@@ -214,6 +214,9 @@ export class CustomDrawFormComponent implements OnDestroy {
   // [[[II ESC:020-04 DOC:docs/documents/2026-06-04_020_custom-draw-form-virtual-scroll-dropdowns.md#escenario-04
   virtualOptionsReadySignal = signal<Record<string, boolean>>({});
   // ]]]FI
+  // [[[II ESC:007-07 DOC:docs/documents/2026-06-01_007_custom-draw-form-listbox.md#escenario-07
+  selectionMultipleSignal = signal<Record<string, boolean>>({});
+  // ]]]FI
   // [[[II ESC:020-01 DOC:docs/documents/2026-06-04_020_custom-draw-form-virtual-scroll-dropdowns.md#escenario-01
   readonly listboxVirtualScrollOptions = {
     autoSize: false,
@@ -274,8 +277,6 @@ export class CustomDrawFormComponent implements OnDestroy {
         };
       }
     });
-
-    //console.log('✅ signatureDataSignal resultado completo:', signatureData);
     return signatureData;
   });
 
@@ -296,7 +297,7 @@ export class CustomDrawFormComponent implements OnDestroy {
   }
   // --- FIN TEMPORAL ---
 
-  // [[[II ESC:016-02 DOC:docs/documents/2026-06-02_016_dynamic-dropdown-data-service.md#escenario-02 ESC:017-02 DOC:docs/documents/2026-06-02_017_custom-draw-form-device-drawform.md#escenario-02
+  // [[[II ESC:016-02 DOC:docs/documents/2026-06-02_016_dynamic-dropdown-data-service.md#escenario-02 ESC:017-02 DOC:docs/documents/2026-06-02_017_custom-draw-form-device-drawform.md#escenario-02 ESC:001-09 DOC:docs/documents/2026-05-16_001_consolidacion_dropdown_types_y_fix_escenarios.md#escenario-09
   private getDropdownDataContext(): DynamicDropdownDataContext {
     return {
       type: this.typeSignal() || this.type || '',
@@ -325,13 +326,14 @@ export class CustomDrawFormComponent implements OnDestroy {
     const field = element?.field || '(sin-field)';
     const fieldType = element?.type || '(sin-type)';
     const context = this.getDropdownDataContext();
+    const localOnlyDropdown = element?.type === 'multi-choice';
     const existsStart = this.perfNow();
-    const dropdownOptions = force
+    const dropdownOptions = force && !localOnlyDropdown
       ? false
-      : await this.dynamicDropdownDataS.dataDropdownExists(element, context, force);
+      : await this.dynamicDropdownDataS.dataDropdownExists(element, context, localOnlyDropdown ? false : force);
     this.logPerf('dropdown.exists', existsStart, { field, type: fieldType, source: dropdownOptions === false ? 'miss' : 'cache/local' }, true);
 
-    if (dropdownOptions !== false && !force) {
+    if (dropdownOptions !== false && (!force || localOnlyDropdown)) {
       const buildStart = this.perfNow();
       const resolvedOptions = await this._buildDropdownOptionsForField(element, dropdownOptions);
       this.logPerf('dropdown.buildOptions.cached', buildStart, {
@@ -409,6 +411,10 @@ export class CustomDrawFormComponent implements OnDestroy {
 
   // [[[II Fuente única de tipos dropdown en utils/dropdown-types.const.ts ]]]FI
   private readonly DROPDOWN_TYPES = DROPDOWN_TYPES_PRELOAD;
+  // [[[II ESC:007-07 DOC:docs/documents/2026-06-01_007_custom-draw-form-listbox.md#escenario-07 ESC:001-09 DOC:docs/documents/2026-05-16_001_consolidacion_dropdown_types_y_fix_escenarios.md#escenario-09
+  private readonly SELECTION_LIMIT_TYPES = new Set(['listbox', 'multi-select', 'multi-choice', 'tree-select']);
+  private readonly ARRAY_SELECTION_TYPES = new Set(['multi-select', 'multi-choice', 'tree-select']);
+  // ]]]FI
 
   private isDropdown(el: any): boolean {
     return !!el?.type && this.DROPDOWN_TYPES.has(el.type);
@@ -998,7 +1004,7 @@ export class CustomDrawFormComponent implements OnDestroy {
   }
   // ]]]FI
 
-  // [[[II ESC:008-01 DOC:docs/documents/2026-06-02_008_custom-draw-form-ngonchanges-signals.md#escenario-01 ESC:017-01 DOC:docs/documents/2026-06-02_017_custom-draw-form-device-drawform.md#escenario-01 ESC:007-06 DOC:docs/documents/2026-06-01_007_custom-draw-form-listbox.md#escenario-06
+  // [[[II ESC:008-01 DOC:docs/documents/2026-06-02_008_custom-draw-form-ngonchanges-signals.md#escenario-01 ESC:017-01 DOC:docs/documents/2026-06-02_017_custom-draw-form-device-drawform.md#escenario-01 ESC:007-06 DOC:docs/documents/2026-06-01_007_custom-draw-form-listbox.md#escenario-06 ESC:007-07 DOC:docs/documents/2026-06-01_007_custom-draw-form-listbox.md#escenario-07 ESC:001-08 DOC:docs/documents/2026-05-16_001_consolidacion_dropdown_types_y_fix_escenarios.md#escenario-08 ESC:001-09 DOC:docs/documents/2026-05-16_001_consolidacion_dropdown_types_y_fix_escenarios.md#escenario-09
   ngOnChanges(changes: SimpleChanges) {
     const perfStart = this.perfNow();
     this.syncInputSignals(changes);
@@ -1056,7 +1062,7 @@ export class CustomDrawFormComponent implements OnDestroy {
     // Cuando el formulario se construye por primera vez (transición null → FormGroup),
     // addFieldsByPrefix ya muté los nombres de campo a 'object_...' y data_type.options
     // sigue intacto en el elemento. Re-ejecutar dropdownOptions para que el signal
-    // se popule con las claves object_ correctas (dropdown, dropdown-choice, multi-select, etc.).
+    // se popule con las claves object_ correctas (dropdown, dropdown-choice, multi-select, multi-choice, etc.).
     if (!previousValue && currentValue && !this.handlingDrawFormChange) {
       const _dform = this.drawFormSignal();
       if (_dform) {
@@ -1065,7 +1071,7 @@ export class CustomDrawFormComponent implements OnDestroy {
     }
 
     if (currentValue) {
-      this.normalizeListboxControlValues(this.drawFormSignal(), currentValue);
+      this.normalizeListboxControlValues(this.drawFormSignal(), currentValue, true);
       this.formSubscription = currentValue.valueChanges.subscribe(() => {
         this.normalizeListboxControlValues();
       });
@@ -1131,12 +1137,13 @@ export class CustomDrawFormComponent implements OnDestroy {
     const perfStart = this.perfNow();
     this._fileMenuCache = {};
     this.resetDropdownPreloadState();
+    this.rebuildSelectionLimitState(drawForm);
 
     let stepStart = this.perfNow();
     this.dropdownOptions(drawForm);
     this.logPerf('handleDrawFormChange.dropdownOptions', stepStart);
 
-    this.normalizeListboxControlValues(drawForm);
+    this.normalizeListboxControlValues(drawForm, this.formGroupSignal(), true);
 
     stepStart = this.perfNow();
     this.initializeTableFields(drawForm);
@@ -1168,27 +1175,83 @@ export class CustomDrawFormComponent implements OnDestroy {
     }, true);
   }
 
-  private normalizeListboxControlValues(drawForm = this.drawFormSignal(), formGroup = this.formGroupSignal()): void {
+  private normalizeListboxControlValues(drawForm = this.drawFormSignal(), formGroup = this.formGroupSignal(), enforceSelectionLimits = false): void {
     if (!drawForm || !formGroup) return;
 
     const normalizeNode = (node: any): void => {
-      if (node?.type !== 'listbox' || !node?.field) return;
+      if (!node?.field) return;
 
       const control = formGroup.get(node.field);
       if (!control) return;
 
       const value = control.value;
-      if (Array.isArray(value)) return;
+      const limit = this.getSelectionLimit(node);
+
+      if (this.ARRAY_SELECTION_TYPES.has(node?.type)) {
+        const arrayValue = Array.isArray(value)
+          ? value
+          : (value === null || value === undefined || value === '' ? [] : [value]);
+        const nextValue = enforceSelectionLimits && limit !== null
+          ? this.limitSelectionArrayValue(node, arrayValue, limit)
+          : arrayValue;
+
+        if (nextValue !== value) {
+          control.setValue(nextValue, { emitEvent: false });
+        }
+        return;
+      }
+
+      if (node?.type !== 'listbox') {
+        if (enforceSelectionLimits && limit !== null && Array.isArray(value)) {
+          const limitedValue = this.limitSelectionArrayValue(node, value, limit);
+          if (limitedValue !== value) {
+            control.setValue(limitedValue, { emitEvent: false });
+          }
+        }
+        return;
+      }
+
+      if (limit === 1) {
+        const nextValue = Array.isArray(value) ? (value[0] ?? null) : value;
+        if (nextValue !== value) {
+          control.setValue(nextValue, { emitEvent: false });
+        }
+        return;
+      }
+
+      if (Array.isArray(value)) {
+        if (enforceSelectionLimits && limit !== null && value.length > limit) {
+          control.setValue(value.slice(0, limit), { emitEvent: false });
+        }
+        return;
+      }
 
       const nextValue = value === null || value === undefined || value === '' ? [] : [value];
       control.setValue(nextValue, { emitEvent: false });
     };
 
+    this.scanDrawFormFields(drawForm, normalizeNode);
+  }
+
+  private rebuildSelectionLimitState(drawForm = this.drawFormSignal()): void {
+    const multipleByField: Record<string, boolean> = {};
+
+    this.scanDrawFormFields(drawForm, (node: any): void => {
+      if (node?.type !== 'listbox' || !node?.field) return;
+      multipleByField[node.field] = this.getSelectionLimit(node) !== 1;
+    });
+
+    this.selectionMultipleSignal.set(multipleByField);
+  }
+
+  private scanDrawFormFields(drawForm: any, visit: (node: any) => void): void {
+    if (!drawForm || typeof drawForm !== 'object') return;
+
     const scanCollection = (collection: any): void => {
       if (!collection || typeof collection !== 'object') return;
 
       for (const element of Object.values(collection)) {
-        this.walkElement(element, normalizeNode);
+        this.walkElement(element, visit);
       }
     };
 
@@ -1200,6 +1263,18 @@ export class CustomDrawFormComponent implements OnDestroy {
         scanCollection((step as any)?.fields);
       }
     }
+  }
+
+  private getSelectionLimit(fieldConfig: any): number | null {
+    if (!this.SELECTION_LIMIT_TYPES.has(fieldConfig?.type)) return null;
+
+    const rawLimit = fieldConfig?.selection_limit;
+    if (rawLimit === null || rawLimit === undefined || rawLimit === '') return null;
+
+    const limit = Number(rawLimit);
+    if (!Number.isFinite(limit) || limit <= 0) return null;
+
+    return Math.floor(limit);
   }
   // ]]]FI
 
@@ -1301,7 +1376,7 @@ export class CustomDrawFormComponent implements OnDestroy {
         if (this.hasRestorableCachePayload(restoredCache)) {
           const patchStart = this.perfNow();
           formGroup.patchValue(restoredCache, { emitEvent: false });
-          this.normalizeListboxControlValues(drawForm, formGroup);
+          this.normalizeListboxControlValues(drawForm, formGroup, true);
           this.logPerf('formCache.patchRestoredDraft', patchStart, { fields: Object.keys(restoredCache || {}).length }, true);
           formGroup.markAsDirty();
           this.wasDirty = true;
@@ -2683,9 +2758,11 @@ export class CustomDrawFormComponent implements OnDestroy {
   // ]]]FI
 
   private _emptyMirroredDropdownValue(fieldConfig: any): any {
-    return fieldConfig?.type === 'multi-select' || fieldConfig?.type === 'tree-select' || fieldConfig?.type === 'listbox'
+    // [[[II ESC:001-09 DOC:docs/documents/2026-05-16_001_consolidacion_dropdown_types_y_fix_escenarios.md#escenario-09
+    return this.ARRAY_SELECTION_TYPES.has(fieldConfig?.type) || fieldConfig?.type === 'listbox'
       ? []
       : null;
+    // ]]]FI
   }
 
   private _flattenDropdownOptions(options: any[]): any[] {
@@ -2821,6 +2898,86 @@ export class CustomDrawFormComponent implements OnDestroy {
       ?? this._emptyMirroredDropdownValue(fieldConfig);
   }
 
+  // [[[II ESC:007-07 DOC:docs/documents/2026-06-01_007_custom-draw-form-listbox.md#escenario-07
+  private applySelectionLimitForDropdownChange(fieldConfig: any, currentValue: any): any {
+    const limit = this.getSelectionLimit(fieldConfig);
+    if (limit === null || !fieldConfig?.field) return currentValue;
+
+    if (limit === 1 && fieldConfig?.type === 'listbox') {
+      const nextValue = Array.isArray(currentValue) ? (currentValue[0] ?? null) : currentValue;
+      if (nextValue !== currentValue) {
+        this.formGroupSignal()?.get(fieldConfig.field)?.setValue(nextValue);
+      }
+      return nextValue;
+    }
+
+    if (!Array.isArray(currentValue)) return currentValue;
+
+    const limitedValue = this.limitSelectionArrayValue(fieldConfig, currentValue, limit);
+    if (limitedValue === currentValue) return currentValue;
+
+    this.formGroupSignal()?.get(fieldConfig.field)?.setValue(limitedValue);
+    this.notifySelectionLimitReached(fieldConfig, limit);
+    return limitedValue;
+  }
+
+  private limitSelectionArrayValue(fieldConfig: any, currentValue: any[], limit: number): any[] {
+    if (this.isTreeSelectLimitedByLevel(fieldConfig)) {
+      const perLevelCount = new Map<string, number>();
+      const selected: any[] = [];
+      let changed = false;
+
+      for (const item of currentValue) {
+        const level = this.getSelectionLevelKey(item);
+        const count = perLevelCount.get(level) ?? 0;
+
+        if (count >= limit) {
+          changed = true;
+          continue;
+        }
+
+        perLevelCount.set(level, count + 1);
+        selected.push(item);
+      }
+
+      return changed ? selected : currentValue;
+    }
+
+    return currentValue.length > limit ? currentValue.slice(0, limit) : currentValue;
+  }
+
+  private isTreeSelectLimitedByLevel(fieldConfig: any): boolean {
+    return fieldConfig?.type === 'tree-select' && !!fieldConfig?.tree;
+  }
+
+  private getSelectionLevelKey(item: any): string {
+    const rawLevel = item?.data?.__level
+      ?? item?.__level
+      ?? item?.raw?.__level
+      ?? item?.data?.raw?.__level
+      ?? item?.level
+      ?? item?.data?.level
+      ?? 0;
+    const numericLevel = Number(rawLevel);
+
+    return Number.isFinite(numericLevel) ? String(Math.floor(numericLevel)) : String(rawLevel ?? 0);
+  }
+
+  private notifySelectionLimitReached(fieldConfig: any, limit: number): void {
+    const fieldLabel = fieldConfig?.label || fieldConfig?.placeholder || fieldConfig?.field || 'campo';
+    const scope = this.isTreeSelectLimitedByLevel(fieldConfig) ? ' por nivel' : '';
+    const itemLabel = limit === 1 ? 'elemento' : 'elementos';
+
+    this.messageS.changeMessage(
+      `Se alcanzó el límite de ${limit} ${itemLabel}${scope} en ${fieldLabel}.`,
+      null,
+      {},
+      'warn',
+      'Límite de selección'
+    );
+  }
+  // ]]]FI
+
   // ─── FIN MOTOR DE EVALUACIÓN ───────────────────────────────────────────────
 
 
@@ -2829,9 +2986,23 @@ export class CustomDrawFormComponent implements OnDestroy {
    * @param event evento del dropdown
    * @param object objeto que contiene el evento y el campo que se esta modificando
    */
+  // [[[II ESC:020-06 DOC:docs/documents/2026-06-04_020_custom-draw-form-virtual-scroll-dropdowns.md#escenario-06
+  onTreeSelectNodeChange(event: any, fieldConfig: any): void {
+    const emitChange = () => this.onChangeDropdown(event, fieldConfig);
+
+    if (typeof queueMicrotask === 'function') {
+      queueMicrotask(emitChange);
+      return;
+    }
+
+    Promise.resolve().then(emitChange);
+  }
+  // ]]]FI
+
   /*async*/ onChangeDropdown(event: any, object: any) {
     const field = object.field; //se obtiene el campo del objeto
-    const currentValue = this.formGroupSignal()?.get(field)?.value;
+    let currentValue = this.formGroupSignal()?.get(field)?.value;
+    currentValue = this.applySelectionLimitForDropdownChange(object, currentValue);
     const formValues = this.formGroupSignal()?.value;
     //const eventValue = event.value; // ID/valor seleccionado del dropdown
 
@@ -3230,6 +3401,9 @@ export class CustomDrawFormComponent implements OnDestroy {
 
 
   panelStyleSignal = signal<{ [key: string]: string }>({});
+  // [[[II ESC:020-05 DOC:docs/documents/2026-06-04_020_custom-draw-form-virtual-scroll-dropdowns.md#escenario-05
+  treeSelectPanelStyleSignal = signal<{ [key: string]: string }>({ minWidth: '260px', maxWidth: 'min(92vw, 520px)' });
+  // ]]]FI
 
   adjustPanelStyle(autoCompleteRef: any): void {
     const width = autoCompleteRef.inputEL.nativeElement.offsetWidth;
@@ -4586,7 +4760,7 @@ export class CustomDrawFormComponent implements OnDestroy {
   /**
    * Inicializa los datos de una tabla con filas vacías
    */
-  // [[[II ESC:011-01 DOC:docs/documents/2026-06-02_011_custom-draw-form-table-formarray.md#escenario-01 ESC:015-01 DOC:docs/documents/2026-06-02_015_dynamic-table-field-component.md#escenario-01
+  // [[[II ESC:011-01 DOC:docs/documents/2026-06-02_011_custom-draw-form-table-formarray.md#escenario-01 ESC:015-01 DOC:docs/documents/2026-06-02_015_dynamic-table-field-component.md#escenario-01 ESC:001-09 DOC:docs/documents/2026-05-16_001_consolidacion_dropdown_types_y_fix_escenarios.md#escenario-09
   initializeTableData(tableConfig: any): any[] {
     const data: any[] = [];
     const initialRows = tableConfig?.initial_rows || 0;
@@ -4620,7 +4794,7 @@ export class CustomDrawFormComponent implements OnDestroy {
     if (column?.type === 'input-number' || column?.type === 'date') {
       return null;
     }
-    if (column?.type === 'multi-select' || column?.type === 'listbox') {
+    if (column?.type === 'multi-select' || column?.type === 'multi-choice' || column?.type === 'listbox') {
       return [];
     }
     if (column?.type === 'checkbox') {

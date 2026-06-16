@@ -101,6 +101,18 @@ interprete accidentalmente relaciones como `asset` como M2M y envie
 `relationships.asset.data` como lista, cuando el backend espera un resource identifier
 object.
 
+<a id="escenario-07"></a>
+## Escenario 07: Extraer id desde TreeNode en tree-select sin nodo tree
+
+Los campos `tree-select` sin configuracion `tree` tambien usan `TreeNode` internamente
+porque PrimeNG no expone `optionValue` como `listbox`. En ese caso el id seleccionado
+queda en `node.data.id`, no en `node.id`.
+
+Se ajusta `validateRelationships()` para que, cuando un `tree-select` entregue un
+arreglo de nodos, la relacion envie una lista de ids extraidos de `data.id`, `id`,
+`value` o `key`. Esto evita payloads JSON:API incompletos como `{ type: "person" }`
+sin `id`.
+
 ## Decisiones tomadas
 
 - No se agregan columnas para campos de `form_data` que no existan en la
@@ -117,6 +129,8 @@ object.
   `form_fields_data_*`; no cambia `DJAtoObject` ni la generacion base de columnas.
 - Solo `ManyToMany` conserva arreglos en `relationships`; `ManyToOne` y `OneToOne`
   se normalizan a valor escalar antes de construir JSON:API.
+- En `tree-select` sin `tree`, el valor visual puede seguir siendo `TreeNode`, pero
+  la relacion enviada se reduce a ids antes de pasar por `baseDJA`.
 
 ## Validaciones aplicadas
 

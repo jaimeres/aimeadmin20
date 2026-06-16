@@ -199,10 +199,49 @@ p-dialog .p-button-icon-only.p-button-rounded {
   width: 100% !important;
 }
 
+// [[[II ESC:021-06 DOC:docs/documents/2026-06-05_021_crud-onshow-maximize-small-screens.md#escenario-06
+.p-inputgroup,
+.p-floatlabel {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.p-inputnumber.height-input-custom,
+.p-datepicker.height-input-custom {
+  display: flex;
+  min-width: 0 !important;
+  max-width: 100% !important;
+  width: 100% !important;
+}
+
+.p-inputnumber.height-input-custom .p-inputnumber-input,
+.p-inputnumber.height-input-custom .p-inputtext,
+.p-datepicker.height-input-custom .p-datepicker-input,
+.p-datepicker.height-input-custom .p-inputtext {
+  min-width: 0 !important;
+  max-width: 100% !important;
+  width: 100% !important;
+  box-sizing: border-box;
+}
+// ]]]FI
+
 .height-icon-custom {
   height: 32px !important;
   width: 100% !important;
 }
+
+// [[[II ESC:020-06 DOC:docs/documents/2026-06-04_020_custom-draw-form-virtual-scroll-dropdowns.md#escenario-06
+.custom-tree-select-panel.p-treeselect-overlay,
+.custom-tree-select-panel {
+  min-width: 260px !important;
+  max-width: min(92vw, 520px) !important;
+}
+
+.custom-tree-select-panel .p-treeselect-tree-container,
+.custom-tree-select-panel .p-tree {
+  min-height: 160px;
+}
+// ]]]FI
 
 
 .table-fit-Custom {
@@ -427,6 +466,43 @@ body.scanner-active::after {
     //color: #af1e1e !important;
     /* controla el fill */
   }
+
+  /* [[[II ESC:021-02 DOC:docs/documents/2026-06-05_021_crud-onshow-maximize-small-screens.md#escenario-02 */
+  .p-dialog.crud-form-dialog {
+    --crud-dialog-mobile-viewport-h: 100dvh;
+    margin-top: calc(var(--top-inset, 0px) + 0.5rem) !important;
+    margin-bottom: calc(var(--safe-bottom, 0px) + 0.5rem) !important;
+    max-height: calc(var(--crud-dialog-mobile-viewport-h) - var(--top-inset, 0px) - var(--safe-bottom, 0px) - 1rem) !important;
+    max-width: calc(100vw - 1rem) !important;
+    min-height: 0 !important;
+  }
+
+  @supports (height: 100lvh) {
+    .p-dialog.crud-form-dialog {
+      --crud-dialog-mobile-viewport-h: 100lvh;
+    }
+  }
+
+  .p-dialog.crud-form-dialog.p-dialog-maximized {
+    height: calc(var(--crud-dialog-mobile-viewport-h) - var(--top-inset, 0px) - var(--safe-bottom, 0px) - 1rem) !important;
+    width: calc(100vw - 1rem) !important;
+  }
+
+  .p-dialog.crud-form-dialog.min-height-550px-custom {
+    min-height: 0 !important;
+  }
+
+  .p-dialog.crud-form-dialog .p-dialog-header,
+  .p-dialog.crud-form-dialog .p-dialog-footer {
+    flex: 0 0 auto !important;
+  }
+
+  .p-dialog.crud-form-dialog .p-dialog-content {
+    min-height: 0 !important;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+  }
+  /* ]]]FI */
 
   .layout-menu-button {
     //top: 45% !important;

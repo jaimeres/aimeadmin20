@@ -115,6 +115,15 @@ export class Vars {
   protected fields: { [key: string]: string } = { 0: '' };
 
   /**
+   * [[[II ESC:024-06 Campos fijos por pos que SIEMPRE deben viajar en la consulta
+   * de lista, independientes de las columnas visibles. iniParam() reconstruye
+   * this.fields desde las columnas y sobreescribe cualquier asignacion manual; los
+   * campos declarados aqui se concatenan en getAll2 para garantizar su presencia
+   * (ej: is_detail_required en tareas, necesario para iniciar el detalle). ]]]FI
+   */
+  protected fixedFields: { [key: string]: string } = {};
+
+  /**
    * ordenamiento para la consulta al servidor
    */
   protected sort = '';
@@ -304,14 +313,17 @@ export class Vars {
    */
   excludeFieldsCols: { [key: string]: any[] } = {};
 
+  // [[[II ESC:021-04 DOC:docs/documents/2026-06-05_021_crud-onshow-maximize-small-screens.md#escenario-04
   //selectedColumns = computed(() => this.cols().filter(col =>  !this.removeColumns().includes(col.field)));
   selectedColumns = computed(() => {
-    if (!this.cols()) return [];
-    return this.cols().filter((col: any) => {
-      return !this.removeColumns().includes(col.field);
+    const columns = Array.isArray(this.cols()) ? this.cols() : [];
+    const removedColumns = Array.isArray(this.removeColumns()) ? this.removeColumns() : [];
+    return columns.filter((col: any) => {
+      return !removedColumns.includes(col.field);
     });
     //this.configForm.controls['columns'].setValue(col);
   });
+  // ]]]FI
 
   /**
    * Los campos y valores que se mostrarán en el formulario de configuración local
