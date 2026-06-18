@@ -41,8 +41,8 @@ export interface AdvancedSection {
 const COMMON_BASE: AdvancedFieldDef[] = [
   { path: 'label', label: 'Etiqueta', kind: 'text' },
   { path: 'field', label: 'Campo (API)', kind: 'text', hint: 'Nombre del campo enviado al servidor' },
-  { path: 'class', label: 'Clase escritorio (col-span)', kind: 'text', placeholder: 'col-span-6' },
-  { path: 'class_md', label: 'Clase móvil (md:col-span)', kind: 'text', placeholder: 'md:col-span-3' },
+  { path: 'class', label: 'Clase escritorio (col-span)', kind: 'text', /* placeholder: 'col-span-3' */ },
+  { path: 'class_md', label: 'Clase móvil (md:col-span)', kind: 'text', /* placeholder: 'md:col-span-6' */ },
   { path: 'required', label: 'Requerido', kind: 'boolean' },
   { path: 'hide', label: 'Oculto', kind: 'boolean' },
   { path: 'readonly', label: 'Solo lectura', kind: 'boolean' },
@@ -57,15 +57,15 @@ const DEFAULT_BLOCK: AdvancedFieldDef[] = [
 
 const DESCRIPTION_BLOCK: AdvancedFieldDef[] = [
   { path: 'description.active', label: 'Mostrar descripción', kind: 'boolean' },
-  { path: 'description.name', label: 'Texto descripción', kind: 'textarea', showIf: c => c?.description?.active },
-  { path: 'description.height', label: 'Alto', kind: 'text', placeholder: '60px', showIf: c => c?.description?.active },
+  { path: 'description.name', label: 'Texto descripción', kind: 'text', showIf: c => c?.description?.active },
+  { path: 'description.height', label: 'Alto', kind: 'text', /* placeholder: '60px' */ showIf: c => c?.description?.active },
   { path: 'description.slice', label: 'Cortar a (chars)', kind: 'text', showIf: c => c?.description?.active },
-  { path: 'description.caracter_slice', label: 'Sufijo de corte', kind: 'text', placeholder: '...', showIf: c => c?.description?.active },
+  { path: 'description.caracter_slice', label: 'Sufijo de corte', kind: 'text', /* placeholder: '' */ showIf: c => c?.description?.active },
 ];
 
 const SCANNER_BLOCK: AdvancedFieldDef[] = [
   { path: 'scanner.active', label: 'Habilitar escáner', kind: 'boolean' },
-  { path: 'scanner.icon', label: 'Icono', kind: 'text', placeholder: 'pi pi-qrcode', showIf: c => c?.scanner?.active },
+  { path: 'scanner.icon', label: 'Icono', kind: 'text', /* placeholder: 'pi pi-qrcode' */ showIf: c => c?.scanner?.active },
   { path: 'scanner.tooltip', label: 'Tooltip', kind: 'text', showIf: c => c?.scanner?.active },
   { path: 'scanner.hint', label: 'Hint (chars mínimos)', kind: 'number', min: 0, max: 99, showIf: c => c?.scanner?.active },
 ];
@@ -87,7 +87,7 @@ const TEXT_SCHEMA: AdvancedSection[] = [
     title: 'Texto', icon: 'pi pi-pencil', defs: [
       { path: 'max_length', label: 'Largo máximo', kind: 'number', min: 0 },
       { path: 'min_length', label: 'Largo mínimo', kind: 'number', min: 0 },
-      { path: 'placeholder', label: 'Placeholder', kind: 'text' },
+      //{ path: 'placeholder', label: 'Placeholder', kind: 'text' },
     ],
   },
   { title: 'Escáner', icon: 'pi pi-qrcode', defs: SCANNER_BLOCK },
@@ -148,14 +148,14 @@ const TOGGLE_SCHEMA: AdvancedSection[] = [
   {
     title: 'Valor por defecto', icon: 'pi pi-bolt', defs: [
       { path: 'default.active', label: 'Aplicar default', kind: 'boolean' },
-      { path: 'default.value', label: 'Valor (true/false)', kind: 'boolean', showIf: c => c?.default?.active },
+      { path: 'default.value', label: 'Valor (Si/No)', kind: 'boolean', showIf: c => c?.default?.active },
       { path: 'default.edit', label: 'Editable', kind: 'boolean', showIf: c => c?.default?.active },
     ]
   },
   {
     title: 'Etiquetas', icon: 'pi pi-tag', defs: [
-      { path: 'label_true', label: 'Etiqueta verdadero', kind: 'text', placeholder: 'Activo' },
-      { path: 'label_false', label: 'Etiqueta falso', kind: 'text', placeholder: 'Inactivo' },
+      { path: 'label_true', label: 'Etiqueta verdadero', kind: 'text', /* placeholder: 'Activo' */ },
+      { path: 'label_false', label: 'Etiqueta falso', kind: 'text', /* placeholder: 'Inactivo' */ },
     ],
   },
   { title: 'Columna en tabla', icon: 'pi pi-table', defs: COLS_BLOCK },
@@ -189,11 +189,11 @@ const FK_LIKE_SCHEMA: AdvancedSection[] = [
   { title: 'General', icon: 'pi pi-cog', defs: COMMON_BASE },
   {
     title: 'Origen de datos', icon: 'pi pi-database', defs: [
-      { path: 'data_type.type', label: 'Recurso (appType)', kind: 'text', hint: 'p.ej. asset, currency, slot' },
-      { path: 'option_value', label: 'option_value', kind: 'text', placeholder: 'id' },
-      { path: 'option_label', label: 'option_label', kind: 'text', placeholder: 'name' },
+      { path: 'data_type.type', label: 'Fuente', kind: 'text', hint: 'Productos, clientes, etc' },
+      { path: 'option_value', label: 'option_value', kind: 'text', /* placeholder: 'id' */ },
+      { path: 'option_label', label: 'option_label', kind: 'text', /* placeholder: 'name' */ },
       { path: 'filter_local', label: 'Filtro local', kind: 'boolean' },
-      { path: 'filter_by', label: 'Filtrar por (campos)', kind: 'text', placeholder: 'name' },
+      { path: 'filter_by', label: 'Filtrar por (campos)', kind: 'text', /* placeholder: 'name' */ },
       { path: 'editable', label: 'Editable', kind: 'boolean' },
       { path: 'reload_icon', label: 'Icono recargar', kind: 'boolean' },
       { path: 'new_icon', label: 'Icono nuevo', kind: 'boolean' },
@@ -213,10 +213,10 @@ const MULTI_CHOICE_SCHEMA: AdvancedSection[] = [
         path: 'data_type.options', label: 'Opciones (JSON)', kind: 'json',
         hint: 'Array de objetos. P.ej. [{"id":"A","name":"Activo"},{"id":"I","name":"Inactivo"}]'
       },
-      { path: 'option_value', label: 'option_value', kind: 'text', placeholder: 'id' },
-      { path: 'option_label', label: 'option_label', kind: 'text', placeholder: 'name' },
+      { path: 'option_value', label: 'option_value', kind: 'text', /* placeholder: 'id' */ },
+      { path: 'option_label', label: 'option_label', kind: 'text', /* placeholder: 'name' */ },
       { path: 'filter_local', label: 'Filtro local', kind: 'boolean' },
-      { path: 'filter_by', label: 'Filtrar por (campos)', kind: 'text', placeholder: 'name' },
+      { path: 'filter_by', label: 'Filtrar por (campos)', kind: 'text', /* placeholder: 'name' */ },
       { path: 'selection_limit', label: 'Límite de selección', kind: 'number', min: 0 },
     ],
   },
@@ -236,9 +236,9 @@ const AUTOCOMPLETE_SCHEMA: AdvancedSection[] = [
       { path: 'auto_highlight', label: 'Resaltar primer item', kind: 'boolean' },
       { path: 'complete_on_focus', label: 'Buscar al enfocar', kind: 'boolean' },
       { path: 'select_on_focus', label: 'Seleccionar al enfocar', kind: 'boolean' },
-      { path: 'scroll_height', label: 'Alto scroll', kind: 'text', placeholder: '200px' },
+      { path: 'scroll_height', label: 'Alto scroll', kind: 'text', /* placeholder: '200px' */ },
       { path: 'virtual_scroll', label: 'Scroll virtual', kind: 'boolean' },
-      { path: 'placeholder', label: 'Placeholder', kind: 'text' },
+      //{ path: 'placeholder', label: 'Placeholder', kind: 'text' },
     ],
   },
 ];
@@ -247,7 +247,7 @@ const BUTTON_SCHEMA: AdvancedSection[] = [
   {
     title: 'General', icon: 'pi pi-cog', defs: [
       ...COMMON_BASE.filter(d => d.path !== 'required' && d.path !== 'readonly'),
-      { path: 'icon', label: 'Icono', kind: 'text', placeholder: 'pi pi-plus' },
+      { path: 'icon', label: 'Icono', kind: 'text', /* placeholder: 'pi pi-plus' */ },
       {
         path: 'icon_position', label: 'Posición icono', kind: 'select',
         options: [
@@ -320,7 +320,9 @@ const CODE_SCHEMA: AdvancedSection[] = [
       { path: 'default.fixed.active', label: 'Prefijo fijo', kind: 'boolean', showIf: c => c?.default?.active },
       { path: 'default.fixed.value', label: 'Valor fijo', kind: 'text', showIf: c => c?.default?.fixed?.active },
       { path: 'default.date.active', label: 'Incluir fecha', kind: 'boolean', showIf: c => c?.default?.active },
-      { path: 'default.date.format', label: 'Formato fecha', kind: 'text', placeholder: 'DDMMYY', showIf: c => c?.default?.date?.active },
+      {
+        path: 'default.date.format', label: 'Formato fecha', kind: 'text', /*placeholder: 'DDMMYY',*/ showIf: c => c?.default?.date?.active
+      },
       { path: 'default.fill.active', label: 'Relleno', kind: 'boolean', showIf: c => c?.default?.active },
       { path: 'default.fill.length', label: 'Largo total', kind: 'number', min: 1, showIf: c => c?.default?.fill?.active },
       { path: 'default.fill.char', label: 'Carácter de relleno', kind: 'text', showIf: c => c?.default?.fill?.active },
@@ -335,8 +337,8 @@ const SELECT_BUTTON_SCHEMA: AdvancedSection[] = [
   {
     title: 'Selección', icon: 'pi pi-list', defs: [
       { path: 'multiple', label: 'Selección múltiple', kind: 'boolean' },
-      { path: 'option_value', label: 'option_value', kind: 'text', placeholder: 'id' },
-      { path: 'option_label', label: 'option_label', kind: 'text', placeholder: 'name' },
+      { path: 'option_value', label: 'option_value', kind: 'text', /* placeholder: 'id' */ },
+      { path: 'option_label', label: 'option_label', kind: 'text', /* placeholder: 'name' */ },
       {
         path: 'data_type.options', label: 'Opciones (JSON)', kind: 'json',
         hint: 'Array de objetos. P.ej. [{"id":"SI","name":"SI"},{"id":"NO","name":"NO"}]'

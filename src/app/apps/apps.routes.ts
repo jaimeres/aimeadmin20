@@ -34,7 +34,9 @@ export default [
   ,
   {
     path: 'task',
-    loadComponent: () => import('@/tasks/task/task.component').then((c) => c.TaskComponent),
+    // [[[II ESC:023-04 DOC:docs/documents/2026-06-14_023_task-personalized-opennew.md#escenario-04
+    loadComponent: () => import('../tasks/task/task.component').then((c) => c.TaskComponent),
+    // ]]]FI
     data: { breadcrumb: 'Task' }
   }
 ] as Routes;

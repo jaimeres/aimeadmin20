@@ -3724,6 +3724,7 @@ export class CRUD extends Vars implements OnChanges  /*implements OnInit*/ {
     }
 
     //|||DEBOR PONERLO FUERA DEL IF, PARA QUE AGREGUE EL VALOR AL FORMULARIO EN LOS SECUNDARIOS
+    console.log('unify Dialog - parent_id::::::::::::::', parent_id, '| id:', id);
     if (parent_id && id) {
       this.formTempo[pos].get(parent_id)?.setValue(id);
     }
@@ -3740,7 +3741,7 @@ export class CRUD extends Vars implements OnChanges  /*implements OnInit*/ {
   // [[[II ESC:021-02 DOC:docs/documents/2026-06-05_021_crud-onshow-maximize-small-screens.md#escenario-02
   styleClassSecundaryDialog = signal(this.defaultCrudDialogClass);
   // ]]]FI
-  tabVisibleSecundary = signal(1);
+  tabVisibleSecundary = signal(0);
   tabVisible = signal(1);
 
   openNewSecundary(options: { pos: any, node?: boolean, parent_id?: string }) {
@@ -3763,6 +3764,7 @@ export class CRUD extends Vars implements OnChanges  /*implements OnInit*/ {
     // grande). Se obtiene on-demand antes de construir los dinamicos. Es opcional:
     // si no existe o viene vacio, el detalle igual se abre solo con los campos del
     // OPTIONS de task-detail. ]]]FI
+    //|||no si quieran le encuentro sentido, no hace nada bien puede ser una linea
     this._ensureParentChildFormFields(parentSelect, parent_id).subscribe(() => {
       this._buildSecundaryDetail(pos, parent_id, parentSelect);
     });
@@ -3826,6 +3828,12 @@ export class CRUD extends Vars implements OnChanges  /*implements OnInit*/ {
     }
 
 
+    //esto no debe quedar asi, es para ferificar si funciona
+    //aqui voy deberi ser this.taskMenu, ademas debo revisar porque aqui se esan envuiando sys, tasks y tros valores y 
+    //y en otros no
+    const selected = { [parent_id]: this.selected()[0]?.id }
+    console.log('selected..............', parent_id, selected);
+
     //obliga a regenerar el formulario sobre para todo aquellos regitros hijos que cambian en base al padre como child_form_fields
     //if (!this.formTempo[pos]) {
     // si ya se consulto al servidor, no se vuelve a consultar
@@ -3843,7 +3851,10 @@ export class CRUD extends Vars implements OnChanges  /*implements OnInit*/ {
       }
       this.formTempo[pos] = this.generateJSONform(this.optionsFields[pos], pos);
       this.form.set(this.formTempo);
-      this.resetFormDialog({ pos });
+
+      this.resetFormDialog({ pos, selected });
+
+
 
       if (child_form_fields?.draw) {
         //si children tiene sus propios valores de dialog, les da prioridad, sino los que ya se hayan inilizazado desde if (!this.drawForm()[pos]) 
@@ -3874,7 +3885,7 @@ export class CRUD extends Vars implements OnChanges  /*implements OnInit*/ {
           }
           this.formTempo[pos] = this.generateJSONform(this.optionsFields[pos], pos);
           this.form.set(this.formTempo);
-          this.resetFormDialog({ pos });
+          this.resetFormDialog({ pos, selected });
           if (child_form_fields?.draw) {
             //const draw = child_form_fields.draw || {};
             //const field = child_form_fields.fields || {};    
@@ -4820,10 +4831,10 @@ export class CRUD extends Vars implements OnChanges  /*implements OnInit*/ {
       this.crudS.type = this.type[safePos];
       this.crudS.app = this.app[safePos];
 
-      //this.fields siempre se debe inclui sino no es validado el form
       const formData = this.currentForm(safePos).value;
-      //const include = this.include;
-      const include = this.fields[safePos] ? this.fields[safePos] : '';
+      // [[[II ESC:024-10 DOC:docs/documents/2026-06-15_024_open-tasks-detail-render-child-form.md#escenario-10
+      const include = this.include[safePos] || '';
+      // ]]]FI
       //const filter = this.filter;
       //const files = is_file ? this.files : null;
 

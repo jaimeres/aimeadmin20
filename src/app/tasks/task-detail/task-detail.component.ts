@@ -112,12 +112,16 @@ export class TaskDetailComponent extends CRUD implements OnInit {
     this.crudS.type = ctx.consumerType;
     this.crudS.app = ctx.consumerApp;
 
+    // [[[II ESC:024-11 DOC:docs/documents/2026-06-15_024_open-tasks-detail-render-child-form.md#escenario-11
+    const taskDetailRelationships = [{ field: 'task_details', type: 'task-detail', id: [newId] }];
+    // ]]]FI
+    console.log('PATCH ---*-*-*-*-', taskDetailRelationships)
     this.crudS.edit({
       id: ctx.consumerId,
       app: ctx.consumerApp,
       type: ctx.consumerType,
       formData: {},
-      relationships: [{ field: 'task_detail', type: 'task-detail', id: newId }],
+      relationships: taskDetailRelationships,
     }).subscribe({
       next: () => {
         this.messageS.changeMessage('Tarea detalle generada y asociada al registro.', null, {}, 'success', 'Aviso');

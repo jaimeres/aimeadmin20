@@ -25,8 +25,8 @@ export class TaskComponent extends CRUD implements OnInit {
 
   //taeraPersonalizada
   personalizedTask = signal<boolean>(false);
-  // [[[II ESC:023-02 DOC:docs/documents/2026-06-14_023_task-personalized-opennew.md#escenario-02
-  childFormFieldsDraft = signal<any>({ fields: {}, draw: { general: {} } });
+  // [[[II ESC:023-02 DOC:docs/documents/2026-06-14_023_task-personalized-opennew.md#escenario-02 ESC:023-03 DOC:docs/documents/2026-06-14_023_task-personalized-opennew.md#escenario-03
+  childFormFieldsDraft = signal<any>(this.defaultChildFormFieldsDraft());
   // ]]]FI
 
   public override openNewMenu = signal<MenuItem[]>([
@@ -111,9 +111,9 @@ export class TaskComponent extends CRUD implements OnInit {
   }
   // ]]]FI
 
-  // [[[II ESC:023-02 DOC:docs/documents/2026-06-14_023_task-personalized-opennew.md#escenario-02
+  // [[[II ESC:023-02 DOC:docs/documents/2026-06-14_023_task-personalized-opennew.md#escenario-02 ESC:023-03 DOC:docs/documents/2026-06-14_023_task-personalized-opennew.md#escenario-03
   onChildFormFieldsChange(value: any): void {
-    this.childFormFieldsDraft.set(value ?? { fields: {}, draw: { general: {} } });
+    this.childFormFieldsDraft.set(this.parseChildFormFieldsValue(value));
     this.ensureChildFormFieldsControl()?.setValue(this.childFormFieldsDraft(), { emitEvent: false });
   }
 
@@ -144,11 +144,27 @@ export class TaskComponent extends CRUD implements OnInit {
   }
 
   private parseChildFormFieldsValue(value: any): any {
-    if (!value) return { fields: {}, draw: { general: {} } };
+    if (!value) return this.defaultChildFormFieldsDraft();
     if (typeof value === 'string') {
-      try { return JSON.parse(value); } catch { return { fields: {}, draw: { general: {} } }; }
+      try { return this.parseChildFormFieldsValue(JSON.parse(value)); } catch { return this.defaultChildFormFieldsDraft(); }
     }
-    return value;
+    return value?.child_form_fields ?? value;
+  }
+
+  private defaultChildFormFieldsDraft(): any {
+    return {
+      draw: {
+        grid: {},
+        dialog: {
+          tab: 2,
+          width: 'width-900px-custom',
+          height: 'height-700px-custom',
+        },
+      },
+      field: 'child_form_fields',
+      label: 'Formulario del detalle',
+      fields: {},
+    };
   }
   // ]]]FI
 }

@@ -189,8 +189,34 @@ consumidor.
    bloquea la emision automatica de `closeDialog` por `onHide` para no destruir el
    componente antes de terminar. Etiquetas `[[[II ESC:024-09 ... ]]]FI`.
 
-### Validaciones aplicadas (escenarios 07-09)
-- `npm run build`: exit 0 (solo warnings de budget preexistentes).
+<a id="escenario-10"></a>
+## Escenario 10: saveSecundary no debe enviar fields como include
+
+### Problema
+Al guardar `task-detail` desde el dialogo secundario, `saveSecundary` estaba
+pasando `this.fields[pos]` en el parametro `include` de `saveObject`. Eso generaba
+URLs como `?include=status,sys,status,tasks,...`, donde campos de consulta se
+enviaban como relaciones JSON:API incluibles y el servidor respondia 400.
+
+### Decision
+`saveSecundary` ahora usa `this.include[pos]`, igual que el flujo principal
+`save`/`submitForm`. `this.fields[pos]` queda reservado para consultas
+`fields[type]=...`, no para `include`.
+
+<a id="escenario-11"></a>
+## Escenario 11: task_detail de retorno como lista JSON:API
+
+### Problema
+El PATCH de retorno al modulo consumidor enviaba `task_detail` con `id` simple.
+`GeneralService.baseDJA` interpreta un `id` simple como relacion singular y
+serializa `relationships.task_detail.data` como objeto.
+
+### Decision
+`TaskDetailComponent` envia `task_detail` con `id: [newId]`. Asi el serializador
+mantiene la relacion como lista JSON:API: `data: [{ id, type: 'task-detail' }]`.
+
+### Validaciones aplicadas (escenarios 07-11)
+- `npm run build`: exit 0 (warnings preexistentes de budget/CommonJS/stylesheet).
 - `get_errors` sobre `crud.class.ts`, `vars.class.ts`, `task.component.ts`,
   `task-detail.component.ts`, `task-module-registry.ts`: sin errores.
 

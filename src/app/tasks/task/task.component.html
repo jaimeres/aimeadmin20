@@ -50,7 +50,6 @@
 
       <p-tabpanels>
         <p-tabpanel [value]="0">
-          {{personalizedTask()}}
           <app-custom-draw-form *ngIf="form()[$any(typeDefault)] && drawForm()[typeDefault]"
             [drawForm]="drawForm()[typeDefault]['general']" [formGroup]="form()[$any(typeDefault)]"
             (onSelectAutoCompleteAction)="onSelectAutoComplete($event)"
@@ -63,7 +62,7 @@
         </p-tabpanel>
 
         <p-tabpanel [value]="5">
-          <!-- [[[II ESC:023-02 DOC:docs/documents/2026-06-14_023_task-personalized-opennew.md#escenario-02 -->
+          <!-- [[[II ESC:023-02 DOC:docs/documents/2026-06-14_023_task-personalized-opennew.md#escenario-02 ESC:023-03 DOC:docs/documents/2026-06-14_023_task-personalized-opennew.md#escenario-03 -->
           <app-child-form-fields-builder [value]="childFormFieldsDraft()"
             (valueChange)="onChildFormFieldsChange($event)" />
           <!-- ]]]FI -->

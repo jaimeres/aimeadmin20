@@ -34,7 +34,6 @@
         </p-tabpanel>
 
         <p-tabpanel [value]="1">
-          {{drawForm()['task-detail_child_form_fields']}}
           <app-custom-draw-form *ngIf="form()[$any('task-detail')] && drawForm()['task-detail_child_form_fields']"
             [drawForm]="drawForm()['task-detail_child_form_fields']" [formGroup]="form()[$any('task-detail')]"
             (onSelectAutoCompleteAction)="onSelectAutoComplete($event)"
