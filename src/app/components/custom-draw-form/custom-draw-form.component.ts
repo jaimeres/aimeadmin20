@@ -1,7 +1,7 @@
 import { CommonModule, KeyValue } from '@angular/common';
 import { DROPDOWN_TYPES_PRELOAD } from '../../utils/dropdown-types.const';
 import { FormControl, FormGroup, FormsModule, ReactiveFormsModule, FormArray, Validators, FormBuilder } from '@angular/forms';
-import { Component, ChangeDetectionStrategy, ElementRef, EventEmitter, inject, Input, Output, signal, computed, SimpleChange, SimpleChanges, ViewChild, OnDestroy } from '@angular/core';
+import { Component, ChangeDetectionStrategy, ElementRef, EventEmitter, inject, Input, Output, signal, computed, SimpleChange, SimpleChanges, ViewChild, OnDestroy, OnInit } from '@angular/core';
 import { Subscription } from 'rxjs';
 import { debounceTime } from 'rxjs/operators';
 import { MenuItem } from 'primeng/api';
@@ -128,7 +128,7 @@ export class JoinOrSelfPipe implements PipeTransform {
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
-export class CustomDrawFormComponent implements OnDestroy {
+export class CustomDrawFormComponent implements OnInit, OnDestroy {
 
   @ViewChild('videoElement') video!: ElementRef;
   @ViewChild('canvasElement') canvas!: ElementRef;
@@ -144,6 +144,7 @@ export class CustomDrawFormComponent implements OnDestroy {
   // Suscripción para detectar cambios en el formulario
   private formSubscription?: Subscription;
   private formStatusSubscription?: Subscription;
+  private messageSubscription?: Subscription;
   /** Suscripción para el autoguardado de caché */
   private cacheAutoSaveSub?: Subscription;
   private wasDirty: boolean = false;
@@ -211,6 +212,11 @@ export class CustomDrawFormComponent implements OnDestroy {
   readonly isCacheRestored = signal<boolean>(false);
 
   dropdownOptionsSignal = signal<any>({});
+  // [[[II ESC:001-12 DOC:docs/documents/2026-05-16_001_consolidacion_dropdown_types_y_fix_escenarios.md#escenario-12
+  fileSplitButtonInvalidSignal = signal<Record<string, boolean>>({});
+  private fileSplitButtonValidationTargets: Record<string, string[]> = {};
+  private fileSplitButtonServerErrorFields = new Set<string>();
+  // ]]]FI
   // [[[II ESC:020-04 DOC:docs/documents/2026-06-04_020_custom-draw-form-virtual-scroll-dropdowns.md#escenario-04
   virtualOptionsReadySignal = signal<Record<string, boolean>>({});
   // ]]]FI
@@ -1004,6 +1010,15 @@ export class CustomDrawFormComponent implements OnDestroy {
   }
   // ]]]FI
 
+  // [[[II ESC:001-12 DOC:docs/documents/2026-05-16_001_consolidacion_dropdown_types_y_fix_escenarios.md#escenario-12
+  ngOnInit(): void {
+    this.messageSubscription = this.messageS.currentMessage.subscribe((msg: any) => {
+      this.fileSplitButtonServerErrorFields = this.extractErrorFieldsFromMessage(msg);
+      this.refreshFileSplitButtonInvalidState();
+    });
+  }
+  // ]]]FI
+
   // [[[II ESC:008-01 DOC:docs/documents/2026-06-02_008_custom-draw-form-ngonchanges-signals.md#escenario-01 ESC:017-01 DOC:docs/documents/2026-06-02_017_custom-draw-form-device-drawform.md#escenario-01 ESC:007-06 DOC:docs/documents/2026-06-01_007_custom-draw-form-listbox.md#escenario-06 ESC:007-07 DOC:docs/documents/2026-06-01_007_custom-draw-form-listbox.md#escenario-07 ESC:001-08 DOC:docs/documents/2026-05-16_001_consolidacion_dropdown_types_y_fix_escenarios.md#escenario-08 ESC:001-09 DOC:docs/documents/2026-05-16_001_consolidacion_dropdown_types_y_fix_escenarios.md#escenario-09
   ngOnChanges(changes: SimpleChanges) {
     const perfStart = this.perfNow();
@@ -1051,6 +1066,12 @@ export class CustomDrawFormComponent implements OnDestroy {
     const previousValue = change.previousValue;
     const currentValue = change.currentValue;
 
+    // [[[II ESC:001-12 DOC:docs/documents/2026-05-16_001_consolidacion_dropdown_types_y_fix_escenarios.md#escenario-12
+    if (previousValue !== currentValue) {
+      this.fileSplitButtonServerErrorFields.clear();
+    }
+    // ]]]FI
+
     // Limpiar suscripciones anteriores si existen
     if (this.formSubscription) {
       this.formSubscription.unsubscribe();
@@ -1074,7 +1095,14 @@ export class CustomDrawFormComponent implements OnDestroy {
       this.normalizeListboxControlValues(this.drawFormSignal(), currentValue, true);
       this.formSubscription = currentValue.valueChanges.subscribe(() => {
         this.normalizeListboxControlValues();
+        // [[[II ESC:001-12 DOC:docs/documents/2026-05-16_001_consolidacion_dropdown_types_y_fix_escenarios.md#escenario-12
+        this.fileSplitButtonServerErrorFields.clear();
+        this.refreshFileSplitButtonInvalidState();
+        // ]]]FI
       });
+      // [[[II ESC:001-12 DOC:docs/documents/2026-05-16_001_consolidacion_dropdown_types_y_fix_escenarios.md#escenario-12
+      this.rebuildFileSplitButtonValidationTargets(this.drawFormSignal(), currentValue);
+      // ]]]FI
     }
 
     // Si el formGroup cambió (reset o nuevo objeto), limpiar todos los canvas de firma Y archivos multimedia
@@ -1096,6 +1124,9 @@ export class CustomDrawFormComponent implements OnDestroy {
 
       // Suscribirse al estado del formulario (pristine/dirty)
       this.formStatusSubscription = currentValue.statusChanges.subscribe(() => {
+        // [[[II ESC:001-12 DOC:docs/documents/2026-05-16_001_consolidacion_dropdown_types_y_fix_escenarios.md#escenario-12
+        this.refreshFileSplitButtonInvalidState();
+        // ]]]FI
         const isPristine = currentValue.pristine;
         const isDirty = currentValue.dirty;
 
@@ -1144,6 +1175,10 @@ export class CustomDrawFormComponent implements OnDestroy {
     this.logPerf('handleDrawFormChange.dropdownOptions', stepStart);
 
     this.normalizeListboxControlValues(drawForm, this.formGroupSignal(), true);
+
+    // [[[II ESC:001-12 DOC:docs/documents/2026-05-16_001_consolidacion_dropdown_types_y_fix_escenarios.md#escenario-12
+    this.rebuildFileSplitButtonValidationTargets(drawForm, this.formGroupSignal());
+    // ]]]FI
 
     stepStart = this.perfNow();
     this.initializeTableFields(drawForm);
@@ -1289,6 +1324,9 @@ export class CustomDrawFormComponent implements OnDestroy {
     }
     if (this.formStatusSubscription) {
       this.formStatusSubscription.unsubscribe();
+    }
+    if (this.messageSubscription) {
+      this.messageSubscription.unsubscribe();
     }
     if (this.cacheAutoSaveSub) {
       this.cacheAutoSaveSub.unsubscribe();
@@ -1677,6 +1715,9 @@ export class CustomDrawFormComponent implements OnDestroy {
         }
       }
     }
+    // [[[II ESC:001-12 DOC:docs/documents/2026-05-16_001_consolidacion_dropdown_types_y_fix_escenarios.md#escenario-12
+    this.refreshFileSplitButtonInvalidState();
+    // ]]]FI
     return allValid;
   }
 
@@ -3741,6 +3782,137 @@ export class CustomDrawFormComponent implements OnDestroy {
     if (documentsCandidate === fieldName) return null;
     return formGroup?.get(documentsCandidate) ? documentsCandidate : null;
   }
+
+  // [[[II ESC:001-12 DOC:docs/documents/2026-05-16_001_consolidacion_dropdown_types_y_fix_escenarios.md#escenario-12
+  private rebuildFileSplitButtonValidationTargets(drawForm = this.drawFormSignal(), formGroup = this.formGroupSignal()): void {
+    const targets: Record<string, string[]> = {};
+
+    if (!drawForm || !formGroup) {
+      this.fileSplitButtonValidationTargets = targets;
+      this.fileSplitButtonInvalidSignal.set({});
+      return;
+    }
+
+    const seen = new WeakSet<object>();
+    const walk = (node: any): void => {
+      if (!node || typeof node !== 'object' || seen.has(node)) return;
+      seen.add(node);
+
+      if (node.type === 'files' || node.type === 'file' || node.type === 'document') {
+        const stateKey = this.fileSplitButtonStateKey(node, formGroup);
+        if (stateKey) {
+          node._fileSplitButtonInvalidKey = stateKey;
+          const current = targets[stateKey] || [];
+          targets[stateKey] = Array.from(new Set([...current, ...this.fileSplitButtonControlNames(node, formGroup)]));
+        }
+      }
+
+      for (const child of Object.values(node)) {
+        if (child && typeof child === 'object') walk(child);
+      }
+    };
+
+    walk(drawForm);
+    this.fileSplitButtonValidationTargets = targets;
+    this.refreshFileSplitButtonInvalidState();
+  }
+
+  private fileSplitButtonStateKey(fieldConfig: any, formGroup: FormGroup): string {
+    const fieldName = fieldConfig?.field;
+    const keyName = fieldConfig?.key;
+
+    if (keyName && keyName !== fieldName) return keyName;
+    if (fieldName) return fieldName;
+
+    const documentsField = this.resolveDocumentsField(fieldName, formGroup);
+    return documentsField || '';
+  }
+
+  private fileSplitButtonControlNames(fieldConfig: any, formGroup: FormGroup): string[] {
+    const fieldName = fieldConfig?.field;
+    const keyName = fieldConfig?.key;
+    const controls = new Set<string>();
+    const hasDistinctKey = !!(keyName && keyName !== fieldName);
+
+    if (hasDistinctKey) controls.add(keyName);
+    if (fieldName) controls.add(fieldName);
+
+    if (!hasDistinctKey) {
+      const documentsField = this.resolveDocumentsField(fieldName, formGroup);
+      if (documentsField) controls.add(documentsField);
+    }
+
+    return Array.from(controls);
+  }
+
+  private refreshFileSplitButtonInvalidState(): void {
+    const formGroup = this.formGroupSignal();
+    const next: Record<string, boolean> = {};
+
+    if (!formGroup) {
+      this.fileSplitButtonInvalidSignal.set(next);
+      return;
+    }
+
+    for (const [stateKey, controlNames] of Object.entries(this.fileSplitButtonValidationTargets)) {
+      next[stateKey] = controlNames.some((controlName) => {
+        const control = formGroup.get(controlName);
+        return (!!control?.invalid && (control.dirty || control.touched)) || this.fileSplitButtonHasServerError(controlName);
+      });
+    }
+
+    this.fileSplitButtonInvalidSignal.set(next);
+  }
+
+  private extractErrorFieldsFromMessage(msg: any): Set<string> {
+    const fields = new Set<string>();
+    const err = msg?.err;
+    if (!err) return fields;
+
+    if (Array.isArray(err.local)) {
+      err.local.forEach((errorObject: any) => this.addErrorField(fields, errorObject?.field));
+      return fields;
+    }
+
+    const errors = err.error?.errors;
+    const errorsArray = Array.isArray(errors) ? errors : (errors ? [errors] : []);
+    errorsArray.forEach((error: any) => {
+      const pointer = error?.source?.pointer;
+      if (typeof pointer === 'string') {
+        const parts = pointer.split('/').filter(Boolean);
+        this.addErrorField(fields, parts[parts.length - 1]);
+      }
+      this.addErrorField(fields, error?.source?.parameter);
+    });
+
+    return fields;
+  }
+
+  private addErrorField(fields: Set<string>, field: any): void {
+    if (typeof field === 'string' && field.trim()) fields.add(field.trim());
+  }
+
+  private fileSplitButtonHasServerError(controlName: string): boolean {
+    if (!this.fileSplitButtonServerErrorFields.size) return false;
+    return this.fileSplitButtonControlAliases(controlName)
+      .some((alias) => this.fileSplitButtonServerErrorFields.has(alias));
+  }
+
+  private fileSplitButtonControlAliases(controlName: string): string[] {
+    const clean = controlName.startsWith('object_') ? controlName.slice('object_'.length) : controlName;
+    const aliases = new Set<string>([controlName, clean]);
+
+    const filesIndex = clean.lastIndexOf('_files');
+    if (filesIndex >= 0) aliases.add(clean.slice(filesIndex + 1));
+    if (clean.endsWith('_files')) aliases.add('files');
+
+    const documentsIndex = clean.lastIndexOf('_documents');
+    if (documentsIndex >= 0) aliases.add(clean.slice(documentsIndex + 1));
+    if (clean.endsWith('_documents')) aliases.add('documents');
+
+    return Array.from(aliases).filter(Boolean);
+  }
+  // ]]]FI
 
   private resolveFileTargets(payload: { field?: string; fieldConfig?: any }): { sendField?: string; localField?: string; key?: string } {
     const formGroup = this.formGroupSignal();

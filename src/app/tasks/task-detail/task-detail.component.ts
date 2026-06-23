@@ -92,6 +92,12 @@ export class TaskDetailComponent extends CRUD implements OnInit {
     this.openNewSecundary({ pos: 'task-detail', parent_id: 'task' });
   }
 
+  // [[[II ESC:005-11 DOC:docs/documents/2026-05-31_005_columnas-form-data-y-tree-select-nombres.md#escenario-11
+  override configDialog(): void {
+    this.localSettings();
+  }
+  // ]]]FI
+
   /**
    * Tras crear el task-detail, hace el PATCH de retorno al modulo consumidor con la
    * relacion task_detail = id generado y luego cierra el dialogo.

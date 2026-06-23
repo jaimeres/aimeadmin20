@@ -45,6 +45,20 @@ export interface FilterRow { active: boolean; op: string; }
 
 interface OpOption { label: string; value: string; }
 
+// [[[II ESC:005-11 DOC:docs/documents/2026-05-31_005_columnas-form-data-y-tree-select-nombres.md#escenario-11
+interface FilterableCol {
+  field: string;
+  filterField: string;
+  filterKey: string;
+  filterMode: 'simple' | 'explicit';
+  header: string;
+  type: string;
+  data_type: any;
+  filter_by: string;
+  filter: any;
+}
+// ]]]FI
+
 export interface ColsCfgData {
   label: string;
   sortable: boolean;
@@ -241,7 +255,8 @@ export class CustomLocalSettingsComponent implements OnChanges, OnDestroy {
     return map;
   });
 
-  filterableCols = computed<any[]>(() => {
+  // [[[II ESC:005-11 DOC:docs/documents/2026-05-31_005_columnas-form-data-y-tree-select-nombres.md#escenario-11
+  filterableCols = computed<FilterableCol[]>(() => {
     const rawFields = this.fieldSignal()?.fields;
     if (!rawFields) return [];
     const colsArr: any[] = this.fieldSignal()?.cols ?? [];
@@ -251,14 +266,9 @@ export class CustomLocalSettingsComponent implements OnChanges, OnDestroy {
       ? rawFields.map((f: any) => [f?.field ?? f?.name, f])
       : Object.entries(rawFields as Record<string, any>);
     return entries
-      .map(([fieldName, cfg]: [string, any]) => ({
-        field: fieldName,
-        header: labelMap[fieldName] ?? cfg?.cols?.label ?? cfg?.label ?? fieldName,
-        type: cfg?.type ?? '',
-        data_type: cfg?.data_type?.type ?? '',
-        filter_by: cfg?.cols?.filter?.by ?? cfg?.filter_by ?? '',
-        filter: cfg?.cols?.filter ?? {},
-      }))
+      .flatMap(([fieldName, cfg]: [string, any]) =>
+        this._buildFilterableCols(fieldName, cfg, labelMap[fieldName])
+      )
       .filter((col: any) => {
         if (!col.field) return false;
         if (col.filter?.ui === false) return false;
@@ -266,13 +276,13 @@ export class CustomLocalSettingsComponent implements OnChanges, OnDestroy {
       });
   });
 
-  filterableColMap = computed<Record<string, any>>(() =>
-    Object.fromEntries(this.filterableCols().map(c => [c.field, c]))
+  filterableColMap = computed<Record<string, FilterableCol>>(() =>
+    Object.fromEntries(this.filterableCols().map(c => [c.filterKey, c]))
   );
 
   filterTypeByField = computed<Record<string, FilterFieldType>>(() => {
     const map: Record<string, FilterFieldType> = {};
-    for (const c of this.filterableCols()) map[c.field] = colTypeToFilterType(c.type ?? '');
+    for (const c of this.filterableCols()) map[c.filterKey] = colTypeToFilterType(c.type ?? '');
     return map;
   });
 
@@ -284,10 +294,11 @@ export class CustomLocalSettingsComponent implements OnChanges, OnDestroy {
         ? rawOps
         : (rawOps && typeof rawOps === 'object' ? Object.values(rawOps) : []) as string[];
       const eff = ops.length > 0 ? ops : (DEFAULT_OPS[colTypeToFilterType(c.type ?? '')] ?? ['exact']);
-      map[c.field] = eff.map(op => ({ label: OP_LABELS[op] ?? op, value: op }));
+      map[c.filterKey] = eff.map(op => ({ label: OP_LABELS[op] ?? op, value: op }));
     }
     return map;
   });
+  // ]]]FI
 
   activeFilterCount = computed<number>(() =>
     Object.values(this.filterState()).filter(r => r.active).length
@@ -309,6 +320,68 @@ export class CustomLocalSettingsComponent implements OnChanges, OnDestroy {
     return schemaForType(cfg?.type);
   });
 
+  // [[[II ESC:005-11 DOC:docs/documents/2026-05-31_005_columnas-form-data-y-tree-select-nombres.md#escenario-11
+  private _buildFilterableCols(fieldName: string, cfg: any, colHeader?: string): FilterableCol[] {
+    const filter = cfg?.cols?.filter ?? {};
+    const header = colHeader ?? cfg?.cols?.label ?? cfg?.label ?? fieldName;
+    const explicitEntries = this._explicitFilterEntries(filter);
+    const rows: FilterableCol[] = [];
+
+    if (explicitEntries.length === 0 || this._isFilterEntry(filter)) {
+      rows.push({
+        field: fieldName,
+        filterField: fieldName,
+        filterKey: fieldName,
+        filterMode: 'simple',
+        header,
+        type: cfg?.type ?? '',
+        data_type: cfg?.data_type?.type ?? '',
+        filter_by: cfg?.cols?.filter?.by ?? cfg?.filter_by ?? '',
+        filter,
+      });
+    }
+
+    for (const [filterField, entry] of explicitEntries) {
+      rows.push({
+        field: fieldName,
+        filterField,
+        filterKey: `${fieldName}::${filterField}`,
+        filterMode: 'explicit',
+        header: `${header} / ${entry?.label ?? entry?.header ?? filterField}`,
+        type: this._resolveExplicitFilterType(entry),
+        data_type: entry?.data_type?.type ?? entry?.data_type ?? '',
+        filter_by: entry?.by ?? entry?.filter_by ?? '',
+        filter: entry,
+      });
+    }
+
+    return rows;
+  }
+
+  private _explicitFilterEntries(filter: any): [string, any][] {
+    if (!filter || typeof filter !== 'object' || Array.isArray(filter)) return [];
+    const reserved = new Set(['active', 'default', 'default_value', 'ops', 'option_value', 'by', 'relative', 'ui', 'option_label']);
+    return Object.entries(filter)
+      .filter(([key, value]: [string, any]) => key !== 'logic' && !reserved.has(key) && this._isFilterEntry(value)) as [string, any][];
+  }
+
+  private _isFilterEntry(filter: any): boolean {
+    if (!filter || typeof filter !== 'object' || Array.isArray(filter)) return false;
+    return Object.prototype.hasOwnProperty.call(filter, 'active')
+      || Object.prototype.hasOwnProperty.call(filter, 'default')
+      || Object.prototype.hasOwnProperty.call(filter, 'default_value')
+      || Object.prototype.hasOwnProperty.call(filter, 'ops')
+      || Object.prototype.hasOwnProperty.call(filter, 'option_value');
+  }
+
+  private _resolveExplicitFilterType(filter: any): string {
+    if (filter?.type) return filter.type;
+    if (typeof filter?.default_value === 'boolean') return 'toggle-button';
+    if (typeof filter?.default_value === 'number') return 'input-number';
+    return 'input-text';
+  }
+  // ]]]FI
+
   // ─── Lifecycle ────────────────────────────────────────────────────────────
 
   ngOnChanges(changes: SimpleChanges): void {
@@ -324,21 +397,23 @@ export class CustomLocalSettingsComponent implements OnChanges, OnDestroy {
 
   // ─── FK / dropdowns ───────────────────────────────────────────────────────
 
+  // [[[II ESC:005-11 DOC:docs/documents/2026-05-31_005_columnas-form-data-y-tree-select-nombres.md#escenario-11
   completeFkMethod(event: { query: string }, col: any): void {
     const q = (event?.query ?? '').trim();
     const dataType = col?.data_type?.type ?? col?.data_type;
+    const filterKey = col?.filterKey ?? col?.field;
 
     if (dataType) {
       if (q.length > 0 && q.length < FK_MIN_CHARS) {
-        this.fkSuggestionsSignal.update(s => ({ ...s, [col.field]: [] }));
+        this.fkSuggestionsSignal.update(s => ({ ...s, [filterKey]: [] }));
         this.fkSearchHintSignal.update(s => ({
-          ...s, [col.field]: `Escriba al menos ${FK_MIN_CHARS} caracteres para buscar`
+          ...s, [filterKey]: `Escriba al menos ${FK_MIN_CHARS} caracteres para buscar`
         }));
         return;
       }
-      this.fkSearchHintSignal.update(s => ({ ...s, [col.field]: '' }));
+      this.fkSearchHintSignal.update(s => ({ ...s, [filterKey]: '' }));
       if (q.length === 0) {
-        this.fkSuggestionsSignal.update(s => ({ ...s, [col.field]: [] }));
+        this.fkSuggestionsSignal.update(s => ({ ...s, [filterKey]: [] }));
         return;
       }
       const appTypeEntry = this.crudS.getAppType(dataType);
@@ -358,25 +433,26 @@ export class CustomLocalSettingsComponent implements OnChanges, OnDestroy {
             respDJA: data,
             fields: { [col.field]: {} },
           });
-          this.fkSuggestionsSignal.update(s => ({ ...s, [col.field]: options }));
+          this.fkSuggestionsSignal.update(s => ({ ...s, [filterKey]: options }));
         });
         return;
       }
     }
-    this.fkSearchHintSignal.update(s => ({ ...s, [col.field]: '' }));
-    const all = this.dropdownOptionsSignal()[col.field] ?? [];
+    this.fkSearchHintSignal.update(s => ({ ...s, [filterKey]: '' }));
+    const all = this.dropdownOptionsSignal()[filterKey] ?? [];
     const label = this.getOptionLabel(col);
     const filtered = q
       ? all.filter((o: any) => String(o[label] ?? '').toLowerCase().includes(q.toLowerCase()))
       : [...all];
-    this.fkSuggestionsSignal.update(s => ({ ...s, [col.field]: filtered }));
+    this.fkSuggestionsSignal.update(s => ({ ...s, [filterKey]: filtered }));
   }
+  // ]]]FI
 
-  hasRelativePresets(field: string): boolean {
-    const col = this.filterableColMap()[field];
+  hasRelativePresets(filterKey: string): boolean {
+    const col = this.filterableColMap()[filterKey];
     if (!col) return false;
-    if (this.filterTypeByField()[field] !== 'datetime') return false;
-    const row = this.getRow(field);
+    if (this.filterTypeByField()[filterKey] !== 'datetime') return false;
+    const row = this.getRow(filterKey);
     return row.active && (col.filter?.relative?.enabled !== false);
   }
 
@@ -451,20 +527,21 @@ export class CustomLocalSettingsComponent implements OnChanges, OnDestroy {
 
   // ─── Filtros ──────────────────────────────────────────────────────────────
 
-  toggleFilter(field: string, active: boolean): void {
-    const col = this.filterableColMap()[field];
-    const ops = this.opsOptionsByField()[field]?.map(o => o.value) ?? ['exact'];
-    const op = active ? (col?.filter?.default ?? ops[0] ?? 'exact') : this.getRow(field).op;
-    this.filterState.update(st => ({ ...st, [field]: { active, op } }));
+  // [[[II ESC:005-11 DOC:docs/documents/2026-05-31_005_columnas-form-data-y-tree-select-nombres.md#escenario-11
+  toggleFilter(filterKey: string, active: boolean): void {
+    const col = this.filterableColMap()[filterKey];
+    const ops = this.opsOptionsByField()[filterKey]?.map(o => o.value) ?? ['exact'];
+    const op = active ? (col?.filter?.default ?? ops[0] ?? 'exact') : this.getRow(filterKey).op;
+    this.filterState.update(st => ({ ...st, [filterKey]: { active, op } }));
   }
 
-  setOp(field: string, op: string): void {
-    this.filterState.update(st => ({ ...st, [field]: { ...this.getRow(field), op } }));
-    this.filterValuesFormGroup.get(`fv_${field}`)?.setValue(null, { emitEvent: false });
-    this.filterValuesFormGroup.get(`fv_${field}_2`)?.setValue(null, { emitEvent: false });
+  setOp(filterKey: string, op: string): void {
+    this.filterState.update(st => ({ ...st, [filterKey]: { ...this.getRow(filterKey), op } }));
+    this.filterValuesFormGroup.get(`fv_${filterKey}`)?.setValue(null, { emitEvent: false });
+    this.filterValuesFormGroup.get(`fv_${filterKey}_2`)?.setValue(null, { emitEvent: false });
   }
 
-  applyRelativePreset(field: string, preset: string): void {
+  applyRelativePreset(filterKey: string, preset: string): void {
     const now = new Date();
     let v1: Date | null = null, v2: Date | null = null;
     switch (preset) {
@@ -473,20 +550,21 @@ export class CustomLocalSettingsComponent implements OnChanges, OnDestroy {
       case 'month': v1 = this._startOf('month', now); v2 = this._endOf('month', now); break;
       case 'year': v1 = this._startOf('year', now); v2 = this._endOf('year', now); break;
     }
-    this.filterState.update(st => ({ ...st, [field]: { active: true, op: 'range' } }));
-    this.filterValuesFormGroup.get(`fv_${field}`)?.setValue(v1);
-    this.filterValuesFormGroup.get(`fv_${field}_2`)?.setValue(v2);
+    this.filterState.update(st => ({ ...st, [filterKey]: { active: true, op: 'range' } }));
+    this.filterValuesFormGroup.get(`fv_${filterKey}`)?.setValue(v1);
+    this.filterValuesFormGroup.get(`fv_${filterKey}_2`)?.setValue(v2);
   }
 
-  resetFilter(field: string): void {
-    const col = this.filterableColMap()[field];
-    const ops = this.opsOptionsByField()[field]?.map(o => o.value) ?? ['exact'];
+  resetFilter(filterKey: string): void {
+    const col = this.filterableColMap()[filterKey];
+    const ops = this.opsOptionsByField()[filterKey]?.map(o => o.value) ?? ['exact'];
     this.filterState.update(st => ({
-      ...st, [field]: { active: false, op: col?.filter?.default ?? ops[0] ?? 'exact' },
+      ...st, [filterKey]: { active: false, op: col?.filter?.default ?? ops[0] ?? 'exact' },
     }));
-    this.filterValuesFormGroup.get(`fv_${field}`)?.setValue(null, { emitEvent: false });
-    this.filterValuesFormGroup.get(`fv_${field}_2`)?.setValue(null, { emitEvent: false });
+    this.filterValuesFormGroup.get(`fv_${filterKey}`)?.setValue(null, { emitEvent: false });
+    this.filterValuesFormGroup.get(`fv_${filterKey}_2`)?.setValue(null, { emitEvent: false });
   }
+  // ]]]FI
 
   resetAllFilters(): void { this._initFilterState(); }
 
@@ -646,22 +724,36 @@ export class CustomLocalSettingsComponent implements OnChanges, OnDestroy {
     for (const [k, v] of rawEntries) fieldsOut[k] = { ...(v ?? {}) };
 
     // 1) Filtros activos
+    // [[[II ESC:005-11 DOC:docs/documents/2026-05-31_005_columnas-form-data-y-tree-select-nombres.md#escenario-11
     for (const col of this.filterableCols()) {
-      const row = this.getRow(col.field);
-      const val = this.filterValuesFormGroup.get(`fv_${col.field}`)?.value;
-      fieldsOut[col.field] = {
-        ...(fieldsOut[col.field] ?? {}),
-        cols: {
-          ...((fieldsOut[col.field] ?? {})?.cols ?? {}),
-          filter: {
-            ...((fieldsOut[col.field] ?? {})?.cols?.filter ?? {}),
+      const row = this.getRow(col.filterKey);
+      const val = this.filterValuesFormGroup.get(`fv_${col.filterKey}`)?.value;
+      const currentFilter = (fieldsOut[col.field] ?? {})?.cols?.filter ?? {};
+      const nextFilter = col.filterMode === 'explicit'
+        ? {
+          ...currentFilter,
+          [col.filterField]: {
+            ...(currentFilter?.[col.filterField] ?? {}),
             active: row.active,
             default: row.op,
             default_value: val ?? null,
           },
+        }
+        : {
+          ...currentFilter,
+          active: row.active,
+          default: row.op,
+          default_value: val ?? null,
+        };
+      fieldsOut[col.field] = {
+        ...(fieldsOut[col.field] ?? {}),
+        cols: {
+          ...((fieldsOut[col.field] ?? {})?.cols ?? {}),
+          filter: nextFilter,
         },
       };
     }
+    // ]]]FI
 
     // 2) cols/fields visibles + props
     for (const urow of this.unifiedRows()) {
@@ -773,27 +865,28 @@ export class CustomLocalSettingsComponent implements OnChanges, OnDestroy {
     this._loadDrawTabIntoRows(this.activeDrawTab());
   }
 
+  // [[[II ESC:005-11 DOC:docs/documents/2026-05-31_005_columnas-form-data-y-tree-select-nombres.md#escenario-11
   private _initFilterState(): void {
     const cols: any[] = this.filterableCols();
     const state: Record<string, FilterRow> = {};
     for (const col of cols) {
-      this._ensureControls(col.field);
+      this._ensureControls(col.filterKey);
       const filter = col?.filter;
       const isActive = filter?.active === true;
       if (isActive && filter?.default_value !== undefined && filter?.default_value !== null) {
         let preloadValue = filter.default_value;
         const ft = colTypeToFilterType(col.type ?? '');
         if (ft === 'boolean' && typeof preloadValue === 'boolean') preloadValue = String(preloadValue);
-        this.filterValuesFormGroup.get(`fv_${col.field}`)?.setValue(preloadValue);
+        this.filterValuesFormGroup.get(`fv_${col.filterKey}`)?.setValue(preloadValue);
       } else {
-        this.filterValuesFormGroup.get(`fv_${col.field}`)?.setValue(null, { emitEvent: false });
-        this.filterValuesFormGroup.get(`fv_${col.field}_2`)?.setValue(null, { emitEvent: false });
+        this.filterValuesFormGroup.get(`fv_${col.filterKey}`)?.setValue(null, { emitEvent: false });
+        this.filterValuesFormGroup.get(`fv_${col.filterKey}_2`)?.setValue(null, { emitEvent: false });
       }
     }
     for (const col of cols) {
       const filter = col?.filter;
-      const opsArr = this.opsOptionsByField()[col.field]?.map(o => o.value) ?? ['exact'];
-      state[col.field] = {
+      const opsArr = this.opsOptionsByField()[col.filterKey]?.map(o => o.value) ?? ['exact'];
+      state[col.filterKey] = {
         active: filter?.active === true,
         op: filter?.default ?? opsArr[0] ?? 'exact',
       };
@@ -801,6 +894,7 @@ export class CustomLocalSettingsComponent implements OnChanges, OnDestroy {
     this.filterState.set(state);
     this._loadAllDropdownOptions(cols);
   }
+  // ]]]FI
 
   private _ensureControls(field: string): void {
     if (!this.filterValuesFormGroup.contains(`fv_${field}`))
@@ -911,8 +1005,8 @@ export class CustomLocalSettingsComponent implements OnChanges, OnDestroy {
       if (col.type === 'dropdown-choice' && !col.data_type?.type) {
         const localOpts = col?.data_type?.options ?? [];
         if (localOpts.length > 0) {
-          this.dropdownOptionsSignal.update(s => ({ ...s, [col.field]: localOpts }));
-          this.fkSuggestionsSignal.update(s => ({ ...s, [col.field]: [...localOpts] }));
+          this.dropdownOptionsSignal.update(s => ({ ...s, [col.filterKey]: localOpts }));
+          this.fkSuggestionsSignal.update(s => ({ ...s, [col.filterKey]: [...localOpts] }));
         }
       }
     }

@@ -1,6 +1,6 @@
 # BOS No Regressions
 
-Esta regla es global para Codex en este repositorio. No depende de skills.
+Esta regla es global para GitHub Copilot en este repositorio. No depende de skills.
 
 ## Regla Principal
 
@@ -16,7 +16,7 @@ Antes de cambiar comportamiento existente:
 
 ## Regla de Alcance Minimo sobre Correcciones Puntuales
 
-Cuando el usuario pida corregir una condicion o bloque especifico, Codex debe modificar unicamente esa unidad minima.
+Cuando el usuario pida corregir una condicion o bloque especifico, Copilot debe modificar unicamente esa unidad minima.
 No debe introducir helpers, constantes, abstracciones, reestructuraciones, cambios de indentacion amplia ni tocar ramas vecinas salvo que sea estrictamente necesario para corregir el bug descrito.
 
 Si durante la revision aparecen posibles problemas adicionales, optimizaciones, riesgos o mejoras, deben reportarse como observaciones y no corregirse sin confirmacion explicita del usuario.

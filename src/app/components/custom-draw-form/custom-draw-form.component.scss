@@ -70,6 +70,13 @@
     border-color: #e24c4c !important;
     box-shadow: 0 0 0 0.2rem rgba(226, 76, 76, 0.25) !important;
   }
+
+  // [[[II ESC:001-12 DOC:docs/documents/2026-05-16_001_consolidacion_dropdown_types_y_fix_escenarios.md#escenario-12
+  .file-splitbutton-invalid .p-button {
+    border-color: #e24c4c !important;
+    box-shadow: 0 0 0 0.2rem rgba(226, 76, 76, 0.25) !important;
+  }
+  // ]]]FI
 }
 
 .p-datepicker.p-invalid .p-inputtext {

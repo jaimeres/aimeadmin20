@@ -461,6 +461,7 @@ export class GeneralService {
     if (!dataDJA) {
       return [];
     }
+    console.log('-................', fieldsBool)
 
     // typeof identifica a un array y un objecto como un objecto, por eso si typeof dice que es un objeto y isArray dice que no es array,
     //entonces es un objeto
@@ -633,14 +634,19 @@ export class GeneralService {
       // Cambiamos fieldsBool.forEach(...) por un bucle for para poder usar 'continue'
       for (let i = 0; i < fieldsBool.length; i++) {
         const field = fieldsBool[i];
-
         // Verificamos que 'field.field' exista y que 'dja.attributes[field.field]' no sea undefined
         if (!field || !field.field || dja.attributes[field.field] === undefined) {
           continue;
         }
 
+        // [[[II ESC:005-09 DOC:docs/documents/2026-05-31_005_columnas-form-data-y-tree-select-nombres.md#escenario-09
         // Dependiendo del valor del campo se carga el valor para el verdadero o falso
-        data[field.field + '__text'] = dja.attributes[field.field] ? customField[field.field + '_true'] : customField[field.field + '_false'];
+        const trueLabel = field.label_true ?? customField?.[field.field + '_true'] ?? 'true';
+        const falseLabel = field.label_false ?? customField?.[field.field + '_false'] ?? 'false';
+        const rawBoolValue = dja.attributes[field.field];
+        const isTrueValue = rawBoolValue === true || rawBoolValue === 'true' || rawBoolValue === 1 || rawBoolValue === '1';
+        data[field.field + '__text'] = isTrueValue ? trueLabel : falseLabel;
+        // ]]]FI
       }
 
       // Es muy parecido fieldsBool, pero en lugar de buscar entre 2 valores posibles busca en un array
@@ -681,7 +687,17 @@ export class GeneralService {
           for (const childKey in formDataValue) {
             if (!Object.prototype.hasOwnProperty.call(formDataValue, childKey)) continue;
             const fieldCfg = fields?.[childKey];
-            data[formDataKey + '.' + childKey] = this._formatDynamicValue(formDataValue[childKey], fieldCfg);
+            // [[[II ESC:005-09 DOC:docs/documents/2026-05-31_005_columnas-form-data-y-tree-select-nombres.md#escenario-09
+            const rawDynamicValue = formDataValue[childKey];
+            if (typeof rawDynamicValue === 'boolean' || rawDynamicValue === 'true' || rawDynamicValue === 'false' || rawDynamicValue === 1 || rawDynamicValue === 0 || rawDynamicValue === '1' || rawDynamicValue === '0') {
+              const trueLabel = fieldCfg?.label_true ?? customField?.[childKey + '_true'] ?? 'true';
+              const falseLabel = fieldCfg?.label_false ?? customField?.[childKey + '_false'] ?? 'false';
+              const isTrueValue = rawDynamicValue === true || rawDynamicValue === 'true' || rawDynamicValue === 1 || rawDynamicValue === '1';
+              data[formDataKey + '.' + childKey] = isTrueValue ? trueLabel : falseLabel;
+              continue;
+            }
+            // ]]]FI
+            data[formDataKey + '.' + childKey] = this._formatDynamicValue(rawDynamicValue, fieldCfg);
           }
         }
       }

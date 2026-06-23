@@ -325,11 +325,15 @@ export class CRUDService {
     return this.authS.config[module]['fields'];
   }
 
+  // [[[II ESC:005-11 DOC:docs/documents/2026-05-31_005_columnas-form-data-y-tree-select-nombres.md#escenario-11
   /**
    * Genera el string de parámetros de filtro a partir de un dict de fields.
    * Recibe el objeto fields (de fieldsForm(pos) en crud.class o fieldSignal()?.fields
    * en custom-local-settings) y devuelve una cadena tipo
    * "filter[field]=value&filter[other.icontains]=q".
+   * Soporta `cols.filter` simple contra el campo contenedor y mapa explícito
+   * `{ <campo_remoto>: FilterEntry }` relativo al campo contenedor cuando este
+   * es una relación.
    * Solo incluye campos con filter.active=true y default_value no nulo/vacío.
    * Para FK: extrae el id usando filter.option_value (default 'id').
    */
@@ -337,7 +341,7 @@ export class CRUDService {
     const parts: string[] = [];
     for (const [fieldName, cfg] of Object.entries(fields)) {
       const filter = (cfg as any)?.cols?.filter ?? {};
-      this._appendFilterParts(parts, fieldName, filter);
+      this._appendColumnFilterParts(parts, fieldName, filter);
     }
     return parts.join('&');
   }
@@ -351,12 +355,45 @@ export class CRUDService {
   buildDropdownFilterString(filterConfig: Record<string, any>): string {
     if (!filterConfig || typeof filterConfig !== 'object') return '';
     const parts: string[] = [];
-    for (const [fieldName, cfg] of Object.entries(filterConfig)) {
-      if (fieldName === 'logic') continue;
-      this._appendFilterParts(parts, fieldName, cfg);
-    }
+    this._appendExplicitFilterMapParts(parts, filterConfig);
     return parts.join('&');
   }
+
+  private _appendColumnFilterParts(parts: string[], fieldName: string, filter: any): void {
+    if (!filter || typeof filter !== 'object') return;
+
+    if (this._isFilterEntry(filter)) {
+      this._appendFilterParts(parts, fieldName, filter);
+    }
+
+    this._appendExplicitFilterMapParts(parts, filter, true, fieldName);
+  }
+
+  private _appendExplicitFilterMapParts(
+    parts: string[],
+    filterConfig: Record<string, any>,
+    skipColumnFilterKeys = false,
+    fieldPrefix = ''
+  ): void {
+    const reserved = new Set(['active', 'default', 'default_value', 'ops', 'option_value', 'by', 'relative', 'ui', 'option_label']);
+    for (const [fieldName, cfg] of Object.entries(filterConfig)) {
+      if (fieldName === 'logic') continue;
+      if (skipColumnFilterKeys && reserved.has(fieldName)) continue;
+      if (!this._isFilterEntry(cfg)) continue;
+      const filterFieldName = fieldPrefix ? `${fieldPrefix}__${fieldName}` : fieldName;
+      this._appendFilterParts(parts, filterFieldName, cfg);
+    }
+  }
+
+  private _isFilterEntry(filter: any): boolean {
+    if (!filter || typeof filter !== 'object' || Array.isArray(filter)) return false;
+    return Object.prototype.hasOwnProperty.call(filter, 'active')
+      || Object.prototype.hasOwnProperty.call(filter, 'default')
+      || Object.prototype.hasOwnProperty.call(filter, 'default_value')
+      || Object.prototype.hasOwnProperty.call(filter, 'ops')
+      || Object.prototype.hasOwnProperty.call(filter, 'option_value');
+  }
+  // ]]]FI
 
   /**
    * Lógica compartida: dado un filter object {active, default, default_value, ops, option_value},

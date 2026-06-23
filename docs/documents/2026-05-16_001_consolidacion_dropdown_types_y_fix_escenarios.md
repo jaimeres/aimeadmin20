@@ -83,6 +83,16 @@
 - **Cambio aplicado:** se calcula `disabled` desde `fieldObj.read_only === true`, se registra en `initialDisabledForm` usando el nombre real del control (`field_prefix + field`) y el `FormControl` se crea ya deshabilitado.
 - **Validación esperada:** un schema como `sys: { type: "Boolean", read_only: true, initial: false }` debe renderizarse como toggle deshabilitado y mantenerse deshabilitado al reactivar el formulario.
 
+<a id="escenario-12"></a>
+## Escenario 12: Estado inválido visual para `p-splitbutton` de archivos
+
+- **Fecha de ajuste:** 2026-06-22.
+- **Objetivo:** hacer que el `p-splitbutton` de campos `type: "files"` simule un control de formulario y pinte borde rojo cuando el archivo requerido queda inválido.
+- **Alcance:** solo feedback visual; no cambia validadores, routing de `appendFile`, carga servidor, serialización JSON:API ni valores guardados.
+- **Implementación:** `custom-draw-form` prepara un `signal` de estado visual por configuración de archivo. La plantilla solo consulta ese estado por clave; no llama funciones nuevas desde el HTML. La clave visual prioriza el control específico (`key` cuando es distinto o el `field` separado) y solo cae al sibling `*_documents` cuando no existe un control específico, evitando que dos evidencias que comparten `documents` se marquen entre sí.
+- **Errores cubiertos:** se refleja el estado local `invalid && (dirty || touched)` y, de forma visual sin mutar controles ni validadores, los errores de servidor que llegan con `source.pointer`/`source.parameter` hacia `files`, `documents` o sus campos prefijados.
+- **Compatibilidad:** se preserva la reconciliación previa entre cámara, servidor y `key`; el botón solo refleja el estado que el formulario ya calculó.
+
 ## Pendientes
 
 - °°° Revisar por qué varios campos del formulario se vuelven `null` después de inicializarse con `default.value` distinto de `null`. SOLUCIONADO parcialmente para `tree-select`, `multi-select` y `classifiers` en el escenario 08.

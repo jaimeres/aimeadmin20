@@ -558,10 +558,13 @@
 <!-- imagenes y mantener una sola zona de archivos.                   -->
 <!-- =============================================================== -->
 <ng-template #fileTemplate let-fieldConfig="fieldConfig">
-  <p-splitbutton *ngIf="getFileMenuItems(fieldConfig).length > 0" styleClass="height-input-custom w-full sb-full"
+  <!-- [[[II ESC:001-12 DOC:docs/documents/2026-05-16_001_consolidacion_dropdown_types_y_fix_escenarios.md#escenario-12 -->
+  <p-splitbutton *ngIf="getFileMenuItems(fieldConfig).length > 0"
+    [styleClass]="'height-input-custom w-full sb-full' + (fileSplitButtonInvalidSignal()[fieldConfig._fileSplitButtonInvalidKey] ? ' p-invalid file-splitbutton-invalid' : '')"
     [label]="fieldConfig?.label" [model]="getFileMenuItems(fieldConfig)" [pAutoFocus]="fieldConfig?.autofocus || false"
     [disabled]="fieldConfig?.disabled || false" (onClick)="fileMenuPrimary(fieldConfig)">
   </p-splitbutton>
+  <!-- ]]]FI -->
 </ng-template>
 
 <!-- =============================================================== -->

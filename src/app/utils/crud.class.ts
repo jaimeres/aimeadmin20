@@ -34,6 +34,9 @@ export class CRUD extends Vars implements OnChanges  /*implements OnInit*/ {
   private readonly resolvedCrudDrawFormCache = new WeakMap<object, { mobile?: any; desktop?: any }>();
   private readonly mobileTypeAppliedDrawForms = new WeakSet<object>();
   // ]]]FI
+  // [[[II ESC:005-10 DOC:docs/documents/2026-05-31_005_columnas-form-data-y-tree-select-nombres.md#escenario-10
+  private readonly deviceDateDefaultFields: { [key: string]: Set<string> } = {};
+  // ]]]FI
 
   constructor(protected override crudS: CRUDService, pos = '') {
     super(crudS);
@@ -869,6 +872,109 @@ export class CRUD extends Vars implements OnChanges  /*implements OnInit*/ {
     return index;
   }
 
+  // [[[II ESC:005-08 DOC:docs/documents/2026-05-31_005_columnas-form-data-y-tree-select-nombres.md#escenario-08
+  private initializeTimeZoneField(fieldName: any, field: any): void {
+    if (!this.timeZone[fieldName]) {
+      this.timeZone[fieldName] = [];
+    }
+    if (this.searchByValue(field, this.timeZone[fieldName], false) === -1) {
+      this.timeZone[fieldName].push(field);
+    }
+  }
+  // ]]]FI
+
+  // [[[II ESC:005-10 DOC:docs/documents/2026-05-31_005_columnas-form-data-y-tree-select-nombres.md#escenario-10
+  private isDateControlType(type: any): boolean {
+    return type === 'date' || type === 'DateTime';
+  }
+
+  private hasDateDefaultValue(fieldConfig: any, value: string): boolean {
+    return fieldConfig?.default?.value === value && fieldConfig?.default?.active !== false;
+  }
+
+  private normalizeDateControlValue(value: any): Date | null {
+    if (value === undefined || value === null || value === '') return null;
+    return value instanceof Date ? value : new Date(value);
+  }
+
+  private normalizeUtcDateControlValue(value: any): Date | null {
+    if (value === undefined || value === null || value === '') return null;
+    if (value instanceof Date) return value;
+    if (typeof value !== 'string') return new Date(value);
+
+    const trimmed = value.trim();
+    if (!trimmed) return null;
+    if (/[zZ]|[+-]\d{2}:?\d{2}$/.test(trimmed)) return new Date(trimmed);
+
+    const isoLike = /^\d{4}-\d{2}-\d{2}(?:[T\s]\d{2}:\d{2}(?::\d{2}(?:\.\d{1,6})?)?)?$/.test(trimmed);
+    if (!isoLike) return new Date(trimmed);
+
+    const normalized = trimmed.length === 10 ? `${trimmed}T00:00:00` : trimmed.replace(' ', 'T');
+    return new Date(`${normalized}Z`);
+  }
+
+  private resolveDateControlInitial(fieldConfig: any, initialValue: any = undefined, fallbackValue: any = undefined): Date | null {
+    const defaultValue = fieldConfig?.default?.value;
+    if (defaultValue !== undefined && defaultValue !== null && defaultValue !== '' && fieldConfig?.default?.active !== false) {
+      if (defaultValue === 'current') return null;
+      if (defaultValue === 'device') return new Date();
+      return this.normalizeUtcDateControlValue(defaultValue);
+    }
+
+    const source = initialValue !== undefined ? initialValue : fallbackValue;
+    if (source === 'current') return null;
+    if (source === 'device') return new Date();
+    return this.normalizeDateControlValue(source);
+  }
+
+  private registerDeviceDateDefault(pos: any, fieldName: any, fieldConfig: any): void {
+    if (!this.isDateControlType(fieldConfig?.type) || !this.hasDateDefaultValue(fieldConfig, 'device')) return;
+
+    const key = String(pos);
+    if (!this.deviceDateDefaultFields[key]) {
+      this.deviceDateDefaultFields[key] = new Set<string>();
+    }
+    this.deviceDateDefaultFields[key].add(String(fieldName));
+  }
+
+  private refreshDeviceDateDefaults(pos: any, selected: any = null): void {
+    const fields = this.deviceDateDefaultFields[String(pos)];
+    if (!fields?.size) return;
+
+    const form = this.currentForm(pos);
+    fields.forEach((field) => {
+      if (selected && Object.prototype.hasOwnProperty.call(selected, field)) return;
+      const ctrl = form.get(field);
+      if (ctrl) ctrl.setValue(new Date(), { emitEvent: false });
+    });
+  }
+  // ]]]FI
+
+  // [[[II ESC:005-09 DOC:docs/documents/2026-05-31_005_columnas-form-data-y-tree-select-nombres.md#escenario-09
+  private initializeBooleanField(fieldName: any, field: any, labels: { label_true?: any; label_false?: any } = {}): void {
+    if (!this.fieldsBool[fieldName]) {
+      this.fieldsBool[fieldName] = [];
+    }
+
+    const index = this.fieldsBool[fieldName].findIndex((item: any) => item?.field === field);
+    const nextField = {
+      field,
+      label_true: labels?.label_true,
+      label_false: labels?.label_false,
+    };
+
+    if (index === -1) {
+      this.fieldsBool[fieldName].push(nextField);
+      return;
+    }
+
+    this.fieldsBool[fieldName][index] = {
+      ...this.fieldsBool[fieldName][index],
+      ...nextField,
+    };
+  }
+  // ]]]FI
+
 
   /**
    * 
@@ -1541,6 +1647,10 @@ export class CRUD extends Vars implements OnChanges  /*implements OnInit*/ {
   }): void {
     const { formFields, node, fieldName, fieldPrefix, pos, schemaEntry, hasSchema, scopeInfo } = params;
     const fieldData = node;
+    // [[[II ESC:005-10 DOC:docs/documents/2026-05-31_005_columnas-form-data-y-tree-select-nombres.md#escenario-10
+    const effectiveDateType = fieldData?.type ?? schemaEntry?.type;
+    const dateFieldConfig = { ...(schemaEntry ?? {}), ...(fieldData ?? {}), type: effectiveDateType };
+    // ]]]FI
 
     // Obtener valores por defecto
     const active = fieldData?.default?.active || false;
@@ -1557,6 +1667,11 @@ export class CRUD extends Vars implements OnChanges  /*implements OnInit*/ {
         defaultValue = value;
       }
     }
+    // [[[II ESC:005-10 DOC:docs/documents/2026-05-31_005_columnas-form-data-y-tree-select-nombres.md#escenario-10
+    if (this.isDateControlType(effectiveDateType)) {
+      defaultValue = this.resolveDateControlInitial(dateFieldConfig, fieldData?.initial, defaultValue);
+    }
+    // ]]]FI
     // [[[II ESC:001-08 DOC:docs/documents/2026-05-16_001_consolidacion_dropdown_types_y_fix_escenarios.md#escenario-08
     defaultValue = this.normalizeCollectionControlDefault(fieldData?.type, defaultValue);
     // ]]]FI
@@ -1582,6 +1697,17 @@ export class CRUD extends Vars implements OnChanges  /*implements OnInit*/ {
       }
       this.initialDisabledForm[pos][fieldName] = true;
     }
+
+    // [[[II ESC:005-08 DOC:docs/documents/2026-05-31_005_columnas-form-data-y-tree-select-nombres.md#escenario-08
+    if (this.isDateControlType(effectiveDateType)) {
+      this.initializeTimeZoneField(pos, fieldName);
+    }
+    // ]]]FI
+    // [[[II ESC:005-10 DOC:docs/documents/2026-05-31_005_columnas-form-data-y-tree-select-nombres.md#escenario-10
+    if (this.isDateControlType(effectiveDateType)) {
+      this.registerDeviceDateDefault(pos, fieldName, dateFieldConfig);
+    }
+    // ]]]FI
 
     const validators: any[] = [];
 
@@ -2550,6 +2676,11 @@ export class CRUD extends Vars implements OnChanges  /*implements OnInit*/ {
     //pos = pos ?? this.pos(); // Asegurar que pos no sea null
     pos = (pos !== null && pos !== undefined && pos !== "") ? pos : this.pos();
     const posIndex = pos as string; // Cast explícito a string
+    // [[[II ESC:005-10 DOC:docs/documents/2026-05-31_005_columnas-form-data-y-tree-select-nombres.md#escenario-10
+    if (!field_prefix) {
+      this.deviceDateDefaultFields[String(posIndex)] = new Set<string>();
+    }
+    // ]]]FI
 
     // se desestructura el array para para poder eliminar los campos afectados y optimizar la busqueda
     const boolLocal = this.fieldsBool[0][posIndex] ? [...this.fieldsBool][0][posIndex] : [];
@@ -2641,7 +2772,7 @@ export class CRUD extends Vars implements OnChanges  /*implements OnInit*/ {
         }
 
         // los strin y optros diferentes a boolean se inicializan con un string vacio
-        let val: string | boolean | any[] = '';
+        let val: any = '';
 
         if (fieldObj.type == 'Boolean') {
           // si el campo está en el Local, se toma el valor del Local,
@@ -2654,8 +2785,17 @@ export class CRUD extends Vars implements OnChanges  /*implements OnInit*/ {
 
         } else if (fieldObj.type == 'DateTime') {
           //console.log('¿¿¿¿¿¿¿¿¿¿¿¿¿¿¿¿¿¿', fieldObj.initial);
-
-          val = fieldObj.initial !== undefined && fieldObj.initial !== null ? fieldObj.initial : null;
+          // [[[II ESC:005-08 DOC:docs/documents/2026-05-31_005_columnas-form-data-y-tree-select-nombres.md#escenario-08
+          this.initializeTimeZoneField(posIndex, field);
+          // ]]]FI
+          // [[[II ESC:005-10 DOC:docs/documents/2026-05-31_005_columnas-form-data-y-tree-select-nombres.md#escenario-10
+          const cfgField = this.crudS.fieldsForm(posIndex)?.[fieldControlName]
+            ?? this.crudS.fieldsForm(posIndex)?.[field]
+            ?? {};
+          const dateFieldConfig = { ...cfgField, type: fieldObj.type };
+          this.registerDeviceDateDefault(posIndex, fieldControlName, dateFieldConfig);
+          val = this.resolveDateControlInitial(dateFieldConfig, fieldObj.initial);
+          // ]]]FI
 
         } else if (fieldObj.type == 'Choice') {
           (this.sharedS as any).data[posIndex + ':' + field_prefix + field] = fieldObj?.choices || null;
@@ -2766,6 +2906,11 @@ export class CRUD extends Vars implements OnChanges  /*implements OnInit*/ {
       if (jsonFields.hasOwnProperty(field)) {
         const fieldObj = jsonFields[field];
 
+
+        //if (field in ['parent_form_data', 'form_data', 'form_fields', 'child_form_fields']) {
+        //  continue;
+        //}
+
         if (this.excludeFieldsCols[pos]) {
           const excludeField = this.excludeFieldsCols[pos].find((item) => item.field == field);
           if (excludeField) {
@@ -2820,11 +2965,13 @@ export class CRUD extends Vars implements OnChanges  /*implements OnInit*/ {
             header: this.customField()[pos][field_relationship + field] + ' ' + header_prefix,
             //sortable: true
           };
-          if (!this.fieldsBool[pos]) {
-            this.fieldsBool[pos] = [];
-          }
+          const boolFieldKey = field_relationship + field;
+          const cfgField = this.crudS.fieldsForm(pos)?.[boolFieldKey] || {};
           // no tiene caso validar si existe en fieldsBool[0] porque esto es para el form ya se validó en generateJSON
-          this.fieldsBool[pos].push({ field: field_relationship + field /*, default: fieldObj.initial */ });
+          this.initializeBooleanField(pos, boolFieldKey, {
+            label_true: fieldObj?.label_true ?? cfgField?.label_true,
+            label_false: fieldObj?.label_false ?? cfgField?.label_false,
+          });
           //this.fieldsBool[pos].push({ field: field_prefix + '__' + field/*, default: fieldObj.initial */ });
         } else if (fieldObj.type == 'Choice') {
           columnObj = { field: field_prefix + field + '__text', header: this.customField()[pos][field_relationship + field] + ' ' + header_prefix, /*sortable: true*/ };
@@ -2836,9 +2983,11 @@ export class CRUD extends Vars implements OnChanges  /*implements OnInit*/ {
           this.moreFields[pos].push([field, fieldObj.choices]);
 
           //agregar __text a los fieldObj.type == 'DateTime' para que se muestre la fecha en la tabla siempre y cuando existan en this.timeZone
-          // usando la funcion searchByValue
-        } else if (fieldObj.type == 'DateTime' && this.searchByValue(field, this.timeZone[pos], false) !== -1) {
+        } else if (fieldObj.type == 'DateTime') {
           columnObj = { field: field_prefix + field + '__text', header: this.customField()[pos][field_relationship + field] + ' ' + header_prefix, /*sortable: true*/ };
+          // [[[II ESC:005-08 DOC:docs/documents/2026-05-31_005_columnas-form-data-y-tree-select-nombres.md#escenario-08
+          this.initializeTimeZoneField(pos, field);
+          // ]]]FI
         } else if (fieldObj.relationship_type == 'ManyToMany' || fieldObj.relationship_type == 'ManyToOne' || fieldObj.relationship_type == 'OneToOne') {
           // [[[II ESC:005-01 DOC:docs/documents/2026-05-31_005_columnas-form-data-y-tree-select-nombres.md#escenario-01
           // Campos relacionales que el OPTIONS NO tipa como 'Relationship'/'Serializer'
@@ -2910,6 +3059,11 @@ export class CRUD extends Vars implements OnChanges  /*implements OnInit*/ {
             // En los items de la tabla, form_fields_data_* está anidado en form_data (atributo del modelo)
             const colField = 'form_data.' + fieldName;
             const columnObj: any = { field: colField, header };
+            // [[[II ESC:005-08 DOC:docs/documents/2026-05-31_005_columnas-form-data-y-tree-select-nombres.md#escenario-08
+            if (fieldData.type === 'date' || fieldData.type === 'DateTime') {
+              this.initializeTimeZoneField(pos, colField);
+            }
+            // ]]]FI
             // [[[II ESC:005-05 DOC:docs/documents/2026-05-31_005_columnas-form-data-y-tree-select-nombres.md#escenario-05
             const headerKey = typeof header === 'string' ? header.trim() : '';
             const duplicatedColumn = cols.some((col: any) =>
@@ -4003,12 +4157,18 @@ export class CRUD extends Vars implements OnChanges  /*implements OnInit*/ {
       //selected.scheduled_date = new Date(selected.scheduled_date),
 
       this.currentForm(pos).reset(selected);
+      // [[[II ESC:005-10 DOC:docs/documents/2026-05-31_005_columnas-form-data-y-tree-select-nombres.md#escenario-10
+      this.refreshDeviceDateDefaults(pos, selected);
+      // ]]]FI
+      console.log('reset formmm,,,,,,,,,,,,,1', this.currentForm(pos).value);
     } else {
       //const data = this.resetForm[pos] || this.resetForm[0]
       //console.log('reset formmm0000');
-      this.currentForm(pos).reset(/*{
-        ...data
-      }*/);
+      this.currentForm(pos).reset();
+      // [[[II ESC:005-10 DOC:docs/documents/2026-05-31_005_columnas-form-data-y-tree-select-nombres.md#escenario-10
+      this.refreshDeviceDateDefaults(pos);
+      // ]]]FI
+      console.log('reset formmm,,,,,,,,,,,,,2', this.currentForm(pos).value);
     }
     //console.log('fin resetFormDialog', this.currentForm());
   }
@@ -5602,7 +5762,7 @@ export class CRUD extends Vars implements OnChanges  /*implements OnInit*/ {
     const relationships = [{ field: 'status', type: 'status', id: status }];
     // ]]]FI
 
-    console.log('setStatus..................', { id, app, type, formData, relationships, include: this.include[safePos] });
+    //console.log('setStatus..................', { id, app, type, formData, relationships, include: this.include[safePos] });
 
     this.crudS.edit({ id, app, type, formData, relationships, include: this.include[safePos] }).subscribe({
       next: (resp: any) => {
@@ -5714,7 +5874,10 @@ export class CRUD extends Vars implements OnChanges  /*implements OnInit*/ {
       return;
     }
 
-    this.crudS.getObject({ app: 'tasks/task', type: 'task', fields: 'name,modules,action_app,is_detail_required,' }).subscribe({
+    this.crudS.getObject({
+      app: 'tasks/task', type: 'task', fields: 'name,modules,action_app,is_detail_required,',
+      filter: 'filter[is_active]=true'
+    }).subscribe({
       next: (resp: any) => {
         let task = this.DJAtoObject({ resp });
 

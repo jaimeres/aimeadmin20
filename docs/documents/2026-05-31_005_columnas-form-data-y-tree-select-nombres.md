@@ -113,6 +113,96 @@ arreglo de nodos, la relacion envie una lista de ids extraidos de `data.id`, `id
 `value` o `key`. Esto evita payloads JSON:API incompletos como `{ type: "person" }`
 sin `id`.
 
+<a id="escenario-08"></a>
+## Escenario 08: Centralizar registro de campos con zona horaria
+
+Se centralizo en `CRUD.initializeTimeZoneField()` la inicializacion de
+`this.timeZone[pos]` y la insercion sin duplicados de campos de fecha/hora.
+
+La funcion se reutiliza al generar columnas desde OPTIONS, al generar formularios
+desde OPTIONS y al procesar campos dinamicos declarados en `drawForm`, incluyendo
+columnas `form_fields_data_*`. El objetivo es conservar la misma regla previa de
+deduplicacion con `searchByValue(..., false)` sin repetir el bloque manual en cada
+generador.
+
+<a id="escenario-09"></a>
+## Escenario 09: Labels de booleanos en options y campos dinamicos
+
+Se ajusto `DJAtoObject` para que los booleanos no queden vacios en tabla cuando no
+existe etiqueta en `customField` o cuando el valor viene en formato no estricto.
+
+Cobertura aplicada:
+
+- Campos booleanos de OPTIONS (`fieldsBool`):
+  - Se centraliza el registro en `CRUD.initializeBooleanField()` (mismo patron
+    de inicializacion/deduplicacion que `initializeTimeZoneField`).
+  - `generateJSONColumns` guarda en `fieldsBool[pos]` las etiquetas booleanas de
+    configuracion (`label_true` / `label_false`) tomadas primero del `OPTIONS`
+    del campo y, si faltan, de `fieldsForm(pos)[field]`.
+  - Prioriza `label_true` / `label_false` en la definicion del campo.
+  - Si no existen, usa fallback local `customField[<campo>_true]` /
+    `customField[<campo>_false]`.
+  - Si tampoco existen, usa fallback final `'true'` / `'false'`.
+  - Normaliza valores booleanos en formatos `true/false`, `'true'/'false'`,
+    `1/0`, `'1'/'0'`.
+
+- Campos booleanos dinamicos (`form_data.*` / `parent_form_data.*`):
+  - Antes de `_formatDynamicValue`, detecta booleanos y aplica la misma prioridad
+    de labels (`fieldCfg.label_*` -> `customField` -> fallback literal).
+  - Esto evita celdas vacias cuando la tabla evalua valores falsy en columnas
+    dinamicas.
+
+<a id="escenario-10"></a>
+## Escenario 10: Defaults de fecha en alta y reset
+
+Se ajusta la prioridad de fechas configuradas en formularios creados desde
+OPTIONS y campos dinamicos. En campos de OPTIONS, OPTIONS solo aporta el `type`;
+la regla de `default.value` sale de `fieldsForm(pos)`:
+
+- `default.value: 'current'` deja el control en `null` y no acepta el `initial`
+  entregado por OPTIONS.
+- `default.value: 'device'` inicializa con `new Date()` y se recalcula en cada
+  `resetFormDialog()` cuando el campo no venga explicitamente en `selected`.
+- Si `default.value` trae una fecha definida por configuracion, se normaliza como
+  fecha UTC (`new Date(<valor>Z)` cuando el string no trae zona horaria).
+- Si la configuracion no trae default de fecha aplicable, se toma `initial` y se
+  normaliza a `Date` con `new Date(...)`.
+- `DJAtoObject` / `general.service` no participan en este escenario; el cambio se
+  limita a la creacion y reset del formulario.
+
+Decision de compatibilidad autorizada: antes un `DateTime` de OPTIONS podia
+conservar `initial` aunque la configuracion declarara `default.value='current'`.
+Con este cambio, `current` prevalece y fuerza `null`; `device` pasa a ser el
+modo que usa la hora UTC actual del dispositivo en cada reset de alta.
+
+<a id="escenario-11"></a>
+## Escenario 11: Filtros de columnas con campos explicitos de relaciones
+
+Se amplio el procesamiento de `cols.filter` para soportar dos formas coherentes:
+
+- Forma simple: `{ active, default, default_value, ops }` sigue filtrando contra el
+  campo contenedor. Ejemplo: `fields.is_active.cols.filter` genera
+  `filter[is_active]=true`.
+- Forma explicita: `{ <campo_relativo>: FilterEntry, logic? }` permite declarar
+  campos internos de la relacion contenida por la columna. El campo contenedor se
+  toma como la relacion real: `status.cols.filter.code` genera
+  `filter[status__code.in]=P`. En el primer nivel no se usa `_data_`; si el campo
+  interno salta a otra relacion, desde ahi si se usa `_data_`, por ejemplo
+  `status.cols.filter.code_data_titulo` genera `filter[status__code__titulo]=algo`.
+
+`data_type.filter` conserva su comportamiento de mapa explicito absoluto dentro
+del recurso indicado por `data_type.type`; no antepone el nombre del campo
+contenedor porque la fuente (`type: "status"`, por ejemplo) puede ser distinta al
+nombre local del campo. `logic` se acepta en ambas formas como metadato y se ignora
+en el serializador actual, manteniendo el comportamiento AND existente de los query
+params enviados al backend.
+
+El editor `app-custom-local-settings` ahora expande un `cols.filter` explicito en
+filas independientes por campo remoto y guarda cada entrada sin pisar filtros
+hermanos. El flujo `app-task-detail` monta tambien `app-custom-local-settings` y
+abre la configuracion desde el icono del dialogo para que este soporte este
+disponible en la tarea detalle.
+
 ## Decisiones tomadas
 
 - No se agregan columnas para campos de `form_data` que no existan en la
@@ -131,6 +221,25 @@ sin `id`.
   se normalizan a valor escalar antes de construir JSON:API.
 - En `tree-select` sin `tree`, el valor visual puede seguir siendo `TreeNode`, pero
   la relacion enviada se reduce a ids antes de pasar por `baseDJA`.
+- La centralizacion de `timeZone` no cambia el `field` de columnas dinamicas
+  existentes; solo reutiliza el registro de campos para evitar duplicados.
+- Para booleanos, cuando no hay etiquetas configuradas, el sistema ahora usa
+  fallback explicito `'true'` / `'false'` para evitar celdas vacias.
+- En fechas, `selected` conserva prioridad sobre `device`: si un registro editado
+  trae el campo en `selected`, `resetFormDialog(selected)` no lo pisa con la hora
+  actual.
+- En `cols.filter`, el campo contenedor si participa en el path porque representa
+  la relacion real de la columna. Por eso `status + code` se serializa como
+  `status__code`, no como `code`.
+- En `data_type.filter`, el campo contenedor no participa en el path porque la
+  fuente real sale de `data_type.type` y puede no coincidir con el nombre local del
+  campo.
+- El formato simple de `cols.filter` no se considera obsoleto: se mantiene como la
+  forma correcta para campos directos. Si el campo no es relacional, basta el filtro
+  simple. Si el campo es relacional, puede agregar campos dentro de `filter`; esos
+  campos se serializan despues del contenedor con `__`.
+- No se implementa semantica OR para `logic`; queda preservado como metadato hasta
+  que exista contrato de backend para combinar filtros de otra forma.
 
 ## Validaciones aplicadas
 
@@ -141,14 +250,44 @@ sin `id`.
   - `include` resultante incluye `responsible_persons`.
   - Columnas visibles incluyen `responsible_persons__name` y las 4
     `form_data.form_fields_data_*`.
+- Para el escenario 08 se reviso por busqueda que el bloque manual de
+  inicializacion de `timeZone` quedara reemplazado por el helper centralizado en
+  `crud.class.ts`.
+- Para el escenario 09 se valido que booleanos en OPTIONS y en `form_data.*`
+  muestren texto aun cuando no exista `customField[<campo>_true/_false]`.
+- Para el escenario 10 se reviso por codigo que OPTIONS y campos dinamicos usen
+  la configuracion para `default.value`, que valores de fecha definidos se
+  conviertan como UTC, que `device` se registre para refrescarse en reset y que
+  `selected` preserve campos enviados explicitamente.
+- Para el escenario 11 se agregaron specs de `CRUDService` para confirmar que:
+  - `cols.filter` simple sigue generando `filter[is_active]=true`.
+  - `cols.filter` explicito antepone el campo contenedor:
+    `status.filter.code` genera `filter[status__code.in]=P`.
+  - `cols.filter` explicito normaliza saltos anidados con `_data_`:
+    `status.filter.code_data_titulo` genera `filter[status__code__titulo]=algo`.
+  - `data_type.filter` conserva el contrato de mapa explicito.
 
 ## Archivos modificados
 
 - `src/app/utils/crud.class.ts`
 - `src/app/utils/services/general.service.ts`
+- `src/app/utils/services/crud.service.ts`
+- `src/app/utils/services/crud.service.spec.ts`
+- `src/app/components/custom-local-settings/custom-local-settings.component.ts`
+- `src/app/components/custom-local-settings/custom-local-settings.component.html`
+- `src/app/tasks/task-detail/task-detail.component.ts`
+- `src/app/tasks/task-detail/task-detail.component.html`
+- `docs/documents/2026-05-31_005_columnas-form-data-y-tree-select-nombres.md`
 
 ## Pruebas sugeridas
 
 - Verificar registros con `parent_form_data` (flujo hijo) para confirmar el aplanado
   `parent_form_data.<campo>`.
 - Verificar campos `form_data` con valor primitivo o arreglo de objetos.
+- Verificar un campo `DateTime` de OPTIONS y un campo dinamico `date` para confirmar
+  que no se duplican entradas en `timeZone[pos]`.
+- Verificar alta con `default.value='current'`, alta con `device`, reset sin
+  `selected` y edicion con `selected` que ya trae fecha.
+- Verificar desde la UI de configuracion local una columna con `cols.filter`
+  explicito y confirmar que guardar no elimina filtros hermanos ni cambia filtros
+  simples existentes.
