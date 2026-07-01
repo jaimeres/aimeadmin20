@@ -1,5 +1,8 @@
 apply plugin: 'com.android.application'
 apply plugin: 'kotlin-android'
+// [[[II ESC:025-04 DOC:docs/documents/2026-06-28-025-push-notifications-fcm-capacitor.md#escenario-04 CONFIG
+apply plugin: 'com.google.gms.google-services'
+// ]]]FI
 
 def keystorePropertiesFile = rootProject.file("keystore.properties")
 def keystoreProperties = new Properties()
@@ -14,8 +17,8 @@ android {
         applicationId "com.jukai.jukai"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 3
-        versionName "1.0.6"
+        versionCode 4
+        versionName "1.0.8"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
@@ -73,15 +76,12 @@ dependencies {
     // Biometric authentication dependencies
     implementation "androidx.biometric:biometric:1.1.0"
     implementation "androidx.fragment:fragment-ktx:1.6.2"
+
+    // [[[II ESC:025-04 DOC:docs/documents/2026-06-28-025-push-notifications-fcm-capacitor.md#escenario-04 CONFIG
+    implementation platform('com.google.firebase:firebase-bom:34.15.0')
+    implementation 'com.google.firebase:firebase-analytics'
+    implementation 'com.google.firebase:firebase-messaging'
+    // ]]]FI
 }
 
 apply from: 'capacitor.build.gradle'
-
-try {
-    def servicesJSON = file('google-services.json')
-    if (servicesJSON.text) {
-        apply plugin: 'com.google.gms.google-services'
-    }
-} catch(Exception e) {
-    logger.info("google-services.json not found, google-services plugin not applied. Push Notifications won't work")
-}

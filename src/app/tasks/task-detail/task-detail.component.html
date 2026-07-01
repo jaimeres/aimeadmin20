@@ -1,5 +1,5 @@
-<!-- [[[II ESC:024-09 DOC:docs/documents/2026-06-15_024_open-tasks-detail-render-child-form.md
-  Dialogo de la tarea-detalle (General + Datos) abierto dentro del modulo consumidor. ]]]FI -->
+<!-- [[[II ESC:024-09 DOC:docs/documents/2026-06-15_024_open-tasks-detail-render-child-form.md ESC:024-14 DOC:docs/documents/2026-06-15_024_open-tasks-detail-render-child-form.md#escenario-14
+  Dialogo de la tarea-detalle (General + Datos + Documentos) abierto dentro del modulo consumidor. ]]]FI -->
 <p-dialog [(visible)]="formDialogVisible[$any('task-detail')]" (onHide)="onHide($any('task-detail'))"
   (onShow)="onShow($any('task-detail'))" [styleClass]="styleClassSecundaryDialog()" modal="true" maximizable="true">
 
@@ -13,11 +13,14 @@
   </ng-template>
 
   <form [formGroup]="form()[$any('task-detail')]" *ngIf="form()[$any('task-detail')]">
-    <p-tabs [scrollable]="true" [value]="tabVisibleSecundary()">
+    <p-tabs [scrollable]="true" [value]="tabVisibleSecundary()" (valueChange)="onTaskDetailTabChange($event)">
 
       <p-tablist>
         <p-tab [value]="0">General</p-tab>
         <p-tab [value]="1">Datos</p-tab>
+        <!-- [[[II ESC:024-14 DOC:docs/documents/2026-06-15_024_open-tasks-detail-render-child-form.md#escenario-14 -->
+        <p-tab [value]="2">Documentos</p-tab>
+        <!-- ]]]FI -->
       </p-tablist>
 
       <p-tabpanels>
@@ -44,6 +47,15 @@
             (filesAction)="onFiles($event)" />
         </p-tabpanel>
 
+        <!-- [[[II ESC:024-14 DOC:docs/documents/2026-06-15_024_open-tasks-detail-render-child-form.md#escenario-14 -->
+        <p-tabpanel [value]="2">
+          <app-custom-documents [active]="taskDetailDocumentsActive()" [showNew]="false"
+            [selected]="taskDetailDocumentSelected()" [type]="taskDetailDocumentType()"
+            [app]="taskDetailDocumentApp()" [filter]="taskDetailDocumentFilter()"
+            [related]="taskDetailDocumentRelated()" [relatedType]="taskDetailDocumentRelatedType()" />
+        </p-tabpanel>
+        <!-- ]]]FI -->
+
       </p-tabpanels>
 
     </p-tabs>
@@ -51,9 +63,11 @@
 
   <ng-template #footer>
     <div class="p-dialog-footer">
-      <app-custom-button-footer (saveAction)="saveSecundary({pos: 'task-detail', is_file: true })"
-        (saveNotHideAction)="saveSecundary({pos: 'task-detail', hide:false, is_file: true})"
+      <!-- [[[II ESC:024-13 DOC:docs/documents/2026-06-15_024_open-tasks-detail-render-child-form.md#escenario-13 -->
+      <app-custom-button-footer (saveAction)="saveTaskDetail({pos: 'task-detail', is_file: true })"
+        (saveNotHideAction)="saveTaskDetail({pos: 'task-detail', hide:false, is_file: true})"
         (resetFormAction)="resetFormDialog()" />
+      <!-- ]]]FI -->
     </div>
   </ng-template>
 

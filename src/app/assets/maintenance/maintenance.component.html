@@ -39,13 +39,16 @@
     <!-- [value]="tabVisible()"  -->
     <p-tabs [scrollable]="true" value="0" (valueChange)="onTabChange($event)">
 
-      <p-tablist>
-        <p-tab value="0">General</p-tab>
-        <p-tab value="1">Clasificadores</p-tab>
-        <p-tab value="2">Notas</p-tab>
-        <p-tab value="3">Auditoría</p-tab>
-        <p-tab value="4">Documentos</p-tab>
-      </p-tablist>
+        <p-tablist>
+          <p-tab value="0">General</p-tab>
+          <p-tab value="1">Clasificadores</p-tab>
+          <p-tab value="2">Notas</p-tab>
+          <p-tab value="3">Auditoría</p-tab>
+          <p-tab value="4">Documentos</p-tab>
+          <!-- [[[II ESC:024-12 DOC:docs/documents/2026-06-15_024_open-tasks-detail-render-child-form.md#escenario-12 -->
+          <p-tab value="5">Tareas</p-tab>
+          <!-- ]]]FI -->
+        </p-tablist>
 
       <p-tabpanels>
 
@@ -97,17 +100,26 @@
 
         </p-tabpanel>
 
-        <p-tabpanel value="3">
-          <app-custom-audit [cf]="customField()[typeDefault]" [selected]="selected()" />
-        </p-tabpanel>
+          <p-tabpanel value="3">
+            <app-custom-audit [cf]="customField()[typeDefault]" [selected]="selected()" />
+          </p-tabpanel>
 
-        <p-tabpanel value="4">
-          <app-custom-documents [selected]="selected()" [type]="'maintenance-document'"
-            [app]="'assets/maintenance-document'" [filter]="'maintenance'"
-            (newAction)="openNewSecundary({pos:'maintenance-document-maintenance'})" />
-        </p-tabpanel>
+          <p-tabpanel value="4">
+            <app-custom-documents [selected]="selected()" [type]="'maintenance-document'"
+              [app]="'assets/maintenance-document'" [filter]="'maintenance'"
+              (newAction)="openNewSecundary({pos:'maintenance-document-maintenance'})" />
+          </p-tabpanel>
 
-      </p-tabpanels>
+          <!-- [[[II ESC:024-12 DOC:docs/documents/2026-06-15_024_open-tasks-detail-render-child-form.md#escenario-12 -->
+          <p-tabpanel value="5">
+            <app-custom-task-tree [active]="taskTreeActive()" [selected]="selected()" [module]="module[typeDefault]"
+              [consumerApp]="app[typeDefault]" [consumerType]="type[typeDefault] || typeDefault"
+              [refreshKey]="taskTreeRefreshKey()" (createDetail)="runTaskDetail($event)"
+              (editDetail)="runTaskDetailEdit($event)" />
+          </p-tabpanel>
+          <!-- ]]]FI -->
+
+        </p-tabpanels>
     </p-tabs>
 
   </form>

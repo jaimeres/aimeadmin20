@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "970318154500",
+    "project_id": "aime-c5916",
+    "storage_bucket": "aime-c5916.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:970318154500:android:2fa26363e611b1afec1e51",
+        "android_client_info": {
+          "package_name": "com.jukai.jukai"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCSnyiAp3v0Wa1-ZLp5v-9fHJHs5psR2L0"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

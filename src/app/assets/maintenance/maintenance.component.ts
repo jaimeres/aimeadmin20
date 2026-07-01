@@ -15,6 +15,7 @@ import { ButtonModule } from 'primeng/button';
 import { InputTextModule } from 'primeng/inputtext';
 import { ResponsibleComponent } from '../../components/responsible/responsible.component';
 import { ResponsibleActionComponent } from '../../components/responsible-action/responsible-action.component';
+import { CustomTaskTreeComponent } from '../../components/custom-task-tree/custom-task-tree.component';
 
 
 type ChatMessage = {
@@ -30,6 +31,7 @@ type ChatMessage = {
     SelectModule,
     ResponsibleComponent,
     ResponsibleActionComponent,
+    CustomTaskTreeComponent,
     ...PRIME_MODULES,
     ...LOCAL_BASE,
 
@@ -47,6 +49,10 @@ type ChatMessage = {
   providers: [ConfirmationService]
 })
 export class MaintenanceComponent extends CRUD implements OnInit {
+  // [[[II ESC:024-12 DOC:docs/documents/2026-06-15_024_open-tasks-detail-render-child-form.md#escenario-12
+  taskTreeActive = signal(false);
+  taskTreeRefreshKey = signal(0);
+  // ]]]FI
 
   public override openNewMenu = signal<MenuItem[]>([{
     label: 'Solicitud',
@@ -116,10 +122,20 @@ export class MaintenanceComponent extends CRUD implements OnInit {
     this.app['maintenance-responsible-rule-action'] = 'assets/maintenance-responsible-rule-action';
     this.module['maintenance-responsible-rule-action'] = 'MA';
 
-
     this.initCRUD();
   }
 
+  // [[[II ESC:024-12 DOC:docs/documents/2026-06-15_024_open-tasks-detail-render-child-form.md#escenario-12
+  override onTabChange(e: any): void {
+    super.onTabChange(e);
+    this.taskTreeActive.set(e === 5 || e === '5');
+  }
+
+  override closeTaskModule(): void {
+    super.closeTaskModule();
+    this.taskTreeRefreshKey.update((value) => value + 1);
+  }
+  // ]]]FI
   //temporal
   public installation = false;
   getInstallation() {

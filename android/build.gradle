@@ -9,7 +9,9 @@ buildscript {
     }
     dependencies {
         classpath 'com.android.tools.build:gradle:8.9.1'
-        classpath 'com.google.gms:google-services:4.4.2'
+        // [[[II ESC:025-04 DOC:docs/documents/2026-06-28-025-push-notifications-fcm-capacitor.md#escenario-04 CONFIG
+        classpath 'com.google.gms:google-services:4.5.0'
+        // ]]]FI
         classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:$kotlin_version"
 
         // NOTE: Do not place your application dependencies here; they belong

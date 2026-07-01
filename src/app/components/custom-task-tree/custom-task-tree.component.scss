@@ -1,0 +1,27 @@
+/* [[[II ESC:024-12 DOC:docs/documents/2026-06-15_024_open-tasks-detail-render-child-form.md#escenario-12 ESC:024-15 DOC:docs/documents/2026-06-15_024_open-tasks-detail-render-child-form.md#escenario-15 */
+.custom-task-tree-caption {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  padding: 0;
+}
+
+.custom-task-tree-toggler {
+  width: 36px;
+}
+
+.custom-task-tree-actions {
+  width: 112px;
+  white-space: nowrap;
+}
+
+.custom-task-tree-help {
+  align-items: center;
+  color: var(--p-text-muted-color, #6b7280);
+  display: inline-flex;
+  font-size: 1.15rem;
+  height: 2rem;
+  justify-content: center;
+  width: 2rem;
+}
+/* ]]]FI */

@@ -88,6 +88,23 @@ export class AppMenu {
         }
       ]
     },
+    // [[[II ESC:026-01 DOC:docs/documents/2026-07-01-026-compras-punto-partida.md#escenario-01
+    {
+      label: 'Compras',
+      items: [
+        {
+          label: 'Compras',
+          items: [
+            { label: 'Solicitudes', routerLink: ['/purchases/requests'] },
+            { label: 'Pedidos', routerLink: ['/purchases/supplier-request'] },
+            { label: 'Ofertas y precios', routerLink: ['/purchases/offers-prices'] },
+            { label: 'Remisiones', routerLink: ['/purchases/delivery-notes'] },
+            { label: 'Facturas', routerLink: ['/purchases/bills'] },
+          ]
+        },
+      ]
+    },
+    // ]]]FI
     /*
         {
           label: 'Compras',

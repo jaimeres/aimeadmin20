@@ -11,8 +11,11 @@
 
     <div style="display: flex; align-items: center; justify-content: space-between; padding: 0;">
       <div>
-        <p-button icon="pi pi-plus" styleClass="p-button-secondary" (click)="newAction.emit()" class="mr-2 ml-2"
-          pTooltip="Nuevo" tooltipPosition="bottom" [disabled]="(selectedSignal()?.length || 0) <= 0" />
+        <!-- [[[II ESC:024-14 DOC:docs/documents/2026-06-15_024_open-tasks-detail-render-child-form.md#escenario-14 -->
+        <p-button *ngIf="showNew" icon="pi pi-plus" styleClass="p-button-secondary" (click)="newAction.emit()"
+          class="mr-2 ml-2" pTooltip="Nuevo" tooltipPosition="bottom"
+          [disabled]="(selectedSignal()?.length || 0) <= 0" />
+        <!-- ]]]FI -->
         <p-button icon="pi pi-refresh" styleClass="p-button-info" [disabled]="(selectedSignal()?.length || 0) <= 0"
           (click)="onLoadNodesDocuments()" pTooltip="Actualizar" tooltipPosition="bottom" />
       </div>
@@ -48,8 +51,10 @@
         <button pButton pRipple icon="pi pi-trash" class="p-button-rounded p-button-danger mr-1"
           (click)="deleteDocumentAction.emit(rowData)" *ngIf="rowNode.node.parent"></button>
 
+        <!-- [[[II ESC:024-16 DOC:docs/documents/2026-06-15_024_open-tasks-detail-render-child-form.md#escenario-16 -->
         <button pButton pRipple icon="pi pi-eye" class="p-button-rounded p-button-success mr-1"
-          (click)="onShowDocument(rowData.file)" *ngIf="rowNode.node.parent"></button>
+          (click)="onShowDocument(rowData.file)" *ngIf="rowNode.node.parent || rowData?.__directDocumentFile"></button>
+        <!-- ]]]FI -->
 
         <button pButton pRipple icon="pi pi-link" class="p-button-rounded p-button-help"
           (click)="detachDocumentAction.emit(rowData)" *ngIf="rowNode.node.parent"></button>

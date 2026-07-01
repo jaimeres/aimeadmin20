@@ -14,25 +14,27 @@ import { PurchaseService } from '../services/purchase.service';
 })
 export class OffersPricesComponent extends CRUD implements OnInit {
 
+  // [[[II ESC:026-01 DOC:docs/documents/2026-07-01-026-compras-punto-partida.md#escenario-01
   public override openNewMenu = signal<MenuItem[]>([{
     label: 'Oferta o precio',
-    command: () => this.openNew({ pos: 'purchase-offers-prices' })
+    command: () => this.openNew({ pos: 'supplier-product' })
   }]);
 
   public override getMenu = signal<MenuItem[]>([{
     label: 'Ofertas y precios',
-    command: () => this.getAll({ pos: 'purchase-offers-prices' })
+    command: () => this.getAll({ pos: 'supplier-product' })
   }]);
 
   constructor(crudS: PurchaseService) {
-    super(crudS, 'purchase-offers-prices');
+    super(crudS, 'supplier-product');
   }
 
   ngOnInit(): void {
-    this.typeDefault = 'purchase-offers-prices';
-    this.app[this.typeDefault] = 'purchases/offers-prices';
+    this.typeDefault = 'supplier-product';
+    this.app[this.typeDefault] = 'purchases/supplier-product';
     this.module[this.typeDefault] = 'CO';
     this.initCRUD();
   }
+  // ]]]FI
 
 }

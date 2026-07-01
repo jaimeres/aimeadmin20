@@ -1,0 +1,56 @@
+<!-- [[[II ESC:024-12 DOC:docs/documents/2026-06-15_024_open-tasks-detail-render-child-form.md#escenario-12 ESC:024-15 DOC:docs/documents/2026-06-15_024_open-tasks-detail-render-child-form.md#escenario-15 -->
+<p-treeTable #tt [value]="taskNodes()" [columns]="columns()" [loading]="loading()" [scrollable]="true"
+  [tableStyle]="{ 'min-width': '50rem' }" [globalFilterFields]="globalFilterFields()" size="small"
+  styleClass="p-treetable-sm" scrollHeight="flex" [resizableColumns]="true" columnResizeMode="expand"
+  (onNodeExpand)="onNodeExpand($event)">
+
+  <ng-template #caption>
+    <div class="custom-task-tree-caption">
+      <p-iconfield iconPosition="left">
+        <p-inputicon>
+          <i class="pi pi-search"></i>
+        </p-inputicon>
+        <input pInputText type="text" (input)="tt.filterGlobal($any($event.target).value, 'contains')"
+          placeholder="Buscar..." />
+      </p-iconfield>
+    </div>
+  </ng-template>
+
+  <ng-template #header let-columns>
+    <tr>
+      <th class="custom-task-tree-toggler"></th>
+      <th *ngFor="let col of columns">{{ col.header }}</th>
+      <th class="custom-task-tree-actions">Acciones</th>
+    </tr>
+  </ng-template>
+
+  <ng-template #body let-rowNode let-rowData="rowData" let-columns="columns">
+    <tr [ttRow]="rowNode" (dblclick)="openRow(rowNode, rowData)">
+      <td class="custom-task-tree-toggler">
+        <p-treeTableToggler [rowNode]="rowNode"></p-treeTableToggler>
+      </td>
+      <td *ngFor="let col of columns">
+        {{ rowData[col.field] }}
+      </td>
+      <td class="custom-task-tree-actions">
+        <p-button *ngIf="rowData?.__taskTreeKind === 'task' && rowData?.is_detail_required === true"
+          icon="pi pi-plus" severity="success" (click)="createDetail.emit(rowData)" pTooltip="Crear detalle"
+          tooltipPosition="bottom" />
+        <span *ngIf="rowData?.__taskTreeKind === 'task' && rowData?.is_detail_required !== true"
+          class="custom-task-tree-help" pTooltip="No requiere detalle" tooltipPosition="bottom">
+          <i class="pi pi-question-circle"></i>
+        </span>
+        <p-button *ngIf="rowData?.__taskTreeKind === 'detail'" icon="pi pi-pencil" severity="warn"
+          (click)="editDetail.emit({ detail: rowData, task: rowNode?.node?.parent?.data })" pTooltip="Editar detalle"
+          tooltipPosition="bottom" />
+      </td>
+    </tr>
+  </ng-template>
+
+  <ng-template #emptymessage>
+    <tr>
+      <td [attr.colspan]="columns().length + 2">No hay tareas para mostrar.</td>
+    </tr>
+  </ng-template>
+</p-treeTable>
+<!-- ]]]FI -->

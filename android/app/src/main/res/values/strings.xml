@@ -4,4 +4,7 @@
     <string name="title_activity_main">Jukai</string>
     <string name="package_name">com.jukai.jukai</string>
     <string name="custom_url_scheme">com.jukai.jukai</string>
+    <!-- [[[II ESC:025-05 DOC:docs/documents/2026-06-28-025-push-notifications-fcm-capacitor.md#escenario-05 CONFIG -->
+    <string name="jukai_push_communications_channel_id">jukai_communications_alerts</string>
+    <!-- ]]]FI -->
 </resources>

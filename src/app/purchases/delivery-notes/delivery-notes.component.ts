@@ -14,25 +14,27 @@ import { PurchaseService } from '../services/purchase.service';
 })
 export class DeliveryNotesComponent extends CRUD implements OnInit {
 
+  // [[[II ESC:026-01 DOC:docs/documents/2026-07-01-026-compras-punto-partida.md#escenario-01
   public override openNewMenu = signal<MenuItem[]>([{
     label: 'Remisión',
-    command: () => this.openNew({ pos: 'purchase-delivery-notes' })
+    command: () => this.openNew({ pos: 'delivery-note' })
   }]);
 
   public override getMenu = signal<MenuItem[]>([{
     label: 'Remisiones',
-    command: () => this.getAll({ pos: 'purchase-delivery-notes' })
+    command: () => this.getAll({ pos: 'delivery-note' })
   }]);
 
   constructor(crudS: PurchaseService) {
-    super(crudS, 'purchase-delivery-notes');
+    super(crudS, 'delivery-note');
   }
 
   ngOnInit(): void {
-    this.typeDefault = 'purchase-delivery-notes';
-    this.app[this.typeDefault] = 'purchases/delivery-notes';
+    this.typeDefault = 'delivery-note';
+    this.app[this.typeDefault] = 'purchases/delivery-note';
     this.module[this.typeDefault] = 'CO';
     this.initCRUD();
   }
+  // ]]]FI
 
 }

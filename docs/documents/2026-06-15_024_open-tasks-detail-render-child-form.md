@@ -215,7 +215,137 @@ serializa `relationships.task_detail.data` como objeto.
 `TaskDetailComponent` envia `task_detail` con `id: [newId]`. Asi el serializador
 mantiene la relacion como lista JSON:API: `data: [{ id, type: 'task-detail' }]`.
 
-### Validaciones aplicadas (escenarios 07-11)
+<a id="escenario-12"></a>
+## Escenario 12: Pestaña de tareas en maintenance con TreeTable generico
+
+### Problema
+Se requirio agregar una nueva pestana en el dialogo de `maintenance` con
+`value="5"` para listar tareas sin cargar datos al abrir el dialogo. La carga
+debia ocurrir solo al ingresar al tab y el arbol debia cargar, bajo cada tarea
+raiz, los detalles asociados al servicio que se esta editando.
+
+### Decision
+Se agrego `CustomTaskTreeComponent` como componente standalone generico. Recibe
+`active`, `selected`, `module`, `consumerApp`, `consumerType` y `refreshKey`.
+Cuando `active=true`, carga las tareas raiz desde `tasks/task`, filtrando por los
+ids ya presentes en `selected[0].tasks` y por el modulo consumidor. En expansion
+de nodo consulta la relacion generica `/<consumer>/<id>/task_details` y filtra en
+cliente los `task-detail` cuyo `task` coincide con la tarea raiz expandida.
+
+En `maintenance` se agrego el tab `value="5"` y se conecta el TreeTable con
+`runTaskDetail($event)` para crear detalle y con `runTaskDetailEdit($event)` para
+editar detalles existentes. `onTabChange()` solo activa la carga para ese tab y
+conserva el comportamiento previo de documentos en `value=4` llamando a
+`super.onTabChange(e)`.
+
+<a id="escenario-13"></a>
+## Escenario 13: Edicion de task-detail desde el TreeTable
+
+### Problema
+El flujo existente solo creaba un nuevo `task-detail` y despues lo asociaba al
+registro consumidor mediante `task_details`. El nuevo TreeTable necesitaba ambas
+acciones: crear un detalle desde la tarea raiz y editar un `task-detail` ya
+asociado como nodo hijo.
+
+### Decision
+Se agrego `runTaskDetailEdit(event)` en `CRUD`, que abre el mismo
+`TaskDetailComponent` via `TASK_DETAIL`, pero con contexto `{ mode:'edit',
+detail, task, consumerApp, consumerType, consumerId }`. `TaskDetailComponent`
+mantiene intacto el modo creacion con `saveSecundary`; cuando recibe
+`mode:'edit'`, reusa `openNewSecundary` para construir el mismo formulario
+General + Datos, rehidrata los controles `parent_form_data_*` desde el
+`parent_form_data` persistido y guarda el `task-detail` existente mediante PATCH.
+
+La creacion conserva el PATCH de retorno al consumidor con `task_details`. La
+edicion no vuelve a asociar el detalle al consumidor: solo modifica el
+`task-detail` existente.
+
+<a id="escenario-14"></a>
+## Escenario 14: Documentos en el dialogo de task-detail
+
+### Problema
+`TaskDetailComponent` solo exponia las pestanas General y Datos. Al editar un
+detalle de tarea no habia una pestana generica para visualizar documentos ya
+asociados al `task-detail`, y los campos dinamicos `parent_form_data_*` de tipo
+`files` necesitaban reconocer archivos existentes para no bloquear la edicion con
+validators de `*_documents`/`*_files`.
+
+### Decision
+Se agrego una pestana "Documentos" al dialogo de `task-detail` reutilizando
+`app-custom-documents`. La vista se activa solo al entrar al tab. La primera
+version asumio una relacion independiente `tasks/task-detail-document`, pero el
+backend real expone los documentos de tarea como M2M `files` dentro del propio
+`task-detail`; ver escenario 16.
+
+Para relaciones embebidas en campos `files` de `parent_form_data_*`, el
+componente reconcilia controles existentes: si `*_files`, `*_documents` o el
+`key` independiente ya tienen valor, se limpian los validators de los controles
+hermanos. Asi se preserva el soporte actual para M2M, M2O y capturas/base64 sin
+crear logica paralela.
+
+`CustomDocumentsComponent` recibio inputs opcionales `active` y `showNew` con
+defaults compatibles. En usos existentes no cambia el comportamiento; en
+`task-detail` se usa como vista de solo lectura y carga diferida.
+
+<a id="escenario-16"></a>
+## Escenario 16: Documentos de task-detail por relacion M2M files
+
+### Problema
+No existe endpoint independiente `tasks/task-detail-document`. La llamada
+`GET /tasks/task-detail-document/?filter[task_detail]=<id>` devuelve 404. Los
+documentos del detalle de tarea viven como relacion M2M `files` y el endpoint
+valido es `GET /tasks/task-detail/<id>/files/`.
+
+### Decision
+`CustomDocumentsComponent` ahora acepta `related` y `relatedType` opcionales. Si
+`related` viene informado, carga documentos con el endpoint relacionado
+`/<app>/<id>/<related>/` y muestra los archivos directamente como nodos hoja,
+permitiendo abrirlos con el boton de vista. Si `related` esta vacio, conserva el
+comportamiento anterior por endpoint independiente con `filter[...]`, usado por
+maintenance y otros modulos.
+
+`TaskDetailComponent` usa por defecto `app='tasks/task-detail'`,
+`type='task-detail'`, `related='files'` y `relatedType='file'`, evitando la ruta
+inexistente `tasks/task-detail-document`. La configuracion `documents` puede
+seguir sobrescribiendo el modo si algun modulo requiere una relacion separada.
+
+<a id="escenario-17"></a>
+## Escenario 17: Preservar relaciones M2M files al editar task-detail
+
+### Problema
+Al editar un `task-detail` con documentos ya asociados por M2M `files`, el tab
+"Documentos" listaba correctamente los archivos desde
+`GET /tasks/task-detail/<id>/files/`, pero el formulario no precargaba esas
+relaciones en sus controles tipo `files`. Si el usuario subia un documento nuevo,
+la subida directa agregaba solo ese nuevo `{id,type}` al control y el PATCH podia
+enviar unicamente la ultima relacion, reemplazando las existentes.
+
+### Decision
+`TaskDetailComponent` reutiliza el mismo endpoint relacionado configurado para el
+tab de documentos y, al abrir edicion, normaliza sus recursos como
+`{ id, type:'file' }`. Esas relaciones se fusionan por id con los controles
+`files` del formulario de `task-detail` y de `parent_form_data_*` antes de
+guardar. La fusion se repite justo antes del PATCH para cubrir subidas realizadas
+despues de la carga inicial.
+
+El comportamiento previo para documentos por relacion independiente se conserva:
+si `related` esta vacio, no se hidratan relaciones M2M y `app-custom-documents`
+continua usando el flujo por `filter[...]`.
+
+<a id="escenario-15"></a>
+## Escenario 15: Icono para tareas que no requieren detalle
+
+### Problema
+En el TreeTable de tareas, las tareas con `is_detail_required=false` mostraban un
+boton `+` deshabilitado. Visualmente parecia una accion bloqueada, aunque la
+condicion real es que la tarea no requiere detalle.
+
+### Decision
+Se reemplazo ese boton deshabilitado por un icono `pi-question-circle` con
+tooltip "No requiere detalle". Las tareas con detalle requerido conservan el
+boton `+`, y los nodos hijos siguen usando el boton de edicion.
+
+### Validaciones aplicadas (escenarios 07-17)
 - `npm run build`: exit 0 (warnings preexistentes de budget/CommonJS/stylesheet).
 - `get_errors` sobre `crud.class.ts`, `vars.class.ts`, `task.component.ts`,
   `task-detail.component.ts`, `task-module-registry.ts`: sin errores.
@@ -227,6 +357,14 @@ mantiene la relacion como lista JSON:API: `data: [{ id, type: 'task-detail' }]`.
 - `src/app/tasks/task-detail/task-detail.component.ts` (nuevo)
 - `src/app/tasks/task-detail/task-detail.component.html` (nuevo)
 - `src/app/utils/task-module-registry.ts`
+- `src/app/components/custom-documents/custom-documents.component.ts`
+- `src/app/components/custom-documents/custom-documents.component.html`
+- `src/app/components/custom-task-tree/custom-task-tree.component.ts`
+- `src/app/components/custom-task-tree/custom-task-tree.component.html`
+- `src/app/components/custom-task-tree/custom-task-tree.component.scss`
+- `src/app/components/custom-task-tree/custom-task-tree.component.spec.ts`
+- `src/app/assets/maintenance/maintenance.component.ts`
+- `src/app/assets/maintenance/maintenance.component.html`
 - `docs/documents/2026-06-15_024_open-tasks-detail-render-child-form.md`
 
 ### Pendientes
@@ -234,8 +372,22 @@ mantiene la relacion como lista JSON:API: `data: [{ id, type: 'task-detail' }]`.
 - Validar que `addFieldsByPrefix` mantiene comportamiento identico para `form_fields_data_*` y `relacion_data_*`.
 - Confirmar contra el backend el nombre exacto de la relacion (`task_detail`) y el `type` (`task-detail`) usados en el PATCH de retorno.
 - Tras validar, evaluar eliminar `_openTasksDetailLegacyDead`.
+- Validar manualmente que el endpoint relacionado `<consumer>/<id>/task_details`
+  existe para todos los modulos consumidores que usen el TreeTable.
+- Confirmado por revision funcional que `task-detail` debe usar el endpoint M2M
+  relacionado `tasks/task-detail/<id>/files/`, no un endpoint independiente.
 
 ### Pruebas sugeridas
 1. Crear una tarea con detalle requerido y campos `parent_form_data_*` (texto, fecha, dropdown, files) y confirmar render en "Datos".
 2. Confirmar que un dropdown-choice hijo crea el control `object_<field>` y muestra sus opciones.
 3. Confirmar que un draw por dispositivo (grid/stepper) sigue representandose correctamente.
+4. En `/assets/maintenance`, abrir un registro, entrar al tab "Tareas" y confirmar que la carga ocurre en ese momento.
+5. Expandir una tarea raiz y confirmar que aparecen solo los `task-detail` asociados a ese mantenimiento y esa tarea.
+6. Crear un detalle desde la tarea raiz y editar un detalle hijo con doble clic o boton.
+7. Editar un `task-detail` con documentos, abrir el tab "Documentos" y confirmar
+   que consulta `tasks/task-detail/<id>/files/` y lista solo los archivos de ese
+   detalle.
+8. Confirmar que una tarea sin detalle requerido muestra el icono de ayuda y no
+   el boton `+` deshabilitado.
+9. Editar un `task-detail` con documentos existentes, subir un documento nuevo y
+   confirmar que el PATCH conserva las relaciones previas en `files`.

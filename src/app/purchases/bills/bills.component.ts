@@ -14,25 +14,27 @@ import { PurchaseService } from '../services/purchase.service';
 })
 export class BillsComponent extends CRUD implements OnInit {
 
+  // [[[II ESC:026-01 DOC:docs/documents/2026-07-01-026-compras-punto-partida.md#escenario-01
   public override openNewMenu = signal<MenuItem[]>([{
     label: 'Factura',
-    command: () => this.openNew({ pos: 'purchase-bills' })
+    command: () => this.openNew({ pos: 'bill' })
   }]);
 
   public override getMenu = signal<MenuItem[]>([{
     label: 'Facturas',
-    command: () => this.getAll({ pos: 'purchase-bills' })
+    command: () => this.getAll({ pos: 'bill' })
   }]);
 
   constructor(crudS: PurchaseService) {
-    super(crudS, 'purchase-bills');
+    super(crudS, 'bill');
   }
 
   ngOnInit(): void {
-    this.typeDefault = 'purchase-bills';
-    this.app[this.typeDefault] = 'purchases/bills';
+    this.typeDefault = 'bill';
+    this.app[this.typeDefault] = 'purchases/bill';
     this.module[this.typeDefault] = 'CO';
     this.initCRUD();
   }
+  // ]]]FI
 
 }

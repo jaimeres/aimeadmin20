@@ -15,8 +15,8 @@ import { Preferences } from '@capacitor/preferences';
 import { App } from '@capacitor/app';
 import { PermissionsService } from './permissions.service';
 import { ClientCacheStorageService } from '../../utils/services/client-cache-storage.service';
-// [[[II ESC:004-01 DOC:docs/documents/2026-05-30_004_sistema-avisos-socket.md#escenario-01
-import { NotificationSocketService } from '../../utils/services/notification-socket.service';
+// [[[II ESC:025-01 DOC:docs/documents/2026-06-28-025-push-notifications-fcm-capacitor.md#escenario-01
+import { PushDeviceService } from '../../communications/services/push-device.service';
 // ]]]FI
 
 // [[[II ESC:001-07 DOC:docs/documents/2026-06-04-001-token-config-cache.md#escenario-07
@@ -70,9 +70,10 @@ export class AuthService {
   /** Servicio de permisos (inicializado en el constructor) */
   public permissionsS!: PermissionsService;
 
-  // [[[II ESC:004-01 DOC:docs/documents/2026-05-30_004_sistema-avisos-socket.md#escenario-01
-  /** Servicio de avisos/alertas en tiempo real (Socket.IO). */
-  private notificationSocketS = inject(NotificationSocketService);
+  // [[[II ESC:025-01 DOC:docs/documents/2026-06-28-025-push-notifications-fcm-capacitor.md#escenario-01
+  /** Registro FCM del dispositivo autenticado. */
+  private pushDeviceS = inject(PushDeviceService);
+  // °°° Revisar: websocket deshabilitado por FCM push; se debe quitar socket.io-client y conservar solo el socket Angular si se retoma tiempo real.
   // ]]]FI
   // [[[II ESC:001-07 DOC:docs/documents/2026-06-04-001-token-config-cache.md#escenario-07
   private clientCacheS = inject(ClientCacheStorageService);
@@ -81,6 +82,9 @@ export class AuthService {
   constructor(private http: HttpClient, private cookieS: CookieService, private messageS: MessageService, private router: Router, private generalS: GeneralService, public biometricAuthS: BiometricAuthService, private formCacheS: FormCacheService) {
     // Servicio de permisos (inject para evitar romper la firma del constructor existente)
     this.permissionsS = inject(PermissionsService);
+    // [[[II ESC:025-05 DOC:docs/documents/2026-06-28-025-push-notifications-fcm-capacitor.md#escenario-05
+    this.pushDeviceS.initializePushHandlers();
+    // ]]]FI
 
     // Cargar tokens y usuario al inicializar (solo importante para móviles)
     this._storageReady = this.loadTokensFromStorage();
@@ -231,6 +235,9 @@ export class AuthService {
           const userId = String(this.userId() ?? this.username() ?? 'anonymous');
           await this.formCacheS.clearAllForUser(userId);
         } catch { /* silencioso */ }
+        // [[[II ESC:025-02 DOC:docs/documents/2026-06-28-025-push-notifications-fcm-capacitor.md#escenario-02
+        await this.pushDeviceS.deactivateRegisteredDevice();
+        // ]]]FI
         await this.clearTokensFromStorage();
         this.cookieS.delete('refresh');
         this.cookieS.delete('user');
@@ -239,9 +246,6 @@ export class AuthService {
         this.setLoggedin(false);
         this.setUser(null);
         this.messageS.changeMessage('Sesión cerrada correctamente', null, {}, 'success');
-        // [[[II ESC:004-01 DOC:docs/documents/2026-05-30_004_sistema-avisos-socket.md#escenario-01
-        this.notificationSocketS.disconnect(); // Cerrar socket de avisos al salir
-        // ]]]FI
         this.redirectMP();
       }),
       catchError(async (err) => {
@@ -250,6 +254,9 @@ export class AuthService {
           const userId = String(this.userId() ?? this.username() ?? 'anonymous');
           await this.formCacheS.clearAllForUser(userId);
         } catch { /* silencioso */ }
+        // [[[II ESC:025-02 DOC:docs/documents/2026-06-28-025-push-notifications-fcm-capacitor.md#escenario-02
+        await this.pushDeviceS.deactivateRegisteredDevice();
+        // ]]]FI
         await this.clearTokensFromStorage();
         this.cookieS.delete('refresh');
         this.cookieS.delete('user');
@@ -258,9 +265,6 @@ export class AuthService {
         this.setLoggedin(false);
         this.setUser(null);
         this.messageS.changeMessage('Sesión cerrada correctamente');
-        // [[[II ESC:004-01 DOC:docs/documents/2026-05-30_004_sistema-avisos-socket.md#escenario-01
-        this.notificationSocketS.disconnect(); // Cerrar socket de avisos al salir
-        // ]]]FI
         this.redirectMP();
         return of(null);
       })
@@ -453,18 +457,10 @@ export class AuthService {
           this.setUser(resp.data.user);
           await this.saveTokensToStorage(); // Guardar inmediatamente después del login
 
-          // [[[II ESC:004-01 DOC:docs/documents/2026-05-30_004_sistema-avisos-socket.md#escenario-01
-          // ====================================================================
-          // AVISO DE INICIO DE SESIÓN (Socket.IO) — PREPARADO LOCALMENTE
-          // El servidor de avisos AÚN NO está implementado; esto queda listo.
-          // Conecta el socket con el token y emite el aviso de login.
-          //
-          // 👉 PARA DEJAR DE ENVIAR EL AVISO DE LOGIN: comenta las DOS líneas
-          //    siguientes (connect + emitLoginNotice). Con eso el socket no se
-          //    conecta ni notifica el inicio de sesión.
-          this.notificationSocketS.connect(this.access);
-          this.notificationSocketS.emitLoginNotice(resp.data.user);
-          // ====================================================================
+          // [[[II ESC:025-01 DOC:docs/documents/2026-06-28-025-push-notifications-fcm-capacitor.md#escenario-01
+          await this.pushDeviceS.initializePushHandlers();
+          await this.pushDeviceS.registerCurrentDevice();
+          // WebSocket/Socket.IO queda deshabilitado: se debe quitar socket.io-client y dejar solo el socket Angular si se retoma tiempo real.
           // ]]]FI
         }),
         switchMap((resp: any) => {

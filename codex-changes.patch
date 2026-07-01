@@ -1,0 +1,2272 @@
+diff --git a/.github/copilot-instructions.md b/.github/copilot-instructions.md
+index d87c13e..1e32d85 100644
+--- a/.github/copilot-instructions.md
++++ b/.github/copilot-instructions.md
+@@ -6,6 +6,8 @@ Esta regla es global para GitHub Copilot en este repositorio. No depende de skil
+ 
+ No introducir regresiones funcionales por interpretacion implicita.
+ 
++La ruta del API es /home/jaime/Escritorio/d/aimeServidor2 y se puede acceder en modo lectura cuando sea necesario para revisar comportamiento, contratos o reglas relacionadas.
++
+ Antes de cambiar comportamiento existente:
+ 
+ 1. Identificar el comportamiento previo leyendo el codigo y, si existe, la documentacion de trazabilidad.
+diff --git a/AGENTS.md b/AGENTS.md
+index b128038..9c787b9 100644
+--- a/AGENTS.md
++++ b/AGENTS.md
+@@ -6,6 +6,8 @@ Esta regla es global para Codex en este repositorio. No depende de skills.
+ 
+ No introducir regresiones funcionales por interpretacion implicita.
+ 
++La ruta del API es /home/jaime/Escritorio/d/aimeServidor2 y se puede acceder en modo lectura cuando sea necesario para revisar comportamiento, contratos o reglas relacionadas.
++
+ Antes de cambiar comportamiento existente:
+ 
+ 1. Identificar el comportamiento previo leyendo el codigo y, si existe, la documentacion de trazabilidad.
+diff --git a/android/app/build.gradle b/android/app/build.gradle
+index a5dfaf3..41c5867 100644
+--- a/android/app/build.gradle
++++ b/android/app/build.gradle
+@@ -1,5 +1,8 @@
+ apply plugin: 'com.android.application'
+ apply plugin: 'kotlin-android'
++// [[[II ESC:025-04 DOC:docs/documents/2026-06-28-025-push-notifications-fcm-capacitor.md#escenario-04 CONFIG
++apply plugin: 'com.google.gms.google-services'
++// ]]]FI
+ 
+ def keystorePropertiesFile = rootProject.file("keystore.properties")
+ def keystoreProperties = new Properties()
+@@ -14,8 +17,8 @@ android {
+         applicationId "com.jukai.jukai"
+         minSdkVersion rootProject.ext.minSdkVersion
+         targetSdkVersion rootProject.ext.targetSdkVersion
+-        versionCode 3
+-        versionName "1.0.6"
++        versionCode 4
++        versionName "1.0.8"
+         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
+         aaptOptions {
+              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
+@@ -73,15 +76,12 @@ dependencies {
+     // Biometric authentication dependencies
+     implementation "androidx.biometric:biometric:1.1.0"
+     implementation "androidx.fragment:fragment-ktx:1.6.2"
++
++    // [[[II ESC:025-04 DOC:docs/documents/2026-06-28-025-push-notifications-fcm-capacitor.md#escenario-04 CONFIG
++    implementation platform('com.google.firebase:firebase-bom:34.15.0')
++    implementation 'com.google.firebase:firebase-analytics'
++    implementation 'com.google.firebase:firebase-messaging'
++    // ]]]FI
+ }
+ 
+ apply from: 'capacitor.build.gradle'
+-
+-try {
+-    def servicesJSON = file('google-services.json')
+-    if (servicesJSON.text) {
+-        apply plugin: 'com.google.gms.google-services'
+-    }
+-} catch(Exception e) {
+-    logger.info("google-services.json not found, google-services plugin not applied. Push Notifications won't work")
+-}
+diff --git a/android/app/capacitor.build.gradle b/android/app/capacitor.build.gradle
+index ee0e543..96ca181 100644
+--- a/android/app/capacitor.build.gradle
++++ b/android/app/capacitor.build.gradle
+@@ -17,6 +17,7 @@ dependencies {
+     implementation project(':capacitor-device')
+     implementation project(':capacitor-geolocation')
+     implementation project(':capacitor-preferences')
++    implementation project(':capacitor-push-notifications')
+     implementation project(':capacitor-share')
+ 
+ }
+diff --git a/android/app/src/main/AndroidManifest.xml b/android/app/src/main/AndroidManifest.xml
+index 52295e4..7d5c80a 100644
+--- a/android/app/src/main/AndroidManifest.xml
++++ b/android/app/src/main/AndroidManifest.xml
+@@ -8,6 +8,12 @@
+         android:supportsRtl="true"
+         android:largeHeap="true"
+         android:theme="@style/AppTheme">
++        <!-- [[[II ESC:025-05 DOC:docs/documents/2026-06-28-025-push-notifications-fcm-capacitor.md#escenario-05 CONFIG -->
++        <meta-data
++            android:name="com.google.firebase.messaging.default_notification_channel_id"
++            android:value="@string/jukai_push_communications_channel_id" />
++        <!-- ]]]FI -->
++
+         <!-- [[[II ESC:021-03 DOC:docs/documents/2026-06-05_021_crud-onshow-maximize-small-screens.md#escenario-03 CONFIG -->
+         <activity
+             android:configChanges="orientation|keyboardHidden|keyboard|screenSize|locale|smallestScreenSize|screenLayout|uiMode|navigation"
+@@ -40,6 +46,9 @@
+ 
+     <!-- Permissions -->
+     <uses-permission android:name="android.permission.INTERNET" />
++    <!-- [[[II ESC:027-01 DOC:docs/documents/2026-07-01-027-autenticacion-segura-dispositivo-movil.md#escenario-01 CONFIG -->
++    <uses-permission android:name="android.permission.USE_BIOMETRIC" />
++    <!-- ]]]FI -->
+     <uses-permission android:name="android.permission.CAMERA" />
+     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CAMERA" />
+diff --git a/android/app/src/main/java/com/jukai/security/DeviceAttestPlugin.kt b/android/app/src/main/java/com/jukai/security/DeviceAttestPlugin.kt
+index 9d58536..2ceb6a3 100644
+--- a/android/app/src/main/java/com/jukai/security/DeviceAttestPlugin.kt
++++ b/android/app/src/main/java/com/jukai/security/DeviceAttestPlugin.kt
+@@ -1,7 +1,13 @@
+ package com.jukai.security
+ 
++import android.app.KeyguardManager
++import android.content.Context
+ import android.os.Build
++import android.security.keystore.KeyPermanentlyInvalidatedException
+ import android.util.Base64
++import androidx.biometric.BiometricManager
++import androidx.biometric.BiometricManager.Authenticators.BIOMETRIC_STRONG
++import androidx.biometric.BiometricManager.Authenticators.DEVICE_CREDENTIAL
+ import androidx.biometric.BiometricPrompt
+ import androidx.core.content.ContextCompat
+ import com.getcapacitor.JSObject
+@@ -16,6 +22,7 @@ import android.security.keystore.KeyGenParameterSpec
+ import android.security.keystore.KeyProperties
+ import androidx.fragment.app.FragmentActivity
+ 
++// [[[II ESC:027-01 DOC:docs/documents/2026-07-01-027-autenticacion-segura-dispositivo-movil.md#escenario-01
+ @CapacitorPlugin(name = "DeviceAttestPlugin")
+ class DeviceAttestPlugin : Plugin() {
+ 
+@@ -24,6 +31,8 @@ class DeviceAttestPlugin : Plugin() {
+         private const val KEYSTORE_PROVIDER = "AndroidKeyStore"
+         private const val EC_CURVE = "secp256r1"
+         private const val SIGNATURE_ALGORITHM = "SHA256withECDSA"
++        private const val AUTHENTICATORS_STRONG_OR_DEVICE = "BIOMETRIC_STRONG_OR_DEVICE_CREDENTIAL"
++        private const val AUTHENTICATORS_STRONG_ONLY = "BIOMETRIC_STRONG"
+     }
+ 
+     private fun getKeyAlias(userId: String?): String {
+@@ -41,7 +50,7 @@ class DeviceAttestPlugin : Plugin() {
+         val keyAlias = getKeyAlias(userId)
+ 
+         try {
+-            val challenge = Base64.decode(challengeB64, Base64.URL_SAFE or Base64.NO_WRAP)
++            val challenge = decodeB64Url(challengeB64)
+ 
+             // Eliminar clave existente si existe
+             deleteExistingKey(keyAlias)
+@@ -52,12 +61,14 @@ class DeviceAttestPlugin : Plugin() {
+             // Intentar con StrongBox primero
+             var builder = createKeyGenParameterSpec(keyAlias, challenge, true)
+             var keyPair: KeyPair
++            var usedStrongBox = true
+             
+             try {
+                 kpg.initialize(builder)
+                 keyPair = kpg.generateKeyPair()
+             } catch (e: Exception) {
+                 // Si StrongBox falla, intentar con TEE
++                usedStrongBox = false
+                 builder = createKeyGenParameterSpec(keyAlias, challenge, false)
+                 kpg.initialize(builder)
+                 keyPair = kpg.generateKeyPair()
+@@ -83,11 +94,15 @@ class DeviceAttestPlugin : Plugin() {
+ 
+             val result = JSObject()
+             result.put("publicKey", Base64.encodeToString(pubSpkiDer, Base64.URL_SAFE or Base64.NO_WRAP).trimEnd('='))
++            result.put("publicKeyPem", pubPem)
+             result.put("attestationChain", certChain.map { 
+                 Base64.encodeToString(it.encoded, Base64.URL_SAFE or Base64.NO_WRAP).trimEnd('=')
+             }.toTypedArray())
++            result.put("attestationCertChainPem", chainPem)
+             result.put("deviceId", deviceId)
+             result.put("keyAlias", keyAlias)
++            result.put("authenticators", authenticatorsLabel())
++            result.put("securityLevel", if (usedStrongBox) "STRONGBOX" else "TEE_OR_SOFTWARE_UNVERIFIED")
+             
+             call.resolve(result)
+ 
+@@ -98,12 +113,12 @@ class DeviceAttestPlugin : Plugin() {
+ 
+     @PluginMethod
+     fun signWithBiometrics(call: PluginCall) {
+-        val challengeB64 = call.getString("challenge") ?: return call.reject("challenge required")
++        val challengeB64 = call.getString("challenge") ?: call.getString("nonce") ?: return call.reject("challenge required")
+         val userId = call.getString("userId")
+         val keyAlias = getKeyAlias(userId)
+ 
+         try {
+-            val challenge = Base64.decode(challengeB64, Base64.URL_SAFE or Base64.NO_WRAP)
++            val challenge = decodeB64Url(challengeB64)
+ 
+             // Preparar signature con la clave privada
+             val keystore = KeyStore.getInstance(KEYSTORE_PROVIDER)
+@@ -127,13 +142,7 @@ class DeviceAttestPlugin : Plugin() {
+ 
+             // Configurar BiometricPrompt
+             val executor = ContextCompat.getMainExecutor(context)
+-            val promptInfo = BiometricPrompt.PromptInfo.Builder()
+-                .setTitle("Autenticación Biométrica")
+-                .setSubtitle("Confirma tu identidad para acceder")
+-                .setDescription("Usa tu huella dactilar o reconocimiento facial")
+-                .setNegativeButtonText("Cancelar")
+-                .setAllowedAuthenticators(androidx.biometric.BiometricManager.Authenticators.BIOMETRIC_STRONG)
+-                .build()
++            val promptInfo = buildPromptInfo()
+ 
+             val activity = activity as FragmentActivity
+             val biometricPrompt = BiometricPrompt(activity, executor,
+@@ -145,8 +154,10 @@ class DeviceAttestPlugin : Plugin() {
+                             
+                             val response = JSObject()
+                             response.put("signature", Base64.encodeToString(sigDer, Base64.URL_SAFE or Base64.NO_WRAP).trimEnd('='))
++                            response.put("signatureDerB64url", Base64.encodeToString(sigDer, Base64.URL_SAFE or Base64.NO_WRAP).trimEnd('='))
+                             response.put("deviceId", deviceId)
+                             response.put("keyAlias", keyAlias)
++                            response.put("authenticators", authenticatorsLabel())
+                             call.resolve(response)
+                         } catch (e: Exception) {
+                             call.reject("Signing failed: ${e.message}", e)
+@@ -158,13 +169,15 @@ class DeviceAttestPlugin : Plugin() {
+                     }
+ 
+                     override fun onAuthenticationFailed() {
+-                        call.reject("Biometric authentication failed")
++                        android.util.Log.w("DeviceAttestPlugin", "Biometric authentication attempt failed")
+                     }
+                 })
+ 
+             // Lanzar prompt biométrico
+             biometricPrompt.authenticate(promptInfo, BiometricPrompt.CryptoObject(signature))
+ 
++        } catch (e: KeyPermanentlyInvalidatedException) {
++            call.reject("KEY_PERMANENTLY_INVALIDATED", e)
+         } catch (e: Exception) {
+             call.reject("Sign initialization failed: ${e.message}", e)
+         }
+@@ -173,24 +186,29 @@ class DeviceAttestPlugin : Plugin() {
+     @PluginMethod
+     fun checkBiometricAvailability(call: PluginCall) {
+         try {
+-            val biometricManager = androidx.biometric.BiometricManager.from(context)
+-            val canAuthenticate = biometricManager.canAuthenticate(androidx.biometric.BiometricManager.Authenticators.BIOMETRIC_STRONG)
++            val biometricManager = BiometricManager.from(context)
++            val authenticators = promptAuthenticators()
++            val canAuthenticate = biometricManager.canAuthenticate(authenticators)
++            val keyguardManager = context.getSystemService(Context.KEYGUARD_SERVICE) as KeyguardManager
+             
+             val result = JSObject()
++            result.put("authenticators", authenticatorsLabel())
++            result.put("canUseBiometricStrong", biometricManager.canAuthenticate(BIOMETRIC_STRONG) == BiometricManager.BIOMETRIC_SUCCESS)
++            result.put("canUseDeviceCredential", Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && keyguardManager.isDeviceSecure)
+             when (canAuthenticate) {
+-                androidx.biometric.BiometricManager.BIOMETRIC_SUCCESS -> {
++                BiometricManager.BIOMETRIC_SUCCESS -> {
+                     result.put("available", true)
+                     result.put("status", "AVAILABLE")
+                 }
+-                androidx.biometric.BiometricManager.BIOMETRIC_ERROR_NO_HARDWARE -> {
++                BiometricManager.BIOMETRIC_ERROR_NO_HARDWARE -> {
+                     result.put("available", false)
+                     result.put("status", "NO_HARDWARE")
+                 }
+-                androidx.biometric.BiometricManager.BIOMETRIC_ERROR_HW_UNAVAILABLE -> {
++                BiometricManager.BIOMETRIC_ERROR_HW_UNAVAILABLE -> {
+                     result.put("available", false)
+                     result.put("status", "HW_UNAVAILABLE")
+                 }
+-                androidx.biometric.BiometricManager.BIOMETRIC_ERROR_NONE_ENROLLED -> {
++                BiometricManager.BIOMETRIC_ERROR_NONE_ENROLLED -> {
+                     result.put("available", false)
+                     result.put("status", "NONE_ENROLLED")
+                 }
+@@ -236,12 +254,24 @@ class DeviceAttestPlugin : Plugin() {
+             .setAlgorithmParameterSpec(ECGenParameterSpec(EC_CURVE))
+             .setDigests(KeyProperties.DIGEST_SHA256)
+             .setUserAuthenticationRequired(true)
+-            .setUserAuthenticationValidityDurationSeconds(60)
+ 
+         // Funciones que requieren API 24+
+         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+             builder.setAttestationChallenge(challenge)
+-            builder.setInvalidatedByBiometricEnrollment(false) // No invalidar si cambian las huellas
++            builder.setInvalidatedByBiometricEnrollment(true)
++        }
++
++        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
++            builder.setUserAuthenticationParameters(
++                0,
++                KeyProperties.AUTH_BIOMETRIC_STRONG or KeyProperties.AUTH_DEVICE_CREDENTIAL
++            )
++        } else {
++            builder.setUserAuthenticationValidityDurationSeconds(-1)
++        }
++
++        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
++            builder.setUnlockedDeviceRequired(true)
+         }
+ 
+         // Si está disponible, usar StrongBox para máxima seguridad (API 28+)
+@@ -274,4 +304,40 @@ class DeviceAttestPlugin : Plugin() {
+         return Base64.encodeToString(bytes, Base64.URL_SAFE or Base64.NO_WRAP)
+             .trimEnd('=')
+     }
++
++    private fun decodeB64Url(value: String): ByteArray {
++        val padding = (4 - value.length % 4) % 4
++        return Base64.decode(value + "=".repeat(padding), Base64.URL_SAFE or Base64.NO_WRAP)
++    }
++
++    private fun promptAuthenticators(): Int {
++        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
++            BIOMETRIC_STRONG or DEVICE_CREDENTIAL
++        } else {
++            BIOMETRIC_STRONG
++        }
++    }
++
++    private fun authenticatorsLabel(): String {
++        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
++            AUTHENTICATORS_STRONG_OR_DEVICE
++        } else {
++            AUTHENTICATORS_STRONG_ONLY
++        }
++    }
++
++    private fun buildPromptInfo(): BiometricPrompt.PromptInfo {
++        val builder = BiometricPrompt.PromptInfo.Builder()
++            .setTitle("Autenticación segura")
++            .setSubtitle("Confirma tu identidad para acceder")
++            .setDescription("Usa huella, rostro o bloqueo seguro del equipo cuando esté disponible")
++            .setAllowedAuthenticators(promptAuthenticators())
++
++        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) {
++            builder.setNegativeButtonText("Cancelar")
++        }
++
++        return builder.build()
++    }
+ }
++// ]]]FI
+diff --git a/android/app/src/main/res/values/strings.xml b/android/app/src/main/res/values/strings.xml
+index 00d32d7..cdd6fab 100644
+--- a/android/app/src/main/res/values/strings.xml
++++ b/android/app/src/main/res/values/strings.xml
+@@ -4,4 +4,7 @@
+     <string name="title_activity_main">Jukai</string>
+     <string name="package_name">com.jukai.jukai</string>
+     <string name="custom_url_scheme">com.jukai.jukai</string>
++    <!-- [[[II ESC:025-05 DOC:docs/documents/2026-06-28-025-push-notifications-fcm-capacitor.md#escenario-05 CONFIG -->
++    <string name="jukai_push_communications_channel_id">jukai_communications_alerts</string>
++    <!-- ]]]FI -->
+ </resources>
+diff --git a/android/build.gradle b/android/build.gradle
+index 6d8931c..20b76d4 100644
+--- a/android/build.gradle
++++ b/android/build.gradle
+@@ -9,7 +9,9 @@ buildscript {
+     }
+     dependencies {
+         classpath 'com.android.tools.build:gradle:8.9.1'
+-        classpath 'com.google.gms:google-services:4.4.2'
++        // [[[II ESC:025-04 DOC:docs/documents/2026-06-28-025-push-notifications-fcm-capacitor.md#escenario-04 CONFIG
++        classpath 'com.google.gms:google-services:4.5.0'
++        // ]]]FI
+         classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:$kotlin_version"
+ 
+         // NOTE: Do not place your application dependencies here; they belong
+diff --git a/android/capacitor.settings.gradle b/android/capacitor.settings.gradle
+index cdda42f..c3c526f 100644
+--- a/android/capacitor.settings.gradle
++++ b/android/capacitor.settings.gradle
+@@ -26,5 +26,8 @@ project(':capacitor-geolocation').projectDir = new File('../node_modules/@capaci
+ include ':capacitor-preferences'
+ project(':capacitor-preferences').projectDir = new File('../node_modules/@capacitor/preferences/android')
+ 
++include ':capacitor-push-notifications'
++project(':capacitor-push-notifications').projectDir = new File('../node_modules/@capacitor/push-notifications/android')
++
+ include ':capacitor-share'
+ project(':capacitor-share').projectDir = new File('../node_modules/@capacitor/share/android')
+diff --git a/capacitor.config.ts b/capacitor.config.ts
+index ca709ad..566471f 100644
+--- a/capacitor.config.ts
++++ b/capacitor.config.ts
+@@ -1,3 +1,4 @@
++/// <reference types="@capacitor/push-notifications" />
+ import type { CapacitorConfig } from '@capacitor/cli';
+ 
+ const config: CapacitorConfig = {
+@@ -14,9 +15,16 @@ const config: CapacitorConfig = {
+     DeviceAttestPlugin: {
+       // Configuración para plugin de autenticación biométrica
+       strongBoxBacked: true, // Intentar usar StrongBox si está disponible
+-      userAuthenticationTimeout: 60, // Segundos de validez después de autenticación
+-      invalidatedByBiometricEnrollment: false // No invalidar si cambian las huellas
++      // [[[II ESC:027-01 DOC:docs/documents/2026-07-01-027-autenticacion-segura-dispositivo-movil.md#escenario-01 CONFIG
++      userAuthenticationTimeout: 0, // Requerir autenticación por cada firma
++      invalidatedByBiometricEnrollment: true // Revocar la clave si cambian biométricos compatibles
++      // ]]]FI
++    },
++    // [[[II ESC:025-01 DOC:docs/documents/2026-06-28-025-push-notifications-fcm-capacitor.md#escenario-01 CONFIG
++    PushNotifications: {
++      presentationOptions: ['badge', 'sound', 'banner', 'list']
+     }
++    // ]]]FI
+   }
+ };
+ 
+diff --git a/docs/documents/2026-05-31_005_columnas-form-data-y-tree-select-nombres.md b/docs/documents/2026-05-31_005_columnas-form-data-y-tree-select-nombres.md
+index ebb5344..dce3853 100644
+--- a/docs/documents/2026-05-31_005_columnas-form-data-y-tree-select-nombres.md
++++ b/docs/documents/2026-05-31_005_columnas-form-data-y-tree-select-nombres.md
+@@ -203,6 +203,20 @@ hermanos. El flujo `app-task-detail` monta tambien `app-custom-local-settings` y
+ abre la configuracion desde el icono del dialogo para que este soporte este
+ disponible en la tarea detalle.
+ 
++<a id="escenario-12"></a>
++## Escenario 12: Aplicar filtros configurados al cargar la tabla
++
++Se reactivo la aplicacion de filtros persistidos al cambiar/cargar la posicion del
++CRUD. `changePos()` ahora reconstruye `this.filter` desde los `fields` de la
++configuracion activa antes de llamar `iniParam()`, de modo que la primera llamada
++de `getAll2()` use los filtros definidos en `cols.filter` sin esperar a guardar
++desde `app-custom-local-settings`.
++
++El camino de guardado conserva el mismo comportamiento visible, pero ahora reutiliza
++el helper comun pasando los `fields` modificados por el formulario local. Si la
++configuracion del modulo aun no esta disponible durante una llamada temprana desde
++constructor o navegacion, el helper usa `{}` y evita romper la carga inicial.
++
+ ## Decisiones tomadas
+ 
+ - No se agregan columnas para campos de `form_data` que no existan en la
+@@ -240,6 +254,12 @@ disponible en la tarea detalle.
+   campos se serializan despues del contenedor con `__`.
+ - No se implementa semantica OR para `logic`; queda preservado como metadato hasta
+   que exista contrato de backend para combinar filtros de otra forma.
++- Los filtros configurados conservan menor prioridad que un `filter` enviado
++  explicitamente a `getAll()` / `getAll2()`: el flujo existente sigue usando
++  `filter || this.filter`.
++- No se usa `SharedDynamicDataService` para el filtro principal de tabla; ese
++  servicio sigue limitado a datos dinamicos/dropdowns, mientras que el filtro de
++  listado vive en `CRUD.filter`.
+ 
+ ## Validaciones aplicadas
+ 
+@@ -266,6 +286,10 @@ disponible en la tarea detalle.
+   - `cols.filter` explicito normaliza saltos anidados con `_data_`:
+     `status.filter.code_data_titulo` genera `filter[status__code__titulo]=algo`.
+   - `data_type.filter` conserva el contrato de mapa explicito.
++- Para el escenario 12 se reviso por codigo que `initCRUD()` llama `getAll()`,
++  `getAll2()` ejecuta `changePos()` antes de resolver `filter = filter ||
++  this.filter`, y que guardar desde `app-custom-local-settings` usa el mismo helper
++  con los `fields` editados.
+ 
+ ## Archivos modificados
+ 
+@@ -291,3 +315,6 @@ disponible en la tarea detalle.
+ - Verificar desde la UI de configuracion local una columna con `cols.filter`
+   explicito y confirmar que guardar no elimina filtros hermanos ni cambia filtros
+   simples existentes.
++- Verificar una carga inicial con `load_on_start` activo y un `cols.filter`
++  persistido para confirmar que la primera peticion ya incluye el query param
++  `filter[...]`.
+diff --git a/docs/documents/2026-06-15_024_open-tasks-detail-render-child-form.md b/docs/documents/2026-06-15_024_open-tasks-detail-render-child-form.md
+index 7273ea3..65bd806 100644
+--- a/docs/documents/2026-06-15_024_open-tasks-detail-render-child-form.md
++++ b/docs/documents/2026-06-15_024_open-tasks-detail-render-child-form.md
+@@ -215,7 +215,137 @@ serializa `relationships.task_detail.data` como objeto.
+ `TaskDetailComponent` envia `task_detail` con `id: [newId]`. Asi el serializador
+ mantiene la relacion como lista JSON:API: `data: [{ id, type: 'task-detail' }]`.
+ 
+-### Validaciones aplicadas (escenarios 07-11)
++<a id="escenario-12"></a>
++## Escenario 12: Pestaña de tareas en maintenance con TreeTable generico
++
++### Problema
++Se requirio agregar una nueva pestana en el dialogo de `maintenance` con
++`value="5"` para listar tareas sin cargar datos al abrir el dialogo. La carga
++debia ocurrir solo al ingresar al tab y el arbol debia cargar, bajo cada tarea
++raiz, los detalles asociados al servicio que se esta editando.
++
++### Decision
++Se agrego `CustomTaskTreeComponent` como componente standalone generico. Recibe
++`active`, `selected`, `module`, `consumerApp`, `consumerType` y `refreshKey`.
++Cuando `active=true`, carga las tareas raiz desde `tasks/task`, filtrando por los
++ids ya presentes en `selected[0].tasks` y por el modulo consumidor. En expansion
++de nodo consulta la relacion generica `/<consumer>/<id>/task_details` y filtra en
++cliente los `task-detail` cuyo `task` coincide con la tarea raiz expandida.
++
++En `maintenance` se agrego el tab `value="5"` y se conecta el TreeTable con
++`runTaskDetail($event)` para crear detalle y con `runTaskDetailEdit($event)` para
++editar detalles existentes. `onTabChange()` solo activa la carga para ese tab y
++conserva el comportamiento previo de documentos en `value=4` llamando a
++`super.onTabChange(e)`.
++
++<a id="escenario-13"></a>
++## Escenario 13: Edicion de task-detail desde el TreeTable
++
++### Problema
++El flujo existente solo creaba un nuevo `task-detail` y despues lo asociaba al
++registro consumidor mediante `task_details`. El nuevo TreeTable necesitaba ambas
++acciones: crear un detalle desde la tarea raiz y editar un `task-detail` ya
++asociado como nodo hijo.
++
++### Decision
++Se agrego `runTaskDetailEdit(event)` en `CRUD`, que abre el mismo
++`TaskDetailComponent` via `TASK_DETAIL`, pero con contexto `{ mode:'edit',
++detail, task, consumerApp, consumerType, consumerId }`. `TaskDetailComponent`
++mantiene intacto el modo creacion con `saveSecundary`; cuando recibe
++`mode:'edit'`, reusa `openNewSecundary` para construir el mismo formulario
++General + Datos, rehidrata los controles `parent_form_data_*` desde el
++`parent_form_data` persistido y guarda el `task-detail` existente mediante PATCH.
++
++La creacion conserva el PATCH de retorno al consumidor con `task_details`. La
++edicion no vuelve a asociar el detalle al consumidor: solo modifica el
++`task-detail` existente.
++
++<a id="escenario-14"></a>
++## Escenario 14: Documentos en el dialogo de task-detail
++
++### Problema
++`TaskDetailComponent` solo exponia las pestanas General y Datos. Al editar un
++detalle de tarea no habia una pestana generica para visualizar documentos ya
++asociados al `task-detail`, y los campos dinamicos `parent_form_data_*` de tipo
++`files` necesitaban reconocer archivos existentes para no bloquear la edicion con
++validators de `*_documents`/`*_files`.
++
++### Decision
++Se agrego una pestana "Documentos" al dialogo de `task-detail` reutilizando
++`app-custom-documents`. La vista se activa solo al entrar al tab. La primera
++version asumio una relacion independiente `tasks/task-detail-document`, pero el
++backend real expone los documentos de tarea como M2M `files` dentro del propio
++`task-detail`; ver escenario 16.
++
++Para relaciones embebidas en campos `files` de `parent_form_data_*`, el
++componente reconcilia controles existentes: si `*_files`, `*_documents` o el
++`key` independiente ya tienen valor, se limpian los validators de los controles
++hermanos. Asi se preserva el soporte actual para M2M, M2O y capturas/base64 sin
++crear logica paralela.
++
++`CustomDocumentsComponent` recibio inputs opcionales `active` y `showNew` con
++defaults compatibles. En usos existentes no cambia el comportamiento; en
++`task-detail` se usa como vista de solo lectura y carga diferida.
++
++<a id="escenario-16"></a>
++## Escenario 16: Documentos de task-detail por relacion M2M files
++
++### Problema
++No existe endpoint independiente `tasks/task-detail-document`. La llamada
++`GET /tasks/task-detail-document/?filter[task_detail]=<id>` devuelve 404. Los
++documentos del detalle de tarea viven como relacion M2M `files` y el endpoint
++valido es `GET /tasks/task-detail/<id>/files/`.
++
++### Decision
++`CustomDocumentsComponent` ahora acepta `related` y `relatedType` opcionales. Si
++`related` viene informado, carga documentos con el endpoint relacionado
++`/<app>/<id>/<related>/` y muestra los archivos directamente como nodos hoja,
++permitiendo abrirlos con el boton de vista. Si `related` esta vacio, conserva el
++comportamiento anterior por endpoint independiente con `filter[...]`, usado por
++maintenance y otros modulos.
++
++`TaskDetailComponent` usa por defecto `app='tasks/task-detail'`,
++`type='task-detail'`, `related='files'` y `relatedType='file'`, evitando la ruta
++inexistente `tasks/task-detail-document`. La configuracion `documents` puede
++seguir sobrescribiendo el modo si algun modulo requiere una relacion separada.
++
++<a id="escenario-17"></a>
++## Escenario 17: Preservar relaciones M2M files al editar task-detail
++
++### Problema
++Al editar un `task-detail` con documentos ya asociados por M2M `files`, el tab
++"Documentos" listaba correctamente los archivos desde
++`GET /tasks/task-detail/<id>/files/`, pero el formulario no precargaba esas
++relaciones en sus controles tipo `files`. Si el usuario subia un documento nuevo,
++la subida directa agregaba solo ese nuevo `{id,type}` al control y el PATCH podia
++enviar unicamente la ultima relacion, reemplazando las existentes.
++
++### Decision
++`TaskDetailComponent` reutiliza el mismo endpoint relacionado configurado para el
++tab de documentos y, al abrir edicion, normaliza sus recursos como
++`{ id, type:'file' }`. Esas relaciones se fusionan por id con los controles
++`files` del formulario de `task-detail` y de `parent_form_data_*` antes de
++guardar. La fusion se repite justo antes del PATCH para cubrir subidas realizadas
++despues de la carga inicial.
++
++El comportamiento previo para documentos por relacion independiente se conserva:
++si `related` esta vacio, no se hidratan relaciones M2M y `app-custom-documents`
++continua usando el flujo por `filter[...]`.
++
++<a id="escenario-15"></a>
++## Escenario 15: Icono para tareas que no requieren detalle
++
++### Problema
++En el TreeTable de tareas, las tareas con `is_detail_required=false` mostraban un
++boton `+` deshabilitado. Visualmente parecia una accion bloqueada, aunque la
++condicion real es que la tarea no requiere detalle.
++
++### Decision
++Se reemplazo ese boton deshabilitado por un icono `pi-question-circle` con
++tooltip "No requiere detalle". Las tareas con detalle requerido conservan el
++boton `+`, y los nodos hijos siguen usando el boton de edicion.
++
++### Validaciones aplicadas (escenarios 07-17)
+ - `npm run build`: exit 0 (warnings preexistentes de budget/CommonJS/stylesheet).
+ - `get_errors` sobre `crud.class.ts`, `vars.class.ts`, `task.component.ts`,
+   `task-detail.component.ts`, `task-module-registry.ts`: sin errores.
+@@ -227,6 +357,14 @@ mantiene la relacion como lista JSON:API: `data: [{ id, type: 'task-detail' }]`.
+ - `src/app/tasks/task-detail/task-detail.component.ts` (nuevo)
+ - `src/app/tasks/task-detail/task-detail.component.html` (nuevo)
+ - `src/app/utils/task-module-registry.ts`
++- `src/app/components/custom-documents/custom-documents.component.ts`
++- `src/app/components/custom-documents/custom-documents.component.html`
++- `src/app/components/custom-task-tree/custom-task-tree.component.ts`
++- `src/app/components/custom-task-tree/custom-task-tree.component.html`
++- `src/app/components/custom-task-tree/custom-task-tree.component.scss`
++- `src/app/components/custom-task-tree/custom-task-tree.component.spec.ts`
++- `src/app/assets/maintenance/maintenance.component.ts`
++- `src/app/assets/maintenance/maintenance.component.html`
+ - `docs/documents/2026-06-15_024_open-tasks-detail-render-child-form.md`
+ 
+ ### Pendientes
+@@ -234,8 +372,22 @@ mantiene la relacion como lista JSON:API: `data: [{ id, type: 'task-detail' }]`.
+ - Validar que `addFieldsByPrefix` mantiene comportamiento identico para `form_fields_data_*` y `relacion_data_*`.
+ - Confirmar contra el backend el nombre exacto de la relacion (`task_detail`) y el `type` (`task-detail`) usados en el PATCH de retorno.
+ - Tras validar, evaluar eliminar `_openTasksDetailLegacyDead`.
++- Validar manualmente que el endpoint relacionado `<consumer>/<id>/task_details`
++  existe para todos los modulos consumidores que usen el TreeTable.
++- Confirmado por revision funcional que `task-detail` debe usar el endpoint M2M
++  relacionado `tasks/task-detail/<id>/files/`, no un endpoint independiente.
+ 
+ ### Pruebas sugeridas
+ 1. Crear una tarea con detalle requerido y campos `parent_form_data_*` (texto, fecha, dropdown, files) y confirmar render en "Datos".
+ 2. Confirmar que un dropdown-choice hijo crea el control `object_<field>` y muestra sus opciones.
+ 3. Confirmar que un draw por dispositivo (grid/stepper) sigue representandose correctamente.
++4. En `/assets/maintenance`, abrir un registro, entrar al tab "Tareas" y confirmar que la carga ocurre en ese momento.
++5. Expandir una tarea raiz y confirmar que aparecen solo los `task-detail` asociados a ese mantenimiento y esa tarea.
++6. Crear un detalle desde la tarea raiz y editar un detalle hijo con doble clic o boton.
++7. Editar un `task-detail` con documentos, abrir el tab "Documentos" y confirmar
++   que consulta `tasks/task-detail/<id>/files/` y lista solo los archivos de ese
++   detalle.
++8. Confirmar que una tarea sin detalle requerido muestra el icono de ayuda y no
++   el boton `+` deshabilitado.
++9. Editar un `task-detail` con documentos existentes, subir un documento nuevo y
++   confirmar que el PATCH conserva las relaciones previas en `files`.
+diff --git a/package-lock.json b/package-lock.json
+index 7641391..6c6e644 100644
+--- a/package-lock.json
++++ b/package-lock.json
+@@ -29,6 +29,7 @@
+         "@capacitor/geolocation": "^8.2.0",
+         "@capacitor/ios": "^8.3.1",
+         "@capacitor/preferences": "^8.0.1",
++        "@capacitor/push-notifications": "^8.1.1",
+         "@capacitor/share": "^8.0.1",
+         "@primeuix/themes": "^1.2.1",
+         "@tailwindcss/postcss": "^4.1.11",
+@@ -3326,6 +3327,15 @@
+         "@capacitor/core": ">=8.0.0"
+       }
+     },
++    "node_modules/@capacitor/push-notifications": {
++      "version": "8.1.1",
++      "resolved": "https://registry.npmjs.org/@capacitor/push-notifications/-/push-notifications-8.1.1.tgz",
++      "integrity": "sha512-WqzjPKIbYbARMN+GC0XMAJcxJpUUzqgzS/Ny8RODLrro38pQhm3GXYwX2Mwd+LZlLY39rGImkCkrKyQSNfuikA==",
++      "license": "MIT",
++      "peerDependencies": {
++        "@capacitor/core": ">=8.0.0"
++      }
++    },
+     "node_modules/@capacitor/share": {
+       "version": "8.0.1",
+       "resolved": "https://registry.npmjs.org/@capacitor/share/-/share-8.0.1.tgz",
+diff --git a/package.json b/package.json
+index 0aa8e52..4a0fb9a 100644
+--- a/package.json
++++ b/package.json
+@@ -42,6 +42,7 @@
+     "@capacitor/geolocation": "^8.2.0",
+     "@capacitor/ios": "^8.3.1",
+     "@capacitor/preferences": "^8.0.1",
++    "@capacitor/push-notifications": "^8.1.1",
+     "@capacitor/share": "^8.0.1",
+     "@primeuix/themes": "^1.2.1",
+     "@tailwindcss/postcss": "^4.1.11",
+diff --git a/src/app/assets/maintenance/maintenance.component.html b/src/app/assets/maintenance/maintenance.component.html
+index d88461a..77e2e2e 100644
+--- a/src/app/assets/maintenance/maintenance.component.html
++++ b/src/app/assets/maintenance/maintenance.component.html
+@@ -39,13 +39,16 @@
+     <!-- [value]="tabVisible()"  -->
+     <p-tabs [scrollable]="true" value="0" (valueChange)="onTabChange($event)">
+ 
+-      <p-tablist>
+-        <p-tab value="0">General</p-tab>
+-        <p-tab value="1">Clasificadores</p-tab>
+-        <p-tab value="2">Notas</p-tab>
+-        <p-tab value="3">Auditoría</p-tab>
+-        <p-tab value="4">Documentos</p-tab>
+-      </p-tablist>
++        <p-tablist>
++          <p-tab value="0">General</p-tab>
++          <p-tab value="1">Clasificadores</p-tab>
++          <p-tab value="2">Notas</p-tab>
++          <p-tab value="3">Auditoría</p-tab>
++          <p-tab value="4">Documentos</p-tab>
++          <!-- [[[II ESC:024-12 DOC:docs/documents/2026-06-15_024_open-tasks-detail-render-child-form.md#escenario-12 -->
++          <p-tab value="5">Tareas</p-tab>
++          <!-- ]]]FI -->
++        </p-tablist>
+ 
+       <p-tabpanels>
+ 
+@@ -97,17 +100,26 @@
+ 
+         </p-tabpanel>
+ 
+-        <p-tabpanel value="3">
+-          <app-custom-audit [cf]="customField()[typeDefault]" [selected]="selected()" />
+-        </p-tabpanel>
++          <p-tabpanel value="3">
++            <app-custom-audit [cf]="customField()[typeDefault]" [selected]="selected()" />
++          </p-tabpanel>
+ 
+-        <p-tabpanel value="4">
+-          <app-custom-documents [selected]="selected()" [type]="'maintenance-document'"
+-            [app]="'assets/maintenance-document'" [filter]="'maintenance'"
+-            (newAction)="openNewSecundary({pos:'maintenance-document-maintenance'})" />
+-        </p-tabpanel>
++          <p-tabpanel value="4">
++            <app-custom-documents [selected]="selected()" [type]="'maintenance-document'"
++              [app]="'assets/maintenance-document'" [filter]="'maintenance'"
++              (newAction)="openNewSecundary({pos:'maintenance-document-maintenance'})" />
++          </p-tabpanel>
+ 
+-      </p-tabpanels>
++          <!-- [[[II ESC:024-12 DOC:docs/documents/2026-06-15_024_open-tasks-detail-render-child-form.md#escenario-12 -->
++          <p-tabpanel value="5">
++            <app-custom-task-tree [active]="taskTreeActive()" [selected]="selected()" [module]="module[typeDefault]"
++              [consumerApp]="app[typeDefault]" [consumerType]="type[typeDefault] || typeDefault"
++              [refreshKey]="taskTreeRefreshKey()" (createDetail)="runTaskDetail($event)"
++              (editDetail)="runTaskDetailEdit($event)" />
++          </p-tabpanel>
++          <!-- ]]]FI -->
++
++        </p-tabpanels>
+     </p-tabs>
+ 
+   </form>
+@@ -449,4 +461,4 @@
+     </div>
+   </ng-template>
+ 
+-</p-dialog>
+\ No newline at end of file
++</p-dialog>
+diff --git a/src/app/assets/maintenance/maintenance.component.ts b/src/app/assets/maintenance/maintenance.component.ts
+index 6f1349b..1f1278b 100644
+--- a/src/app/assets/maintenance/maintenance.component.ts
++++ b/src/app/assets/maintenance/maintenance.component.ts
+@@ -15,6 +15,7 @@ import { ButtonModule } from 'primeng/button';
+ import { InputTextModule } from 'primeng/inputtext';
+ import { ResponsibleComponent } from '../../components/responsible/responsible.component';
+ import { ResponsibleActionComponent } from '../../components/responsible-action/responsible-action.component';
++import { CustomTaskTreeComponent } from '../../components/custom-task-tree/custom-task-tree.component';
+ 
+ 
+ type ChatMessage = {
+@@ -30,6 +31,7 @@ type ChatMessage = {
+     SelectModule,
+     ResponsibleComponent,
+     ResponsibleActionComponent,
++    CustomTaskTreeComponent,
+     ...PRIME_MODULES,
+     ...LOCAL_BASE,
+ 
+@@ -47,6 +49,10 @@ type ChatMessage = {
+   providers: [ConfirmationService]
+ })
+ export class MaintenanceComponent extends CRUD implements OnInit {
++  // [[[II ESC:024-12 DOC:docs/documents/2026-06-15_024_open-tasks-detail-render-child-form.md#escenario-12
++  taskTreeActive = signal(false);
++  taskTreeRefreshKey = signal(0);
++  // ]]]FI
+ 
+   public override openNewMenu = signal<MenuItem[]>([{
+     label: 'Solicitud',
+@@ -116,10 +122,20 @@ export class MaintenanceComponent extends CRUD implements OnInit {
+     this.app['maintenance-responsible-rule-action'] = 'assets/maintenance-responsible-rule-action';
+     this.module['maintenance-responsible-rule-action'] = 'MA';
+ 
+-
+     this.initCRUD();
+   }
+ 
++  // [[[II ESC:024-12 DOC:docs/documents/2026-06-15_024_open-tasks-detail-render-child-form.md#escenario-12
++  override onTabChange(e: any): void {
++    super.onTabChange(e);
++    this.taskTreeActive.set(e === 5 || e === '5');
++  }
++
++  override closeTaskModule(): void {
++    super.closeTaskModule();
++    this.taskTreeRefreshKey.update((value) => value + 1);
++  }
++  // ]]]FI
+   //temporal
+   public installation = false;
+   getInstallation() {
+diff --git a/src/app/auth/services/auth.service.ts b/src/app/auth/services/auth.service.ts
+index bd865b6..1d4517d 100644
+--- a/src/app/auth/services/auth.service.ts
++++ b/src/app/auth/services/auth.service.ts
+@@ -15,8 +15,8 @@ import { Preferences } from '@capacitor/preferences';
+ import { App } from '@capacitor/app';
+ import { PermissionsService } from './permissions.service';
+ import { ClientCacheStorageService } from '../../utils/services/client-cache-storage.service';
+-// [[[II ESC:004-01 DOC:docs/documents/2026-05-30_004_sistema-avisos-socket.md#escenario-01
+-import { NotificationSocketService } from '../../utils/services/notification-socket.service';
++// [[[II ESC:025-01 DOC:docs/documents/2026-06-28-025-push-notifications-fcm-capacitor.md#escenario-01
++import { PushDeviceService } from '../../communications/services/push-device.service';
+ // ]]]FI
+ 
+ // [[[II ESC:001-07 DOC:docs/documents/2026-06-04-001-token-config-cache.md#escenario-07
+@@ -70,9 +70,10 @@ export class AuthService {
+   /** Servicio de permisos (inicializado en el constructor) */
+   public permissionsS!: PermissionsService;
+ 
+-  // [[[II ESC:004-01 DOC:docs/documents/2026-05-30_004_sistema-avisos-socket.md#escenario-01
+-  /** Servicio de avisos/alertas en tiempo real (Socket.IO). */
+-  private notificationSocketS = inject(NotificationSocketService);
++  // [[[II ESC:025-01 DOC:docs/documents/2026-06-28-025-push-notifications-fcm-capacitor.md#escenario-01
++  /** Registro FCM del dispositivo autenticado. */
++  private pushDeviceS = inject(PushDeviceService);
++  // °°° Revisar: websocket deshabilitado por FCM push; se debe quitar socket.io-client y conservar solo el socket Angular si se retoma tiempo real.
+   // ]]]FI
+   // [[[II ESC:001-07 DOC:docs/documents/2026-06-04-001-token-config-cache.md#escenario-07
+   private clientCacheS = inject(ClientCacheStorageService);
+@@ -81,6 +82,9 @@ export class AuthService {
+   constructor(private http: HttpClient, private cookieS: CookieService, private messageS: MessageService, private router: Router, private generalS: GeneralService, public biometricAuthS: BiometricAuthService, private formCacheS: FormCacheService) {
+     // Servicio de permisos (inject para evitar romper la firma del constructor existente)
+     this.permissionsS = inject(PermissionsService);
++    // [[[II ESC:025-05 DOC:docs/documents/2026-06-28-025-push-notifications-fcm-capacitor.md#escenario-05
++    this.pushDeviceS.initializePushHandlers();
++    // ]]]FI
+ 
+     // Cargar tokens y usuario al inicializar (solo importante para móviles)
+     this._storageReady = this.loadTokensFromStorage();
+@@ -231,6 +235,9 @@ export class AuthService {
+           const userId = String(this.userId() ?? this.username() ?? 'anonymous');
+           await this.formCacheS.clearAllForUser(userId);
+         } catch { /* silencioso */ }
++        // [[[II ESC:025-02 DOC:docs/documents/2026-06-28-025-push-notifications-fcm-capacitor.md#escenario-02
++        await this.pushDeviceS.deactivateRegisteredDevice();
++        // ]]]FI
+         await this.clearTokensFromStorage();
+         this.cookieS.delete('refresh');
+         this.cookieS.delete('user');
+@@ -239,9 +246,6 @@ export class AuthService {
+         this.setLoggedin(false);
+         this.setUser(null);
+         this.messageS.changeMessage('Sesión cerrada correctamente', null, {}, 'success');
+-        // [[[II ESC:004-01 DOC:docs/documents/2026-05-30_004_sistema-avisos-socket.md#escenario-01
+-        this.notificationSocketS.disconnect(); // Cerrar socket de avisos al salir
+-        // ]]]FI
+         this.redirectMP();
+       }),
+       catchError(async (err) => {
+@@ -250,6 +254,9 @@ export class AuthService {
+           const userId = String(this.userId() ?? this.username() ?? 'anonymous');
+           await this.formCacheS.clearAllForUser(userId);
+         } catch { /* silencioso */ }
++        // [[[II ESC:025-02 DOC:docs/documents/2026-06-28-025-push-notifications-fcm-capacitor.md#escenario-02
++        await this.pushDeviceS.deactivateRegisteredDevice();
++        // ]]]FI
+         await this.clearTokensFromStorage();
+         this.cookieS.delete('refresh');
+         this.cookieS.delete('user');
+@@ -258,9 +265,6 @@ export class AuthService {
+         this.setLoggedin(false);
+         this.setUser(null);
+         this.messageS.changeMessage('Sesión cerrada correctamente');
+-        // [[[II ESC:004-01 DOC:docs/documents/2026-05-30_004_sistema-avisos-socket.md#escenario-01
+-        this.notificationSocketS.disconnect(); // Cerrar socket de avisos al salir
+-        // ]]]FI
+         this.redirectMP();
+         return of(null);
+       })
+@@ -453,18 +457,10 @@ export class AuthService {
+           this.setUser(resp.data.user);
+           await this.saveTokensToStorage(); // Guardar inmediatamente después del login
+ 
+-          // [[[II ESC:004-01 DOC:docs/documents/2026-05-30_004_sistema-avisos-socket.md#escenario-01
+-          // ====================================================================
+-          // AVISO DE INICIO DE SESIÓN (Socket.IO) — PREPARADO LOCALMENTE
+-          // El servidor de avisos AÚN NO está implementado; esto queda listo.
+-          // Conecta el socket con el token y emite el aviso de login.
+-          //
+-          // 👉 PARA DEJAR DE ENVIAR EL AVISO DE LOGIN: comenta las DOS líneas
+-          //    siguientes (connect + emitLoginNotice). Con eso el socket no se
+-          //    conecta ni notifica el inicio de sesión.
+-          this.notificationSocketS.connect(this.access);
+-          this.notificationSocketS.emitLoginNotice(resp.data.user);
+-          // ====================================================================
++          // [[[II ESC:025-01 DOC:docs/documents/2026-06-28-025-push-notifications-fcm-capacitor.md#escenario-01
++          await this.pushDeviceS.initializePushHandlers();
++          await this.pushDeviceS.registerCurrentDevice();
++          // WebSocket/Socket.IO queda deshabilitado: se debe quitar socket.io-client y dejar solo el socket Angular si se retoma tiempo real.
+           // ]]]FI
+         }),
+         switchMap((resp: any) => {
+diff --git a/src/app/auth/services/biometric-auth.service.ts b/src/app/auth/services/biometric-auth.service.ts
+index b1afd92..0a13b51 100644
+--- a/src/app/auth/services/biometric-auth.service.ts
++++ b/src/app/auth/services/biometric-auth.service.ts
+@@ -1,17 +1,14 @@
+ import { Injectable } from '@angular/core';
+-import { Capacitor } from '@capacitor/core';
++import { Capacitor, registerPlugin } from '@capacitor/core';
+ import { Observable, from, throwError, of } from 'rxjs';
+-import { catchError, switchMap, tap } from 'rxjs/operators';
++import { catchError, map, switchMap, tap } from 'rxjs/operators';
+ import { HttpClient } from '@angular/common/http';
+ import { MessageService } from '../../components/services/message.service';
+ import { environment } from '../../../environments/environment';
+ import { DeviceAttestPlugin, BiometricAuthData, BiometricLoginChallenge, BiometricLoginResponse } from '../../plugins/device-attest.interface';
+ 
+-declare global {
+-  interface Window {
+-    DeviceAttest: DeviceAttestPlugin;
+-  }
+-}
++// [[[II ESC:027-01 DOC:docs/documents/2026-07-01-027-autenticacion-segura-dispositivo-movil.md#escenario-01
++const DeviceAttest = registerPlugin<DeviceAttestPlugin>('DeviceAttestPlugin');
+ 
+ @Injectable({
+   providedIn: 'root'
+@@ -30,7 +27,7 @@ export class BiometricAuthService {
+ 
+   private initializePlugin(): void {
+     if (Capacitor.isNativePlatform()) {
+-      this.deviceAttestPlugin = window.DeviceAttest;
++      this.deviceAttestPlugin = DeviceAttest;
+     }
+   }
+ 
+@@ -67,30 +64,39 @@ export class BiometricAuthService {
+           userId
+         })).pipe(
+           switchMap(attestationResult => {
++            const publicKeyPem = attestationResult.publicKeyPem || '';
++            const publicKey = attestationResult.publicKey || publicKeyPem;
++            const attestationCertChainPem = attestationResult.attestationCertChainPem || '';
++            const attestationChain = attestationResult.attestationChain || [];
++
+             // Paso 3: Enviar atestación al servidor para validación
+             return this.submitAttestationForValidation({
+               challengeId,
+-              publicKeyPem: attestationResult.publicKeyPem,
+-              attestationCertChainPem: attestationResult.attestationCertChainPem,
++              publicKey,
++              publicKeyPem,
++              attestationChain,
++              attestationCertChainPem,
+               deviceId: attestationResult.deviceId
+             }).pipe(
+               tap(validationResult => {
+                 // Paso 4: Guardar datos localmente
+                 const biometricData: BiometricAuthData = {
+                   deviceId: attestationResult.deviceId,
+-                  publicKeyPem: attestationResult.publicKeyPem,
+-                  attestationCertChainPem: attestationResult.attestationCertChainPem,
++                  publicKeyPem: publicKeyPem || publicKey,
++                  attestationCertChainPem,
+                   registeredAt: new Date(),
+-                  securityLevel: validationResult.securityLevel
++                  securityLevel: validationResult.securityLevel,
++                  authenticators: attestationResult.authenticators
+                 };
+                 this.saveBiometricData(userId, biometricData);
+               }),
+               switchMap(validationResult => of({
+                 deviceId: attestationResult.deviceId,
+-                publicKeyPem: attestationResult.publicKeyPem,
+-                attestationCertChainPem: attestationResult.attestationCertChainPem,
++                publicKeyPem: publicKeyPem || publicKey,
++                attestationCertChainPem,
+                 registeredAt: new Date(),
+-                securityLevel: validationResult.securityLevel
++                securityLevel: validationResult.securityLevel,
++                authenticators: attestationResult.authenticators
+               } as BiometricAuthData))
+             );
+           })
+@@ -128,12 +134,13 @@ export class BiometricAuthService {
+         // Paso 2: Firmar con biometría
+         return from(this.deviceAttestPlugin!.signWithBiometrics({
+           nonce: challenge.nonce,
++          challenge: challenge.nonce,
+           userId
+         })).pipe(
+           switchMap(signatureResult => {
+             // Paso 3: Verificar firma en el servidor
+             const loginData: BiometricLoginResponse = {
+-              signature: signatureResult.signatureDerB64url,
++              signature: signatureResult.signatureDerB64url || signatureResult.signature || '',
+               challengeId: challenge.challengeId,
+               deviceId: biometricData.deviceId,
+               keyAlias: signatureResult.keyAlias
+@@ -220,12 +227,16 @@ export class BiometricAuthService {
+     return this.http.post<{ challenge: string; challengeId: string }>(
+       `${this.BASE_URL}/auth/biometric/register/challenge/`,
+       {}
++    ).pipe(
++      map(response => this.normalizeRegistrationChallenge(response))
+     );
+   }
+ 
+   private submitAttestationForValidation(data: {
+     challengeId: string;
++    publicKey: string;
+     publicKeyPem: string;
++    attestationChain: string[];
+     attestationCertChainPem: string;
+     deviceId: string;
+   }): Observable<{ valid: boolean; securityLevel: 'STRONGBOX' | 'TEE' | 'SOFTWARE' }> {
+@@ -235,11 +246,18 @@ export class BiometricAuthService {
+         authorizationCheck: true,
+         data: {
+           type: 'biometric_registration',
+-          attributes: data
++          attributes: {
++            challenge_id: data.challengeId,
++            public_key: data.publicKey,
++            public_key_pem: data.publicKeyPem,
++            attestation_chain: data.attestationChain,
++            attestation_cert_chain_pem: data.attestationCertChainPem,
++            device_id: data.deviceId
++          }
+         }
+       }
+     ).pipe(
+-      map(response => (response as any).data || response)
++      map(response => this.unwrapAttributes(response))
+     );
+   }
+ 
+@@ -254,7 +272,7 @@ export class BiometricAuthService {
+         }
+       }
+     ).pipe(
+-      map(response => (response as any).data || response)
++      map(response => this.normalizeLoginChallenge(response))
+     );
+   }
+ 
+@@ -274,21 +292,56 @@ export class BiometricAuthService {
+         }
+       }
+     ).pipe(
+-      map(response => (response as any).data || response)
++      map(response => this.normalizeLoginResponse(response))
+     );
+   }
+ 
++  private unwrapAttributes<T = any>(response: any): T {
++    return (response?.data?.attributes || response?.data || response) as T;
++  }
++
++  private normalizeRegistrationChallenge(response: any): { challenge: string; challengeId: string } {
++    const attrs = this.unwrapAttributes<any>(response);
++    return {
++      challenge: attrs.challenge || attrs.nonce,
++      challengeId: attrs.challengeId || attrs.challenge_id
++    };
++  }
++
++  private normalizeLoginChallenge(response: any): BiometricLoginChallenge {
++    const attrs = this.unwrapAttributes<any>(response);
++    return {
++      challengeId: attrs.challengeId || attrs.challenge_id,
++      nonce: attrs.nonce || attrs.challenge,
++      expiresAt: attrs.expiresAt || attrs.expires_at,
++      deviceId: attrs.deviceId || attrs.device_id
++    };
++  }
++
++  private normalizeLoginResponse(response: any): { access: string; refresh: string; user: any } {
++    const attrs = this.unwrapAttributes<any>(response);
++    return {
++      access: attrs.access,
++      refresh: attrs.refresh,
++      user: attrs.user
++    };
++  }
++
+   private getStorageKey(userId?: string): string {
+     return `${this.STORAGE_KEY_PREFIX}${userId || 'default'}`;
+   }
+ 
+   private saveBiometricData(userId: string | undefined, data: BiometricAuthData): void {
+     try {
+-      localStorage.setItem(this.getStorageKey(userId), JSON.stringify({
++      const serialized = JSON.stringify({
+         ...data,
+         registeredAt: data.registeredAt.toISOString(),
+         lastUsedAt: data.lastUsedAt?.toISOString()
+-      }));
++      });
++      localStorage.setItem(this.getStorageKey(userId), serialized);
++      if (userId) {
++        localStorage.setItem(this.getStorageKey(), serialized);
++      }
+     } catch (error) {
+       console.error('Failed to save biometric data:', error);
+     }
+@@ -313,11 +366,15 @@ export class BiometricAuthService {
+ 
+   private removeBiometricData(userId?: string): void {
+     try {
++      const current = this.getBiometricData(userId);
++      const defaultData = userId ? this.getBiometricData() : null;
+       localStorage.removeItem(this.getStorageKey(userId));
++      if (!userId || current?.deviceId === defaultData?.deviceId) {
++        localStorage.removeItem(this.getStorageKey());
++      }
+     } catch (error) {
+       console.error('Failed to remove biometric data:', error);
+     }
+   }
+ }
+-
+-import { map } from 'rxjs/operators';
++// ]]]FI
+diff --git a/src/app/components/custom-documents/custom-documents.component.html b/src/app/components/custom-documents/custom-documents.component.html
+index 7df5bc4..539ac90 100644
+--- a/src/app/components/custom-documents/custom-documents.component.html
++++ b/src/app/components/custom-documents/custom-documents.component.html
+@@ -11,8 +11,11 @@
+ 
+     <div style="display: flex; align-items: center; justify-content: space-between; padding: 0;">
+       <div>
+-        <p-button icon="pi pi-plus" styleClass="p-button-secondary" (click)="newAction.emit()" class="mr-2 ml-2"
+-          pTooltip="Nuevo" tooltipPosition="bottom" [disabled]="(selectedSignal()?.length || 0) <= 0" />
++        <!-- [[[II ESC:024-14 DOC:docs/documents/2026-06-15_024_open-tasks-detail-render-child-form.md#escenario-14 -->
++        <p-button *ngIf="showNew" icon="pi pi-plus" styleClass="p-button-secondary" (click)="newAction.emit()"
++          class="mr-2 ml-2" pTooltip="Nuevo" tooltipPosition="bottom"
++          [disabled]="(selectedSignal()?.length || 0) <= 0" />
++        <!-- ]]]FI -->
+         <p-button icon="pi pi-refresh" styleClass="p-button-info" [disabled]="(selectedSignal()?.length || 0) <= 0"
+           (click)="onLoadNodesDocuments()" pTooltip="Actualizar" tooltipPosition="bottom" />
+       </div>
+@@ -48,8 +51,10 @@
+         <button pButton pRipple icon="pi pi-trash" class="p-button-rounded p-button-danger mr-1"
+           (click)="deleteDocumentAction.emit(rowData)" *ngIf="rowNode.node.parent"></button>
+ 
++        <!-- [[[II ESC:024-16 DOC:docs/documents/2026-06-15_024_open-tasks-detail-render-child-form.md#escenario-16 -->
+         <button pButton pRipple icon="pi pi-eye" class="p-button-rounded p-button-success mr-1"
+-          (click)="onShowDocument(rowData.file)" *ngIf="rowNode.node.parent"></button>
++          (click)="onShowDocument(rowData.file)" *ngIf="rowNode.node.parent || rowData?.__directDocumentFile"></button>
++        <!-- ]]]FI -->
+ 
+         <button pButton pRipple icon="pi pi-link" class="p-button-rounded p-button-help"
+           (click)="detachDocumentAction.emit(rowData)" *ngIf="rowNode.node.parent"></button>
+@@ -60,4 +65,4 @@
+ 
+ <p-dialog [(visible)]="documentDialogVisible">
+   <iframe *ngIf="blobDocument()" width="100%" height="100%" [src]="blobDocument()"></iframe>
+-</p-dialog>
+\ No newline at end of file
++</p-dialog>
+diff --git a/src/app/components/custom-documents/custom-documents.component.ts b/src/app/components/custom-documents/custom-documents.component.ts
+index 52e7db9..15f664d 100644
+--- a/src/app/components/custom-documents/custom-documents.component.ts
++++ b/src/app/components/custom-documents/custom-documents.component.ts
+@@ -49,18 +49,41 @@ export class CustomDocumentsComponent {
+   @Input() type: string = ''; // tipo de objeto que se va a consultar
+   @Input() app: string = ''; // app que se va a consultar
+   @Input() filter: string = ''; // el pk por el cual se va a filtrar
++  // [[[II ESC:024-14 DOC:docs/documents/2026-06-15_024_open-tasks-detail-render-child-form.md#escenario-14
++  @Input() active = true;
++  @Input() showNew = true;
++  @Input() related = '';
++  @Input() relatedType = '';
++  // ]]]FI
+   selectedSignal = signal<any>([]);
+ 
+   ngOnChanges(changes: SimpleChanges) {
+ 
+     if (changes['selected']) {
+-      this.selectedSignal.set(changes['selected'].currentValue);
++      this.selectedSignal.set(changes['selected'].currentValue || []);
+     }
+-    if ((changes['type'] && changes['app']) || changes['selected'].currentValue.length > 0) {
+-      if (this.selectedSignal()) {
+-        this.onLoadNodesDocuments();
+-      }
++    // [[[II ESC:024-14 DOC:docs/documents/2026-06-15_024_open-tasks-detail-render-child-form.md#escenario-14
++    if (!this.active) {
++      this.appDocuments.set([]);
++      return;
++    }
++
++    const shouldLoad = !!(
++      changes['active'] ||
++      changes['selected'] ||
++      changes['type'] ||
++      changes['app'] ||
++      changes['filter'] ||
++      changes['related'] ||
++      changes['relatedType']
++    );
++
++    if (shouldLoad && this.selectedSignal()?.length > 0 && this.type && this.app && (this.filter || this.related)) {
++      this.onLoadNodesDocuments();
++    } else if (shouldLoad && (this.selectedSignal()?.length || 0) <= 0) {
++      this.appDocuments.set([]);
+     }
++    // ]]]FI
+   }
+ 
+   /**
+@@ -102,6 +125,35 @@ export class CustomDocumentsComponent {
+     }
+ 
+     this.loadingAppDocument.set(true);
++    // [[[II ESC:024-16 DOC:docs/documents/2026-06-15_024_open-tasks-detail-render-child-form.md#escenario-16
++    if (this.related) {
++      this.crudS.getRelated({
++        id: this.selectedSignal()[0].id,
++        app: this.app,
++        type: this.relatedType || this.type,
++        related: this.related,
++        fields: 'name,file,is_active,created_at,modified_at,',
++      }).subscribe({
++        next: (resp: any) => {
++          resp = this.generalS.DJAtoObject({ respDJA: resp, node: true })
++            .map((node: any) => ({
++              ...node,
++              leaf: true,
++              data: { ...(node.data || {}), __directDocumentFile: true },
++            }));
++          this.loadingAppDocument.set(false);
++          this.appDocuments.set([...resp]);
++        },
++        error: (err: any) => {
++          this.loadingAppDocument.set(false);
++          this.messageS.changeMessage(`Hay un error al cargar los documentos.`,
++            err, []);
++        }
++      });
++      return;
++    }
++    // ]]]FI
++
+     //aqui voy estoy revisando entre la consuta al servidor (no funciona) y el for que si funciona
+     const filter = `filter[${this.filter}]=${this.selectedSignal()[0].id}`
+     //llamo los documentos del elemento seleccionado
+@@ -123,6 +175,9 @@ export class CustomDocumentsComponent {
+ 
+     const node = event.node;
+     const url = event.node.data.relationships?.files?.links?.related;
++    // [[[II ESC:024-16 DOC:docs/documents/2026-06-15_024_open-tasks-detail-render-child-form.md#escenario-16
++    if (this.related || !url) return;
++    // ]]]FI
+     this.loadingAppDocument.set(true);
+ 
+     this.crudS.getDetail({ url }).subscribe({
+diff --git a/src/app/layout/components/app.menu.ts b/src/app/layout/components/app.menu.ts
+index 9f53c80..e9ddee2 100644
+--- a/src/app/layout/components/app.menu.ts
++++ b/src/app/layout/components/app.menu.ts
+@@ -88,6 +88,23 @@ export class AppMenu {
+         }
+       ]
+     },
++    // [[[II ESC:026-01 DOC:docs/documents/2026-07-01-026-compras-punto-partida.md#escenario-01
++    {
++      label: 'Compras',
++      items: [
++        {
++          label: 'Compras',
++          items: [
++            { label: 'Solicitudes', routerLink: ['/purchases/requests'] },
++            { label: 'Pedidos', routerLink: ['/purchases/supplier-request'] },
++            { label: 'Ofertas y precios', routerLink: ['/purchases/offers-prices'] },
++            { label: 'Remisiones', routerLink: ['/purchases/delivery-notes'] },
++            { label: 'Facturas', routerLink: ['/purchases/bills'] },
++          ]
++        },
++      ]
++    },
++    // ]]]FI
+     /*
+         {
+           label: 'Compras',
+diff --git a/src/app/layout/components/app.sidebar.ts b/src/app/layout/components/app.sidebar.ts
+index 896173b..5b1c5c3 100644
+--- a/src/app/layout/components/app.sidebar.ts
++++ b/src/app/layout/components/app.sidebar.ts
+@@ -26,7 +26,7 @@ import { GeneralService } from '../../utils/services/general.service';
+     <div app-menu-profile #menuProfileStart *ngIf="menuProfilePosition() === 'start'"></div>
+     <div #menuContainer class="layout-menu-container">
+       <div app-menu></div>
+-      <label class="pl-8"> <strong>Beta 1.0.7</strong></label>
++      <label class="pl-8"> <strong>Beta 1.0.8</strong></label>
+       <div *ngIf="deviceIdSuffix()" class="pl-8" style="font-size: 0.7rem; color: #94a3b8;">
+         ID: {{deviceIdSuffix()}}
+       </div>
+diff --git a/src/app/pages/auth/login.ts b/src/app/pages/auth/login.ts
+index 8aace2a..d768804 100644
+--- a/src/app/pages/auth/login.ts
++++ b/src/app/pages/auth/login.ts
+@@ -1,4 +1,4 @@
+-import { Component, inject } from '@angular/core';
++import { Component, OnInit } from '@angular/core';
+ import { FormBuilder, FormsModule, ReactiveFormsModule, Validators } from '@angular/forms';
+ import { CommonModule } from '@angular/common';
+ import { Router, RouterModule } from '@angular/router';
+@@ -36,6 +36,21 @@ import { SkeletonModule } from 'primeng/skeleton';
+             <span class="text-2xl font-semibold">Bienvenido</span>
+             <div class="text-muted-color mb-12 px-12"></div>
+ 
++            <!-- [[[II ESC:027-01 DOC:docs/documents/2026-07-01-027-autenticacion-segura-dispositivo-movil.md#escenario-01 -->
++            <div *ngIf="showBiometricOption && !blockedDocument" class="w-full flex flex-col gap-4 px-4 mb-6">
++              <button
++                pButton
++                pRipple
++                type="button"
++                (click)="loginWithBiometrics()"
++                [loading]="biometricLoading"
++                class="w-full p-button-outlined p-button-primary"
++                label="Acceder con el bloqueo del equipo"
++                icon="pi pi-fingerprint">
++              </button>
++            </div>
++            <!-- ]]]FI -->
++
+             <div class="w-full flex flex-col gap-4 px-4" *ngIf="!blockedDocument">
+               <p-icon-field>
+                 <p-inputicon class="pi pi-envelope" />
+@@ -47,6 +62,21 @@ import { SkeletonModule } from 'primeng/skeleton';
+                 <!--<input pInputText type="password" formControlName="password" class="w-full" placeholder="Contraseña" />-->
+                 <p-password formControlName="password" placeholder="contraseña" [toggleMask]="true" [feedback]="false" />
+               </p-icon-field>
++
++              <!-- [[[II ESC:027-01 DOC:docs/documents/2026-07-01-027-autenticacion-segura-dispositivo-movil.md#escenario-01 -->
++              <div *ngIf="showBiometricSetupOption" class="flex align-items-center text-left">
++                <p-checkbox
++                  [(ngModel)]="setupBiometricAfterLogin"
++                  [ngModelOptions]="{standalone: true}"
++                  inputId="setup-biometric"
++                  binary="true">
++                </p-checkbox>
++                <label for="setup-biometric" class="ml-2 text-sm">
++                  Activar acceso con huella, rostro o PIN del equipo
++                </label>
++              </div>
++              <!-- ]]]FI -->
++
+               <button pButton pRipple (click)="login()" class="w-full mt-4 px-4" label="Iniciar sesión"></button>
+             </div>
+ 
+@@ -86,10 +116,17 @@ import { SkeletonModule } from 'primeng/skeleton';
+     <app-configurator simple />
+     `
+ })
+-export class Login {
++export class Login implements OnInit {
+ 
+   public blockedDocument = false;
+   public loginForm;
++  // [[[II ESC:027-01 DOC:docs/documents/2026-07-01-027-autenticacion-segura-dispositivo-movil.md#escenario-01
++  public biometricLoading = false;
++  public showBiometricOption = false;
++  public showBiometricSetupOption = false;
++  public setupBiometricAfterLogin = false;
++  // ]]]FI
++
+   constructor(private fb: FormBuilder, private authS: AuthService, private router: Router, private messageS: MessageService,
+     private cookieS: CookieService) {
+     this.loginForm = this.fb.group({
+@@ -98,6 +135,64 @@ export class Login {
+     });
+   }
+ 
++  // [[[II ESC:027-01 DOC:docs/documents/2026-07-01-027-autenticacion-segura-dispositivo-movil.md#escenario-01
++  ngOnInit() {
++    this.checkBiometricAvailability();
++  }
++
++  private async checkBiometricAvailability() {
++    try {
++      const available = await this.authS.isBiometricAvailable().toPromise();
++
++      if (available) {
++        this.showBiometricOption = true;
++        return;
++      }
++
++      this.authS.biometricAuthS.checkBiometricAvailability().subscribe({
++        next: (result) => {
++          this.showBiometricSetupOption = result.available;
++        },
++        error: (error) => {
++          console.log('Biometric check failed:', error);
++        }
++      });
++    } catch (error) {
++      console.log('Biometric availability check failed:', error);
++    }
++  }
++
++  async loginWithBiometrics() {
++    this.biometricLoading = true;
++    this.blockedDocument = true;
++
++    try {
++      const user = await this.authS.loginWithBiometrics().toPromise();
++
++      if (user) {
++        this.messageS.changeMessage('Acceso seguro exitoso', null, {}, 'success');
++        const currentUser = this.authS.user() as any;
++        if (currentUser?.erp?.is_active_ERP) {
++          this.cookieS.delete('configuration');
++  // ]]]FI
++          // [[[II ESC:001-05 DOC:docs/documents/2026-06-04-001-token-config-cache.md#escenario-05
++          const lastUrl = this.authS.normalizeLastModuleUrl(localStorage.getItem('lastModuleUrl'));
++          this.router.navigateByUrl(lastUrl);
++          // ]]]FI
++          // [[[II ESC:027-01 DOC:docs/documents/2026-07-01-027-autenticacion-segura-dispositivo-movil.md#escenario-01
++        } else {
++          this.authS.redirectMP();
++        }
++      }
++    } catch (error: any) {
++      console.error('Biometric login failed:', error);
++      this.messageS.changeMessage('No se pudo usar el acceso seguro. Usa tu contraseña.', error, {}, 'warn');
++      this.biometricLoading = false;
++      this.blockedDocument = false;
++    }
++  }
++  // ]]]FI
++
+   login() {
+ 
+     this.blockedDocument = true;
+@@ -112,6 +207,12 @@ export class Login {
+ 
+     this.authS.login({ username, password }).subscribe({
+       next: (resp: any) => {
++        // [[[II ESC:027-01 DOC:docs/documents/2026-07-01-027-autenticacion-segura-dispositivo-movil.md#escenario-01
++        if (this.setupBiometricAfterLogin && this.showBiometricSetupOption) {
++          this.setupBiometricAuth();
++        }
++        // ]]]FI
++
+         if (resp.erp.is_active_ERP) {
+           this.cookieS.delete('configuration');
+           // Restaurar el último módulo visitado o ir al inicio
+@@ -129,4 +230,24 @@ export class Login {
+       }
+     });
+   }
++
++  // [[[II ESC:027-01 DOC:docs/documents/2026-07-01-027-autenticacion-segura-dispositivo-movil.md#escenario-01
++  private setupBiometricAuth() {
++    this.authS.setupBiometricAuth().subscribe({
++      next: (success) => {
++        if (success) {
++          this.messageS.changeMessage(
++            'Acceso seguro configurado para este equipo',
++            null,
++            {},
++            'success'
++          );
++        }
++      },
++      error: (error) => {
++        console.warn('Biometric setup failed after login:', error);
++      }
++    });
++  }
++  // ]]]FI
+ }
+diff --git a/src/app/plugins/device-attest.interface.ts b/src/app/plugins/device-attest.interface.ts
+index 019fe41..f10deb2 100644
+--- a/src/app/plugins/device-attest.interface.ts
++++ b/src/app/plugins/device-attest.interface.ts
+@@ -1,3 +1,4 @@
++// [[[II ESC:027-01 DOC:docs/documents/2026-07-01-027-autenticacion-segura-dispositivo-movil.md#escenario-01
+ export interface DeviceAttestPlugin {
+   /**
+    * Genera un par de claves EC P-256 con atestación hardware
+@@ -8,10 +9,14 @@ export interface DeviceAttestPlugin {
+     challenge: string; // Base64URL encoded challenge del servidor
+     userId?: string; // ID del usuario para múltiples claves
+   }): Promise<{
+-    publicKeyPem: string; // Clave pública en formato PEM
+-    attestationCertChainPem: string; // Cadena de certificados de atestación
++    publicKey?: string; // Clave pública SPKI en base64url, compatibilidad con plugin nativo actual
++    publicKeyPem?: string; // Clave pública en formato PEM
++    attestationChain?: string[]; // Cadena de atestación DER base64url
++    attestationCertChainPem?: string; // Cadena de certificados de atestación en PEM
+     deviceId: string; // SHA256 de la clave pública (identificador único del dispositivo)
+     keyAlias: string; // Alias interno de la clave en el keystore
++    authenticators?: string; // Autenticadores aceptados por el dispositivo/app
++    securityLevel?: 'STRONGBOX' | 'TEE' | 'SOFTWARE' | 'TEE_OR_SOFTWARE_UNVERIFIED';
+   }>;
+ 
+   /**
+@@ -20,11 +25,15 @@ export interface DeviceAttestPlugin {
+    * @returns Promise con la firma digital
+    */
+   signWithBiometrics(options: {
+-    nonce: string; // Base64URL encoded nonce del servidor
++    nonce?: string; // Base64URL encoded nonce del servidor
++    challenge?: string; // Alias de nonce para compatibilidad con el plugin nativo
+     userId?: string; // ID del usuario para seleccionar la clave correcta
+   }): Promise<{
+-    signatureDerB64url: string; // Firma ECDSA SHA-256 en formato DER base64url
++    signature?: string; // Firma ECDSA SHA-256 en formato DER base64url, compatibilidad nativa
++    signatureDerB64url?: string; // Firma ECDSA SHA-256 en formato DER base64url
++    deviceId?: string; // SHA256 de la clave pública
+     keyAlias: string; // Alias de la clave utilizada
++    authenticators?: string; // Autenticadores aceptados por el dispositivo/app
+   }>;
+ 
+   /**
+@@ -33,7 +42,10 @@ export interface DeviceAttestPlugin {
+    */
+   checkBiometricAvailability(): Promise<{
+     available: boolean; // true si la biometría está disponible
+-    status: 'AVAILABLE' | 'NO_HARDWARE' | 'HW_UNAVAILABLE' | 'NONE_ENROLLED' | 'UNKNOWN';
++    status: 'AVAILABLE' | 'NO_HARDWARE' | 'HW_UNAVAILABLE' | 'NONE_ENROLLED' | 'DEVICE_NOT_SECURE' | 'UNKNOWN';
++    authenticators?: string;
++    canUseBiometricStrong?: boolean;
++    canUseDeviceCredential?: boolean;
+   }>;
+ 
+   /**
+@@ -56,6 +68,7 @@ export interface BiometricAuthData {
+   registeredAt: Date;
+   lastUsedAt?: Date;
+   securityLevel?: 'STRONGBOX' | 'TEE' | 'SOFTWARE';
++  authenticators?: string;
+ }
+ 
+ export interface BiometricLoginChallenge {
+@@ -71,3 +84,4 @@ export interface BiometricLoginResponse {
+   deviceId: string;
+   keyAlias: string;
+ }
++// ]]]FI
+diff --git a/src/app/purchases/bills/bills.component.ts b/src/app/purchases/bills/bills.component.ts
+index 17b1ae0..71155b8 100644
+--- a/src/app/purchases/bills/bills.component.ts
++++ b/src/app/purchases/bills/bills.component.ts
+@@ -14,25 +14,27 @@ import { PurchaseService } from '../services/purchase.service';
+ })
+ export class BillsComponent extends CRUD implements OnInit {
+ 
++  // [[[II ESC:026-01 DOC:docs/documents/2026-07-01-026-compras-punto-partida.md#escenario-01
+   public override openNewMenu = signal<MenuItem[]>([{
+     label: 'Factura',
+-    command: () => this.openNew({ pos: 'purchase-bills' })
++    command: () => this.openNew({ pos: 'bill' })
+   }]);
+ 
+   public override getMenu = signal<MenuItem[]>([{
+     label: 'Facturas',
+-    command: () => this.getAll({ pos: 'purchase-bills' })
++    command: () => this.getAll({ pos: 'bill' })
+   }]);
+ 
+   constructor(crudS: PurchaseService) {
+-    super(crudS, 'purchase-bills');
++    super(crudS, 'bill');
+   }
+ 
+   ngOnInit(): void {
+-    this.typeDefault = 'purchase-bills';
+-    this.app[this.typeDefault] = 'purchases/bills';
++    this.typeDefault = 'bill';
++    this.app[this.typeDefault] = 'purchases/bill';
+     this.module[this.typeDefault] = 'CO';
+     this.initCRUD();
+   }
++  // ]]]FI
+ 
+ }
+diff --git a/src/app/purchases/delivery-notes/delivery-notes.component.ts b/src/app/purchases/delivery-notes/delivery-notes.component.ts
+index 2d3381b..4bdeb6d 100644
+--- a/src/app/purchases/delivery-notes/delivery-notes.component.ts
++++ b/src/app/purchases/delivery-notes/delivery-notes.component.ts
+@@ -14,25 +14,27 @@ import { PurchaseService } from '../services/purchase.service';
+ })
+ export class DeliveryNotesComponent extends CRUD implements OnInit {
+ 
++  // [[[II ESC:026-01 DOC:docs/documents/2026-07-01-026-compras-punto-partida.md#escenario-01
+   public override openNewMenu = signal<MenuItem[]>([{
+     label: 'Remisión',
+-    command: () => this.openNew({ pos: 'purchase-delivery-notes' })
++    command: () => this.openNew({ pos: 'delivery-note' })
+   }]);
+ 
+   public override getMenu = signal<MenuItem[]>([{
+     label: 'Remisiones',
+-    command: () => this.getAll({ pos: 'purchase-delivery-notes' })
++    command: () => this.getAll({ pos: 'delivery-note' })
+   }]);
+ 
+   constructor(crudS: PurchaseService) {
+-    super(crudS, 'purchase-delivery-notes');
++    super(crudS, 'delivery-note');
+   }
+ 
+   ngOnInit(): void {
+-    this.typeDefault = 'purchase-delivery-notes';
+-    this.app[this.typeDefault] = 'purchases/delivery-notes';
++    this.typeDefault = 'delivery-note';
++    this.app[this.typeDefault] = 'purchases/delivery-note';
+     this.module[this.typeDefault] = 'CO';
+     this.initCRUD();
+   }
++  // ]]]FI
+ 
+ }
+diff --git a/src/app/purchases/offers-prices/offers-prices.component.ts b/src/app/purchases/offers-prices/offers-prices.component.ts
+index 4fae518..1455c7e 100644
+--- a/src/app/purchases/offers-prices/offers-prices.component.ts
++++ b/src/app/purchases/offers-prices/offers-prices.component.ts
+@@ -14,25 +14,27 @@ import { PurchaseService } from '../services/purchase.service';
+ })
+ export class OffersPricesComponent extends CRUD implements OnInit {
+ 
++  // [[[II ESC:026-01 DOC:docs/documents/2026-07-01-026-compras-punto-partida.md#escenario-01
+   public override openNewMenu = signal<MenuItem[]>([{
+     label: 'Oferta o precio',
+-    command: () => this.openNew({ pos: 'purchase-offers-prices' })
++    command: () => this.openNew({ pos: 'supplier-product' })
+   }]);
+ 
+   public override getMenu = signal<MenuItem[]>([{
+     label: 'Ofertas y precios',
+-    command: () => this.getAll({ pos: 'purchase-offers-prices' })
++    command: () => this.getAll({ pos: 'supplier-product' })
+   }]);
+ 
+   constructor(crudS: PurchaseService) {
+-    super(crudS, 'purchase-offers-prices');
++    super(crudS, 'supplier-product');
+   }
+ 
+   ngOnInit(): void {
+-    this.typeDefault = 'purchase-offers-prices';
+-    this.app[this.typeDefault] = 'purchases/offers-prices';
++    this.typeDefault = 'supplier-product';
++    this.app[this.typeDefault] = 'purchases/supplier-product';
+     this.module[this.typeDefault] = 'CO';
+     this.initCRUD();
+   }
++  // ]]]FI
+ 
+ }
+diff --git a/src/app/purchases/services/purchase.service.ts b/src/app/purchases/services/purchase.service.ts
+index 4dd5216..0cc695b 100644
+--- a/src/app/purchases/services/purchase.service.ts
++++ b/src/app/purchases/services/purchase.service.ts
+@@ -9,6 +9,11 @@ export class PurchaseService extends CRUDService {
+ 
+   private readonly placeholderModules = [
+     //'purchase-supplier-request',
++    // [[[II ESC:026-01 DOC:docs/documents/2026-07-01-026-compras-punto-partida.md#escenario-01
++    'supplier-product',
++    'delivery-note',
++    'bill',
++    // ]]]FI
+     'purchase-offers-prices',
+     'purchase-auctions',
+     'purchase-delivery-notes',
+@@ -26,8 +31,13 @@ export class PurchaseService extends CRUDService {
+     this.customField.set({
+       'request-detail': this.authS.config['request-detail']['cols'],
+       'supplier-request': this.authS.config['supplier-request']['cols'],
++      // [[[II ESC:026-01 DOC:docs/documents/2026-07-01-026-compras-punto-partida.md#escenario-01
++      'delivery-note': this.authS.config['delivery-note']['cols'],
++      'bill': this.authS.config['bill']['cols'],
++      'supplier-product': this.authS.config['supplier-product']['cols'],
++      // ]]]FI
+       ...buildPlaceholderCustomFields(this.authS.config, this.placeholderModules)
+     });
+ 
+   }
+-}
+\ No newline at end of file
++}
+diff --git a/src/app/tasks/task-detail/task-detail.component.html b/src/app/tasks/task-detail/task-detail.component.html
+index f07e63d..bfdf15c 100644
+--- a/src/app/tasks/task-detail/task-detail.component.html
++++ b/src/app/tasks/task-detail/task-detail.component.html
+@@ -1,5 +1,5 @@
+-<!-- [[[II ESC:024-09 DOC:docs/documents/2026-06-15_024_open-tasks-detail-render-child-form.md
+-  Dialogo de la tarea-detalle (General + Datos) abierto dentro del modulo consumidor. ]]]FI -->
++<!-- [[[II ESC:024-09 DOC:docs/documents/2026-06-15_024_open-tasks-detail-render-child-form.md ESC:024-14 DOC:docs/documents/2026-06-15_024_open-tasks-detail-render-child-form.md#escenario-14
++  Dialogo de la tarea-detalle (General + Datos + Documentos) abierto dentro del modulo consumidor. ]]]FI -->
+ <p-dialog [(visible)]="formDialogVisible[$any('task-detail')]" (onHide)="onHide($any('task-detail'))"
+   (onShow)="onShow($any('task-detail'))" [styleClass]="styleClassSecundaryDialog()" modal="true" maximizable="true">
+ 
+@@ -13,11 +13,14 @@
+   </ng-template>
+ 
+   <form [formGroup]="form()[$any('task-detail')]" *ngIf="form()[$any('task-detail')]">
+-    <p-tabs [scrollable]="true" [value]="tabVisibleSecundary()">
++    <p-tabs [scrollable]="true" [value]="tabVisibleSecundary()" (valueChange)="onTaskDetailTabChange($event)">
+ 
+       <p-tablist>
+         <p-tab [value]="0">General</p-tab>
+         <p-tab [value]="1">Datos</p-tab>
++        <!-- [[[II ESC:024-14 DOC:docs/documents/2026-06-15_024_open-tasks-detail-render-child-form.md#escenario-14 -->
++        <p-tab [value]="2">Documentos</p-tab>
++        <!-- ]]]FI -->
+       </p-tablist>
+ 
+       <p-tabpanels>
+@@ -44,6 +47,15 @@
+             (filesAction)="onFiles($event)" />
+         </p-tabpanel>
+ 
++        <!-- [[[II ESC:024-14 DOC:docs/documents/2026-06-15_024_open-tasks-detail-render-child-form.md#escenario-14 -->
++        <p-tabpanel [value]="2">
++          <app-custom-documents [active]="taskDetailDocumentsActive()" [showNew]="false"
++            [selected]="taskDetailDocumentSelected()" [type]="taskDetailDocumentType()"
++            [app]="taskDetailDocumentApp()" [filter]="taskDetailDocumentFilter()"
++            [related]="taskDetailDocumentRelated()" [relatedType]="taskDetailDocumentRelatedType()" />
++        </p-tabpanel>
++        <!-- ]]]FI -->
++
+       </p-tabpanels>
+ 
+     </p-tabs>
+@@ -51,9 +63,11 @@
+ 
+   <ng-template #footer>
+     <div class="p-dialog-footer">
+-      <app-custom-button-footer (saveAction)="saveSecundary({pos: 'task-detail', is_file: true })"
+-        (saveNotHideAction)="saveSecundary({pos: 'task-detail', hide:false, is_file: true})"
++      <!-- [[[II ESC:024-13 DOC:docs/documents/2026-06-15_024_open-tasks-detail-render-child-form.md#escenario-13 -->
++      <app-custom-button-footer (saveAction)="saveTaskDetail({pos: 'task-detail', is_file: true })"
++        (saveNotHideAction)="saveTaskDetail({pos: 'task-detail', hide:false, is_file: true})"
+         (resetFormAction)="resetFormDialog()" />
++      <!-- ]]]FI -->
+     </div>
+   </ng-template>
+ 
+diff --git a/src/app/tasks/task-detail/task-detail.component.ts b/src/app/tasks/task-detail/task-detail.component.ts
+index d5c9593..0ff3974 100644
+--- a/src/app/tasks/task-detail/task-detail.component.ts
++++ b/src/app/tasks/task-detail/task-detail.component.ts
+@@ -1,4 +1,4 @@
+-import { Component, EventEmitter, Input, OnInit, Output, SimpleChanges } from '@angular/core';
++import { Component, EventEmitter, Input, OnInit, Output, SimpleChanges, signal } from '@angular/core';
+ import { CommonModule } from '@angular/common';
+ import { CRUD } from '../../utils/crud.class';
+ import { ConfirmationService, PRIME_MODULES } from '../../shared/primeng.index';
+@@ -46,6 +46,20 @@ export class TaskDetailComponent extends CRUD implements OnInit {
+   private _pendingCtx: any = null;
+   private _consumerCtx: any = null;
+   private _savingPatch = false;
++  // [[[II ESC:024-13 DOC:docs/documents/2026-06-15_024_open-tasks-detail-render-child-form.md#escenario-13
++  taskDetailEditMode = signal(false);
++  private _editingDetail: any = null;
++  // ]]]FI
++  // [[[II ESC:024-14 DOC:docs/documents/2026-06-15_024_open-tasks-detail-render-child-form.md#escenario-14
++  taskDetailDocumentsActive = signal(false);
++  taskDetailDocumentSelected = signal<any[]>([]);
++  taskDetailDocumentType = signal('task-detail');
++  taskDetailDocumentApp = signal('tasks/task-detail');
++  taskDetailDocumentFilter = signal('');
++  taskDetailDocumentRelated = signal('files');
++  taskDetailDocumentRelatedType = signal('file');
++  private _taskDetailFileRelations: any[] = [];
++  // ]]]FI
+ 
+   constructor(crudS: TaskService) {
+     super(crudS, 'task-detail');
+@@ -85,6 +99,24 @@ export class TaskDetailComponent extends CRUD implements OnInit {
+     const ctx = this._pendingCtx;
+     this._pendingCtx = null;
+     this._consumerCtx = ctx;
++    // [[[II ESC:024-14 DOC:docs/documents/2026-06-15_024_open-tasks-detail-render-child-form.md#escenario-14
++    this._syncTaskDetailDocumentsConfig(ctx);
++    // ]]]FI
++
++    // [[[II ESC:024-13 DOC:docs/documents/2026-06-15_024_open-tasks-detail-render-child-form.md#escenario-13
++    if (ctx?.mode === 'edit' && ctx?.detail) {
++      this._openEdit(ctx);
++      return;
++    }
++
++    this.taskDetailEditMode.set(false);
++    this._editingDetail = null;
++    // [[[II ESC:024-14 DOC:docs/documents/2026-06-15_024_open-tasks-detail-render-child-form.md#escenario-14
++    this.taskDetailDocumentSelected.set([]);
++    this.taskDetailDocumentsActive.set(false);
++    this._taskDetailFileRelations = [];
++    // ]]]FI
++    // ]]]FI
+ 
+     // la tarea padre se marca como seleccionada para que openNewSecundary la valide
+     // (is_detail_required) y resuelva su child_form_fields.
+@@ -92,6 +124,329 @@ export class TaskDetailComponent extends CRUD implements OnInit {
+     this.openNewSecundary({ pos: 'task-detail', parent_id: 'task' });
+   }
+ 
++  // [[[II ESC:024-13 DOC:docs/documents/2026-06-15_024_open-tasks-detail-render-child-form.md#escenario-13
++  private _openEdit(ctx: any): void {
++    const task = { ...(ctx.task || {}), is_detail_required: true };
++    this.taskDetailEditMode.set(true);
++    this._editingDetail = ctx.detail;
++    this._taskDetailFileRelations = [];
++    this.selected.set([task]);
++    this.openNewSecundary({ pos: 'task-detail', parent_id: 'task' });
++    this._patchEditForm(ctx.detail, task);
++  }
++
++  private _patchEditForm(detail: any, task: any, attempt = 0): void {
++    const form = (this.form() as any)?.['task-detail'];
++    if (!form) {
++      if (attempt < 30) {
++        setTimeout(() => this._patchEditForm(detail, task, attempt + 1), 100);
++      }
++      return;
++    }
++
++    const selected = this._detailToFormData(detail, task);
++    this.resetFormDialog({ pos: 'task-detail', selected });
++    this.selected.set([selected]);
++    // [[[II ESC:024-14 DOC:docs/documents/2026-06-15_024_open-tasks-detail-render-child-form.md#escenario-14
++    this.taskDetailDocumentSelected.set([selected]);
++    this._reconcileParentFormFileControls('task-detail');
++    // [[[II ESC:024-17 DOC:docs/documents/2026-06-15_024_open-tasks-detail-render-child-form.md#escenario-17
++    this._hydrateTaskDetailFileRelations(detail);
++    // ]]]FI
++    // ]]]FI
++    this.isCreate.set(false);
++    this.headerDialogSecundary.set(`Editar ${this.singular['task-detail'] || 'detalle de tarea'}`);
++  }
++
++  private _detailToFormData(detail: any, task: any): any {
++    const selected = {
++      ...detail,
++      task: task?.id ?? detail?.task,
++    };
++    const parentData = detail?.parent_form_data && typeof detail.parent_form_data === 'object'
++      ? detail.parent_form_data
++      : {};
++
++    for (const [key, value] of Object.entries(parentData)) {
++      const field = String(key).startsWith('parent_form_data_') ? String(key) : `parent_form_data_${key}`;
++      selected[field] = value;
++      selected['object_' + field] = this._objectControlValue(value);
++    }
++
++    for (const [key, value] of Object.entries(detail || {})) {
++      if (!String(key).startsWith('parent_form_data.')) continue;
++      const field = `parent_form_data_${String(key).slice('parent_form_data.'.length)}`;
++      selected[field] = value;
++      selected['object_' + field] = this._objectControlValue(value);
++    }
++
++    return selected;
++  }
++
++  private _objectControlValue(value: any): any {
++    if (Array.isArray(value)) {
++      return value.map((item) => this._objectControlValue(item));
++    }
++    if (value && typeof value === 'object') {
++      return value.id ?? value.value ?? value;
++    }
++    return value;
++  }
++
++  saveTaskDetail(options: any = {}): void {
++    // [[[II ESC:024-14 DOC:docs/documents/2026-06-15_024_open-tasks-detail-render-child-form.md#escenario-14
++    // [[[II ESC:024-17 DOC:docs/documents/2026-06-15_024_open-tasks-detail-render-child-form.md#escenario-17
++    this._mergeTaskDetailFileRelationsIntoForm('task-detail');
++    // ]]]FI
++    this._reconcileParentFormFileControls('task-detail');
++    // ]]]FI
++
++    if (!this.taskDetailEditMode()) {
++      this.saveSecundary(options);
++      return;
++    }
++
++    const pos = 'task-detail';
++    const hide = options?.hide !== false;
++    const reset = options?.reset !== false;
++    const form = this.currentForm(pos);
++
++    this.local(form);
++    if (this.formErrors(pos, options?.is_file === true)) return;
++    this.validateRelationships(pos);
++    this.showBlocked();
++
++    this.crudS.type = this.type[pos] || pos;
++    this.crudS.app = this.app[pos];
++
++    const formData = { ...form.value };
++    this._mergeFormDataFiles(pos, formData);
++    this._rebuildFormDataDicts(pos, formData);
++
++    this.crudS.edit({
++      id: this._editingDetail?.id,
++      app: this.app[pos],
++      type: this.type[pos] || pos,
++      formData,
++      include: this.include[pos],
++    }).subscribe({
++      next: () => {
++        this.messageS.changeMessage('Detalle de tarea modificado.', null, {}, 'success', 'Aviso');
++        this.showBlocked(false);
++        if (reset) this.resetFormDialog({ pos });
++        if (hide) {
++          this._savingPatch = true;
++          this.closeDialog.emit();
++        }
++      },
++      error: (err: any) => {
++        this.showBlocked(false);
++        this.messageS.changeMessage('No fue posible editar el detalle de tarea.', err, this.customField()[pos]);
++      }
++    });
++  }
++  // ]]]FI
++
++  // [[[II ESC:024-14 DOC:docs/documents/2026-06-15_024_open-tasks-detail-render-child-form.md#escenario-14
++  onTaskDetailTabChange(value: any): void {
++    this.tabVisibleSecundary.set(value);
++    this.taskDetailDocumentsActive.set(value === 2 || value === '2');
++  }
++
++  private _syncTaskDetailDocumentsConfig(ctx: any): void {
++    const cfg = ctx?.documents
++      ?? ctx?.task?.documents
++      ?? ctx?.task?.child_form_fields?.documents
++      ?? ctx?.task?.child_form_fields?.document;
++    const usesIndependentEndpoint = !!(cfg?.filter || cfg?.parent_field);
++
++    this.taskDetailDocumentType.set(cfg?.type || cfg?.data_type || 'task-detail');
++    this.taskDetailDocumentApp.set(cfg?.app || 'tasks/task-detail');
++    this.taskDetailDocumentFilter.set(cfg?.filter || cfg?.parent_field || '');
++    this.taskDetailDocumentRelated.set(cfg?.related ?? (usesIndependentEndpoint ? '' : 'files'));
++    this.taskDetailDocumentRelatedType.set(cfg?.related_type || cfg?.relatedType || 'file');
++  }
++
++  private _reconcileParentFormFileControls(pos: any): void {
++    const form = this.currentForm(pos);
++    const draw = this.drawForm()?.[pos + '_child_form_fields'];
++    if (!form || !draw) return;
++
++    const hasValue = (value: any): boolean => {
++      if (value === null || value === undefined || value === '') return false;
++      return Array.isArray(value) ? value.length > 0 : true;
++    };
++
++    const clearRequired = (control: any): void => {
++      if (!control) return;
++      control.clearValidators();
++      control.updateValueAndValidity({ emitEvent: false });
++    };
++
++    const visit = (node: any): void => {
++      if (!node || typeof node !== 'object') return;
++
++      const rawField = typeof node.field === 'string' ? node.field : '';
++      const field = rawField.startsWith('object_') ? rawField.slice('object_'.length) : rawField;
++      const isFileField = node.type === 'files' || node.type === 'file' || node.type === 'document';
++
++      if (isFileField && field.startsWith('parent_form_data_')) {
++        const filesCtrl = form.get(field);
++        const docsFields = Array.from(new Set([
++          field.replace(/files$/, 'documents'),
++          'parent_form_data_documents',
++        ])).filter((docsField) => docsField !== field);
++        const docsCtrl = docsFields
++          .map((docsField) => form.get(docsField))
++          .find((control) => !!control) || null;
++        const keyCtrl = node.key && node.key !== field ? form.get(node.key) : null;
++
++        if (hasValue(filesCtrl?.value)) {
++          clearRequired(docsCtrl);
++          clearRequired(keyCtrl);
++        } else if (hasValue(docsCtrl?.value)) {
++          clearRequired(filesCtrl);
++          clearRequired(keyCtrl);
++        } else if (hasValue(keyCtrl?.value)) {
++          clearRequired(filesCtrl);
++          clearRequired(docsCtrl);
++        }
++      }
++
++      for (const child of Object.values(node)) {
++        if (child && typeof child === 'object') visit(child);
++      }
++    };
++
++    visit(draw);
++  }
++
++  // [[[II ESC:024-17 DOC:docs/documents/2026-06-15_024_open-tasks-detail-render-child-form.md#escenario-17
++  private _hydrateTaskDetailFileRelations(detail: any): void {
++    const detailId = detail?.id;
++    const related = this.taskDetailDocumentRelated();
++    if (!detailId || !related) {
++      this._taskDetailFileRelations = [];
++      return;
++    }
++
++    this.showBlocked();
++    this.crudS.getRelated({
++      id: detailId,
++      app: this.taskDetailDocumentApp() || this.app['task-detail'],
++      type: this.taskDetailDocumentRelatedType() || 'file',
++      related,
++      fields: 'name,file,is_active,created_at,modified_at,',
++    }).subscribe({
++      next: (resp: any) => {
++        const data = Array.isArray(resp?.data) ? resp.data : [];
++        const relations = data
++          .map((item: any) => this._normalizeTaskDetailFileRelation(item))
++          .filter((item: any) => !!item);
++
++        this._taskDetailFileRelations = this._mergeTaskDetailFileRelationArrays(this._taskDetailFileRelations, relations);
++        this._mergeTaskDetailFileRelationsIntoForm('task-detail');
++        this._reconcileParentFormFileControls('task-detail');
++        this.showBlocked(false);
++      },
++      error: (err: any) => {
++        this.showBlocked(false);
++        this.messageS.changeMessage(
++          'No fue posible cargar las relaciones de documentos del detalle de tarea.',
++          err,
++          this.customField()?.['task-detail'] || []
++        );
++      }
++    });
++  }
++
++  private _mergeTaskDetailFileRelationsIntoForm(pos: any): void {
++    if (!this._taskDetailFileRelations.length) return;
++
++    const form = this.currentForm(pos);
++    if (!form) return;
++
++    for (const field of this._taskDetailFileControlNames(pos)) {
++      const control = form.get(field);
++      if (!control) continue;
++
++      const current = Array.isArray(control.value)
++        ? control.value
++        : (control.value ? [control.value] : []);
++      const merged = this._mergeTaskDetailFileRelationArrays(this._taskDetailFileRelations, current);
++
++      control.setValue(merged, { emitEvent: false });
++      control.updateValueAndValidity({ emitEvent: false });
++
++      const documentsField = field.replace(/files$/, 'documents');
++      if (documentsField !== field) {
++        const documentsControl = form.get(documentsField);
++        documentsControl?.clearValidators();
++        documentsControl?.updateValueAndValidity({ emitEvent: false });
++      }
++    }
++  }
++
++  private _taskDetailFileControlNames(pos: any): string[] {
++    const form = this.currentForm(pos);
++    if (!form) return [];
++
++    const fields = new Set<string>();
++    if (form.get('files')) fields.add('files');
++
++    const visit = (node: any): void => {
++      if (!node || typeof node !== 'object') return;
++
++      const rawField = typeof node.field === 'string' ? node.field : '';
++      const field = rawField.startsWith('object_') ? rawField.slice('object_'.length) : rawField;
++      const isFileField = node.type === 'files' || node.type === 'file' || node.type === 'document';
++
++      if (isFileField && field && form.get(field)) {
++        fields.add(field);
++      }
++
++      for (const child of Object.values(node)) {
++        if (child && typeof child === 'object') visit(child);
++      }
++    };
++
++    visit(this.drawForm()?.[pos]);
++    visit(this.drawForm()?.[pos + '_child_form_fields']);
++    return Array.from(fields);
++  }
++
++  private _mergeTaskDetailFileRelationArrays(...sources: any[][]): any[] {
++    const merged: any[] = [];
++    const seen = new Set<string>();
++
++    for (const source of sources) {
++      for (const item of source || []) {
++        const relation = this._normalizeTaskDetailFileRelation(item);
++        if (!relation) continue;
++
++        const key = `${relation.type || 'file'}:${relation.id}`;
++        if (seen.has(key)) continue;
++
++        seen.add(key);
++        merged.push(relation);
++      }
++    }
++
++    return merged;
++  }
++
++  private _normalizeTaskDetailFileRelation(item: any): any | null {
++    const id = item?.id ?? item?.relation_id ?? null;
++    if (!id) return null;
++
++    return {
++      id,
++      type: item?.type || this.taskDetailDocumentRelatedType() || 'file',
++    };
++  }
++  // ]]]FI
++  // ]]]FI
++
+   // [[[II ESC:005-11 DOC:docs/documents/2026-05-31_005_columnas-form-data-y-tree-select-nombres.md#escenario-11
+   override configDialog(): void {
+     this.localSettings();
+@@ -109,10 +464,13 @@ export class TaskDetailComponent extends CRUD implements OnInit {
+     const newId = resp?.data?.id;
+ 
+     if (!newId || !ctx?.consumerApp || ctx?.consumerId == null) {
++      if (newId) this.taskDetailDocumentSelected.set([{ id: newId, type_type: 'task-detail' }]);
+       this.closeDialog.emit();
+       return;
+     }
+ 
++    this.taskDetailDocumentSelected.set([{ id: newId, type_type: 'task-detail' }]);
++
+     this._savingPatch = true;
+     this.showBlocked();
+     this.crudS.type = ctx.consumerType;
+diff --git a/src/app/utils/crud.class.ts b/src/app/utils/crud.class.ts
+index 4c9d397..026cab2 100644
+--- a/src/app/utils/crud.class.ts
++++ b/src/app/utils/crud.class.ts
+@@ -118,6 +118,19 @@ export class CRUD extends Vars implements OnChanges  /*implements OnInit*/ {
+   }
+   // ]]]FI
+ 
++  // [[[II ESC:005-12 DOC:docs/documents/2026-05-31_005_columnas-form-data-y-tree-select-nombres.md#escenario-12
++  private applyConfiguredFilter(pos: any, fieldsOverride?: Record<string, any> | null): void {
++    const fields = fieldsOverride || this.configuredFieldsForFilter(pos);
++    this.filter = this.crudS.buildFilterString(fields);
++  }
++
++  private configuredFieldsForFilter(pos: any): Record<string, any> {
++    const module = String(pos ?? '').trim();
++    const fields = module ? this.crudS.authS.config?.[module]?.fields : null;
++    return fields && typeof fields === 'object' ? fields : {};
++  }
++  // ]]]FI
++
+   // [[[II ESC:021-05 DOC:docs/documents/2026-06-05_021_crud-onshow-maximize-small-screens.md#escenario-05
+   private resolveRoutePos(requestedPos: any): any {
+     if (requestedPos && this.app[requestedPos]) return requestedPos;
+@@ -625,10 +638,9 @@ export class CRUD extends Vars implements OnChanges  /*implements OnInit*/ {
+       // Generar la cadena de filtros a partir de los fields de la posición actual.
+       // Se ejecuta siempre que cambie la posición para que getAll2 use los filtros
+       // persistentes sin necesidad de consultar el servidor.
+-
+-
+-      //quitar temporal is_active
+-      //this.filter = this.crudS.buildFilterString(this.crudS.fieldsForm(pos));
++      // [[[II ESC:005-12 DOC:docs/documents/2026-05-31_005_columnas-form-data-y-tree-select-nombres.md#escenario-12
++      this.applyConfiguredFilter(pos);
++      // ]]]FI
+       console.log('antes de ini Param  de changePos');
+ 
+       this.iniParam();
+@@ -5326,7 +5338,9 @@ export class CRUD extends Vars implements OnChanges  /*implements OnInit*/ {
+       this.itemsRemove[currentPos] = missingFields;
+     }
+ 
+-    this.filter = this.crudS.buildFilterString(fields);
++    // [[[II ESC:005-12 DOC:docs/documents/2026-05-31_005_columnas-form-data-y-tree-select-nombres.md#escenario-12
++    this.applyConfiguredFilter(currentPos, fields);
++    // ]]]FI
+     this.iniParam();
+     this.getAll({ pos: currentPos, force: true });
+ 
+@@ -5808,6 +5822,36 @@ export class CRUD extends Vars implements OnChanges  /*implements OnInit*/ {
+     });
+   }
+ 
++  // [[[II ESC:024-13 DOC:docs/documents/2026-06-15_024_open-tasks-detail-render-child-form.md#escenario-13
++  runTaskDetailEdit(event: any) {
++    const detail = event?.detail ?? event;
++    const task = event?.task ?? detail?.task;
++    const consumerPos: any = this.pos();
++    const consumerId = this.selected()[0]?.id;
++
++    if (!detail?.id) {
++      this.messageS.changeMessage('Seleccione el detalle de tarea que desea editar.', null, {}, 'info');
++      return;
++    }
++
++    if (consumerId == null) {
++      this.messageS.changeMessage('Seleccione el registro al que pertenece la tarea.', null, {}, 'info');
++      return;
++    }
++
++    this.tasksModule.set({
++      'TASK_DETAIL': {
++        mode: 'edit',
++        detail,
++        task,
++        consumerApp: this.app[consumerPos],
++        consumerType: this.type[consumerPos] || consumerPos,
++        consumerId,
++      }
++    });
++  }
++  // ]]]FI
++
+ 
+ 
+   closeTaskModule() {
+diff --git a/src/environments/environment.prod.ts b/src/environments/environment.prod.ts
+index dd2e3f2..5d1f3ba 100644
+--- a/src/environments/environment.prod.ts
++++ b/src/environments/environment.prod.ts
+@@ -5,14 +5,14 @@ export const environment = {
+   //erp: 'https://erp.jukai.io'
+ 
+   production: true,
+-  //base_url: 'https://eronuh0qs0.execute-api.mx-central-1.amazonaws.com/dev/v1',
+-  base_url: 'http://127.0.0.1:8000/v1',
+-  android_native_loopback_host: 'http://127.0.0.1:8000/v1',
++  base_url: 'https://eronuh0qs0.execute-api.mx-central-1.amazonaws.com/dev/v1',
++  //base_url: 'http://127.0.0.1:8000/v1',
++  //android_native_loopback_host: 'http://127.0.0.1:8000/v1',
+ 
+   mk: 'jukai.io',
+   mk_red: 'https://jukai.io',
+   /** Versión de la app. Cambiar aqui invalida todos los cachés automáticamente. */
+-  appVersion: '1.0.6',
++  appVersion: '1.0.8',
+   erp: 'https://erp.jukai.io',
+   // [[[II ESC:004-01 DOC:docs/documents/2026-05-30_004_sistema-avisos-socket.md#escenario-01
+   /**

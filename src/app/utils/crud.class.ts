@@ -118,6 +118,19 @@ export class CRUD extends Vars implements OnChanges  /*implements OnInit*/ {
   }
   // ]]]FI
 
+  // [[[II ESC:005-12 DOC:docs/documents/2026-05-31_005_columnas-form-data-y-tree-select-nombres.md#escenario-12
+  private applyConfiguredFilter(pos: any, fieldsOverride?: Record<string, any> | null): void {
+    const fields = fieldsOverride || this.configuredFieldsForFilter(pos);
+    this.filter = this.crudS.buildFilterString(fields);
+  }
+
+  private configuredFieldsForFilter(pos: any): Record<string, any> {
+    const module = String(pos ?? '').trim();
+    const fields = module ? this.crudS.authS.config?.[module]?.fields : null;
+    return fields && typeof fields === 'object' ? fields : {};
+  }
+  // ]]]FI
+
   // [[[II ESC:021-05 DOC:docs/documents/2026-06-05_021_crud-onshow-maximize-small-screens.md#escenario-05
   private resolveRoutePos(requestedPos: any): any {
     if (requestedPos && this.app[requestedPos]) return requestedPos;
@@ -625,10 +638,9 @@ export class CRUD extends Vars implements OnChanges  /*implements OnInit*/ {
       // Generar la cadena de filtros a partir de los fields de la posición actual.
       // Se ejecuta siempre que cambie la posición para que getAll2 use los filtros
       // persistentes sin necesidad de consultar el servidor.
-
-
-      //quitar temporal is_active
-      //this.filter = this.crudS.buildFilterString(this.crudS.fieldsForm(pos));
+      // [[[II ESC:005-12 DOC:docs/documents/2026-05-31_005_columnas-form-data-y-tree-select-nombres.md#escenario-12
+      this.applyConfiguredFilter(pos);
+      // ]]]FI
       console.log('antes de ini Param  de changePos');
 
       this.iniParam();
@@ -5326,7 +5338,9 @@ export class CRUD extends Vars implements OnChanges  /*implements OnInit*/ {
       this.itemsRemove[currentPos] = missingFields;
     }
 
-    this.filter = this.crudS.buildFilterString(fields);
+    // [[[II ESC:005-12 DOC:docs/documents/2026-05-31_005_columnas-form-data-y-tree-select-nombres.md#escenario-12
+    this.applyConfiguredFilter(currentPos, fields);
+    // ]]]FI
     this.iniParam();
     this.getAll({ pos: currentPos, force: true });
 
@@ -5807,6 +5821,36 @@ export class CRUD extends Vars implements OnChanges  /*implements OnInit*/ {
       }
     });
   }
+
+  // [[[II ESC:024-13 DOC:docs/documents/2026-06-15_024_open-tasks-detail-render-child-form.md#escenario-13
+  runTaskDetailEdit(event: any) {
+    const detail = event?.detail ?? event;
+    const task = event?.task ?? detail?.task;
+    const consumerPos: any = this.pos();
+    const consumerId = this.selected()[0]?.id;
+
+    if (!detail?.id) {
+      this.messageS.changeMessage('Seleccione el detalle de tarea que desea editar.', null, {}, 'info');
+      return;
+    }
+
+    if (consumerId == null) {
+      this.messageS.changeMessage('Seleccione el registro al que pertenece la tarea.', null, {}, 'info');
+      return;
+    }
+
+    this.tasksModule.set({
+      'TASK_DETAIL': {
+        mode: 'edit',
+        detail,
+        task,
+        consumerApp: this.app[consumerPos],
+        consumerType: this.type[consumerPos] || consumerPos,
+        consumerId,
+      }
+    });
+  }
+  // ]]]FI
 
 
 

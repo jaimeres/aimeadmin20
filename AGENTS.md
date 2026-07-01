@@ -6,6 +6,8 @@ Esta regla es global para Codex en este repositorio. No depende de skills.
 
 No introducir regresiones funcionales por interpretacion implicita.
 
+La ruta del API es /home/jaime/Escritorio/d/aimeServidor2 y se puede acceder en modo lectura cuando sea necesario para revisar comportamiento, contratos o reglas relacionadas.
+
 Antes de cambiar comportamiento existente:
 
 1. Identificar el comportamiento previo leyendo el codigo y, si existe, la documentacion de trazabilidad.

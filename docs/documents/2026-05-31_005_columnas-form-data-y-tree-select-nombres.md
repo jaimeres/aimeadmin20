@@ -203,6 +203,20 @@ hermanos. El flujo `app-task-detail` monta tambien `app-custom-local-settings` y
 abre la configuracion desde el icono del dialogo para que este soporte este
 disponible en la tarea detalle.
 
+<a id="escenario-12"></a>
+## Escenario 12: Aplicar filtros configurados al cargar la tabla
+
+Se reactivo la aplicacion de filtros persistidos al cambiar/cargar la posicion del
+CRUD. `changePos()` ahora reconstruye `this.filter` desde los `fields` de la
+configuracion activa antes de llamar `iniParam()`, de modo que la primera llamada
+de `getAll2()` use los filtros definidos en `cols.filter` sin esperar a guardar
+desde `app-custom-local-settings`.
+
+El camino de guardado conserva el mismo comportamiento visible, pero ahora reutiliza
+el helper comun pasando los `fields` modificados por el formulario local. Si la
+configuracion del modulo aun no esta disponible durante una llamada temprana desde
+constructor o navegacion, el helper usa `{}` y evita romper la carga inicial.
+
 ## Decisiones tomadas
 
 - No se agregan columnas para campos de `form_data` que no existan en la
@@ -240,6 +254,12 @@ disponible en la tarea detalle.
   campos se serializan despues del contenedor con `__`.
 - No se implementa semantica OR para `logic`; queda preservado como metadato hasta
   que exista contrato de backend para combinar filtros de otra forma.
+- Los filtros configurados conservan menor prioridad que un `filter` enviado
+  explicitamente a `getAll()` / `getAll2()`: el flujo existente sigue usando
+  `filter || this.filter`.
+- No se usa `SharedDynamicDataService` para el filtro principal de tabla; ese
+  servicio sigue limitado a datos dinamicos/dropdowns, mientras que el filtro de
+  listado vive en `CRUD.filter`.
 
 ## Validaciones aplicadas
 
@@ -266,6 +286,10 @@ disponible en la tarea detalle.
   - `cols.filter` explicito normaliza saltos anidados con `_data_`:
     `status.filter.code_data_titulo` genera `filter[status__code__titulo]=algo`.
   - `data_type.filter` conserva el contrato de mapa explicito.
+- Para el escenario 12 se reviso por codigo que `initCRUD()` llama `getAll()`,
+  `getAll2()` ejecuta `changePos()` antes de resolver `filter = filter ||
+  this.filter`, y que guardar desde `app-custom-local-settings` usa el mismo helper
+  con los `fields` editados.
 
 ## Archivos modificados
 
@@ -291,3 +315,6 @@ disponible en la tarea detalle.
 - Verificar desde la UI de configuracion local una columna con `cols.filter`
   explicito y confirmar que guardar no elimina filtros hermanos ni cambia filtros
   simples existentes.
+- Verificar una carga inicial con `load_on_start` activo y un `cols.filter`
+  persistido para confirmar que la primera peticion ya incluye el query param
+  `filter[...]`.

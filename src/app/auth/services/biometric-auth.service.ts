@@ -1,17 +1,14 @@
 import { Injectable } from '@angular/core';
-import { Capacitor } from '@capacitor/core';
+import { Capacitor, registerPlugin } from '@capacitor/core';
 import { Observable, from, throwError, of } from 'rxjs';
-import { catchError, switchMap, tap } from 'rxjs/operators';
+import { catchError, map, switchMap, tap } from 'rxjs/operators';
 import { HttpClient } from '@angular/common/http';
 import { MessageService } from '../../components/services/message.service';
 import { environment } from '../../../environments/environment';
 import { DeviceAttestPlugin, BiometricAuthData, BiometricLoginChallenge, BiometricLoginResponse } from '../../plugins/device-attest.interface';
 
-declare global {
-  interface Window {
-    DeviceAttest: DeviceAttestPlugin;
-  }
-}
+// [[[II ESC:027-01 DOC:docs/documents/2026-07-01-027-autenticacion-segura-dispositivo-movil.md#escenario-01
+const DeviceAttest = registerPlugin<DeviceAttestPlugin>('DeviceAttestPlugin');
 
 @Injectable({
   providedIn: 'root'
@@ -30,7 +27,7 @@ export class BiometricAuthService {
 
   private initializePlugin(): void {
     if (Capacitor.isNativePlatform()) {
-      this.deviceAttestPlugin = window.DeviceAttest;
+      this.deviceAttestPlugin = DeviceAttest;
     }
   }
 
@@ -67,30 +64,39 @@ export class BiometricAuthService {
           userId
         })).pipe(
           switchMap(attestationResult => {
+            const publicKeyPem = attestationResult.publicKeyPem || '';
+            const publicKey = attestationResult.publicKey || publicKeyPem;
+            const attestationCertChainPem = attestationResult.attestationCertChainPem || '';
+            const attestationChain = attestationResult.attestationChain || [];
+
             // Paso 3: Enviar atestación al servidor para validación
             return this.submitAttestationForValidation({
               challengeId,
-              publicKeyPem: attestationResult.publicKeyPem,
-              attestationCertChainPem: attestationResult.attestationCertChainPem,
+              publicKey,
+              publicKeyPem,
+              attestationChain,
+              attestationCertChainPem,
               deviceId: attestationResult.deviceId
             }).pipe(
               tap(validationResult => {
                 // Paso 4: Guardar datos localmente
                 const biometricData: BiometricAuthData = {
                   deviceId: attestationResult.deviceId,
-                  publicKeyPem: attestationResult.publicKeyPem,
-                  attestationCertChainPem: attestationResult.attestationCertChainPem,
+                  publicKeyPem: publicKeyPem || publicKey,
+                  attestationCertChainPem,
                   registeredAt: new Date(),
-                  securityLevel: validationResult.securityLevel
+                  securityLevel: validationResult.securityLevel,
+                  authenticators: attestationResult.authenticators
                 };
                 this.saveBiometricData(userId, biometricData);
               }),
               switchMap(validationResult => of({
                 deviceId: attestationResult.deviceId,
-                publicKeyPem: attestationResult.publicKeyPem,
-                attestationCertChainPem: attestationResult.attestationCertChainPem,
+                publicKeyPem: publicKeyPem || publicKey,
+                attestationCertChainPem,
                 registeredAt: new Date(),
-                securityLevel: validationResult.securityLevel
+                securityLevel: validationResult.securityLevel,
+                authenticators: attestationResult.authenticators
               } as BiometricAuthData))
             );
           })
@@ -128,12 +134,13 @@ export class BiometricAuthService {
         // Paso 2: Firmar con biometría
         return from(this.deviceAttestPlugin!.signWithBiometrics({
           nonce: challenge.nonce,
+          challenge: challenge.nonce,
           userId
         })).pipe(
           switchMap(signatureResult => {
             // Paso 3: Verificar firma en el servidor
             const loginData: BiometricLoginResponse = {
-              signature: signatureResult.signatureDerB64url,
+              signature: signatureResult.signatureDerB64url || signatureResult.signature || '',
               challengeId: challenge.challengeId,
               deviceId: biometricData.deviceId,
               keyAlias: signatureResult.keyAlias
@@ -220,12 +227,16 @@ export class BiometricAuthService {
     return this.http.post<{ challenge: string; challengeId: string }>(
       `${this.BASE_URL}/auth/biometric/register/challenge/`,
       {}
+    ).pipe(
+      map(response => this.normalizeRegistrationChallenge(response))
     );
   }
 
   private submitAttestationForValidation(data: {
     challengeId: string;
+    publicKey: string;
     publicKeyPem: string;
+    attestationChain: string[];
     attestationCertChainPem: string;
     deviceId: string;
   }): Observable<{ valid: boolean; securityLevel: 'STRONGBOX' | 'TEE' | 'SOFTWARE' }> {
@@ -235,11 +246,18 @@ export class BiometricAuthService {
         authorizationCheck: true,
         data: {
           type: 'biometric_registration',
-          attributes: data
+          attributes: {
+            challenge_id: data.challengeId,
+            public_key: data.publicKey,
+            public_key_pem: data.publicKeyPem,
+            attestation_chain: data.attestationChain,
+            attestation_cert_chain_pem: data.attestationCertChainPem,
+            device_id: data.deviceId
+          }
         }
       }
     ).pipe(
-      map(response => (response as any).data || response)
+      map(response => this.unwrapAttributes(response))
     );
   }
 
@@ -254,7 +272,7 @@ export class BiometricAuthService {
         }
       }
     ).pipe(
-      map(response => (response as any).data || response)
+      map(response => this.normalizeLoginChallenge(response))
     );
   }
 
@@ -274,8 +292,39 @@ export class BiometricAuthService {
         }
       }
     ).pipe(
-      map(response => (response as any).data || response)
+      map(response => this.normalizeLoginResponse(response))
     );
+  }
+
+  private unwrapAttributes<T = any>(response: any): T {
+    return (response?.data?.attributes || response?.data || response) as T;
+  }
+
+  private normalizeRegistrationChallenge(response: any): { challenge: string; challengeId: string } {
+    const attrs = this.unwrapAttributes<any>(response);
+    return {
+      challenge: attrs.challenge || attrs.nonce,
+      challengeId: attrs.challengeId || attrs.challenge_id
+    };
+  }
+
+  private normalizeLoginChallenge(response: any): BiometricLoginChallenge {
+    const attrs = this.unwrapAttributes<any>(response);
+    return {
+      challengeId: attrs.challengeId || attrs.challenge_id,
+      nonce: attrs.nonce || attrs.challenge,
+      expiresAt: attrs.expiresAt || attrs.expires_at,
+      deviceId: attrs.deviceId || attrs.device_id
+    };
+  }
+
+  private normalizeLoginResponse(response: any): { access: string; refresh: string; user: any } {
+    const attrs = this.unwrapAttributes<any>(response);
+    return {
+      access: attrs.access,
+      refresh: attrs.refresh,
+      user: attrs.user
+    };
   }
 
   private getStorageKey(userId?: string): string {
@@ -284,11 +333,15 @@ export class BiometricAuthService {
 
   private saveBiometricData(userId: string | undefined, data: BiometricAuthData): void {
     try {
-      localStorage.setItem(this.getStorageKey(userId), JSON.stringify({
+      const serialized = JSON.stringify({
         ...data,
         registeredAt: data.registeredAt.toISOString(),
         lastUsedAt: data.lastUsedAt?.toISOString()
-      }));
+      });
+      localStorage.setItem(this.getStorageKey(userId), serialized);
+      if (userId) {
+        localStorage.setItem(this.getStorageKey(), serialized);
+      }
     } catch (error) {
       console.error('Failed to save biometric data:', error);
     }
@@ -313,11 +366,15 @@ export class BiometricAuthService {
 
   private removeBiometricData(userId?: string): void {
     try {
+      const current = this.getBiometricData(userId);
+      const defaultData = userId ? this.getBiometricData() : null;
       localStorage.removeItem(this.getStorageKey(userId));
+      if (!userId || current?.deviceId === defaultData?.deviceId) {
+        localStorage.removeItem(this.getStorageKey());
+      }
     } catch (error) {
       console.error('Failed to remove biometric data:', error);
     }
   }
 }
-
-import { map } from 'rxjs/operators';
+// ]]]FI

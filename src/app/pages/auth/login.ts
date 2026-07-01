@@ -1,4 +1,4 @@
-import { Component, inject } from '@angular/core';
+import { Component, OnInit } from '@angular/core';
 import { FormBuilder, FormsModule, ReactiveFormsModule, Validators } from '@angular/forms';
 import { CommonModule } from '@angular/common';
 import { Router, RouterModule } from '@angular/router';
@@ -36,6 +36,21 @@ import { SkeletonModule } from 'primeng/skeleton';
             <span class="text-2xl font-semibold">Bienvenido</span>
             <div class="text-muted-color mb-12 px-12"></div>
 
+            <!-- [[[II ESC:027-01 DOC:docs/documents/2026-07-01-027-autenticacion-segura-dispositivo-movil.md#escenario-01 -->
+            <div *ngIf="showBiometricOption && !blockedDocument" class="w-full flex flex-col gap-4 px-4 mb-6">
+              <button
+                pButton
+                pRipple
+                type="button"
+                (click)="loginWithBiometrics()"
+                [loading]="biometricLoading"
+                class="w-full p-button-outlined p-button-primary"
+                label="Acceder con el bloqueo del equipo"
+                icon="pi pi-fingerprint">
+              </button>
+            </div>
+            <!-- ]]]FI -->
+
             <div class="w-full flex flex-col gap-4 px-4" *ngIf="!blockedDocument">
               <p-icon-field>
                 <p-inputicon class="pi pi-envelope" />
@@ -47,6 +62,21 @@ import { SkeletonModule } from 'primeng/skeleton';
                 <!--<input pInputText type="password" formControlName="password" class="w-full" placeholder="Contraseña" />-->
                 <p-password formControlName="password" placeholder="contraseña" [toggleMask]="true" [feedback]="false" />
               </p-icon-field>
+
+              <!-- [[[II ESC:027-01 DOC:docs/documents/2026-07-01-027-autenticacion-segura-dispositivo-movil.md#escenario-01 -->
+              <div *ngIf="showBiometricSetupOption" class="flex align-items-center text-left">
+                <p-checkbox
+                  [(ngModel)]="setupBiometricAfterLogin"
+                  [ngModelOptions]="{standalone: true}"
+                  inputId="setup-biometric"
+                  binary="true">
+                </p-checkbox>
+                <label for="setup-biometric" class="ml-2 text-sm">
+                  Activar acceso con huella, rostro o PIN del equipo
+                </label>
+              </div>
+              <!-- ]]]FI -->
+
               <button pButton pRipple (click)="login()" class="w-full mt-4 px-4" label="Iniciar sesión"></button>
             </div>
 
@@ -86,10 +116,17 @@ import { SkeletonModule } from 'primeng/skeleton';
     <app-configurator simple />
     `
 })
-export class Login {
+export class Login implements OnInit {
 
   public blockedDocument = false;
   public loginForm;
+  // [[[II ESC:027-01 DOC:docs/documents/2026-07-01-027-autenticacion-segura-dispositivo-movil.md#escenario-01
+  public biometricLoading = false;
+  public showBiometricOption = false;
+  public showBiometricSetupOption = false;
+  public setupBiometricAfterLogin = false;
+  // ]]]FI
+
   constructor(private fb: FormBuilder, private authS: AuthService, private router: Router, private messageS: MessageService,
     private cookieS: CookieService) {
     this.loginForm = this.fb.group({
@@ -97,6 +134,64 @@ export class Login {
       username: ["", [Validators.required, Validators.email]],
     });
   }
+
+  // [[[II ESC:027-01 DOC:docs/documents/2026-07-01-027-autenticacion-segura-dispositivo-movil.md#escenario-01
+  ngOnInit() {
+    this.checkBiometricAvailability();
+  }
+
+  private async checkBiometricAvailability() {
+    try {
+      const available = await this.authS.isBiometricAvailable().toPromise();
+
+      if (available) {
+        this.showBiometricOption = true;
+        return;
+      }
+
+      this.authS.biometricAuthS.checkBiometricAvailability().subscribe({
+        next: (result) => {
+          this.showBiometricSetupOption = result.available;
+        },
+        error: (error) => {
+          console.log('Biometric check failed:', error);
+        }
+      });
+    } catch (error) {
+      console.log('Biometric availability check failed:', error);
+    }
+  }
+
+  async loginWithBiometrics() {
+    this.biometricLoading = true;
+    this.blockedDocument = true;
+
+    try {
+      const user = await this.authS.loginWithBiometrics().toPromise();
+
+      if (user) {
+        this.messageS.changeMessage('Acceso seguro exitoso', null, {}, 'success');
+        const currentUser = this.authS.user() as any;
+        if (currentUser?.erp?.is_active_ERP) {
+          this.cookieS.delete('configuration');
+  // ]]]FI
+          // [[[II ESC:001-05 DOC:docs/documents/2026-06-04-001-token-config-cache.md#escenario-05
+          const lastUrl = this.authS.normalizeLastModuleUrl(localStorage.getItem('lastModuleUrl'));
+          this.router.navigateByUrl(lastUrl);
+          // ]]]FI
+          // [[[II ESC:027-01 DOC:docs/documents/2026-07-01-027-autenticacion-segura-dispositivo-movil.md#escenario-01
+        } else {
+          this.authS.redirectMP();
+        }
+      }
+    } catch (error: any) {
+      console.error('Biometric login failed:', error);
+      this.messageS.changeMessage('No se pudo usar el acceso seguro. Usa tu contraseña.', error, {}, 'warn');
+      this.biometricLoading = false;
+      this.blockedDocument = false;
+    }
+  }
+  // ]]]FI
 
   login() {
 
@@ -112,6 +207,12 @@ export class Login {
 
     this.authS.login({ username, password }).subscribe({
       next: (resp: any) => {
+        // [[[II ESC:027-01 DOC:docs/documents/2026-07-01-027-autenticacion-segura-dispositivo-movil.md#escenario-01
+        if (this.setupBiometricAfterLogin && this.showBiometricSetupOption) {
+          this.setupBiometricAuth();
+        }
+        // ]]]FI
+
         if (resp.erp.is_active_ERP) {
           this.cookieS.delete('configuration');
           // Restaurar el último módulo visitado o ir al inicio
@@ -129,4 +230,24 @@ export class Login {
       }
     });
   }
+
+  // [[[II ESC:027-01 DOC:docs/documents/2026-07-01-027-autenticacion-segura-dispositivo-movil.md#escenario-01
+  private setupBiometricAuth() {
+    this.authS.setupBiometricAuth().subscribe({
+      next: (success) => {
+        if (success) {
+          this.messageS.changeMessage(
+            'Acceso seguro configurado para este equipo',
+            null,
+            {},
+            'success'
+          );
+        }
+      },
+      error: (error) => {
+        console.warn('Biometric setup failed after login:', error);
+      }
+    });
+  }
+  // ]]]FI
 }
