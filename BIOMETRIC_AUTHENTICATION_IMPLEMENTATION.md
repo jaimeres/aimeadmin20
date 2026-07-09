@@ -151,48 +151,51 @@ if (info) {
 }
 ```
 
-## Endpoints del Servidor (Requeridos)
+## Endpoints del Servidor
 
-El frontend espera estos endpoints en el backend:
+El servidor expone estos endpoints bajo `/v1/users/`. En el frontend,
+`environment.base_url` ya incluye `/v1`, por lo que el servicio usa `/users/...`.
 
 ### 1. Registro de Dispositivo
 ```
-POST /auth/biometric/register/challenge/
-Response: { challenge: string, challengeId: string }
+POST /users/biometric-register-challenge/
+Response: { challenge: string, challenge_id: string, expires_at: string }
 
-POST /auth/biometric/register/validate/
+POST /users/biometric-register-validate/
 Body: {
   authorizationCheck: true,
   data: {
-    type: 'biometric_registration',
+    type: 'biometric-register',
     attributes: {
-      challengeId: string,
-      publicKeyPem: string,
-      attestationCertChainPem: string,
-      deviceId: string
+      challenge_id: string,
+      public_key: string,
+      public_key_pem: string,
+      attestation_chain: string[],
+      attestation_cert_chain_pem: string,
+      device_id: string
     }
   }
 }
-Response: { valid: boolean, securityLevel: 'STRONGBOX'|'TEE'|'SOFTWARE' }
+Response: { valid: boolean, securityLevel: string }
 ```
 
 ### 2. Login Biométrico
 ```
-POST /auth/biometric/login/challenge/
+POST /users/biometric-login-challenge/
 Body: {
   authorizationCheck: true,
   data: {
-    type: 'biometric_challenge',
+    type: 'biometric-login-challenge',
     attributes: { device_id: string }
   }
 }
-Response: { challengeId: string, nonce: string, expiresAt: Date, deviceId: string }
+Response: { challenge_id: string, nonce: string, expires_at: string, device_id: string }
 
-POST /auth/biometric/login/verify/
+POST /users/biometric-login-verify/
 Body: {
   authorizationCheck: true,
   data: {
-    type: 'biometric_login',
+    type: 'login',
     attributes: {
       signature: string,
       challenge_id: string,
@@ -206,8 +209,8 @@ Response: { access: string, refresh: string, user: any }
 
 ### 3. Gestión de Dispositivos
 ```
-DELETE /auth/biometric/device/{deviceId}/
-Response: { success: boolean }
+DELETE /users/biometric-device/{deviceId}/
+Response: { revoked: boolean, device_id: string }
 ```
 
 ## Consideraciones de Seguridad

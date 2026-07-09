@@ -28,6 +28,8 @@ export interface DeviceAttestPlugin {
     nonce?: string; // Base64URL encoded nonce del servidor
     challenge?: string; // Alias de nonce para compatibilidad con el plugin nativo
     userId?: string; // ID del usuario para seleccionar la clave correcta
+    deviceId?: string; // Permite localizar la clave registrada cuando el login inicia sin usuario
+    keyAlias?: string; // Alias exacto devuelto por el plugin durante el registro
   }): Promise<{
     signature?: string; // Firma ECDSA SHA-256 en formato DER base64url, compatibilidad nativa
     signatureDerB64url?: string; // Firma ECDSA SHA-256 en formato DER base64url
@@ -55,6 +57,8 @@ export interface DeviceAttestPlugin {
    */
   deleteKey(options: {
     userId?: string; // ID del usuario cuya clave se va a eliminar
+    deviceId?: string; // Permite localizar la clave aun si no se conoce el usuario
+    keyAlias?: string; // Alias exacto de la clave cuando ya fue persistido
   }): Promise<{
     deleted: boolean; // true si se eliminó correctamente
     keyAlias: string; // Alias de la clave eliminada
@@ -63,6 +67,7 @@ export interface DeviceAttestPlugin {
 
 export interface BiometricAuthData {
   deviceId: string;
+  keyAlias?: string;
   publicKeyPem: string;
   attestationCertChainPem: string;
   registeredAt: Date;

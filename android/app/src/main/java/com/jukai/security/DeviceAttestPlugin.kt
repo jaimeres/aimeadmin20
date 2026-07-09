@@ -87,10 +87,7 @@ class DeviceAttestPlugin : Plugin() {
             }
 
             // Calcular device_id como SHA256 de la clave pública
-            val messageDigest = MessageDigest.getInstance("SHA-256")
-            val deviceIdBytes = messageDigest.digest(pubSpkiDer)
-            val deviceId = Base64.encodeToString(deviceIdBytes, Base64.URL_SAFE or Base64.NO_WRAP)
-                .trimEnd('=')
+            val deviceId = deviceIdFromPublicKey(keyPair.public)
 
             val result = JSObject()
             result.put("publicKey", Base64.encodeToString(pubSpkiDer, Base64.URL_SAFE or Base64.NO_WRAP).trimEnd('='))
@@ -114,8 +111,6 @@ class DeviceAttestPlugin : Plugin() {
     @PluginMethod
     fun signWithBiometrics(call: PluginCall) {
         val challengeB64 = call.getString("challenge") ?: call.getString("nonce") ?: return call.reject("challenge required")
-        val userId = call.getString("userId")
-        val keyAlias = getKeyAlias(userId)
 
         try {
             val challenge = decodeB64Url(challengeB64)
@@ -123,6 +118,7 @@ class DeviceAttestPlugin : Plugin() {
             // Preparar signature con la clave privada
             val keystore = KeyStore.getInstance(KEYSTORE_PROVIDER)
             keystore.load(null)
+            val keyAlias = resolveKeyAlias(call, keystore)
             
             if (!keystore.containsAlias(keyAlias)) {
                 return call.reject("Key not found for alias: $keyAlias")
@@ -134,47 +130,49 @@ class DeviceAttestPlugin : Plugin() {
 
             // Obtener la clave pública para calcular deviceId
             val publicKey = entry.certificate.publicKey
-            val pubSpkiDer = publicKey.encoded
-            val messageDigest = MessageDigest.getInstance("SHA-256")
-            val deviceIdBytes = messageDigest.digest(pubSpkiDer)
-            val deviceId = Base64.encodeToString(deviceIdBytes, Base64.URL_SAFE or Base64.NO_WRAP)
-                .trimEnd('=')
+            val deviceId = deviceIdFromPublicKey(publicKey)
 
-            // Configurar BiometricPrompt
-            val executor = ContextCompat.getMainExecutor(context)
-            val promptInfo = buildPromptInfo()
+            // AndroidX BiometricPrompt debe crearse y lanzarse en el hilo principal del FragmentActivity.
+            val fragmentActivity = activity as? FragmentActivity
+                ?: return call.reject("FragmentActivity required for biometric authentication")
+            fragmentActivity.runOnUiThread {
+                try {
+                    val executor = ContextCompat.getMainExecutor(fragmentActivity)
+                    val promptInfo = buildPromptInfo()
+                    val biometricPrompt = BiometricPrompt(fragmentActivity, executor,
+                        object : BiometricPrompt.AuthenticationCallback() {
+                            override fun onAuthenticationSucceeded(result: BiometricPrompt.AuthenticationResult) {
+                                try {
+                                    signature.update(challenge)
+                                    val sigDer = signature.sign()
 
-            val activity = activity as FragmentActivity
-            val biometricPrompt = BiometricPrompt(activity, executor,
-                object : BiometricPrompt.AuthenticationCallback() {
-                    override fun onAuthenticationSucceeded(result: BiometricPrompt.AuthenticationResult) {
-                        try {
-                            signature.update(challenge)
-                            val sigDer = signature.sign()
-                            
-                            val response = JSObject()
-                            response.put("signature", Base64.encodeToString(sigDer, Base64.URL_SAFE or Base64.NO_WRAP).trimEnd('='))
-                            response.put("signatureDerB64url", Base64.encodeToString(sigDer, Base64.URL_SAFE or Base64.NO_WRAP).trimEnd('='))
-                            response.put("deviceId", deviceId)
-                            response.put("keyAlias", keyAlias)
-                            response.put("authenticators", authenticatorsLabel())
-                            call.resolve(response)
-                        } catch (e: Exception) {
-                            call.reject("Signing failed: ${e.message}", e)
-                        }
-                    }
+                                    val response = JSObject()
+                                    response.put("signature", Base64.encodeToString(sigDer, Base64.URL_SAFE or Base64.NO_WRAP).trimEnd('='))
+                                    response.put("signatureDerB64url", Base64.encodeToString(sigDer, Base64.URL_SAFE or Base64.NO_WRAP).trimEnd('='))
+                                    response.put("deviceId", deviceId)
+                                    response.put("keyAlias", keyAlias)
+                                    response.put("authenticators", authenticatorsLabel())
+                                    call.resolve(response)
+                                } catch (e: Exception) {
+                                    call.reject("Signing failed: ${e.message}", e)
+                                }
+                            }
 
-                    override fun onAuthenticationError(errorCode: Int, errString: CharSequence) {
-                        call.reject("Biometric authentication error: $errString")
-                    }
+                            override fun onAuthenticationError(errorCode: Int, errString: CharSequence) {
+                                call.reject("Biometric authentication error: $errString")
+                            }
 
-                    override fun onAuthenticationFailed() {
-                        android.util.Log.w("DeviceAttestPlugin", "Biometric authentication attempt failed")
-                    }
-                })
+                            override fun onAuthenticationFailed() {
+                                android.util.Log.w("DeviceAttestPlugin", "Biometric authentication attempt failed")
+                            }
+                        })
 
-            // Lanzar prompt biométrico
-            biometricPrompt.authenticate(promptInfo, BiometricPrompt.CryptoObject(signature))
+                    // Lanzar prompt biométrico
+                    biometricPrompt.authenticate(promptInfo, BiometricPrompt.CryptoObject(signature))
+                } catch (e: Exception) {
+                    call.reject("Biometric prompt failed: ${e.message}", e)
+                }
+            }
 
         } catch (e: KeyPermanentlyInvalidatedException) {
             call.reject("KEY_PERMANENTLY_INVALIDATED", e)
@@ -226,10 +224,10 @@ class DeviceAttestPlugin : Plugin() {
 
     @PluginMethod
     fun deleteKey(call: PluginCall) {
-        val userId = call.getString("userId")
-        val keyAlias = getKeyAlias(userId)
-        
         try {
+            val keystore = KeyStore.getInstance(KEYSTORE_PROVIDER)
+            keystore.load(null)
+            val keyAlias = resolveKeyAlias(call, keystore)
             deleteExistingKey(keyAlias)
             
             val result = JSObject()
@@ -293,6 +291,57 @@ class DeviceAttestPlugin : Plugin() {
             // Log pero no fallar
             android.util.Log.w("DeviceAttestPlugin", "Failed to delete existing key: ${e.message}")
         }
+    }
+
+    private fun resolveKeyAlias(call: PluginCall, keystore: KeyStore): String {
+        var requestedAlias: String? = null
+
+        call.getString("keyAlias")?.trim()?.takeIf { it.isNotEmpty() }?.let { explicitAlias ->
+            if (!explicitAlias.startsWith(KEYSTORE_ALIAS)) {
+                throw IllegalArgumentException("Invalid key alias")
+            }
+            requestedAlias = explicitAlias
+            if (keystore.containsAlias(explicitAlias)) {
+                return explicitAlias
+            }
+        }
+
+        val userId = call.getString("userId")
+        if (!userId.isNullOrEmpty()) {
+            val userAlias = getKeyAlias(userId)
+            requestedAlias = requestedAlias ?: userAlias
+            if (keystore.containsAlias(userAlias)) {
+                return userAlias
+            }
+        }
+
+        call.getString("deviceId")?.trim()?.takeIf { it.isNotEmpty() }?.let { deviceId ->
+            findKeyAliasByDeviceId(keystore, deviceId)?.let { return it }
+        }
+
+        return requestedAlias ?: getKeyAlias(null)
+    }
+
+    private fun findKeyAliasByDeviceId(keystore: KeyStore, deviceId: String): String? {
+        val aliases = keystore.aliases()
+        while (aliases.hasMoreElements()) {
+            val alias = aliases.nextElement()
+            if (!alias.startsWith(KEYSTORE_ALIAS)) {
+                continue
+            }
+            val certificate = keystore.getCertificate(alias) ?: continue
+            if (deviceIdFromPublicKey(certificate.publicKey) == deviceId) {
+                return alias
+            }
+        }
+        return null
+    }
+
+    private fun deviceIdFromPublicKey(publicKey: PublicKey): String {
+        val messageDigest = MessageDigest.getInstance("SHA-256")
+        val deviceIdBytes = messageDigest.digest(publicKey.encoded)
+        return Base64.encodeToString(deviceIdBytes, Base64.URL_SAFE or Base64.NO_WRAP)
+            .trimEnd('=')
     }
 
     private fun pemEncode(type: String, der: ByteArray): String {

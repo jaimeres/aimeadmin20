@@ -217,6 +217,27 @@ el helper comun pasando los `fields` modificados por el formulario local. Si la
 configuracion del modulo aun no esta disponible durante una llamada temprana desde
 constructor o navegacion, el helper usa `{}` y evita romper la carga inicial.
 
+<a id="escenario-13"></a>
+## Escenario 13: Fallback de headers cuando `customField` no trae la clave
+
+Se corrigio `generateJSONColumns()` para que el encabezado no dependa solo de
+`customField()[pos][field]`. Si ese mapa llega incompleto, viejo por cache o sin una
+clave recien agregada a `cols`, el header ahora cae en este orden:
+
+- `customField()[pos][field]`.
+- `fieldsForm(pos)[field].cols.label`.
+- `fieldsForm(pos)[field].label`.
+- `fieldObj.cols.label` / `fieldObj.label` del OPTIONS.
+- clave del campo como ultimo respaldo.
+
+Para columnas dinamicas `form_fields_data_*` agregadas desde `drawForm`, el fallback
+tambien considera `fieldsForm(pos)[field].cols.label`, `fieldsForm(pos)[field].label`
+y `fieldData.label`, evitando que se pinten encabezados como
+`form_fields_data_COMPONENTE` cuando la configuracion si declara `label`.
+
+El ajuste es solo visual de encabezado: no cambia el `field` de la columna, ni el
+payload, ni `include`, ni filtros, ni validaciones.
+
 ## Decisiones tomadas
 
 - No se agregan columnas para campos de `form_data` que no existan en la
@@ -260,6 +281,8 @@ constructor o navegacion, el helper usa `{}` y evita romper la carga inicial.
 - No se usa `SharedDynamicDataService` para el filtro principal de tabla; ese
   servicio sigue limitado a datos dinamicos/dropdowns, mientras que el filtro de
   listado vive en `CRUD.filter`.
+- El fallback de headers no habilita columnas nuevas: solo resuelve el texto de las
+  columnas que ya fueron generadas por OPTIONS/draw/cols.
 
 ## Validaciones aplicadas
 
@@ -290,6 +313,9 @@ constructor o navegacion, el helper usa `{}` y evita romper la carga inicial.
   `getAll2()` ejecuta `changePos()` antes de resolver `filter = filter ||
   this.filter`, y que guardar desde `app-custom-local-settings` usa el mismo helper
   con los `fields` editados.
+- Para el escenario 13 se reviso por codigo que `request_data_*` puede tomar header
+  desde `fieldsForm(...).cols.label` aunque `customField` no tenga la clave, y que
+  `form_fields_data_*` puede tomar `fieldData.label` antes de caer a la clave tecnica.
 
 ## Archivos modificados
 

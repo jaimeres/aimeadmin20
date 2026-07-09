@@ -1035,7 +1035,7 @@ index b1afd92..0a13b51 100644
 @@ -235,11 +246,18 @@ export class BiometricAuthService {
          authorizationCheck: true,
          data: {
-           type: 'biometric_registration',
+           type: 'biometric-register',
 -          attributes: data
 +          attributes: {
 +            challenge_id: data.challengeId,

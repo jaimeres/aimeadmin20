@@ -1736,8 +1736,15 @@ export class CRUD extends Vars implements OnChanges  /*implements OnInit*/ {
       validators.push(Validators.minLength(fieldData.min_length));
     }
 
+    // [[[II ESC:001-13 DOC:docs/documents/2026-05-16_001_consolidacion_dropdown_types_y_fix_escenarios.md#escenario-13
+    const mirrorDropdownPayload = fieldName.startsWith('form_fields_data_') || fieldName.startsWith('parent_form_data_');
+    if (!mirrorDropdownPayload && DROPDOWN_TYPES_PAYLOAD.has(fieldData.type) && typeof fieldData.field === 'string' && fieldData.field.startsWith('object_')) {
+      fieldData.field = fieldName;
+    }
+    // ]]]FI
+
     // Procesar según el tipo de campo
-    if (DROPDOWN_TYPES_PAYLOAD.has(fieldData.type)) {
+    if (mirrorDropdownPayload && DROPDOWN_TYPES_PAYLOAD.has(fieldData.type)) {
       // Crear campo oculto para objetos completos
       const hiddenFieldName = 'object_' + fieldName;
       formFields[hiddenFieldName] = this.fb.control(
@@ -2965,16 +2972,28 @@ export class CRUD extends Vars implements OnChanges  /*implements OnInit*/ {
         // Crear el objeto columna base
         let columnObj: any = {};
 
+        // [[[II ESC:005-13 DOC:docs/documents/2026-05-31_005_columnas-form-data-y-tree-select-nombres.md#escenario-13
+        const headerFieldKey = field_relationship + field;
+        const fieldConfigForHeader = this.crudS.fieldsForm(pos)?.[headerFieldKey] || {};
+        const headerLabel = this.customField()[pos]?.[headerFieldKey]
+          || fieldConfigForHeader?.cols?.label
+          || fieldConfigForHeader?.label
+          || fieldObj?.cols?.label
+          || fieldObj?.label
+          || headerFieldKey;
+        const headerText = String(headerLabel);
+        // ]]]FI
+
         if (fieldObj.type == 'Relationship' || fieldObj.type == 'Serializer') {
           columnObj = {
             field: field_prefix + field + '__name',
-            header: this.customField()[pos][field_relationship + field] + ' ' + header_prefix,
+            header: headerText + ' ' + header_prefix,
             //sortable: true
           };
         } else if (fieldObj.type == 'Boolean') {
           columnObj = {
             field: field_prefix + field + '__text',
-            header: this.customField()[pos][field_relationship + field] + ' ' + header_prefix,
+            header: headerText + ' ' + header_prefix,
             //sortable: true
           };
           const boolFieldKey = field_relationship + field;
@@ -2986,7 +3005,7 @@ export class CRUD extends Vars implements OnChanges  /*implements OnInit*/ {
           });
           //this.fieldsBool[pos].push({ field: field_prefix + '__' + field/*, default: fieldObj.initial */ });
         } else if (fieldObj.type == 'Choice') {
-          columnObj = { field: field_prefix + field + '__text', header: this.customField()[pos][field_relationship + field] + ' ' + header_prefix, /*sortable: true*/ };
+          columnObj = { field: field_prefix + field + '__text', header: headerText + ' ' + header_prefix, /*sortable: true*/ };
           if (!this.moreFields[pos]) {
             this.moreFields[pos] = [];
           }
@@ -2996,7 +3015,7 @@ export class CRUD extends Vars implements OnChanges  /*implements OnInit*/ {
 
           //agregar __text a los fieldObj.type == 'DateTime' para que se muestre la fecha en la tabla siempre y cuando existan en this.timeZone
         } else if (fieldObj.type == 'DateTime') {
-          columnObj = { field: field_prefix + field + '__text', header: this.customField()[pos][field_relationship + field] + ' ' + header_prefix, /*sortable: true*/ };
+          columnObj = { field: field_prefix + field + '__text', header: headerText + ' ' + header_prefix, /*sortable: true*/ };
           // [[[II ESC:005-08 DOC:docs/documents/2026-05-31_005_columnas-form-data-y-tree-select-nombres.md#escenario-08
           this.initializeTimeZoneField(pos, field);
           // ]]]FI
@@ -3010,10 +3029,10 @@ export class CRUD extends Vars implements OnChanges  /*implements OnInit*/ {
           // separador). Además, usar `__name` hace que iniParam agregue la relación al
           // include automáticamente (igual que requesters), para que el server devuelva
           // los objetos en `included` y se puedan resolver los nombres.
-          columnObj = { field: field_prefix + field + '__name', header: this.customField()[pos][field_relationship + field] + ' ' + header_prefix, /*sortable: true*/ };
+          columnObj = { field: field_prefix + field + '__name', header: headerText + ' ' + header_prefix, /*sortable: true*/ };
           // ]]]FI
         } else {
-          columnObj = { field: field_prefix + field, header: this.customField()[pos][field_relationship + field] + header_prefix, /*sortable: true*/ };
+          columnObj = { field: field_prefix + field, header: headerText + header_prefix, /*sortable: true*/ };
         }
 
         // Aplicar configuración de cols si existe
@@ -3065,8 +3084,16 @@ export class CRUD extends Vars implements OnChanges  /*implements OnInit*/ {
             // Saltar controles object_ (son duplicados UI para dropdown)
             if (fieldName.startsWith('object_')) return;
 
-            // El header proviene de customField()[pos] (settings/settings/me) o del drawForm
-            const header = this.customField()[pos]?.[fieldName] || fieldData.header || fieldName;
+            // [[[II ESC:005-13 DOC:docs/documents/2026-05-31_005_columnas-form-data-y-tree-select-nombres.md#escenario-13
+            // El header proviene de customField()[pos], fieldsForm o drawForm.
+            const dynamicFieldConfigForHeader = this.crudS.fieldsForm(pos)?.[fieldName] || {};
+            const header = this.customField()[pos]?.[fieldName]
+              || dynamicFieldConfigForHeader?.cols?.label
+              || dynamicFieldConfigForHeader?.label
+              || fieldData.header
+              || fieldData.label
+              || fieldName;
+            // ]]]FI
 
             // En los items de la tabla, form_fields_data_* está anidado en form_data (atributo del modelo)
             const colField = 'form_data.' + fieldName;

@@ -52,14 +52,47 @@ anterior se conserva `BIOMETRIC_STRONG` por compatibilidad del CryptoObject.
 - `src/app/auth/services/biometric-auth.service.ts`
 - `src/app/pages/auth/login.ts`
 
+## Escenario 02: Armonizacion con rutas y tipos del servidor
+
+El servidor expone el flujo biometrico bajo `apps.users.routers`, incluido desde
+`/v1/users/`. Como `environment.base_url` ya incluye `/v1`, el cliente llama:
+
+- `POST /users/biometric-register-challenge/`
+- `POST /users/biometric-register-validate/`
+- `POST /users/biometric-login-challenge/`
+- `POST /users/biometric-login-verify/`
+- `DELETE /users/biometric-device/{device_id}/`
+
+Los `type` JSON:API del cliente se alinean con los `resource_name` del servidor:
+
+- `biometric-register`
+- `biometric-login-challenge`
+- `login`
+
+`biometric-register-validate` no envia `authorizationCheck: true`, porque el
+interceptor interpreta esa bandera como solicitud publica y omite el header JWT. Ese
+endpoint debe ir autenticado: el servidor registra el dispositivo contra
+`request.user`.
+
+## Escenario 03: Login sin usuario visible resuelve la clave por dispositivo
+
+El registro crea la clave del Android Keystore usando el usuario autenticado, pero
+el acceso seguro desde la pantalla de login puede iniciar sin `username`. Para evitar
+que Android busque el alias generico `biometric_attested_key_default`, el cliente
+envia `deviceId` y, cuando exista en registros nuevos, `keyAlias` al plugin nativo.
+El plugin conserva la prioridad previa por `userId`, acepta el `keyAlias` propio de
+la app y, si no hay usuario, localiza la clave existente comparando el `deviceId`
+con las claves del prefijo `biometric_attested_key_`.
+
+## Escenario 04: Prompt biometrico en hilo principal Android
+
+En equipo fisico, el toque directo del boton puede invocar el plugin desde un hilo
+de Capacitor distinto al principal. AndroidX exige crear y lanzar `BiometricPrompt`
+en el hilo principal del `FragmentActivity`; por eso el acceso desde DevTools podia
+funcionar mientras el toque fisico devolvia `Must be called from main thread of
+fragment host`. El plugin conserva la preparacion de clave/firma y ejecuta solo la
+creacion/autenticacion del prompt dentro de `runOnUiThread`.
+
 ## Pendientes
 
-- Implementar endpoints del servidor:
-  `/v1/auth/biometric/register/challenge/`,
-  `/v1/auth/biometric/register/validate/`,
-  `/v1/auth/biometric/login/challenge/`,
-  `/v1/auth/biometric/login/verify/`,
-  `/v1/auth/biometric/device/{device_id}/`.
 - Probar en dispositivo fisico con huella, rostro y PIN/patron segun soporte.
-*** End Patch
- 

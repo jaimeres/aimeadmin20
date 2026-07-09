@@ -93,6 +93,14 @@
 - **Errores cubiertos:** se refleja el estado local `invalid && (dirty || touched)` y, de forma visual sin mutar controles ni validadores, los errores de servidor que llegan con `source.pointer`/`source.parameter` hacia `files`, `documents` o sus campos prefijados.
 - **Compatibilidad:** se preserva la reconciliación previa entre cámara, servidor y `key`; el botón solo refleja el estado que el formulario ya calculó.
 
+<a id="escenario-13"></a>
+## Escenario 13: Acotar espejo `object_` a campos dinamicos
+
+- **Fecha de ajuste:** 2026-07-09.
+- **Objetivo:** evitar que dropdowns de prefijos anidados de modelo, por ejemplo `request_data_request_type`, envien un objeto `{id, name}` en el campo real y el valor simple en `object_*`.
+- **Cambio aplicado:** `CRUD._applyDynamicFieldToForm()` solo crea la dualidad `object_<field>` / `<field>` para `form_fields_data_*` y `parent_form_data_*`. Los prefijos anidados como `request_data_*` o relaciones `*_data_*` conservan el campo canonico y envian el valor simple.
+- **Compatibilidad:** se conserva el payload rico de campos dinamicos; no se cambia el comportamiento de campos del modelo principal como `priority`.
+
 ## Pendientes
 
 - °°° Revisar por qué varios campos del formulario se vuelven `null` después de inicializarse con `default.value` distinto de `null`. SOLUCIONADO parcialmente para `tree-select`, `multi-select` y `classifiers` en el escenario 08.

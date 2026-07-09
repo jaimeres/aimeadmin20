@@ -13,6 +13,11 @@
             android:name="com.google.firebase.messaging.default_notification_channel_id"
             android:value="@string/jukai_push_communications_channel_id" />
         <!-- ]]]FI -->
+        <!-- [[[II ESC:025-06 DOC:docs/documents/2026-06-28-025-push-notifications-fcm-capacitor.md#escenario-06 CONFIG -->
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_icon"
+            android:resource="@drawable/ic_stat_jukai_push" />
+        <!-- ]]]FI -->
 
         <!-- [[[II ESC:021-03 DOC:docs/documents/2026-06-05_021_crud-onshow-maximize-small-screens.md#escenario-03 CONFIG -->
         <activity

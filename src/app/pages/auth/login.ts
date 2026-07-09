@@ -45,33 +45,35 @@ import { SkeletonModule } from 'primeng/skeleton';
                 (click)="loginWithBiometrics()"
                 [loading]="biometricLoading"
                 class="w-full p-button-outlined p-button-primary"
-                label="Acceder con el bloqueo del equipo"
+                label="Acceder con biometria"
                 icon="pi pi-fingerprint">
               </button>
             </div>
             <!-- ]]]FI -->
 
             <div class="w-full flex flex-col gap-4 px-4" *ngIf="!blockedDocument">
-              <p-icon-field>
+              <p-icon-field class="w-full">
                 <p-inputicon class="pi pi-envelope" />
                 <input pInputText type="email" class="w-full" placeholder="Usuario" formControlName="username" />
               </p-icon-field>
 
-              <p-icon-field>
+              <p-icon-field class="w-full">
                 <p-inputicon class="pi pi-key" />
                 <!--<input pInputText type="password" formControlName="password" class="w-full" placeholder="Contraseña" />-->
-                <p-password formControlName="password" placeholder="contraseña" [toggleMask]="true" [feedback]="false" />
+                <p-password formControlName="password" placeholder="contraseña" [toggleMask]="true" [feedback]="false"
+                  inputStyleClass="w-full" styleClass="w-full" class="w-full" />
               </p-icon-field>
 
               <!-- [[[II ESC:027-01 DOC:docs/documents/2026-07-01-027-autenticacion-segura-dispositivo-movil.md#escenario-01 -->
-              <div *ngIf="showBiometricSetupOption" class="flex align-items-center text-left">
+              <div *ngIf="showBiometricSetupOption" class="w-full flex items-center gap-2 text-left">
                 <p-checkbox
                   [(ngModel)]="setupBiometricAfterLogin"
                   [ngModelOptions]="{standalone: true}"
                   inputId="setup-biometric"
+                  class="flex-none"
                   binary="true">
                 </p-checkbox>
-                <label for="setup-biometric" class="ml-2 text-sm">
+                <label for="setup-biometric" class="m-0 text-sm leading-tight">
                   Activar acceso con huella, rostro o PIN del equipo
                 </label>
               </div>
@@ -174,7 +176,7 @@ export class Login implements OnInit {
         const currentUser = this.authS.user() as any;
         if (currentUser?.erp?.is_active_ERP) {
           this.cookieS.delete('configuration');
-  // ]]]FI
+          // ]]]FI
           // [[[II ESC:001-05 DOC:docs/documents/2026-06-04-001-token-config-cache.md#escenario-05
           const lastUrl = this.authS.normalizeLastModuleUrl(localStorage.getItem('lastModuleUrl'));
           this.router.navigateByUrl(lastUrl);

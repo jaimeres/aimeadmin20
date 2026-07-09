@@ -6,7 +6,7 @@ Tipo: Cambio funcional
 
 ## Resumen
 
-El usuario pidió implementar push notifications con `@capacitor/push-notifications`, registrar el token FCM después del login en `/v1/communications/push-device/`, guardar el id devuelto, desactivar el dispositivo en logout con `is_active=false`, sincronizar Capacitor y deshabilitar el websocket/Socket.IO.
+El usuario pidió implementar push notifications con `@capacitor/push-notifications`, registrar el token FCM después del login en `/v1/communications/push-device/`, guardar el id devuelto, desactivar el dispositivo en logout con `is_active=false`, sincronizar Capacitor y deshabilitar el websocket/Socket.IO. Después pidió personalizar el icono Android de los avisos push para dejar de usar un icono genérico.
 
 ## Alcance
 
@@ -16,6 +16,7 @@ El usuario pidió implementar push notifications con `@capacitor/push-notificati
 - Se crea `PushDeviceService` para permisos, token nativo, registro JSON:API y desactivación.
 - Se integra `AuthService` después del login y durante logout.
 - Se deshabilita el uso automático de Socket.IO en login/logout.
+- Se agrega un icono pequeño Android por defecto para FCM usando el isotipo Jukai.
 
 ## Escenario 01: Registrar dispositivo push después del login
 
@@ -84,6 +85,21 @@ Contrato revisado en servidor:
 - Es suficiente para navegación básica porque el cliente puede usar `deep_link` si viene o caer a `/communications/communication?pos=communication`.
 - Si backend quiere navegación específica por módulo, puede mandar `deep_link` o `route` en `CommunicationNotification.payload`.
 
+## Escenario 06: Personalizar icono pequeño Android de push
+
+Actualización 2026-07-07.
+
+Se agrega `com.google.firebase.messaging.default_notification_icon` en `AndroidManifest.xml` apuntando a `@drawable/ic_stat_jukai_push`. El asset se generó desde `/home/jaime/Descargas/jukai color actual(2) (2)/icononly_transparent_nobuffer.png` en variantes por densidad Android:
+
+- `drawable-ldpi`: 18 x 18.
+- `drawable-mdpi`: 24 x 24.
+- `drawable-hdpi`: 36 x 36.
+- `drawable-xhdpi`: 48 x 48.
+- `drawable-xxhdpi`: 72 x 72.
+- `drawable-xxxhdpi`: 96 x 96.
+
+Decisión: se usó una silueta blanca con fondo transparente porque Android trata los small notification icons como máscara/tinte del sistema. Usar el PNG a color completo como small icon puede terminar mostrándose como un bloque genérico o poco legible en la bandeja.
+
 ## Decisiones
 
 - El registro push no bloquea login si el usuario niega permisos, si Firebase no está configurado todavía o si el plugin no puede obtener token.
@@ -93,6 +109,7 @@ Contrato revisado en servidor:
 - El cliente no navega automáticamente con la app abierta; solo actualiza estado interno y muestra toast.
 - El cliente navega cuando el usuario toca la notificación desde bandeja/background/cerrada.
 - El canal Android no usa un id genérico; usa `jukai_communications_alerts`.
+- Android usa `ic_stat_jukai_push` como icono pequeño por defecto de FCM cuando el servidor no manda un icono específico.
 
 ## Validaciones
 
@@ -105,6 +122,8 @@ Contrato revisado en servidor:
 - Después del ajuste Gradle/Firebase, `npm run android:debug` volvió a finalizar correctamente y ejecutó `:app:processDebugGoogleServices`, confirmando que `android/app/google-services.json` fue leído por el módulo app.
 - Después de agregar listeners y canal `jukai_communications_alerts`, `npm run build`, `npx cap sync` y `npm run android:debug` finalizaron correctamente.
 - `npx ng test --watch=false --browsers=ChromeHeadless --include src/app/communications/services/push-device.service.spec.ts` no llegó a ejecutar por fallas preexistentes de configuración de Karma: fuentes Roboto mal resueltas en `src/assets/styles.scss` y varios specs que importan `testing/crud-test.helpers` inexistente.
+- Después de personalizar el icono push, se verificó que los PNG generados conservan transparencia y usan las dimensiones esperadas por densidad.
+- Después de personalizar el icono push, `npm run android:debug` finalizó correctamente.
 
 ## Notas importantes
 
@@ -121,6 +140,7 @@ Contrato revisado en servidor:
 - `android/app/build.gradle`
 - `android/app/google-services.json`
 - `android/app/src/main/AndroidManifest.xml`
+- `android/app/src/main/res/drawable-*/ic_stat_jukai_push.png`
 - `android/app/src/main/res/values/strings.xml`
 - `android/capacitor.settings.gradle`
 - `src/app/communications/services/push-device.service.ts`
@@ -139,3 +159,4 @@ Contrato revisado en servidor:
 - Logout en Android y verificar `PATCH /v1/communications/push-device/{id}/`.
 - Denegar permisos push y confirmar que login continúa.
 - Repetir login con el mismo token y confirmar idempotencia por fingerprint en servidor.
+- Enviar una push real a Android en background/cerrada y confirmar que la bandeja usa el icono `ic_stat_jukai_push`.

@@ -1,5 +1,4 @@
 <p-confirmdialog />
----------------------------------------{{showComponentSignal()[$any('inventory-movement-detail')] | json}}
 <div style="position: absolute; z-index: 2;"
   *ngIf="showComponentSignal()[$any('request-detail')]?.local || showComponentSignal()[$any('request-detail')]?.read">
   <app-custom-button-crud (deleteAction)="delete()" (editAction)="edit()"

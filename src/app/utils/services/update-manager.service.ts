@@ -14,6 +14,9 @@ export class UpdateManagerService {
   private currentUpdateResult$ = new BehaviorSubject<UpdateCheckResult | null>(null);
   private currentVersion$ = new BehaviorSubject<string>('');
   private isOffline$ = new BehaviorSubject<boolean>(false);
+  // [[[II ESC:028-05 DOC:docs/documents/2026-07-07-028-version-headers-update-policy.md#escenario-05
+  private forcedUpdateCheckInProgress = false;
+  // ]]]FI
 
   // Observables públicos
   public updateDialogVisible = this.updateDialogVisible$.asObservable();
@@ -65,7 +68,14 @@ export class UpdateManagerService {
    * Verifica actualizaciones y muestra diálogo si es necesario
    */
   public async checkForUpdatesAndShow(forceCheck: boolean = false): Promise<void> {
-    if (!this.generalService.isMobile()) return;
+    // [[[II ESC:028-05 DOC:docs/documents/2026-07-07-028-version-headers-update-policy.md#escenario-05
+    if (!this.generalService.isMobile() && !forceCheck) return;
+    if (forceCheck && (this.forcedUpdateCheckInProgress || this.updateDialogVisible$.value)) return;
+
+    if (forceCheck) {
+      this.forcedUpdateCheckInProgress = true;
+    }
+    // ]]]FI
 
     try {
       //console.log('🔍 Verificando actualizaciones...');
@@ -74,12 +84,20 @@ export class UpdateManagerService {
       const isOnline = navigator.onLine;
       this.isOffline$.next(!isOnline);
 
+      // [[[II ESC:028-05 DOC:docs/documents/2026-07-07-028-version-headers-update-policy.md#escenario-05
+      const appInfo = await this.updateService.getCurrentAppInfo();
+      this.currentVersion$.next(`${appInfo.versionCode} (${appInfo.versionName})`);
+      // ]]]FI
+
       // Verificar actualizaciones
       const result = await this.updateService.checkForUpdates('qa', forceCheck);
 
       //console.log('📊 Resultado verificación:', result);
 
       if (result.updateRequired) {
+        // [[[II ESC:028-06 DOC:docs/documents/2026-07-07-028-version-headers-update-policy.md#escenario-06
+        result.refreshPage = !this.generalService.isMobile();
+        // ]]]FI
         this.currentUpdateResult$.next(result);
         this.showUpdateDialog();
       } else {
@@ -88,6 +106,12 @@ export class UpdateManagerService {
 
     } catch (error) {
       //console.error('💥 Error verificando actualizaciones:', error);
+    } finally {
+      // [[[II ESC:028-05 DOC:docs/documents/2026-07-07-028-version-headers-update-policy.md#escenario-05
+      if (forceCheck) {
+        this.forcedUpdateCheckInProgress = false;
+      }
+      // ]]]FI
     }
   }
 
@@ -110,6 +134,13 @@ export class UpdateManagerService {
    */
   public async handleUpdateClick(): Promise<void> {
     const result = this.currentUpdateResult$.value;
+    // [[[II ESC:028-06 DOC:docs/documents/2026-07-07-028-version-headers-update-policy.md#escenario-06
+    if (result?.refreshPage) {
+      window.location.reload();
+      return;
+    }
+    // ]]]FI
+
     if (!result?.url) return;
 
     try {
@@ -189,8 +220,6 @@ export class UpdateManagerService {
    * Fuerza una verificación inmediata (para botones de "Verificar actualizaciones")
    */
   public async forceUpdateCheck(): Promise<boolean> {
-    if (!this.generalService.isMobile()) return false;
-
     try {
       await this.checkForUpdatesAndShow(true);
       return true;

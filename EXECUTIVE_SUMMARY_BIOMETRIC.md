@@ -56,16 +56,17 @@ Se ha implementado exitosamente un sistema completo de autenticación biométric
 4. **Verificación** → Validación de firma en servidor
 5. **Tokens JWT** → Access + Refresh extendido
 
-## 📋 Endpoints del Backend Requeridos
+## 📋 Endpoints del Backend
 
-El sistema espera estos endpoints en el servidor:
+El servidor expone estos endpoints bajo `/v1/users/`. En el cliente,
+`environment.base_url` ya incluye `/v1`, por eso las llamadas usan `/users/...`:
 
 ```
-POST /auth/biometric/register/challenge/     # Solicitar challenge de registro
-POST /auth/biometric/register/validate/     # Validar attestation
-POST /auth/biometric/login/challenge/       # Solicitar challenge de login  
-POST /auth/biometric/login/verify/          # Verificar firma biométrica
-DELETE /auth/biometric/device/{deviceId}/   # Revocar dispositivo
+POST /users/biometric-register-challenge/     # Solicitar challenge de registro
+POST /users/biometric-register-validate/      # Validar attestation
+POST /users/biometric-login-challenge/        # Solicitar challenge de login
+POST /users/biometric-login-verify/           # Verificar firma biométrica
+DELETE /users/biometric-device/{deviceId}/    # Revocar dispositivo
 ```
 
 ## 🚀 Uso de la API

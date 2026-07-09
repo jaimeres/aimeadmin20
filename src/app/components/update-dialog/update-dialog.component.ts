@@ -114,13 +114,15 @@ import { UpdateCheckResult } from '../../utils/services/update.service';
           
           <!-- Actualización forzada -->
           <div *ngIf="updateResult?.forced" class="flex justify-content-center w-full">
+            <!-- [[[II ESC:028-06 DOC:docs/documents/2026-07-07-028-version-headers-update-policy.md#escenario-06 -->
             <p-button 
-              label="Actualizar Ahora" 
-              icon="pi pi-download"
+              [label]="updateResult?.refreshPage ? 'Refrescar página' : 'Actualizar Ahora'"
+              [icon]="updateResult?.refreshPage ? 'pi pi-refresh' : 'pi pi-download'"
               [loading]="isDownloading"
               (click)="onUpdateClick()"
               styleClass="p-button-lg p-button-danger w-full">
             </p-button>
+            <!-- ]]]FI -->
           </div>
 
           <!-- Actualización opcional -->
@@ -137,13 +139,15 @@ import { UpdateCheckResult } from '../../utils/services/update.service';
             </p-button>
 
             <!-- Botón Actualizar -->
+            <!-- [[[II ESC:028-06 DOC:docs/documents/2026-07-07-028-version-headers-update-policy.md#escenario-06 -->
             <p-button 
-              label="Actualizar" 
-              icon="pi pi-download"
+              [label]="updateResult?.refreshPage ? 'Refrescar' : 'Actualizar'"
+              [icon]="updateResult?.refreshPage ? 'pi pi-refresh' : 'pi pi-download'"
               [loading]="isDownloading"
               (click)="onUpdateClick()"
               styleClass="p-button-primary flex-1">
             </p-button>
+            <!-- ]]]FI -->
           </div>
 
           <!-- Botón de emergencia (solo offline con posibilidad de saltar) -->

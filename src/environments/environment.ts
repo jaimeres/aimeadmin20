@@ -17,8 +17,11 @@ export const environment = {
    */
   android_native_loopback_host: 'http://127.0.0.1:8000/v1',
   // ]]]FI
+  // [[[II ESC:028-01 DOC:docs/documents/2026-07-07-028-version-headers-update-policy.md#escenario-01 CONFIG
   /** Versión de la app. Cambiar aqui invalida todos los cachés automáticamente. */
-  appVersion: '1.0.3',
+  appBuild: 5,
+  appVersion: '1.0.9',
+  // ]]]FI
   // [[[II ESC:004-01 DOC:docs/documents/2026-05-30_004_sistema-avisos-socket.md#escenario-01
   /**
    * URL del servidor de avisos/alertas en tiempo real (Socket.IO).

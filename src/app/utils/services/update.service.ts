@@ -38,6 +38,9 @@ export interface UpdateCheckResult {
   url?: string;
   message?: string;
   versionName?: string;
+  // [[[II ESC:028-06 DOC:docs/documents/2026-07-07-028-version-headers-update-policy.md#escenario-06
+  refreshPage?: boolean;
+  // ]]]FI
   canSkipOffline?: boolean;
   isBlocked?: boolean;
   isMaintenance?: boolean;
@@ -71,21 +74,25 @@ export class UpdateService {
     forceCheck: boolean = false
   ): Promise<UpdateCheckResult> {
 
-    // Solo verificar actualizaciones en móviles
-    if (!this.generalS.isMobile()) {
+    // [[[II ESC:028-04 DOC:docs/documents/2026-07-07-028-version-headers-update-policy.md#escenario-04
+    // Las verificaciones automáticas conservan el alcance móvil previo; los
+    // bloqueos del backend usan forceCheck para web/desktop y deben ir al servidor.
+    if (!this.generalS.isMobile() && !forceCheck) {
       return {
         updateRequired: false,
         forced: false
       };
     }
+    // ]]]FI
 
     try {
-      // Obtener información de la app actual
-      const appInfo = await App.getInfo();
+      // [[[II ESC:028-04 DOC:docs/documents/2026-07-07-028-version-headers-update-policy.md#escenario-04
+      const appInfo = await this.getCurrentAppInfo();
       const deviceId = await this.generalS.getDeviceId();
-      const currentVersionCode = parseInt(appInfo.build) || 0;
+      const currentVersionCode = appInfo.versionCode;
 
-      console.log(`📱 Versión actual: ${currentVersionCode} (${appInfo.version})`);
+      console.log(`📱 Versión actual: ${currentVersionCode} (${appInfo.versionName})`);
+      // ]]]FI
 
       let policy: UpdatePolicy | null = null;
       let isOffline = false;
@@ -94,7 +101,9 @@ export class UpdateService {
       // Intentar obtener política del servidor solo si corresponde (una vez al día)
       if (shouldCheckServer) {
         try {
-          policy = await this.fetchUpdatePolicy(channel, currentVersionCode, deviceId);
+          // [[[II ESC:028-04 DOC:docs/documents/2026-07-07-028-version-headers-update-policy.md#escenario-04
+          policy = await this.fetchUpdatePolicy(channel, currentVersionCode, deviceId, appInfo.platform);
+          // ]]]FI
 
           // Guardar la política para uso offline
           await Preferences.set({
@@ -117,6 +126,16 @@ export class UpdateService {
       } else {
         console.log('📅 Usando cache - última consulta al servidor hace menos de 24h');
       }
+
+      // [[[II ESC:028-04 DOC:docs/documents/2026-07-07-028-version-headers-update-policy.md#escenario-04
+      if (!policy && forceCheck) {
+        console.error('❌ Verificación forzada sin política fresca del servidor; no se usará cache local');
+        return {
+          updateRequired: false,
+          forced: false
+        };
+      }
+      // ]]]FI
 
       // Si no se pudo obtener del servidor o no tocaba consultar, usar cache
       if (!policy) {
@@ -314,13 +333,16 @@ export class UpdateService {
   private async fetchUpdatePolicy(
     channel: string,
     versionCode: number,
-    deviceId: string | null
+    deviceId: string | null,
+    platform: string = 'android'
   ): Promise<UpdatePolicy> {
+    // [[[II ESC:028-04 DOC:docs/documents/2026-07-07-028-version-headers-update-policy.md#escenario-04
     const params = new URLSearchParams({
-      platform: 'android',
+      platform,
       channel,
       versionCode: versionCode.toString()
     });
+    // ]]]FI
 
     if (deviceId) {
       params.append('deviceId', deviceId);
@@ -522,19 +544,45 @@ export class UpdateService {
   /**
    * Obtiene información de la app actual
    */
+  // [[[II ESC:028-04 DOC:docs/documents/2026-07-07-028-version-headers-update-policy.md#escenario-04
   public async getCurrentAppInfo(): Promise<{
     versionCode: number;
     versionName: string;
     platform: string;
   }> {
-    const appInfo = await App.getInfo();
-    const deviceInfo = await Device.getInfo();
+    if (!this.generalS.isMobile()) {
+      return {
+        versionCode: Number(environment.appBuild) || 0,
+        versionName: environment.appVersion || '0.0.0',
+        platform: this.resolveUpdatePlatform()
+      };
+    }
+
+    const [appInfo, deviceInfo] = await Promise.all([
+      App.getInfo(),
+      Device.getInfo()
+    ]);
+
     return {
       versionCode: parseInt(appInfo.build) || 0,
       versionName: appInfo.version || '0.0.0',
-      platform: deviceInfo.platform
+      platform: this.resolveUpdatePlatform(deviceInfo.platform)
     };
   }
+
+  private resolveUpdatePlatform(deviceInfoPlatform?: string): 'android' | 'ios' | 'web' | 'desktop' {
+    if (this.generalS.isMobile()) {
+      return String(deviceInfoPlatform).toLowerCase() === 'ios' ? 'ios' : 'android';
+    }
+
+    try {
+      const clientPlatform = this.generalS.getClientPlatform?.();
+      return clientPlatform === 'desktop' ? 'desktop' : 'web';
+    } catch {
+      return 'web';
+    }
+  }
+  // ]]]FI
 
   /**
    * Limpia cache de verificaciones

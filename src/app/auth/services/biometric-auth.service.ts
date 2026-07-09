@@ -82,6 +82,7 @@ export class BiometricAuthService {
                 // Paso 4: Guardar datos localmente
                 const biometricData: BiometricAuthData = {
                   deviceId: attestationResult.deviceId,
+                  keyAlias: attestationResult.keyAlias,
                   publicKeyPem: publicKeyPem || publicKey,
                   attestationCertChainPem,
                   registeredAt: new Date(),
@@ -92,6 +93,7 @@ export class BiometricAuthService {
               }),
               switchMap(validationResult => of({
                 deviceId: attestationResult.deviceId,
+                keyAlias: attestationResult.keyAlias,
                 publicKeyPem: publicKeyPem || publicKey,
                 attestationCertChainPem,
                 registeredAt: new Date(),
@@ -135,7 +137,9 @@ export class BiometricAuthService {
         return from(this.deviceAttestPlugin!.signWithBiometrics({
           nonce: challenge.nonce,
           challenge: challenge.nonce,
-          userId
+          userId,
+          deviceId: biometricData.deviceId,
+          keyAlias: biometricData.keyAlias
         })).pipe(
           switchMap(signatureResult => {
             // Paso 3: Verificar firma en el servidor
@@ -181,14 +185,18 @@ export class BiometricAuthService {
       return of(true); // Ya no está registrado
     }
 
-    return from(this.deviceAttestPlugin.deleteKey({ userId })).pipe(
+    return from(this.deviceAttestPlugin.deleteKey({
+      userId,
+      deviceId: biometricData.deviceId,
+      keyAlias: biometricData.keyAlias
+    })).pipe(
       tap(() => {
         // Eliminar datos locales
         this.removeBiometricData(userId);
       }),
       switchMap(() => {
         // Notificar al servidor
-        return this.http.delete(`${this.BASE_URL}/auth/biometric/device/${biometricData.deviceId}/`).pipe(
+        return this.http.delete(`${this.BASE_URL}/users/biometric-device/${biometricData.deviceId}/`).pipe(
           map(() => true),
           catchError(error => {
             console.warn('Failed to unregister device on server:', error);
@@ -225,7 +233,7 @@ export class BiometricAuthService {
 
   private requestRegistrationChallenge(): Observable<{ challenge: string; challengeId: string }> {
     return this.http.post<{ challenge: string; challengeId: string }>(
-      `${this.BASE_URL}/auth/biometric/register/challenge/`,
+      `${this.BASE_URL}/users/biometric-register-challenge/`,
       {}
     ).pipe(
       map(response => this.normalizeRegistrationChallenge(response))
@@ -241,11 +249,10 @@ export class BiometricAuthService {
     deviceId: string;
   }): Observable<{ valid: boolean; securityLevel: 'STRONGBOX' | 'TEE' | 'SOFTWARE' }> {
     return this.http.post<{ valid: boolean; securityLevel: 'STRONGBOX' | 'TEE' | 'SOFTWARE' }>(
-      `${this.BASE_URL}/auth/biometric/register/validate/`,
+      `${this.BASE_URL}/users/biometric-register-validate/`,
       {
-        authorizationCheck: true,
         data: {
-          type: 'biometric_registration',
+          type: 'biometric-register',
           attributes: {
             challenge_id: data.challengeId,
             public_key: data.publicKey,
@@ -263,11 +270,11 @@ export class BiometricAuthService {
 
   private requestLoginChallenge(deviceId: string): Observable<BiometricLoginChallenge> {
     return this.http.post<BiometricLoginChallenge>(
-      `${this.BASE_URL}/auth/biometric/login/challenge/`,
+      `${this.BASE_URL}/users/biometric-login-challenge/`,
       {
         authorizationCheck: true,
         data: {
-          type: 'biometric_challenge',
+          type: 'biometric-login-challenge',
           attributes: { device_id: deviceId }
         }
       }
@@ -278,11 +285,11 @@ export class BiometricAuthService {
 
   private verifyBiometricSignature(loginData: BiometricLoginResponse): Observable<{ access: string; refresh: string; user: any }> {
     return this.http.post<{ access: string; refresh: string; user: any }>(
-      `${this.BASE_URL}/auth/biometric/login/verify/`,
+      `${this.BASE_URL}/users/biometric-login-verify/`,
       {
         authorizationCheck: true,
         data: {
-          type: 'biometric_login',
+          type: 'login',
           attributes: {
             signature: loginData.signature,
             challenge_id: loginData.challengeId,
