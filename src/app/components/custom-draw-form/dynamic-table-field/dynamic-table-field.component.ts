@@ -1,5 +1,5 @@
 import { CommonModule } from '@angular/common';
-import { ChangeDetectionStrategy, Component, EventEmitter, inject, Input, OnChanges, Output, SimpleChanges } from '@angular/core';
+import { ChangeDetectionStrategy, ChangeDetectorRef, Component, EventEmitter, inject, Input, OnChanges, OnDestroy, Output, SimpleChanges } from '@angular/core';
 import { AbstractControl, FormArray, FormBuilder, FormControl, FormGroup, ReactiveFormsModule, Validators } from '@angular/forms';
 import { AutoFocusModule } from 'primeng/autofocus';
 import { ButtonModule } from 'primeng/button';
@@ -8,9 +8,13 @@ import { InputTextModule } from 'primeng/inputtext';
 import { TableModule } from 'primeng/table';
 import { TagModule } from 'primeng/tag';
 import { TooltipModule } from 'primeng/tooltip';
+import { Subscription } from 'rxjs';
 import { CustomButtonCrudComponent } from '../../custom-button-crud/custom-button-crud.component';
+import { DERIVED_TABLE_DRAFT_FLAG, TABLE_ROW_SOURCE_FLAG } from '../../../utils/table-row-flags.const';
+import { CRUDService } from '../../../utils/services/crud.service';
+import { GeneralService } from '../../../utils/services/general.service';
 
-// [[[II ESC:015-01 DOC:docs/documents/2026-06-02_015_dynamic-table-field-component.md#escenario-01 ESC:001-09 DOC:docs/documents/2026-05-16_001_consolidacion_dropdown_types_y_fix_escenarios.md#escenario-09
+// [[[II ESC:015-01 DOC:docs/documents/2026-06-02_015_dynamic-table-field-component.md#escenario-01 ESC:001-09 DOC:docs/documents/2026-05-16_001_consolidacion_dropdown_types_y_fix_escenarios.md#escenario-09 ESC:030-01 DOC:docs/documents/2026-07-14-030-child-runtime-overlay.md#escenario-01 ESC:030-03 DOC:docs/documents/2026-07-14-030-child-runtime-overlay.md#escenario-03
 @Component({
   selector: 'app-dynamic-table-field',
   standalone: true,
@@ -30,8 +34,18 @@ import { CustomButtonCrudComponent } from '../../custom-button-crud/custom-butto
   styleUrl: './dynamic-table-field.component.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
-export class DynamicTableFieldComponent implements OnChanges {
+export class DynamicTableFieldComponent implements OnChanges, OnDestroy {
   private readonly fb = inject(FormBuilder);
+  private readonly cdr = inject(ChangeDetectorRef);
+  // [[[II ESC:030-06 Servicios reusados para la busqueda en celda (Enter/F3): el
+  // mismo aplanado (DJAtoObject/mergeConfiguredTableRow) y resolucion app/type que
+  // el resto del form; no se duplica logica de red. ]]]FI
+  private readonly crudS = inject(CRUDService);
+  private readonly generalS = inject(GeneralService);
+  // [[[II ESC:030-01 Fuente única compartida en utils/table-row-flags.const.ts ]]]FI
+  private readonly tableRowSourceFlag = TABLE_ROW_SOURCE_FLAG;
+  private readonly derivedTableDraftFlag = DERIVED_TABLE_DRAFT_FLAG;
+  private tableValueSubscription?: Subscription;
 
   @Input() tableConfig: any;
   @Input() formGroup: FormGroup | null = null;
@@ -78,6 +92,24 @@ export class DynamicTableFieldComponent implements OnChanges {
     ) {
       this.clearTableRuntimeCaches();
     }
+
+    if (changes['tableConfig'] || changes['formGroup']) {
+      this.bindTableValueChanges();
+    }
+  }
+
+  ngOnDestroy(): void {
+    this.tableValueSubscription?.unsubscribe();
+  }
+
+  /** Mantiene visible una mutación externa del FormArray en este componente OnPush. */
+  private bindTableValueChanges(): void {
+    this.tableValueSubscription?.unsubscribe();
+    const formArray = this.getTableFormArray(this.tableConfig?.field);
+    this.tableValueSubscription = formArray?.valueChanges.subscribe(() => {
+      this.clearTableRuntimeCaches();
+      this.cdr.markForCheck();
+    });
   }
 
   trackByColumnField(index: number, column: any): any {
@@ -97,6 +129,7 @@ export class DynamicTableFieldComponent implements OnChanges {
   }
 
   addTableRow(field: string, tableConfig: any): void {
+    if (this.isTableReadonly(field)) return;
     const formArray = this.getTableFormArray(field);
     if (!formArray) return;
 
@@ -116,14 +149,19 @@ export class DynamicTableFieldComponent implements OnChanges {
 
   editTableRow(rowData: any, field: string): void {
     const normalizedRowData = rowData instanceof FormGroup ? rowData.getRawValue() : rowData;
-    this.editRow.emit({ rowData: normalizedRowData, field, data: this.getTableValue(field) });
+    const sourceRow = rowData instanceof FormGroup ? (rowData as any)[this.tableRowSourceFlag] : null;
+    this.editRow.emit({ rowData: normalizedRowData, sourceRow, field, data: this.getTableValue(field) });
   }
 
   deleteTableRow(rowIndex: number, field: string): void {
+    if (this.isTableReadonly(field)) return;
     const formArray = this.getTableFormArray(field);
     if (!formArray) return;
 
-    const rowToDelete = this.getTableRowGroup(field, rowIndex)?.getRawValue();
+    const rowControl = this.getTableRowGroup(field, rowIndex);
+    const rowToDelete = rowControl?.getRawValue();
+    const sourceRow = (rowControl as any)?.[this.tableRowSourceFlag];
+    const isDerivedDraft = (rowControl as any)?.[this.derivedTableDraftFlag] === true;
 
     formArray.removeAt(rowIndex);
     formArray.markAsDirty();
@@ -134,6 +172,8 @@ export class DynamicTableFieldComponent implements OnChanges {
 
     this.deleteRow.emit({
       rowData: rowToDelete,
+      sourceRow,
+      isDerivedDraft,
       rowIndex,
       field,
       data: this.getTableValue(field)
@@ -141,6 +181,7 @@ export class DynamicTableFieldComponent implements OnChanges {
   }
 
   onCellEdit(event: any, field: string, rowIndex: number, colField: string): void {
+    if (this.isTableReadonly(field)) return;
     const cellControl = this.getTableCellControl(field, rowIndex, colField);
     if (!cellControl) return;
 
@@ -274,6 +315,11 @@ export class DynamicTableFieldComponent implements OnChanges {
     return rowEditingKeys.length > 0 || cellEditingKeys.length > 0;
   }
 
+  /** Una tabla readonly conserva sus datos resueltos, pero no acepta edición local. */
+  isTableReadonly(field: string): boolean {
+    return this.tableConfig?.readonly === true || this.getTableFormArray(field)?.disabled === true;
+  }
+
   isRowOrCellEditing(tableField: string, rowIndex: number): boolean {
     return this.getTableRowState(tableField, rowIndex).isRowOrCellEditing;
   }
@@ -311,6 +357,7 @@ export class DynamicTableFieldComponent implements OnChanges {
   }
 
   startRowEdit(tableField: string, rowIndex: number): void {
+    if (this.isTableReadonly(tableField)) return;
     const rowKey = `${tableField}_${rowIndex}`;
     this.editingRows[rowKey] = true;
     this.clearTableRuntimeCaches();
@@ -318,6 +365,7 @@ export class DynamicTableFieldComponent implements OnChanges {
   }
 
   startCellEdit(tableField: string, rowIndex: number, colField: string): void {
+    if (this.isTableReadonly(tableField)) return;
     const cellKey = `${tableField}_${rowIndex}_${colField}`;
     this.editingCells[cellKey] = true;
     this.clearTableRuntimeCaches();
@@ -336,6 +384,7 @@ export class DynamicTableFieldComponent implements OnChanges {
     });
 
     if (rowFormGroup.valid) {
+      const previousRowData = this.originalRowData[rowKey];
       this.editingRows[rowKey] = false;
       this.clearTableRuntimeCaches();
       delete this.originalRowData[rowKey];
@@ -353,6 +402,9 @@ export class DynamicTableFieldComponent implements OnChanges {
         field: tableField,
         rowIndex,
         rowData: rowFormGroup.getRawValue(),
+        previousRowData,
+        sourceRow: (rowFormGroup as any)[this.tableRowSourceFlag],
+        isDerivedDraft: (rowFormGroup as any)[this.derivedTableDraftFlag] === true,
         data: this.getTableValue(tableField)
       });
     }
@@ -367,6 +419,7 @@ export class DynamicTableFieldComponent implements OnChanges {
     cellControl.updateValueAndValidity();
 
     if (cellControl.valid) {
+      const previousValue = this.originalRowData[cellKey];
       this.editingCells[cellKey] = false;
       this.clearTableRuntimeCaches();
       delete this.originalRowData[cellKey];
@@ -376,6 +429,10 @@ export class DynamicTableFieldComponent implements OnChanges {
         rowIndex,
         colField,
         value: cellControl.value,
+        previousValue,
+        rowData: this.getTableRowGroup(tableField, rowIndex)?.getRawValue(),
+        sourceRow: (this.getTableRowGroup(tableField, rowIndex) as any)?.[this.tableRowSourceFlag],
+        isDerivedDraft: (this.getTableRowGroup(tableField, rowIndex) as any)?.[this.derivedTableDraftFlag] === true,
         data: this.getTableValue(tableField)
       });
     }
@@ -425,15 +482,181 @@ export class DynamicTableFieldComponent implements OnChanges {
     return this.getTableRowState(tableField, rowIndex).editingCells[colField] || false;
   }
 
+  // ============================================================================
+  // [[[II ESC:030-06 DOC:docs/documents/2026-07-14-030-child-runtime-overlay.md
+  // Teclado y busqueda en celda — ALCANCE: SOLO `type='table'` dentro de
+  // app-custom-draw-form.
+  //
+  // Decision explicita: por ahora NO se implementa Insert/Delete/Supr global ni
+  // para tablas CRUD generales/secundarias. Este handler escucha unicamente
+  // dentro de las celdas de esta tabla dinamica. Si a futuro se amplia a algo
+  // global (atajos a nivel pagina o de tablas CRUD), esta base debe REUTILIZARSE
+  // o refactorizarse en un servicio compartido, NO duplicarse por componente.
+  //
+  // Rendimiento: no hay requests por keypress. La busqueda remota solo se dispara
+  // en Enter (coincidencia exacta) o F3 (filter[search]); las peticiones en vuelo
+  // se deduplican por (tabla:columna:modo:valor).
+  // ============================================================================
   onCellKeydown(event: KeyboardEvent, tableField: string, rowIndex: number, colField: string): void {
+    const column = this._columnByField(colField);
+
+    if (event.key === 'F3') {
+      // F3: busqueda remota filter[search]. Solo en columnas buscables; si no lo
+      // es, se ignora y el navegador conserva su comportamiento por defecto.
+      if (this._isSearchableColumn(column)) {
+        event.preventDefault();
+        this._runCellSearch(tableField, rowIndex, colField, column, 'search');
+      }
+      return;
+    }
+
     if (event.key === 'Enter') {
       event.preventDefault();
-      this.finishCellEdit(tableField, rowIndex, colField);
-    } else if (event.key === 'Escape') {
+      if (this._isSearchableColumn(column)) {
+        // Enter en code/name: coincidencia exacta (case-insensitive) contra el
+        // recurso resuelto por data_type (columna, con fallback al de la tabla).
+        this._runCellSearch(tableField, rowIndex, colField, column, 'exact');
+      } else {
+        this.finishCellEdit(tableField, rowIndex, colField);
+        // focus_after_select tambien aplica a la tabla; si no resuelve -> tabindex.
+        this._focusAfterCell(tableField, rowIndex, column);
+      }
+      return;
+    }
+
+    if (event.key === 'Escape') {
       event.preventDefault();
       this.cancelCellEdit(tableField, rowIndex, colField);
     }
   }
+
+  /** Columna normalizada por field (usa el cache de normalizedColumns). */
+  private _columnByField(colField: string): any {
+    return (this.normalizedColumns || []).find((c: any) => c?.field === colField) || null;
+  }
+
+  /**
+   * Una columna es buscable si lo declara la config (`column.searchable`, o
+   * `tableConfig.search_columns` incluye su field); por defecto `code` y `name`.
+   * Hooks de servidor: `column.searchable`, `column.search_field`,
+   * `column.data_type`, `column.include`, `column.focus_after_select`.
+   */
+  private _isSearchableColumn(column: any): boolean {
+    const field = column?.field;
+    if (!field) return false;
+    if (column.searchable === true) return true;
+    if (column.searchable === false) return false;
+    const list = this.tableConfig?.search_columns;
+    // Solo se respeta search_columns cuando trae elementos; una lista vacia deja
+    // actuar el default (code/name) en vez de deshabilitar la busqueda por completo.
+    if (Array.isArray(list) && list.length) return list.includes(field);
+    return field === 'code' || field === 'name';
+  }
+
+  // Dedup de busquedas en vuelo por (tabla:columna:modo:valor).
+  private _cellSearchInFlight = new Set<string>();
+
+  /**
+   * Dispara la busqueda de la celda. `mode='exact'` (Enter) filtra por el campo
+   * exacto (`filter[<search_field>]`); `mode='search'` (F3) usa `filter[search]`.
+   * Resuelve `data_type` de la columna con fallback al de la tabla. Sin recurso
+   * remoto resoluble, conserva el valor escrito y solo mueve el foco.
+   */
+  private _runCellSearch(tableField: string, rowIndex: number, colField: string, column: any, mode: 'exact' | 'search'): void {
+    const control = this.getTableCellControl(tableField, rowIndex, colField);
+    const raw = (control?.value ?? '').toString().trim();
+    if (!raw) {
+      this._afterCellSearch(tableField, rowIndex, colField, column, null);
+      return;
+    }
+
+    const dt = (column?.data_type && column.data_type.type) ? column.data_type : (this.tableConfig?.data_type || {});
+    const appType = this.crudS.getAppType?.(dt?.type);
+    const app = appType?.app;
+    const type = appType?.type;
+    if (!app) {
+      // Columna sin recurso remoto: preservar valor escrito y mover foco.
+      this._afterCellSearch(tableField, rowIndex, colField, column, null);
+      return;
+    }
+
+    const searchField = column?.search_field || colField;
+    const filter = mode === 'exact'
+      ? `filter[${searchField}]=${encodeURIComponent(raw)}`
+      : `filter[search]=${encodeURIComponent(raw)}`;
+    const include = column?.include || dt?.include || '';
+
+    const dedupKey = `${tableField}:${colField}:${mode}:${raw.toLowerCase()}`;
+    if (this._cellSearchInFlight.has(dedupKey)) return;
+    this._cellSearchInFlight.add(dedupKey);
+
+    this.crudS.getObject({ app, type, filter, include }).subscribe({
+      next: (resp: any) => {
+        this._cellSearchInFlight.delete(dedupKey);
+        const rows = this.generalS.DJAtoObject({ respDJA: resp, fields: { [colField]: column } }) || [];
+        const match = mode === 'exact'
+          ? (rows.find((r: any) => this._exactCellMatch(r, column, colField, raw)) ?? null)
+          : (rows.length ? rows[0] : null);
+        this._afterCellSearch(tableField, rowIndex, colField, column, match);
+      },
+      error: () => {
+        this._cellSearchInFlight.delete(dedupKey);
+        this._afterCellSearch(tableField, rowIndex, colField, column, null);
+      }
+    });
+  }
+
+  private _exactCellMatch(row: any, column: any, colField: string, raw: string): boolean {
+    if (!row) return false;
+    const field = column?.search_field || colField;
+    const target = raw.toLowerCase();
+    const candidates = [row[field], row[`${field}__name`], row.code, row.name, row.display_name];
+    return candidates.some((v: any) => v != null && String(v).trim().toLowerCase() === target);
+  }
+
+  /**
+   * Aplica el resultado (si lo hay) a la fila con la MISMA semantica de aplanado
+   * que DJAtoObject (via mergeConfiguredTableRow), termina la edicion de la celda
+   * actual y transfiere la edicion a la celda destino (`focus_after_select`).
+   * Si no hay resultado, se conserva el valor escrito.
+   */
+  private _afterCellSearch(tableField: string, rowIndex: number, colField: string, column: any, match: any): void {
+    if (match) {
+      const rowGroup = this.getTableRowGroup(tableField, rowIndex);
+      if (rowGroup) {
+        const merged = this.generalS.mergeConfiguredTableRow(
+          rowGroup.getRawValue(), this.normalizedColumns || [], match, column
+        );
+        rowGroup.patchValue(merged, { emitEvent: false });
+        (rowGroup as any)[this.tableRowSourceFlag] = match;
+        rowGroup.markAsDirty();
+      }
+    }
+    // Sin match: el valor escrito ya vive en el control y se conserva.
+    this.finishCellEdit(tableField, rowIndex, colField);
+    this._focusAfterCell(tableField, rowIndex, column);
+    this.clearTableRuntimeCaches();
+    this.cdr.markForCheck();
+  }
+
+  /**
+   * Mueve la edicion a la celda destino declarada por `focus_after_select` de la
+   * columna (dentro de la MISMA tabla). Si no esta configurada o el destino no es
+   * una columna de la tabla, no se fuerza nada: actua la navegacion nativa por
+   * tabindex.
+   */
+  private _focusAfterCell(tableField: string, rowIndex: number, column: any): void {
+    const target = column?.focus_after_select;
+    if (typeof target !== 'string' || target.trim() === '') return;
+    const targetCol = this._columnByField(target.trim());
+    if (!targetCol) return; // destino fuera de la tabla -> tabindex nativo
+    // rAF: esperar a que la celda actual salga de edicion antes de editar destino.
+    requestAnimationFrame(() => {
+      this.startCellEdit(tableField, rowIndex, targetCol.field);
+      this.cdr.markForCheck();
+    });
+  }
+  // ]]]FI
 
   private normalizeTableConfig(): void {
     if (!this.tableConfig) {
@@ -571,7 +794,9 @@ export class DynamicTableFieldComponent implements OnChanges {
       );
     });
 
-    return this.fb.group(rowGroup);
+    const group = this.fb.group(rowGroup);
+    (group as any)[this.tableRowSourceFlag] = rowData;
+    return group;
   }
 
   private normalizeTableEvent(event: any): any {

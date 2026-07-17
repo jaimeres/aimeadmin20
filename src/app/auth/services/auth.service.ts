@@ -26,6 +26,23 @@ interface ConfigVisitEntry {
 }
 // ]]]FI
 
+// [[[II ESC:029-01 DOC:docs/documents/2026-07-11-029-registro-usuario-auth.md#escenario-01
+interface RegisterFormData {
+  name: string;
+  last_name: string;
+  email: string;
+  password: string;
+  re_password: string;
+}
+// ]]]FI
+
+// [[[II ESC:029-02 DOC:docs/documents/2026-07-11-029-registro-usuario-auth.md#escenario-02
+interface ActivationFormData {
+  uid: string;
+  token: string;
+}
+// ]]]FI
+
 @Injectable({
   providedIn: 'root'
 })
@@ -35,8 +52,10 @@ export class AuthService {
   private _tokenRefresh: string = '';
   private _base_url: String = environment.base_url;
   private _config: any = {};
-  // [[[II ESC:001-01 DOC:docs/documents/2026-06-04-001-token-config-cache.md#escenario-01
-  private readonly _configCachePrefix = 'bos_config_module';
+  // [[[II ESC:001-01 DOC:docs/documents/2026-06-04-001-token-config-cache.md#escenario-01 ESC:005-15 DOC:docs/documents/2026-05-31_005_columnas-form-data-y-tree-select-nombres.md#escenario-15
+  // La versión invalida módulos ya procesados con reglas antiguas de labels o children.
+  // `this.customField()` continúa siendo la única fuente consumida por tablas.
+  private readonly _configCachePrefix = 'bos_config_module_v3';
   private readonly _configCacheIndex = 'bos_config_module_index';
   private readonly _configCacheAppIndex = 'bos_config_module_app_index';
   private readonly _configVisitMap = 'bos_config_module_visit_map';
@@ -119,8 +138,22 @@ export class AuthService {
 
     this.messageS.currentLogin.subscribe(
       (resp: any) => {
-        this.login(resp).subscribe({
+        // [[[II ESC:027-05 DOC:docs/documents/2026-07-01-027-autenticacion-segura-dispositivo-movil.md#escenario-05
+        const credentials = {
+          username: resp?.username,
+          password: resp?.password,
+        };
+        const setupBiometricAfterLogin = Boolean(resp?.setupBiometricAfterLogin);
+        // ]]]FI
+
+        this.login(credentials).subscribe({
           next: (resp: any) => {
+            // [[[II ESC:027-05 DOC:docs/documents/2026-07-01-027-autenticacion-segura-dispositivo-movil.md#escenario-05
+            if (setupBiometricAfterLogin) {
+              this.setupBiometricAuth().subscribe();
+            }
+            // ]]]FI
+
             this.messageS.showLoginDialog(false)
           },
           error: (e: any) => {
@@ -493,6 +526,54 @@ export class AuthService {
       });
     });
   }
+
+  // [[[II ESC:029-01 DOC:docs/documents/2026-07-11-029-registro-usuario-auth.md#escenario-01
+  /**
+   * Registra el usuario principal del tenant mediante el endpoint publico de Djoser.
+   */
+  public register(formData: RegisterFormData): Observable<User> {
+    const email = String(formData.email || '').trim();
+    const attributes = {
+      name: String(formData.name || '').trim(),
+      last_name: String(formData.last_name || '').trim(),
+      email,
+      username: email,
+      user_type: 'ERP',
+      password: formData.password,
+      re_password: formData.re_password,
+    };
+
+    const data = {
+      authorizationCheck: true,
+      data: {
+        type: 'user',
+        attributes,
+      },
+    };
+
+    return this.http.post<User>(`${this._base_url}/users/`, data);
+  }
+  // ]]]FI
+
+  // [[[II ESC:029-02 DOC:docs/documents/2026-07-11-029-registro-usuario-auth.md#escenario-02
+  /**
+   * Activa una cuenta creada desde el enlace publico generado por Djoser.
+   */
+  public activate(formData: ActivationFormData): Observable<unknown> {
+    const data = {
+      authorizationCheck: true,
+      data: {
+        type: 'activation',
+        attributes: {
+          uid: formData.uid,
+          token: formData.token,
+        },
+      },
+    };
+
+    return this.http.post<unknown>(`${this._base_url}/users/activation/`, data);
+  }
+  // ]]]FI
 
   /**
   * Indica los segundos que faltan para que el token de acceso expire o 0 si ya esta expirado
@@ -1147,6 +1228,56 @@ export class AuthService {
 
   // ]]]FI
 
+  // [[[II ESC:005-14 DOC:docs/documents/2026-05-31_005_columnas-form-data-y-tree-select-nombres.md#escenario-14
+  private ensureCustomFieldModule(customField: any, appKey: string): void {
+    if (!customField[appKey]) {
+      customField[appKey] = {};
+    }
+    if (!customField[appKey]['cols']) {
+      customField[appKey]['cols'] = {};
+    }
+    if (!customField[appKey]['config_cols']) {
+      customField[appKey]['config_cols'] = {};
+    }
+  }
+
+  private hasUsableCustomFieldLabel(value: any): boolean {
+    if (value === undefined || value === null) return false;
+    const normalized = String(value).trim();
+    return normalized !== '' && normalized !== 'undefined' && normalized !== 'null';
+  }
+
+  private resolveCustomFieldLabel(fieldName: string, fieldConfig: any = {}, sourceConfig: any = {}): string {
+    const label = [
+      fieldConfig?.cols?.label,
+      sourceConfig?.label,
+      sourceConfig?.header,
+      fieldConfig?.label,
+      fieldConfig?.header,
+      fieldName,
+    ].find(candidate => this.hasUsableCustomFieldLabel(candidate));
+
+    return label !== undefined ? String(label) : fieldName;
+  }
+
+  private registerCustomFieldLabel(
+    customField: any,
+    appKey: string,
+    fieldName: any,
+    fieldConfig: any = {},
+    sourceConfig: any = {},
+    overwrite = false
+  ): void {
+    if (!fieldName) return;
+    this.ensureCustomFieldModule(customField, appKey);
+
+    const current = customField[appKey]['cols'][fieldName];
+    if (!overwrite && this.hasUsableCustomFieldLabel(current)) return;
+
+    customField[appKey]['cols'][fieldName] = this.resolveCustomFieldLabel(String(fieldName), fieldConfig, sourceConfig);
+  }
+  // ]]]FI
+
   /**
    * Procesa la configuración de draw para una aplicación específica
    * @param draw Objeto que contiene la configuración de draw
@@ -1158,15 +1289,12 @@ export class AuthService {
   private processDrawConfig(draw: any, fields: any, appKey: string, customField: any, fieldsPrefixes?: any): void {
     if (!draw || typeof draw !== "object") return;
 
-    // Inicializar la estructura si no existe
-    if (!customField[appKey]) {
-      customField[appKey] = {};
-    }
-
-    // Inicializar draw si no existe
+    // [[[II ESC:005-14 DOC:docs/documents/2026-05-31_005_columnas-form-data-y-tree-select-nombres.md#escenario-14
+    this.ensureCustomFieldModule(customField, appKey);
     if (!customField[appKey]['draw']) {
       customField[appKey]['draw'] = {};
     }
+    // ]]]FI
 
     // Agregar fields_prefixes si existe
     if (fieldsPrefixes && typeof fieldsPrefixes === "object") {
@@ -1180,7 +1308,9 @@ export class AuthService {
         customField[appKey]['draw'][drawKey] = drawValue;
       } else {
         // Para el resto de hijos, procesar recursivamente
-        customField[appKey]['draw'][drawKey] = this.processDrawSection(drawValue, fields);
+        // [[[II ESC:005-14 DOC:docs/documents/2026-05-31_005_columnas-form-data-y-tree-select-nombres.md#escenario-14
+        customField[appKey]['draw'][drawKey] = this.processDrawSection(drawValue, fields, appKey, customField);
+        // ]]]FI
       }
     }
   }
@@ -1191,7 +1321,7 @@ export class AuthService {
    * @param fields Objeto fields para obtener la configuración de los campos
    * @returns Objeto procesado con la configuración reemplazada
    */
-  private processDrawSection(section: any, fields: any): any {
+  private processDrawSection(section: any, fields: any, appKey?: string, customField?: any): any {
     if (!section || typeof section !== "object") return section;
 
     const result: any = {};
@@ -1219,13 +1349,25 @@ export class AuthService {
               ...(originalField.hide !== undefined && { hide: originalField.hide }),
               ...(originalField.random_name && { random_name: originalField.random_name })
             };
+            // [[[II ESC:005-14 DOC:docs/documents/2026-05-31_005_columnas-form-data-y-tree-select-nombres.md#escenario-14
+            if (customField && appKey) {
+              this.registerCustomFieldLabel(customField, appKey, fieldName, fields[fieldName], result[key]);
+            }
+            // ]]]FI
           } else {
             // Si no se encuentra en fields, mantener el objeto original
             result[key] = value;
+            // [[[II ESC:005-14 DOC:docs/documents/2026-05-31_005_columnas-form-data-y-tree-select-nombres.md#escenario-14
+            if (customField && appKey) {
+              this.registerCustomFieldLabel(customField, appKey, fieldName, {}, value);
+            }
+            // ]]]FI
           }
         } else {
           // Si no tiene 'field', continuar navegando recursivamente
-          result[key] = this.processDrawSection(value, fields);
+          // [[[II ESC:005-14 DOC:docs/documents/2026-05-31_005_columnas-form-data-y-tree-select-nombres.md#escenario-14
+          result[key] = this.processDrawSection(value, fields, appKey, customField);
+          // ]]]FI
         }
       } else {
         // Si no es un objeto, mantener el valor tal como está
@@ -1248,17 +1390,9 @@ export class AuthService {
 
     //console.log('appKey:', appKey, 'cols:', cols, 'customField antes:', customField);
 
-    // Inicializar la estructura si no existe
-    if (!customField[appKey]) {
-      customField[appKey] = {};
-    }
-
-    if (!customField[appKey]['cols']) {
-      customField[appKey]['cols'] = {};
-    }
-    if (!customField[appKey]['config_cols']) {
-      customField[appKey]['config_cols'] = {};
-    }
+    // [[[II ESC:005-14 DOC:docs/documents/2026-05-31_005_columnas-form-data-y-tree-select-nombres.md#escenario-14
+    this.ensureCustomFieldModule(customField, appKey);
+    // ]]]FI
 
     // Procesar todos los hijos de cols
     for (const [claveHijo, hijo] of Object.entries(cols)) {
@@ -1281,28 +1415,31 @@ export class AuthService {
       // Objeto simplificado: buscar información en fields.cols
 
       const fieldConfig = fields?.[fieldName]?.cols;
+      // [[[II ESC:005-14 DOC:docs/documents/2026-05-31_005_columnas-form-data-y-tree-select-nombres.md#escenario-14
+      const columnLabel = this.resolveCustomFieldLabel(fieldName, fields?.[fieldName] || {}, hijoObj);
+      // ]]]FI
       if (fieldConfig) {
         columnInfo = {
-          label: fieldConfig['label'] /*|| fieldName*/,
+          label: columnLabel,
           order: fieldConfig['order'] || claveHijo,
           hide: fieldConfig['hide'] !== undefined ? fieldConfig['hide'] : false,
           sortable: fieldConfig['sortable'] !== undefined ? fieldConfig['sortable'] : true,
           locked: fieldConfig['locked'] !== undefined ? fieldConfig['locked'] : false,
           fields: fieldConfig['fields']
         };
-      } /*else {
-          // Si no se encuentra en fields.cols, usar valores por defecto
-          columnInfo = {
-            label: fieldName,
-            order: claveHijo,
-            hide: false,
-            sortable: true
-          };
-        }*/
+      } else {
+        // [[[II ESC:005-14 DOC:docs/documents/2026-05-31_005_columnas-form-data-y-tree-select-nombres.md#escenario-14
+        // Si no hay fields.cols, solo se completa el label. No se inventan sortable/hide/order
+        // para preservar el comportamiento previo de las columnas.
+        columnInfo = { label: columnLabel };
+        // ]]]FI
+      }
       //}
 
       // Almacenar la etiqueta del campo
-      customField[appKey]['cols'][fieldName] = columnInfo.label;
+      // [[[II ESC:005-14 DOC:docs/documents/2026-05-31_005_columnas-form-data-y-tree-select-nombres.md#escenario-14
+      this.registerCustomFieldLabel(customField, appKey, fieldName, fields?.[fieldName] || {}, { ...hijoObj, label: columnInfo.label }, true);
+      // ]]]FI
 
       // Configuración de columnas (orden, visibilidad, ordenamiento)
       customField[appKey]['config_cols'][fieldName] = {

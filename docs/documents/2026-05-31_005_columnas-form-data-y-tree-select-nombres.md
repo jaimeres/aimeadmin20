@@ -218,25 +218,58 @@ configuracion del modulo aun no esta disponible durante una llamada temprana des
 constructor o navegacion, el helper usa `{}` y evita romper la carga inicial.
 
 <a id="escenario-13"></a>
-## Escenario 13: Fallback de headers cuando `customField` no trae la clave
+## Escenario 13 (histórico): fallback distribuido de headers
 
-Se corrigio `generateJSONColumns()` para que el encabezado no dependa solo de
-`customField()[pos][field]`. Si ese mapa llega incompleto, viejo por cache o sin una
-clave recien agregada a `cols`, el header ahora cae en este orden:
+Este escenario probó temporalmente fallbacks en `generateJSONColumns()` hacia
+`fieldsForm`, OPTIONS y `drawForm`. Esa solución fue retirada y queda documentada
+solo como antecedente: duplicaba la prioridad de labels en cada consumidor.
 
-- `customField()[pos][field]`.
-- `fieldsForm(pos)[field].cols.label`.
-- `fieldsForm(pos)[field].label`.
-- `fieldObj.cols.label` / `fieldObj.label` del OPTIONS.
+La regla vigente comienza en el escenario 14: `AuthService` completa
+`customField[app].cols` y las tablas consumen exclusivamente `this.customField()`,
+con la clave técnica como último respaldo de seguridad.
+
+<a id="escenario-14"></a>
+## Escenario 14: `customField` como fuente de verdad de headers
+
+Se ajusto el procesamiento de configuracion en `AuthService` para que
+`customField[app].cols` quede completo desde el inicio de sesion y no guarde labels
+`undefined`.
+
+La resolucion de labels queda centralizada en `customField` con esta prioridad:
+
+- `fields[field].cols.label`.
+- `cols[field].label` / `cols[field].header` cuando la columna trae texto directo.
+- `fields[field].label` / `fields[field].header`.
 - clave del campo como ultimo respaldo.
 
-Para columnas dinamicas `form_fields_data_*` agregadas desde `drawForm`, el fallback
-tambien considera `fieldsForm(pos)[field].cols.label`, `fieldsForm(pos)[field].label`
-y `fieldData.label`, evitando que se pinten encabezados como
-`form_fields_data_COMPONENTE` cuando la configuracion si declara `label`.
+Ademas, `processDrawConfig()` registra en `customField[app].cols` los campos que
+nacen desde `draw`, incluyendo `form_fields_data_*`, sin sobreescribir labels ya
+definidos por `cols`. Esto cubre columnas dinamicas agregadas desde
+`custom-draw-form` y mantiene el `draw` procesado con `fields[field].label` para el
+formulario.
 
-El ajuste es solo visual de encabezado: no cambia el `field` de la columna, ni el
-payload, ni `include`, ni filtros, ni validaciones.
+`generateJSONColumns()` vuelve a tomar el encabezado de `customField` y conserva solo
+un respaldo final a la clave del campo para no romper la tabla si llega una
+configuracion incompleta. No cambia columnas, payload, `include`, filtros,
+validadores ni los labels internos del formulario.
+
+<a id="escenario-15"></a>
+## Escenario 15: invalidación de módulos procesados con labels antiguos
+
+Los módulos guardados en cliente contienen el resultado ya procesado de
+`getCustomField()`. Por ello, una corrección en la prioridad de labels no podía
+reparar una entrada almacenada previamente y la tabla seguía mostrando claves como
+`form_fields`, `name2`, `short_name` o `description` aunque el código nuevo fuese
+correcto.
+
+Se versionó la clave de caché de módulos. Tras recargar el cliente, el módulo antiguo
+no se reutiliza y la configuración se procesa otra vez desde servidor. No se agregó
+ningún fallback en `generateJSONColumns()`: `this.customField()` permanece como única
+fuente de verdad del encabezado.
+
+La versión se avanzó nuevamente a `bos_config_module_v3` al completar el contrato de
+children de `request-detail`. Esto evita que una sesión que ya almacenó la versión
+anterior siga publicando únicamente la tabla sin los hijos `code` y `price`.
 
 ## Decisiones tomadas
 
@@ -283,6 +316,11 @@ payload, ni `include`, ni filtros, ni validaciones.
   listado vive en `CRUD.filter`.
 - El fallback de headers no habilita columnas nuevas: solo resuelve el texto de las
   columnas que ya fueron generadas por OPTIONS/draw/cols.
+- `customField` queda como fuente de verdad de labels visibles para columnas. Los
+  consumidores no deben reimplementar la prioridad de `fields.cols.label` localmente.
+- La versión de caché invalida automáticamente módulos procesados con la prioridad
+  anterior de labels. Un cambio futuro del contrato de procesamiento debe incrementar
+  de nuevo esa versión; no debe resolverse agregando fuentes alternativas en las tablas.
 
 ## Validaciones aplicadas
 
@@ -313,12 +351,20 @@ payload, ni `include`, ni filtros, ni validaciones.
   `getAll2()` ejecuta `changePos()` antes de resolver `filter = filter ||
   this.filter`, y que guardar desde `app-custom-local-settings` usa el mismo helper
   con los `fields` editados.
-- Para el escenario 13 se reviso por codigo que `request_data_*` puede tomar header
-  desde `fieldsForm(...).cols.label` aunque `customField` no tenga la clave, y que
-  `form_fields_data_*` puede tomar `fieldData.label` antes de caer a la clave tecnica.
+- El escenario 13 queda reemplazado por el 14; sus fallbacks distribuidos ya no
+  forman parte del código vigente.
+- Para el escenario 14 se agregaron specs de `AuthService.getCustomField()` que
+  validan:
+  - `request_data_request_type` toma label desde `fields[field].cols.label`.
+  - una columna con label directo en `cols` mantiene ese texto.
+  - un campo sin configuracion cae a la clave sin inventar `sortable/hide/order`.
+  - `form_fields_data_*` declarado solo en `draw` queda registrado en
+    `customField[app].cols` sin pisar labels ya configurados en columnas.
 
 ## Archivos modificados
 
+- `src/app/auth/services/auth.service.ts`
+- `src/app/auth/services/auth.service.spec.ts`
 - `src/app/utils/crud.class.ts`
 - `src/app/utils/services/general.service.ts`
 - `src/app/utils/services/crud.service.ts`

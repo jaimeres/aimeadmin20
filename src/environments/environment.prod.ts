@@ -5,9 +5,9 @@ export const environment = {
   //erp: 'https://erp.jukai.io'
 
   production: true,
-  //base_url: 'https://eronuh0qs0.execute-api.mx-central-1.amazonaws.com/dev/v1',
-  base_url: 'http://127.0.0.1:8000/v1',
-  android_native_loopback_host: 'http://127.0.0.1:8000/v1',
+  base_url: 'https://eronuh0qs0.execute-api.mx-central-1.amazonaws.com/dev/v1',
+  //base_url: 'http://127.0.0.1:8000/v1',
+  //android_native_loopback_host: 'http://127.0.0.1:8000/v1',
 
   mk: 'jukai.io',
   mk_red: 'https://jukai.io',

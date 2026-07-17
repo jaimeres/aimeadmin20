@@ -101,6 +101,40 @@
 - **Cambio aplicado:** `CRUD._applyDynamicFieldToForm()` solo crea la dualidad `object_<field>` / `<field>` para `form_fields_data_*` y `parent_form_data_*`. Los prefijos anidados como `request_data_*` o relaciones `*_data_*` conservan el campo canonico y envian el valor simple.
 - **Compatibilidad:** se conserva el payload rico de campos dinamicos; no se cambia el comportamiento de campos del modelo principal como `priority`.
 
+<a id="escenario-14"></a>
+## Escenario 14: Conservar `type` en relaciones prefijadas `_data_`
+
+- **Fecha de ajuste:** 2026-07-09.
+- **Objetivo:** evitar que relaciones prefijadas como `request_data_subsidiary` se serialicen como `{ id }` sin `type`.
+- **Cambio aplicado:** `CRUD.validateRelationships()` completa `element.type` cuando falta usando `relationship_resource` o `data_type.type` resuelto via `crudS.getAppType(...)`, igual que la carga de dropdowns.
+- **Compatibilidad:** no cambia ids, campos, payload de atributos, validadores ni el comportamiento object/scalar de dropdowns; solo rellena el `type` ausente antes de `baseDJA()`.
+
+<a id="escenario-15"></a>
+## Escenario 15: Auto-complete libre o relacion por configuracion
+
+- **Fecha de ajuste:** 2026-07-10.
+- **Objetivo:** permitir que `auto-complete` sea generico y pueda guardar texto libre o llenar una relacion por configuracion.
+- **Contrato:** el campo usa `free_or_relationship: true` o `save_mode: "free_or_relationship"` y declara `relationship_field`, por ejemplo `"product"`. El `id` sale del objeto seleccionado y el `type` lo resuelve la relacion configurada en `fields.product.data_type`.
+- **Cambio aplicado:** `custom-draw-form` sincroniza `relationship_field` al seleccionar una sugerencia y procesa `children.*` con el objeto seleccionado. `CRUD` sincroniza la relacion antes de validar y convierte el atributo visible a texto antes de `baseDJA()`.
+- **Compatibilidad:** `RequestComponent` conserva el respaldo especifico que llena `product` al seleccionar producto, para no romper solicitudes mientras el diccionario del servidor publica `relationship_field`. No se aplica a `form_fields_data_*`, `parent_form_data_*`, `child_form_fields*` ni `form_fields*`; esos campos conservan su payload rico. No se agrega fallback temporal de configuracion vieja: `option_label` debe apuntar al campo principal de la sugerencia (`name`, `code`, etc.) y los extras de relaciones incluidas se declaran como `relacion_data_campo`.
+
+<a id="escenario-16"></a>
+## Escenario 16: Panel autocomplete desde `include` sin aplanar `GeneralService`
+
+- **Fecha de ajuste:** 2026-07-12.
+- **Objetivo:** hacer que el panel de `auto-complete` pueda pintar relaciones incluidas desde `include`, sin depender de `fields_included_relationships` y sin cambiar el contrato general de `GeneralService.DJAtoObject()`.
+- **Cambio aplicado:** `GeneralService.DJAtoObject()` conserva el comportamiento estandar: relacion plana como id y display en `relacion__name`. `custom-draw-form` prepara solo las sugerencias de autocomplete: si el panel pide una relacion como `base_product`, la pinta con `base_product__name`; si pide un campo adicional como `base_product_data_code`, lo toma del `included` solicitado por `include`. El texto visible y el objeto seleccionado siguen separados con `__autocomplete_object_<field>`, y `CRUD` usa ese objeto interno para serializar la relacion sin enviar el objeto al payload.
+- **Decisión:** `fields_included_relationships` queda fuera del flujo nuevo. `option_label` debe apuntar al campo principal de la sugerencia (`name`, `code`, etc.); los campos `relacion_data_campo` quedan reservados para extras declarados por panel/children.
+
+<a id="escenario-17"></a>
+## Escenario 17: `no_form_data_` como estado local de formulario
+
+- **Fecha de ajuste:** 2026-07-13.
+- **Objetivo:** permitir campos locales del drawForm, especialmente tablas, que se pintan y se actualizan en cliente pero no viajan al payload JSON:API.
+- **Contrato:** los campos cuyo nombre canonico inicia con `no_form_data_` u `object_no_form_data_` se agregan al formulario cuando el renderer los necesita, se excluyen de columnas/parametros de listado y se eliminan antes de `saveObject()`/`edit()`. Una tabla `no_form_data_*` usa `FormArray` solo como estado visual de `dynamic-table-field`.
+- **Cambio aplicado:** `CRUD` hidrata nodos `no_form_data_*` del draw desde `fields` cuando el draw trae solo `{field}`, para que `app-custom-draw-form` vea `type`, `class` y `columns`. `handleButtonClick(action="save")` guarda el detalle en backend, transforma la respuesta con `DJAtoObject()`, completa exclusivamente las columnas configuradas desde el objeto seleccionado del autocomplete y actualiza la tabla local antes de ejecutar `fields_reset_form`. La fila derivada se considera vista previa; al confirmar el POST se reemplaza por la fila persistida y las filas confirmadas anteriores se conservan. El encabezado del formulario queda intacto porque el guardado usa `hide:false` y `reset:false`.
+- **Compatibilidad:** no cambia el contrato de `form_fields_data_*`, `parent_form_data_*`, `child_form_fields*` ni relaciones normales. Se elimina el hook temporal `RequestComponent.afterCreateSuccess`; la tabla queda gobernada por `app-custom-draw-form`.
+
 ## Pendientes
 
 - °°° Revisar por qué varios campos del formulario se vuelven `null` después de inicializarse con `default.value` distinto de `null`. SOLUCIONADO parcialmente para `tree-select`, `multi-select` y `classifiers` en el escenario 08.
@@ -112,6 +146,7 @@
 - `src/app/utils/services/crud.service.ts`
 - `src/app/utils/services/general.service.ts`
 - `src/app/utils/crud.class.ts`
+- `src/app/utils/types/crud.types.ts`
 - `src/app/components/custom-draw-form/custom-draw-form.component.ts`
 - `src/app/components/custom-draw-form/custom-draw-form.component.html`
 - `src/app/components/custom-draw-form/dynamic-dropdown-data.service.ts`
@@ -122,3 +157,4 @@
 - `src/app/tasks/task/task.component.ts`
 - `src/app/utils/dropdown-types.const.ts`
 - `src/app/shared/crud-page-shell.component.ts`
+- `src/app/purchases/request/request.component.ts`

@@ -13,6 +13,7 @@ import {
 } from './types/crud.types';
 import { Vars } from './vars.class';
 import { DROPDOWN_TYPES_PAYLOAD } from './dropdown-types.const';
+import { DERIVED_TABLE_DRAFT_FLAG, TABLE_ROW_SOURCE_FLAG } from './table-row-flags.const';
 
 @Directive()
 export class CRUD extends Vars implements OnChanges  /*implements OnInit*/ {
@@ -33,6 +34,12 @@ export class CRUD extends Vars implements OnChanges  /*implements OnInit*/ {
   // [[[II ESC:017-04 DOC:docs/documents/2026-06-02_017_custom-draw-form-device-drawform.md#escenario-04
   private readonly resolvedCrudDrawFormCache = new WeakMap<object, { mobile?: any; desktop?: any }>();
   private readonly mobileTypeAppliedDrawForms = new WeakSet<object>();
+  // ]]]FI
+  // [[[II ESC:001-17 DOC:docs/documents/2026-05-16_001_consolidacion_dropdown_types_y_fix_escenarios.md#escenario-17
+  private readonly noFormDataPrefix = 'no_form_data_';
+  // [[[II ESC:030-01 Fuente única compartida en utils/table-row-flags.const.ts ]]]FI
+  private readonly derivedTableDraftFlag = DERIVED_TABLE_DRAFT_FLAG;
+  private readonly tableRowSourceFlag = TABLE_ROW_SOURCE_FLAG;
   // ]]]FI
   // [[[II ESC:005-10 DOC:docs/documents/2026-05-31_005_columnas-form-data-y-tree-select-nombres.md#escenario-10
   private readonly deviceDateDefaultFields: { [key: string]: Set<string> } = {};
@@ -507,6 +514,11 @@ export class CRUD extends Vars implements OnChanges  /*implements OnInit*/ {
     selectedColumns.forEach((obj) => {
       // [[[II ESC:005-04 DOC:docs/documents/2026-05-31_005_columnas-form-data-y-tree-select-nombres.md#escenario-04
       const selectedField = typeof obj?.field === 'string' ? obj.field : '';
+      // [[[II ESC:001-17 DOC:docs/documents/2026-05-16_001_consolidacion_dropdown_types_y_fix_escenarios.md#escenario-17
+      if (this._isNoFormDataField(selectedField)) {
+        return;
+      }
+      // ]]]FI
       if (
         selectedField.startsWith('form_data.form_fields_data_') ||
         selectedField.startsWith('form_fields_data_') ||
@@ -695,6 +707,31 @@ export class CRUD extends Vars implements OnChanges  /*implements OnInit*/ {
 
     return null; // Si no se encuentra el campo
   }
+
+  // [[[II ESC:001-17 DOC:docs/documents/2026-05-16_001_consolidacion_dropdown_types_y_fix_escenarios.md#escenario-17
+  private _canonicalFormFieldName(fieldName: any): string {
+    if (typeof fieldName !== 'string') return '';
+    const withoutObject = fieldName.startsWith('object_')
+      ? fieldName.slice('object_'.length)
+      : fieldName;
+    return withoutObject.startsWith('form_data.')
+      ? withoutObject.slice('form_data.'.length)
+      : withoutObject;
+  }
+
+  protected _isNoFormDataField(fieldName: any): boolean {
+    return this._canonicalFormFieldName(fieldName).startsWith(this.noFormDataPrefix);
+  }
+
+  private _stripNoFormDataPayload(formData: any): void {
+    if (!formData || typeof formData !== 'object') return;
+    Object.keys(formData).forEach((key) => {
+      if (this._isNoFormDataField(key)) {
+        delete formData[key];
+      }
+    });
+  }
+  // ]]]FI
 
   /**
  * Reemplaza los valores en un formulario dinámico (`drawForm`) basándose en los campos de origen y destino.
@@ -1549,6 +1586,14 @@ export class CRUD extends Vars implements OnChanges  /*implements OnInit*/ {
   }): { applyRequired: boolean; readOnly: boolean } {
     const { childKey, schemaEntry, layoutNode, hasSchema, scopeInfo } = opts;
 
+    // [[[II ESC:001-17 DOC:docs/documents/2026-05-16_001_consolidacion_dropdown_types_y_fix_escenarios.md#escenario-17
+    // Campos locales de UI: pueden existir como controles para pintar tablas o
+    // texto auxiliar, pero no viajan al backend ni deben bloquear el guardado.
+    if (this._isNoFormDataField(childKey)) {
+      return { applyRequired: false, readOnly: false };
+    }
+    // ]]]FI
+
     const isTargetChild = typeof childKey === 'string'
       && (childKey.startsWith('form_fields_data_') || childKey.startsWith('parent_form_data_'));
 
@@ -1620,6 +1665,14 @@ export class CRUD extends Vars implements OnChanges  /*implements OnInit*/ {
         const _schemaDict = this.crudS.fieldsForm(pos) || {};
         const _schemaEntry = _schemaDict[fieldName];
         const _isFormFieldsChild = fieldName.startsWith('form_fields_data_');
+        // [[[II ESC:001-17 DOC:docs/documents/2026-05-16_001_consolidacion_dropdown_types_y_fix_escenarios.md#escenario-17
+        // `no_form_data_*` vive en fields, pero el draw puede traer solo {field}.
+        // Se hidrata el nodo local para que el renderer vea type/columns sin
+        // cambiar el contrato de otros prefijos.
+        if (this._isNoFormDataField(fieldName) && _schemaEntry && typeof _schemaEntry === 'object') {
+          Object.assign(fieldData, { ..._schemaEntry, ...fieldData, field: rawFieldName });
+        }
+        // ]]]FI
 
         // [[[II Helper unificado: arma el/los control(es) del campo y muta el nodo
         // de layout (object_<field>) para que el draw sea representable. ]]]FI
@@ -1873,7 +1926,10 @@ export class CRUD extends Vars implements OnChanges  /*implements OnInit*/ {
       // Procesar tipo table
       const columns = fieldData.columns || [];
       const initialRows = fieldData.initial_rows || 0;
-      const isRequired = fieldData.required || false;
+      // [[[II ESC:001-17 DOC:docs/documents/2026-05-16_001_consolidacion_dropdown_types_y_fix_escenarios.md#escenario-17
+      const isNoFormDataField = this._isNoFormDataField(fieldName);
+      const isRequired = !isNoFormDataField && (fieldData.required || false);
+      // ]]]FI
 
       // Validador personalizado para FormArray
       const minLengthArrayValidator = (min: number): ValidatorFn => {
@@ -1889,7 +1945,7 @@ export class CRUD extends Vars implements OnChanges  /*implements OnInit*/ {
         const rowGroup: any = {};
         columns.forEach((column: any) => {
           const columnValidators: any[] = [];
-          if (column.required && column.editable !== false) {
+          if (!isNoFormDataField && column.required && column.editable !== false) {
             columnValidators.push(Validators.required);
           }
           if (column.validation?.max_length) {
@@ -2155,6 +2211,11 @@ export class CRUD extends Vars implements OnChanges  /*implements OnInit*/ {
 
     // Garantizar siempre form_fields_data_ (Escenario 3)
     push('form_fields_data_');
+    // [[[II ESC:001-17 DOC:docs/documents/2026-05-16_001_consolidacion_dropdown_types_y_fix_escenarios.md#escenario-17
+    // Campos locales del drawForm: existen para UI/tabla, pero se limpian antes
+    // del payload y no se agregan a columnas.
+    push(this.noFormDataPrefix, { kind: 'ui', submit: false });
+    // ]]]FI
     return out;
   }
 
@@ -2925,6 +2986,11 @@ export class CRUD extends Vars implements OnChanges  /*implements OnInit*/ {
       if (jsonFields.hasOwnProperty(field)) {
         const fieldObj = jsonFields[field];
 
+        // [[[II ESC:001-17 DOC:docs/documents/2026-05-16_001_consolidacion_dropdown_types_y_fix_escenarios.md#escenario-17
+        if (this._isNoFormDataField(field_prefix + field) || this._isNoFormDataField(field)) {
+          continue;
+        }
+        // ]]]FI
 
         //if (field in ['parent_form_data', 'form_data', 'form_fields', 'child_form_fields']) {
         //  continue;
@@ -2972,15 +3038,9 @@ export class CRUD extends Vars implements OnChanges  /*implements OnInit*/ {
         // Crear el objeto columna base
         let columnObj: any = {};
 
-        // [[[II ESC:005-13 DOC:docs/documents/2026-05-31_005_columnas-form-data-y-tree-select-nombres.md#escenario-13
+        // [[[II ESC:005-14 DOC:docs/documents/2026-05-31_005_columnas-form-data-y-tree-select-nombres.md#escenario-14
         const headerFieldKey = field_relationship + field;
-        const fieldConfigForHeader = this.crudS.fieldsForm(pos)?.[headerFieldKey] || {};
-        const headerLabel = this.customField()[pos]?.[headerFieldKey]
-          || fieldConfigForHeader?.cols?.label
-          || fieldConfigForHeader?.label
-          || fieldObj?.cols?.label
-          || fieldObj?.label
-          || headerFieldKey;
+        const headerLabel = this.customField()[pos]?.[headerFieldKey] ?? headerFieldKey;
         const headerText = String(headerLabel);
         // ]]]FI
 
@@ -3084,15 +3144,9 @@ export class CRUD extends Vars implements OnChanges  /*implements OnInit*/ {
             // Saltar controles object_ (son duplicados UI para dropdown)
             if (fieldName.startsWith('object_')) return;
 
-            // [[[II ESC:005-13 DOC:docs/documents/2026-05-31_005_columnas-form-data-y-tree-select-nombres.md#escenario-13
-            // El header proviene de customField()[pos], fieldsForm o drawForm.
-            const dynamicFieldConfigForHeader = this.crudS.fieldsForm(pos)?.[fieldName] || {};
-            const header = this.customField()[pos]?.[fieldName]
-              || dynamicFieldConfigForHeader?.cols?.label
-              || dynamicFieldConfigForHeader?.label
-              || fieldData.header
-              || fieldData.label
-              || fieldName;
+            // [[[II ESC:005-14 DOC:docs/documents/2026-05-31_005_columnas-form-data-y-tree-select-nombres.md#escenario-14
+            // customField es la fuente de verdad de labels; fieldName solo evita romper si falta config.
+            const header = this.customField()[pos]?.[fieldName] ?? fieldName;
             // ]]]FI
 
             // En los items de la tabla, form_fields_data_* está anidado en form_data (atributo del modelo)
@@ -4335,6 +4389,130 @@ export class CRUD extends Vars implements OnChanges  /*implements OnInit*/ {
    * extra. `baseDJA` reconoce el flag `__rich:true` y los preserva tal cual.
    * El resto de campos mantienen el comportamiento original.
    */
+  // [[[II ESC:001-15 DOC:docs/documents/2026-05-16_001_consolidacion_dropdown_types_y_fix_escenarios.md#escenario-15 ESC:030-02 DOC:docs/documents/2026-07-14-030-child-runtime-overlay.md#escenario-02
+  private _walkAutoCompleteFields(draw: any, callback: (fieldCfg: any) => void): void {
+    if (!draw || typeof draw !== 'object') return;
+    const seen = new WeakSet<object>();
+    const walk = (node: any): void => {
+      if (!node || typeof node !== 'object' || seen.has(node)) return;
+      seen.add(node);
+      if (Array.isArray(node)) {
+        node.forEach(walk);
+        return;
+      }
+      if (node.type === 'auto-complete' && typeof node.field === 'string') {
+        callback(node);
+      }
+      Object.values(node).forEach((child: any) => {
+        if (child && typeof child === 'object') walk(child);
+      });
+    };
+    walk(draw);
+  }
+
+  private _isDynamicPayloadField(fieldName: string): boolean {
+    const canonical = fieldName.startsWith('object_') ? fieldName.slice('object_'.length) : fieldName;
+    return canonical.startsWith('form_fields_data_')
+      || canonical.startsWith('parent_form_data_')
+      || canonical.startsWith('child_form_fields')
+      || canonical.startsWith('form_fields');
+  }
+
+  private _isFreeOrRelationshipAutoComplete(fieldCfg: any): boolean {
+    return fieldCfg?.type === 'auto-complete'
+      && (fieldCfg?.free_or_relationship === true || fieldCfg?.save_mode === 'free_or_relationship')
+      && typeof fieldCfg?.relationship_field === 'string'
+      && fieldCfg.relationship_field.trim() !== '';
+  }
+
+  private _autoCompleteSelectedObject(value: any): any | null {
+    return value && typeof value === 'object' && !Array.isArray(value) ? value : null;
+  }
+
+  private _autoCompleteObjectFieldName(fieldName: string): string {
+    return `__autocomplete_object_${fieldName}`;
+  }
+
+  private _autoCompleteRelationId(value: any): any {
+    return value?.id ?? value?.data?.id ?? value?.value ?? null;
+  }
+
+  private _autoCompleteAttributeValue(selected: any, fieldCfg: any): string {
+    return this.generalS.formatDynamicValue(selected, fieldCfg);
+  }
+
+  private _autoCompleteSelectionMatchesText(selected: any, currentValue: any, fieldCfg: any): boolean {
+    if (!selected || typeof selected !== 'object' || Array.isArray(selected)) return false;
+    if (currentValue && typeof currentValue === 'object' && !Array.isArray(currentValue)) {
+      return this._autoCompleteRelationId(selected) === this._autoCompleteRelationId(currentValue);
+    }
+
+    const currentText = currentValue === null || currentValue === undefined ? '' : String(currentValue).trim();
+    const selectedText = this._autoCompleteAttributeValue(selected, fieldCfg).trim();
+    return currentText !== '' && selectedText !== '' && currentText === selectedText;
+  }
+
+  private _autoCompleteSelectedObjectFromForm(form: any, fieldCfg: any): any | null {
+    const fieldName = fieldCfg.field;
+    const currentValue = form.get(fieldName)?.value;
+    const visibleSelected = this._autoCompleteSelectedObject(currentValue);
+    if (visibleSelected) return visibleSelected;
+
+    const objectValue = form.get(this._autoCompleteObjectFieldName(fieldName))?.value;
+    const objectSelected = this._autoCompleteSelectedObject(objectValue);
+    return this._autoCompleteSelectionMatchesText(objectSelected, currentValue, fieldCfg) ? objectSelected : null;
+  }
+
+  private _syncAutoCompleteRelationshipControls(pos: any): void {
+    const form = this.currentForm(pos);
+    if (!form) return;
+    const draw = this._drawFormForDevice(pos);
+    this._walkAutoCompleteFields(draw, (fieldCfg: any) => {
+      const fieldName = fieldCfg.field;
+      if (!this._isFreeOrRelationshipAutoComplete(fieldCfg) || this._isDynamicPayloadField(fieldName)) return;
+
+      const relationField = fieldCfg.relationship_field.trim();
+      const relationControl = form.get(relationField);
+      if (!relationControl) return;
+
+      const selected = this._autoCompleteSelectedObjectFromForm(form, fieldCfg);
+      relationControl.setValue(selected ? this._autoCompleteRelationId(selected) : null);
+    });
+  }
+
+  private _normalizeAutoCompletePayload(pos: any, formData: any): void {
+    if (!formData || typeof formData !== 'object') return;
+    const draw = this._drawFormForDevice(pos);
+    this._walkAutoCompleteFields(draw, (fieldCfg: any) => {
+      const fieldName = fieldCfg.field;
+      if (!this._isFreeOrRelationshipAutoComplete(fieldCfg) || this._isDynamicPayloadField(fieldName)) return;
+      if (!Object.prototype.hasOwnProperty.call(formData, fieldName)) return;
+
+      const relationField = fieldCfg.relationship_field.trim();
+      const objectFieldName = this._autoCompleteObjectFieldName(fieldName);
+      const objectValue = formData[objectFieldName];
+      const objectSelected = this._autoCompleteSelectedObject(objectValue);
+      const visibleSelected = this._autoCompleteSelectedObject(formData[fieldName]);
+      const selected = visibleSelected || (
+        this._autoCompleteSelectionMatchesText(objectSelected, formData[fieldName], fieldCfg)
+          ? objectSelected
+          : null
+      );
+      if (selected) {
+        formData[fieldName] = this._autoCompleteAttributeValue(selected, fieldCfg);
+        formData[relationField] = this._autoCompleteRelationId(selected);
+        delete formData[objectFieldName];
+        return;
+      }
+
+      if (Object.prototype.hasOwnProperty.call(formData, relationField)) {
+        formData[relationField] = formData[relationField] ?? null;
+      }
+      delete formData[objectFieldName];
+    });
+  }
+  // ]]]FI
+
   validateRelationships(pos: any) {
     // Pongo relationships=null en lugar de relationships=[], porque aunque esta vacio simpre entrará a la primera
     //condición (relationships=[]), tambin utilizó map para que no se modifique el array original
@@ -4352,6 +4530,11 @@ export class CRUD extends Vars implements OnChanges  /*implements OnInit*/ {
       // No se hardcodea por nombre de campo: se busca la config del field en
       // el drawForm de esta posición.
       const fieldCfg = this._findFieldConfigInDraw(drawAtPos, element.field);
+      // [[[II ESC:001-14 DOC:docs/documents/2026-05-16_001_consolidacion_dropdown_types_y_fix_escenarios.md#escenario-14
+      if (!element.type) {
+        element.type = this._resolveRelationshipResourceType(element, fieldCfg);
+      }
+      // ]]]FI
       const treeCfg = fieldCfg?.tree;
       if ((fieldCfg?.type === 'tree-select' || fieldCfg?.type === 'listbox') && treeCfg?.serialization && Array.isArray(rawValue)) {
         const serialized = this._serializeTreeSelection(rawValue, treeCfg);
@@ -4397,6 +4580,27 @@ export class CRUD extends Vars implements OnChanges  /*implements OnInit*/ {
       ?? value?.value
       ?? (typeof value?.key === 'string' ? value.key.split(':').pop() : value)
       ?? null;
+  }
+  // ]]]FI
+
+  // [[[II ESC:001-14 DOC:docs/documents/2026-05-16_001_consolidacion_dropdown_types_y_fix_escenarios.md#escenario-14
+  private _resolveRelationshipResourceType(relation: any = {}, fieldCfg: any = {}): string | undefined {
+    const relationDataType = relation?.data_type;
+    const fieldDataType = fieldCfg?.data_type;
+    const relationDataTypeKey = typeof relationDataType === 'string'
+      ? relationDataType
+      : relationDataType?.type || relationDataType?.app;
+    const fieldDataTypeKey = typeof fieldDataType === 'string'
+      ? fieldDataType
+      : fieldDataType?.type || fieldDataType?.app;
+    const dataTypeKey = relationDataTypeKey || fieldDataTypeKey;
+
+    return relation?.type
+      || relation?.relationship_resource
+      || fieldCfg?.relationship_resource
+      || this.crudS.getAppType(dataTypeKey)?.type
+      || dataTypeKey
+      || undefined;
   }
   // ]]]FI
 
@@ -4741,9 +4945,165 @@ export class CRUD extends Vars implements OnChanges  /*implements OnInit*/ {
     });
   }
 
+  // [[[II ESC:001-17 DOC:docs/documents/2026-05-16_001_consolidacion_dropdown_types_y_fix_escenarios.md#escenario-17 ESC:030-02 DOC:docs/documents/2026-07-14-030-child-runtime-overlay.md#escenario-02
+  private _findNoFormDataTableConfig(pos: any, targetField: string = ''): any | null {
+    const draw = this._drawFormForDevice(pos);
+    if (!draw) return null;
+
+    const target = this._canonicalFormFieldName(targetField);
+    for (const layout of this._collectDrawFormLayouts(draw)) {
+      for (const key of Object.keys(layout)) {
+        const node = layout[key];
+        const field = node?.field;
+        if (node?.type !== 'table' || !this._isNoFormDataField(field)) continue;
+        if (!target || this._canonicalFormFieldName(field) === target) {
+          return node;
+        }
+      }
+    }
+
+    return null;
+  }
+
+  private _tableColumnDefaultValueForCrud(column: any): any {
+    if (column?.type === 'input-number' || column?.type === 'date') return null;
+    if (column?.type === 'multi-select' || column?.type === 'multi-choice' || column?.type === 'listbox') return [];
+    if (column?.type === 'checkbox') return false;
+    return '';
+  }
+
+  private _tableCellValueForCrud(rowData: any, column: any): any {
+    const field = column?.field;
+    if (!field) return '';
+
+    const displayValue = rowData?.[`${field}__name`];
+    if (displayValue !== undefined && displayValue !== null && displayValue !== '') {
+      return displayValue;
+    }
+
+    const value = rowData?.[field];
+    if (value && typeof value === 'object' && !Array.isArray(value)) {
+      return this.generalS.formatDynamicValue(value, column);
+    }
+
+    return value !== undefined ? value : this._tableColumnDefaultValueForCrud(column);
+  }
+
+  private _createNoFormDataTableRowFormGroup(tableConfig: any, rowData: any = {}): FormGroup {
+    const rowGroup: any = {};
+
+    (tableConfig?.columns || []).forEach((column: any) => {
+      rowGroup[column.field] = this.fb.control(this._tableCellValueForCrud(rowData, column));
+    });
+
+    const group = this.fb.group(rowGroup);
+    (group as any)[this.tableRowSourceFlag] = rowData;
+    return group;
+  }
+
+  private _resolveNoFormDataLocalTable(pos: any, buttonInfo: any): saveOptions['local_table'] | null {
+    const config = buttonInfo?.config || {};
+    const additional = config?.send_additional_data || buttonInfo?.send_additional_data || {};
+    const rawLocalTable = additional.local_table ?? config.local_table;
+    const explicitField = typeof rawLocalTable === 'string'
+      ? rawLocalTable
+      : rawLocalTable?.field;
+    const targetField = explicitField
+      || additional.target_table
+      || additional.table_field
+      || config.target_table
+      || config.table_field
+      || (this._isNoFormDataField(config.sent_data) ? config.sent_data : '')
+      || (this._isNoFormDataField(buttonInfo?.sent_data) ? buttonInfo.sent_data : '');
+
+    const tableConfig = this._findNoFormDataTableConfig(pos, targetField || '');
+    if (!tableConfig?.field) return null;
+
+    const mode = rawLocalTable?.mode
+      || additional.table_mode
+      || additional.mode
+      || config.table_mode
+      || 'prepend';
+
+    return {
+      field: tableConfig.field,
+      mode: mode === 'append' || mode === 'replace' ? mode : 'prepend',
+    };
+  }
+
+  private _completeCreatedLocalTableRow(pos: any, tableConfig: any, createdRow: any): any {
+    let row = createdRow && typeof createdRow === 'object' && !Array.isArray(createdRow)
+      ? { ...createdRow }
+      : {};
+    const form = this.currentForm(pos);
+    const draw = this._drawFormForDevice(pos);
+
+    this._walkAutoCompleteFields(draw, (fieldCfg: any) => {
+      const selected = this._autoCompleteSelectedObjectFromForm(form, fieldCfg);
+      if (!selected) return;
+      row = this.generalS.mergeConfiguredTableRow(
+        row, tableConfig?.columns || [], selected, fieldCfg
+      );
+    });
+
+    return row;
+  }
+
+  private _applyCreatedItemToLocalTable(pos: any, localTable: saveOptions['local_table'], createdItem: any): void {
+    if (!localTable?.field || !createdItem) return;
+
+    const form = this.currentForm(pos);
+    const control = form?.get(localTable.field);
+    if (!(control instanceof FormArray)) return;
+
+    const tableConfig = this._findNoFormDataTableConfig(pos, localTable.field);
+    if (!tableConfig) return;
+
+    for (let index = control.length - 1; index >= 0; index--) {
+      const rowControl = control.at(index);
+      if ((rowControl as any)?.[this.derivedTableDraftFlag] === true) {
+        control.removeAt(index, { emitEvent: false });
+      }
+    }
+
+    const createdRows = (Array.isArray(createdItem) ? createdItem : [createdItem])
+      .map((row) => this._completeCreatedLocalTableRow(pos, tableConfig, row));
+    const rowGroups = createdRows.map((row) => this._createNoFormDataTableRowFormGroup(tableConfig, row));
+
+    if (localTable.mode === 'replace') {
+      control.clear({ emitEvent: false });
+      rowGroups.forEach((rowGroup) => control.push(rowGroup, { emitEvent: false }));
+    } else if (localTable.mode === 'append') {
+      rowGroups.forEach((rowGroup) => control.push(rowGroup, { emitEvent: false }));
+    } else {
+      rowGroups.slice().reverse().forEach((rowGroup) => control.insert(0, rowGroup, { emitEvent: false }));
+    }
+
+    control.markAsDirty();
+    control.root?.markAsDirty();
+    control.updateValueAndValidity();
+  }
+
+  private _syncRelationshipControlsFromCreatedItem(pos: any, createdItem: any): void {
+    const form = this.currentForm(pos);
+    if (!form || !createdItem) return;
+
+    (this.relationships[pos] || []).forEach((relationship: any) => {
+      const field = relationship?.field;
+      const control = field ? form.get(field) : null;
+      if (!field || !control || control.value) return;
+
+      const value = createdItem?.[field] ?? createdItem?.relationships?.[field]?.data?.id;
+      if (value !== undefined && value !== null && value !== '') {
+        control.setValue(value);
+      }
+    });
+  }
+  // ]]]FI
+
   submitForm(options: saveOptions = {}) {
 
-    let { pos, hide = true, reset = true, is_file = false, node = false, selected = null, update_item = true, data = null, custom_user = null } = options;
+    let { pos, hide = true, reset = true, is_file = false, node = false, selected = null, update_item = true, data = null, custom_user = null, local_table = undefined } = options;
 
     const safePos = pos as any; // Type assertion para índices de array
 
@@ -4787,10 +5147,18 @@ export class CRUD extends Vars implements OnChanges  /*implements OnInit*/ {
     // ESCENARIO 3: fusionar URLs previas + nuevos base64 en form_fields_data_* tipo files
     this._mergeFormDataFiles(safePos, formData);
 
+    // [[[II ESC:001-15 DOC:docs/documents/2026-05-16_001_consolidacion_dropdown_types_y_fix_escenarios.md#escenario-15
+    this._normalizeAutoCompletePayload(safePos, formData);
+    // ]]]FI
+
     // ESCENARIO 3: los dropdown-like de `form_fields_data_*` se dibujan con un
     // control string (`object_<field>`), pero el backend recibe un dict dentro
     // de `form_data`. Aquí se recompone ese dict antes de enviar.
     this._rebuildFormDataDicts(safePos, formData);
+
+    // [[[II ESC:001-17 DOC:docs/documents/2026-05-16_001_consolidacion_dropdown_types_y_fix_escenarios.md#escenario-17
+    this._stripNoFormDataPayload(formData);
+    // ]]]FI
 
     // [[[II ESC:001-06 DOC:docs/documents/2026-05-16_001_consolidacion_dropdown_types_y_fix_escenarios.md#escenario-06
     // Parche temporal: NO convertir `*_documents=[]` a null. Mientras se
@@ -4809,7 +5177,8 @@ export class CRUD extends Vars implements OnChanges  /*implements OnInit*/ {
         next: (resp: any) => {
           const temp = [...this.items()];
           const additionalFieldsAppCols = this.additionalFieldsAppCols[safePos] || [];
-          temp.unshift(this.DJAtoObject({ resp, node, additionalFieldsAppCols }));
+          const createdItem = this.DJAtoObject({ resp, node, additionalFieldsAppCols });
+          temp.unshift(createdItem);
 
           //si se envia explicitamente true se asigna el predeterminado items, si se renvia una referencia se establece a esa referencia
           if (update_item === true) {
@@ -4817,6 +5186,13 @@ export class CRUD extends Vars implements OnChanges  /*implements OnInit*/ {
           } else if (update_item) {
             update_item = temp
           }
+
+          // [[[II ESC:001-17 DOC:docs/documents/2026-05-16_001_consolidacion_dropdown_types_y_fix_escenarios.md#escenario-17
+          if (local_table) {
+            this._applyCreatedItemToLocalTable(safePos, local_table, createdItem);
+            this._syncRelationshipControlsFromCreatedItem(safePos, createdItem);
+          }
+          // ]]]FI
 
           if (custom_user) {
             this.customUser(custom_user);
@@ -4982,7 +5358,7 @@ export class CRUD extends Vars implements OnChanges  /*implements OnInit*/ {
    * @param update_item true para actualizar el item de la app principal, false para no hacerlo
    */
   save(options: saveOptions = {}) {
-    const { pos, hide = true, reset = true, is_file = false, node = false, selected = null, update_item = true, data = null, custom_user = null } = options;
+    const { pos, hide = true, reset = true, is_file = false, node = false, selected = null, update_item = true, data = null, custom_user = null, local_table = undefined } = options;
     const safePos = pos as any; // Type assertion para índices de array
     const form = this.currentForm(safePos);
 
@@ -4993,6 +5369,10 @@ export class CRUD extends Vars implements OnChanges  /*implements OnInit*/ {
     }
 
     this.local(form);
+
+    // [[[II ESC:001-15 DOC:docs/documents/2026-05-16_001_consolidacion_dropdown_types_y_fix_escenarios.md#escenario-15
+    this._syncAutoCompleteRelationshipControls(safePos);
+    // ]]]FI
 
     if (this.formErrors(safePos, is_file)) return;
     this.validateRelationships(safePos);
@@ -5007,7 +5387,7 @@ export class CRUD extends Vars implements OnChanges  /*implements OnInit*/ {
 
       //console.log('save else', data, form.get('documents'), form.get('maintenance_document_data_documents'), this.files64)
       //form.get('documents')?.setValue(this.files64);
-      this.submitForm({ pos, hide, reset, is_file, node, selected, update_item, data, custom_user });
+      this.submitForm({ pos, hide, reset, is_file, node, selected, update_item, data, custom_user, local_table });
     }
     /*} else {
       this.submitForm({ pos, hide, reset, is_file, node, selected, update_item, data, custom_user });
@@ -5021,6 +5401,10 @@ export class CRUD extends Vars implements OnChanges  /*implements OnInit*/ {
 
     this.local(this.currentForm(safePos));
 
+    // [[[II ESC:001-15 DOC:docs/documents/2026-05-16_001_consolidacion_dropdown_types_y_fix_escenarios.md#escenario-15
+    this._syncAutoCompleteRelationshipControls(safePos);
+    // ]]]FI
+
     // si hay un error de validación, detiene la función
     if (this.formErrors(safePos, is_file)) return;
     this.validateRelationships(safePos);
@@ -5031,6 +5415,12 @@ export class CRUD extends Vars implements OnChanges  /*implements OnInit*/ {
       this.crudS.app = this.app[safePos];
 
       const formData = this.currentForm(safePos).value;
+      // [[[II ESC:001-15 DOC:docs/documents/2026-05-16_001_consolidacion_dropdown_types_y_fix_escenarios.md#escenario-15
+      this._normalizeAutoCompletePayload(safePos, formData);
+      // ]]]FI
+      // [[[II ESC:001-17 DOC:docs/documents/2026-05-16_001_consolidacion_dropdown_types_y_fix_escenarios.md#escenario-17
+      this._stripNoFormDataPayload(formData);
+      // ]]]FI
       // [[[II ESC:024-10 DOC:docs/documents/2026-06-15_024_open-tasks-detail-render-child-form.md#escenario-10
       const include = this.include[safePos] || '';
       // ]]]FI
@@ -6188,10 +6578,24 @@ export class CRUD extends Vars implements OnChanges  /*implements OnInit*/ {
             // Verificar si el campo es un objeto para realizar el mismo proceso
             const object_control = formGroup.get('object_' + fieldName);
 
+            // El autocomplete libre/relación conserva el objeto seleccionado en
+            // un control local. Al preparar el siguiente detalle también deben
+            // limpiarse ese objeto y su relación, sin depender del nombre del campo.
+            // [[[II ESC:030-02 DOC:docs/documents/2026-07-14-030-child-runtime-overlay.md#escenario-02
+            formGroup.get(this._autoCompleteObjectFieldName(fieldName))?.setValue(null, { emitEvent: false });
+            this._walkAutoCompleteFields(this._drawFormForDevice(this.pos()), (fieldCfg: any) => {
+              if (fieldCfg?.field !== fieldName || !this._isFreeOrRelationshipAutoComplete(fieldCfg)) return;
+              formGroup.get(fieldCfg.relationship_field.trim())?.setValue(null, { emitEvent: false });
+            });
+            // ]]]FI
+
             if (control) {
               // Establecer el valor
-              control.setValue(fieldSettings.value !== undefined ? fieldSettings.value : '');
-              object_control?.setValue(fieldSettings.object_value !== undefined ? fieldSettings.object_value : null);
+              // [[[II ESC:030-04 emitEvent:false: el reset NO debe disparar
+              // valueChanges -> _refreshDependentChildren, que re-derivaria/
+              // re-deshabilitaria los campos hijos y desharia este reset/enable. ]]]FI
+              control.setValue(fieldSettings.value !== undefined ? fieldSettings.value : '', { emitEvent: false });
+              object_control?.setValue(fieldSettings.object_value !== undefined ? fieldSettings.object_value : null, { emitEvent: false });
               //aqui voy debo estabñecer los mosmo procesode para los campos que inician en objec_
 
               // Configurar required
@@ -6255,6 +6659,30 @@ export class CRUD extends Vars implements OnChanges  /*implements OnInit*/ {
         });
       }
     }
+
+    // ============================================
+    // HABILITAR CAMPOS ESPECÍFICOS
+    // ============================================
+    // [[[II ESC:030-04 fields_enable: contraparte reusable de fields_disable para
+    // botones (type='button'). Vive en la misma ruta que fields_reset_form/
+    // fields_disable (customUser) para no ser un hack por pantalla. Habilita el
+    // control y su espejo object_<field> cuando existen. ]]]FI
+    if (config.fields_enable && Array.isArray(config.fields_enable)) {
+      if (formGroup) {
+        config.fields_enable.forEach((fieldName: string) => {
+          if (fieldName && formGroup.get(fieldName)) {
+            const control = formGroup.get(fieldName);
+            const object_control = formGroup.get('object_' + fieldName);
+
+            if (control) {
+              control.enable();
+              object_control?.enable();
+            }
+          }
+        });
+      }
+    }
+    // ]]]FI
   }
 
   /**
@@ -6276,11 +6704,19 @@ export class CRUD extends Vars implements OnChanges  /*implements OnInit*/ {
 
     // AGREGAR/CREAR - Guardar nuevo registro
     if (action === 'save') {
-      this.save({ pos: currentPos, hide: false, reset: false, is_file: true, update_item: false, custom_user: buttonInfo });
-
-      // TODO: Agregar lógica para crear nuevo registro
-      // Ejemplo: llamar al servicio CRUD para guardar
-      // this.crudS.create(this.app, formValues).subscribe(...)
+      // [[[II ESC:001-17 DOC:docs/documents/2026-05-16_001_consolidacion_dropdown_types_y_fix_escenarios.md#escenario-17
+      const localTable = this._resolveNoFormDataLocalTable(currentPos, buttonInfo);
+      this.save({
+        pos: currentPos,
+        hide: false,
+        reset: false,
+        is_file: true,
+        update_item: false,
+        custom_user: buttonInfo,
+        local_table: localTable || undefined,
+      });
+      return;
+      // ]]]FI
     }
 
     // EDITAR/ACTUALIZAR - Modificar registro existente

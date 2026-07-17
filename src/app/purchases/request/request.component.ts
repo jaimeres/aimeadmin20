@@ -1,8 +1,6 @@
-import { Component, ElementRef, EventEmitter, inject, Input, OnInit, Output, Renderer2, signal, SimpleChanges, ViewChild } from '@angular/core';
+import { Component, ElementRef, EventEmitter, inject, Input, OnInit, Output, Renderer2, SimpleChanges, ViewChild } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormGroup } from '@angular/forms';
-import { TableModule } from 'primeng/table';
-import { TagModule } from 'primeng/tag';
 import { PurchaseService } from '../services/purchase.service';
 import { CRUD } from '../../utils/crud.class';
 import { ConfirmationService, PRIME_MODULES } from '../../shared/primeng.index';
@@ -12,8 +10,6 @@ import { LOCAL_BASE } from '../../shared/components.index';
   selector: 'app-request',
   imports: [
     CommonModule,
-    TableModule,
-    TagModule,
     ...PRIME_MODULES,
     ...LOCAL_BASE,
   ],
@@ -40,14 +36,9 @@ export class RequestComponent extends CRUD implements OnInit {
    */
   @Output() closeDialog = new EventEmitter<void>();
 
-  public products = signal<any[]>([]);
-  public stock = signal<any[]>([]);
-
   constructor(crudS: PurchaseService,) {
     super(crudS, 'request-detail');
   }
-
-
 
   ngOnInit() {
 
@@ -62,8 +53,6 @@ export class RequestComponent extends CRUD implements OnInit {
     if (requestFields?.is_active?.cols?.filter) {
       requestFields.is_active.cols.filter.active = false;
     }
-
-
 
     //////////////////////////////////////////////////////////////////////
     /*const option_label = this.searchFieldDrawForm('search_name', 'request-detail');
@@ -99,19 +88,11 @@ export class RequestComponent extends CRUD implements OnInit {
     console.log('showMore---------', item);
   }
 
+  // [[[II ESC:030-04 DOC:docs/documents/2026-07-14-030-child-runtime-overlay.md#escenario-04
   override onSelectAutoComplete(event: any) {
-
-    console.log('onSelectAutoComplete------------------', event);
-
-    this.currentForm()?.get('product')?.setValue(event.event.id);
-
-    //°°°POR EL MOMENTO ES EL PRIMER ELEMENTO PERO DESPUES DEBE RESIOLVERSE COMO LIDIar cuando se retorna mas de uno
-    /*const sName = this.search_name();  // Cadena dinámica
-    const option_label: any = {};
-    // Asigna el valor de manera dinámica
-    option_label[sName] = event[sName];
-    this.currentForm()?.get('search_name')?.setValue(option_label)*/
-    //option_label
+    // La relación y los children se resuelven en el componente dinámico desde
+    // `relationship_field`; request-detail solo conserva su ajuste de autofocus.
+    super.onSelectAutoComplete(event);
     this.replaceValDrawForm(
       [['', '', true]],
       [['requested', 'autofocus'],],
@@ -121,29 +102,16 @@ export class RequestComponent extends CRUD implements OnInit {
     const updatedDraw = { ...this.drawForm() };
     this.drawForm.set(updatedDraw);
   }
-
-
-
-  public columnsExist: any[] = [
-    { field: 'code', header: 'Código', maxlength: 40, type: 'text' },
-    { field: 'name', header: 'Nombre', maxlength: 50 },
-    { field: 'price', header: 'Precio' },
-    { field: 'requested', header: 'Cantidad' },
-    { field: 'discard_proof', header: 'Desecho' },
-  ];
-
+  // ]]]FI
 
   cancelRequestDetail() {
     console.log('cancelRequestDetail');
-
   }
-
 
   private openTempDialogFor(status: string, label: string) {
     this.tempActionLabel = label;
     this.tempActionDialogVisible = true;
   }
-
 
   //temporal
   override onSelection(event: any[]) {

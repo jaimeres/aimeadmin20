@@ -697,7 +697,7 @@ export class GeneralService {
               continue;
             }
             // ]]]FI
-            data[formDataKey + '.' + childKey] = this._formatDynamicValue(rawDynamicValue, fieldCfg);
+            data[formDataKey + '.' + childKey] = this.formatDynamicValue(rawDynamicValue, fieldCfg);
           }
         }
       }
@@ -763,7 +763,7 @@ export class GeneralService {
     //console.log('--------------------', keys, labelFieldKey, parts.length, data[labelFieldKey], data,);
   }
 
-  // [[[II ESC:005-03 DOC:docs/documents/2026-05-31_005_columnas-form-data-y-tree-select-nombres.md#escenario-03
+  // [[[II ESC:005-03 DOC:docs/documents/2026-05-31_005_columnas-form-data-y-tree-select-nombres.md#escenario-03 ESC:030-02 DOC:docs/documents/2026-07-14-030-child-runtime-overlay.md#escenario-02
   /**
    * Formatea un valor persistido de un formulario dinámico (`form_data` /
    * `parent_form_data`) para mostrarlo en la celda de la tabla.
@@ -780,13 +780,13 @@ export class GeneralService {
    * @param value Valor crudo almacenado en `form_data[childKey]`.
    * @param fieldCfg Configuración del campo (de `fieldsForm(pos)[childKey]`), opcional.
    */
-  private _formatDynamicValue(value: any, fieldCfg: any): string {
+  formatDynamicValue(value: any, fieldCfg: any): string {
     if (value === null || value === undefined) return '';
 
     if (Array.isArray(value)) {
       const separator: string = fieldCfg?.cols?.multiple?.separator ?? ',';
       return value
-        .map((v: any) => this._formatDynamicValue(v, fieldCfg))
+        .map((v: any) => this.formatDynamicValue(v, fieldCfg))
         .filter((s: string) => s !== '')
         .join(separator);
     }
@@ -795,7 +795,9 @@ export class GeneralService {
       const optionLabel = fieldCfg?.option_label;
       let parts: string[] = [];
       if (optionLabel) {
-        const keys = String(optionLabel).split(',').map((s: string) => s.trim()).filter((s: string) => s.length > 0);
+        const keys = (Array.isArray(optionLabel) ? optionLabel : String(optionLabel).split(','))
+          .map((key: any) => String(key).trim())
+          .filter((key: string) => key.length > 0);
         parts = keys
           .map((k: string) => value[k])
           .filter((v: any) => v !== null && v !== undefined && v !== '')
@@ -810,6 +812,40 @@ export class GeneralService {
     }
 
     return String(value);
+  }
+
+  /**
+   * Completa una fila de tabla usando únicamente sus columnas declaradas y un
+   * objeto fuente ya aplanado. Una relación conserva el id como dato base, pero
+   * para la celda visible usa el `option_label` de la configuración fuente.
+   */
+  mergeConfiguredTableRow(row: any, columns: any[], source: any, sourceConfig: any = {}): any {
+    const result = row && typeof row === 'object' && !Array.isArray(row) ? { ...row } : {};
+    if (!source || typeof source !== 'object' || Array.isArray(source)) return result;
+
+    const isEmpty = (value: any) => value === null || value === undefined || value === '';
+    const relationshipField = sourceConfig?.relationship_field;
+    const sourceId = source?.id ?? source?.value;
+    const displayValue = this.formatDynamicValue(source, sourceConfig);
+
+    for (const column of columns || []) {
+      const field = column?.field;
+      if (!field) continue;
+
+      if (isEmpty(result[field]) && source[field] !== undefined) {
+        result[field] = source[field];
+      }
+
+      const rawRelationship = result[field];
+      const isSourceRelationship = field === relationshipField;
+      const pointsToSource = sourceId !== null && sourceId !== undefined
+        && String(rawRelationship) === String(sourceId);
+      if (isSourceRelationship && displayValue && (isEmpty(rawRelationship) || pointsToSource)) {
+        result[field] = displayValue;
+      }
+    }
+
+    return result;
   }
   // ]]]FI
 

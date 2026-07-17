@@ -802,14 +802,16 @@ export class CRUDService {
         map((resp: any) => resp));
     }*/
 
+    // [[[II ESC:030-03 DOC:docs/documents/2026-07-14-030-child-runtime-overlay.md#escenario-03
     return this.http.patch(finalUrl, this.generalS.baseDJA({ //`${this.baseUrl()}${id}/${query}`
       attributes: formData,
-      type: this.type,
+      type: type || this.type,
       relationships: relationships || this.relationships,
       id: id
     })).pipe(
       map((resp: any) => resp)
     );
+    // ]]]FI
   }
 
   /**
@@ -841,9 +843,11 @@ export class CRUDService {
    * @param id id del objeto a eliminar
    * @returns retorna el objeto eliminado
    */
-  delete(id: string) {
-    return this.http.delete(`${this.baseUrl()}${id}`);
+  // [[[II ESC:030-03 DOC:docs/documents/2026-07-14-030-child-runtime-overlay.md#escenario-03
+  delete(id: string, app = '') {
+    return this.http.delete(`${this.baseUrl(app)}${id}`);
   }
+  // ]]]FI
 
   /**
    * Contiene los nombres personalizados de los campos comunes. _cf de custom field

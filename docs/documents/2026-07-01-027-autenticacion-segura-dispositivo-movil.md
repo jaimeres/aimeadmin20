@@ -93,6 +93,18 @@ funcionar mientras el toque fisico devolvia `Must be called from main thread of
 fragment host`. El plugin conserva la preparacion de clave/firma y ejecuta solo la
 creacion/autenticacion del prompt dentro de `runOnUiThread`.
 
+## Escenario 05: Controles biometricos en login secundario
+
+La ventana secundaria de login (`app-login`) muestra el boton de acceso seguro
+cuando el dispositivo ya tiene registro biometrico local, y muestra el check
+`Activar registro biometrico en este equipo` cuando el equipo soporta biometria
+pero aun no esta registrado. Al iniciar sesion con el check activo, el flujo
+conserva el login tradicional y despues solicita el registro seguro por dispositivo.
+
+El boton de acceso seguro llama el mismo flujo de `loginWithBiometrics()` que el
+login principal, pero en la ventana secundaria solo autentica y cierra el dialogo,
+sin cambiar la navegacion previa de ese login.
+
 ## Pendientes
 
 - Probar en dispositivo fisico con huella, rostro y PIN/patron segun soporte.

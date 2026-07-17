@@ -1,7 +1,8 @@
 import { CommonModule, KeyValue } from '@angular/common';
 import { DROPDOWN_TYPES_PRELOAD } from '../../utils/dropdown-types.const';
+import { TABLE_ROW_SOURCE_FLAG } from '../../utils/table-row-flags.const';
 import { FormControl, FormGroup, FormsModule, ReactiveFormsModule, FormArray, Validators, FormBuilder } from '@angular/forms';
-import { Component, ChangeDetectionStrategy, ElementRef, EventEmitter, inject, Input, Output, signal, computed, SimpleChange, SimpleChanges, ViewChild, OnDestroy, OnInit } from '@angular/core';
+import { Component, ChangeDetectionStrategy, ChangeDetectorRef, ElementRef, EventEmitter, inject, Input, Output, signal, computed, SimpleChange, SimpleChanges, ViewChild, OnDestroy, OnInit } from '@angular/core';
 import { Subscription } from 'rxjs';
 import { debounceTime } from 'rxjs/operators';
 import { MenuItem } from 'primeng/api';
@@ -140,6 +141,10 @@ export class CustomDrawFormComponent implements OnInit, OnDestroy {
   private authS: AuthService = inject(AuthService);
   private formCacheS: FormCacheService = inject(FormCacheService);
   private dynamicDropdownDataS: DynamicDropdownDataService = inject(DynamicDropdownDataService);
+  private cdr: ChangeDetectorRef = inject(ChangeDetectorRef);
+  // [[[II ESC:030-05 host del componente: raiz para resolver el elemento enfocable
+  // de focus_after_select (querySelector acotado a este formulario). ]]]FI
+  private host: ElementRef = inject(ElementRef);
 
   // Suscripción para detectar cambios en el formulario
   private formSubscription?: Subscription;
@@ -147,6 +152,13 @@ export class CustomDrawFormComponent implements OnInit, OnDestroy {
   private messageSubscription?: Subscription;
   /** Suscripción para el autoguardado de caché */
   private cacheAutoSaveSub?: Subscription;
+  private childRuntimePreviousValue: Record<string, any> = {};
+  private childRuntimeRefreshing = false;
+  private readonly childBaseRequired = new WeakMap<object, boolean>();
+  private readonly childBaseHidden = new WeakMap<object, boolean>();
+  private readonly childBaseReadonly = new WeakMap<object, boolean>();
+  // [[[II ESC:030-01 Fuente única compartida en utils/table-row-flags.const.ts ]]]FI
+  private readonly tableRowSourceFlag = TABLE_ROW_SOURCE_FLAG;
   private wasDirty: boolean = false;
 
   /** Clave activa de caché para el formulario actual */
@@ -1093,8 +1105,10 @@ export class CustomDrawFormComponent implements OnInit, OnDestroy {
 
     if (currentValue) {
       this.normalizeListboxControlValues(this.drawFormSignal(), currentValue, true);
+      this.childRuntimePreviousValue = currentValue.getRawValue();
       this.formSubscription = currentValue.valueChanges.subscribe(() => {
         this.normalizeListboxControlValues();
+        this._refreshDependentChildren();
         // [[[II ESC:001-12 DOC:docs/documents/2026-05-16_001_consolidacion_dropdown_types_y_fix_escenarios.md#escenario-12
         this.fileSplitButtonServerErrorFields.clear();
         this.refreshFileSplitButtonInvalidState();
@@ -1167,6 +1181,8 @@ export class CustomDrawFormComponent implements OnInit, OnDestroy {
   private handleDrawFormChange(drawForm: any): void {
     const perfStart = this.perfNow();
     this._fileMenuCache = {};
+    // [[[II ESC:030-05 El layout cambio: invalidar el registry de foco. ]]]FI
+    this._clearFocusTargetCache();
     this.resetDropdownPreloadState();
     this.rebuildSelectionLimitState(drawForm);
 
@@ -1757,6 +1773,9 @@ export class CustomDrawFormComponent implements OnInit, OnDestroy {
   public suggestions = signal<any[]>([]);
 
   completeMethod(event: any, entry: any) {
+    // [[[II ESC:001-16 DOC:docs/documents/2026-05-16_001_consolidacion_dropdown_types_y_fix_escenarios.md#escenario-16
+    this._clearAutoCompleteSelectionIfManual(entry, event?.query);
+    // ]]]FI
     const filter = "filter[search]=" + event.query;
     const include = entry.include;
     //debo cambiarlo por cols de de combo
@@ -1769,19 +1788,218 @@ export class CustomDrawFormComponent implements OnInit, OnDestroy {
     //        #0:{"field":"name"}
     //    }
     //}
-    const additionalFieldsIncluded = entry.fields_included_relationships;
     const _dt = entry?.data_type ?? {};
     const app = this.crudS.getAppType(_dt?.type)?.app;
     const type = this.crudS.getAppType(_dt?.type)?.type;
 
-    this.crudS.getObject({ app, type, filter, include }).subscribe((data: any) => {
-      data = this.generalS.DJAtoObject({
-        respDJA: data,
-        additionalFieldsIncluded: additionalFieldsIncluded
+    this.crudS.getObject({ app, type, filter, include }).subscribe((resp: any) => {
+      let data = this.generalS.DJAtoObject({
+        respDJA: resp,
+        fields: { [entry.field]: entry }
       });
+      // [[[II ESC:001-16 DOC:docs/documents/2026-05-16_001_consolidacion_dropdown_types_y_fix_escenarios.md#escenario-16
+      data = this._prepareAutoCompleteSuggestions(data, resp, entry);
+      // ]]]FI
       this.suggestions.set(data);
     });
   }
+
+  // [[[II ESC:001-16 DOC:docs/documents/2026-05-16_001_consolidacion_dropdown_types_y_fix_escenarios.md#escenario-16
+  private _autoCompleteRelationDataFieldParts(fieldName: any): { relationship: string; attribute: string } | null {
+    if (typeof fieldName !== 'string') return null;
+    const marker = '_data_';
+    const index = fieldName.indexOf(marker);
+    if (index <= 0) return null;
+
+    const relationship = fieldName.slice(0, index).trim();
+    const attribute = fieldName.slice(index + marker.length).trim();
+    if (!relationship || !attribute) return null;
+
+    return { relationship, attribute };
+  }
+
+  private _collectAutoCompleteRelationDataFields(config: any): string[] {
+    const fields = new Set<string>();
+    const addField = (value: any): void => {
+      const parts = this._autoCompleteRelationDataFieldParts(value);
+      if (parts) fields.add(String(value).trim());
+    };
+
+    const collectNode = (node: any): void => {
+      if (!node || typeof node !== 'object') return;
+      addField(node.field);
+      addField(node.field_name);
+      addField(node?.derived?.field_name);
+
+      if (node.columns && typeof node.columns === 'object') {
+        Object.values(node.columns).forEach(collectNode);
+      }
+      if (node.fields && typeof node.fields === 'object') {
+        Object.values(node.fields).forEach(collectNode);
+      }
+    };
+
+    this._autoCompleteLabelKeys(config?.option_label).forEach(addField);
+
+    const panelFields = config?.panel?.fields;
+    if (panelFields && typeof panelFields === 'object') {
+      Object.values(panelFields).forEach(collectNode);
+    }
+
+    const childGroups = config?.children?.fields;
+    if (childGroups && typeof childGroups === 'object') {
+      ['static', 'dynamic', 'derived'].forEach(groupKey => {
+        const group = childGroups[groupKey];
+        if (group && typeof group === 'object') {
+          Object.values(group).forEach(collectNode);
+        }
+      });
+    }
+
+    return Array.from(fields);
+  }
+
+  private _findAutoCompleteIncludedItem(included: any[], relationData: any): any | null {
+    if (!relationData || !Array.isArray(included)) return null;
+    return included.find((item: any) => item?.id == relationData.id && (!relationData.type || item?.type === relationData.type))
+      ?? included.find((item: any) => item?.id == relationData.id)
+      ?? null;
+  }
+
+  private _autoCompleteIncludedValue(includedItem: any, relationData: any, attribute: string): any {
+    if (attribute === 'id') return includedItem?.id ?? relationData?.id ?? '';
+    if (attribute === 'type') return includedItem?.type ?? relationData?.type ?? '';
+    return includedItem?.attributes?.[attribute];
+  }
+
+  private _applyAutoCompleteRelationDataFields(row: any, included: any[], requestedFields: string[]): void {
+    if (!row || typeof row !== 'object' || !Array.isArray(included) || included.length === 0) return;
+    const relationships = row.relationships || {};
+
+    requestedFields.forEach(fieldName => {
+      if (row[fieldName] !== undefined && row[fieldName] !== null && row[fieldName] !== '') return;
+
+      const parts = this._autoCompleteRelationDataFieldParts(fieldName);
+      if (!parts) return;
+
+      const relationData = relationships?.[parts.relationship]?.data;
+      if (!relationData) return;
+
+      if (Array.isArray(relationData)) {
+        const values = relationData
+          .map((item: any) => this._findAutoCompleteIncludedItem(included, item))
+          .map((includedItem: any, index: number) => this._autoCompleteIncludedValue(includedItem, relationData[index], parts.attribute))
+          .filter((value: any) => value !== undefined && value !== null && value !== '');
+        if (values.length) row[fieldName] = values.join(', ');
+        return;
+      }
+
+      const includedItem = this._findAutoCompleteIncludedItem(included, relationData);
+      if (!includedItem) return;
+
+      const value = this._autoCompleteIncludedValue(includedItem, relationData, parts.attribute);
+      if (value !== undefined && value !== null) {
+        row[fieldName] = value;
+      }
+    });
+  }
+
+  private _prepareAutoCompleteSuggestions(rows: any[], resp: any, config: any): any[] {
+    const requestedFields = this._collectAutoCompleteRelationDataFields(config);
+    if (!requestedFields.length || !Array.isArray(rows)) return rows;
+
+    const included = resp?.included || [];
+    if (!Array.isArray(included) || included.length === 0) return rows;
+
+    return rows.map((row: any) => {
+      if (!row || typeof row !== 'object') return row;
+      const next = { ...row };
+      this._applyAutoCompleteRelationDataFields(next, included, requestedFields);
+      return next;
+    });
+  }
+  // ]]]FI
+
+  // [[[II ESC:001-15 DOC:docs/documents/2026-05-16_001_consolidacion_dropdown_types_y_fix_escenarios.md#escenario-15
+  private _isFreeOrRelationshipAutoComplete(config: any): boolean {
+    return config?.type === 'auto-complete'
+      && (config?.free_or_relationship === true || config?.save_mode === 'free_or_relationship')
+      && typeof config?.relationship_field === 'string'
+      && config.relationship_field.trim() !== '';
+  }
+
+  private _extractAutoCompleteSelectedValue(event: any): any {
+    return event?.value ?? event?.item ?? event?.event ?? event;
+  }
+
+  private _autoCompleteObjectFieldName(fieldName: string): string {
+    return `__autocomplete_object_${fieldName}`;
+  }
+
+  private _ensureAutoCompleteSelectionControl(config: any): FormControl | null {
+    const formGroup = this.formGroupSignal();
+    const fieldName = config?.field;
+    if (!formGroup || typeof fieldName !== 'string' || fieldName.trim() === '') return null;
+
+    const objectFieldName = this._autoCompleteObjectFieldName(fieldName);
+    let control = formGroup.get(objectFieldName) as FormControl | null;
+    if (!control) {
+      control = new FormControl(null);
+      formGroup.addControl(objectFieldName, control);
+      control.disable({ emitEvent: false });
+    }
+    return control;
+  }
+
+  private _autoCompleteLabelKeys(optionLabel: any): string[] {
+    if (Array.isArray(optionLabel)) {
+      return optionLabel.map((key: any) => String(key).trim()).filter((key: string) => key.length > 0);
+    }
+    if (typeof optionLabel !== 'string') return [];
+    return optionLabel.split(',').map((key: string) => key.trim()).filter((key: string) => key.length > 0);
+  }
+
+  private _autoCompleteDisplayValue(selectedValue: any, config: any): string {
+    if (!selectedValue || typeof selectedValue !== 'object' || Array.isArray(selectedValue)) return '';
+    return this.generalS.formatDynamicValue(selectedValue, config);
+  }
+
+  private _clearAutoCompleteSelectionIfManual(config: any, rawValue?: any): void {
+    if (!this._isFreeOrRelationshipAutoComplete(config)) return;
+
+    const fieldName = config.field;
+    const selectedControl = this.formGroupSignal()?.get(this._autoCompleteObjectFieldName(fieldName));
+    const selectedValue = selectedControl?.value;
+    if (!selectedValue || typeof selectedValue !== 'object' || Array.isArray(selectedValue)) return;
+
+    const currentValue = rawValue ?? this.formGroupSignal()?.get(fieldName)?.value;
+    if (typeof currentValue !== 'string') return;
+
+    const selectedDisplay = this._autoCompleteDisplayValue(selectedValue, config);
+    if (currentValue.trim() === selectedDisplay.trim()) return;
+
+    selectedControl?.setValue(null, { emitEvent: false });
+    this.formGroupSignal()?.get(config.relationship_field.trim())?.setValue(null);
+  }
+
+  private _syncAutoCompleteRelationshipField(config: any, selectedValue: any): void {
+    if (!this._isFreeOrRelationshipAutoComplete(config)) return;
+    if (!selectedValue || typeof selectedValue !== 'object' || Array.isArray(selectedValue)) return;
+
+    const relationField = config.relationship_field.trim();
+    const relationControl = this.formGroupSignal()?.get(relationField);
+    if (!relationControl) return;
+
+    this._ensureAutoCompleteSelectionControl(config)?.setValue(selectedValue, { emitEvent: false });
+    const relationId = selectedValue?.id ?? selectedValue?.data?.id ?? selectedValue?.value ?? null;
+    relationControl.setValue(relationId, { emitEvent: false });
+
+    const displayValue = this._autoCompleteDisplayValue(selectedValue, config);
+    if (displayValue) {
+      this.formGroupSignal()?.get(config.field)?.setValue(displayValue, { emitEvent: false });
+    }
+  }
+  // ]]]FI
 
 
   /**
@@ -1807,111 +2025,232 @@ export class CustomDrawFormComponent implements OnInit, OnDestroy {
     return [col, index];
   }
 
-  // ─── MOTOR DE EVALUACIÓN DE CONDICIONES (extraído de onChangeDropdown / onSelectAutoComplete) ───
-  // Antes esta lógica estaba duplicada ~1000 líneas entre ambos métodos.
-  // Para restaurar la versión anterior: buscar los bloques comentados con
-  // «REFACTORIZADO: lógica movida a _processChildrenFields» dentro de
-  // onChangeDropdown y onSelectAutoComplete.
-
+  // [[[II ESC:030-01 DOC:docs/documents/2026-07-14-030-child-runtime-overlay.md#escenario-01
   /**
-   * Evalúa un operador de comparación con soporte de: equals, not_equals,
-   * in, not_in, greater_than, less_than, range.
+   * Motor común para `filter`, `activate` y `requested`. Resuelve primero la
+   * fuente declarada y después compara contra `value` o `values`; en filtros
+   * de opciones `candidate` reemplaza el lado izquierdo de la comparación.
    */
-  private _evaluateOperator(operator: string, compareValue: any, values: any[], optionValue?: any): boolean {
-    const target = optionValue !== undefined ? optionValue : compareValue;
+  private _evaluateOperator(operator: string, target: any, expected: any[] = []): boolean {
+    const values = Array.isArray(expected) ? expected : [expected];
+    const isEmpty = (value: any) => value === null || value === undefined || value === ''
+      || (Array.isArray(value) && value.length === 0)
+      || (typeof value === 'object' && !Array.isArray(value) && Object.keys(value || {}).length === 0);
+    const equals = (left: any, right: any) => left === right || String(left) === String(right);
+    const toNumber = (value: any): number | null => {
+      if (isEmpty(value)) return null;
+      const numberValue = Number(value);
+      return Number.isFinite(numberValue) ? numberValue : null;
+    };
+
     switch (operator) {
-      case 'equals':
-        return values.length > 0
-          ? values.some((v: any) => v === target)
-          : target === compareValue;
-      case 'not_equals':
-        return values.length > 0
-          ? !values.some((v: any) => v === target)
-          : target !== compareValue;
-      case 'in':
-        return values.length > 0
-          ? values.some((v: any) => String(target).includes(String(v)))
-          : String(target).includes(String(compareValue));
-      case 'not_in':
-        return values.length > 0
-          ? !values.some((v: any) => String(target).includes(String(v)))
-          : !String(target).includes(String(compareValue));
-      case 'greater_than':
-        return values.length > 0
-          ? values.some((v: any) => target > v)
-          : target > compareValue;
-      case 'less_than':
-        return values.length > 0
-          ? values.some((v: any) => target < v)
-          : target < compareValue;
-      case 'range':
-        return this._evaluateRange(target, values, compareValue);
-      default:
-        return false;
+      case 'equals': return values.some((value: any) => equals(target, value));
+      case 'not_equals': return values.every((value: any) => !equals(target, value));
+      case 'in': return values.some((value: any) => equals(target, value));
+      case 'not_in': return values.every((value: any) => !equals(target, value));
+      case 'greater_than': {
+        const left = toNumber(target);
+        return left !== null && values.some((value: any) => {
+          const right = toNumber(value);
+          return right !== null && left > right;
+        });
+      }
+      case 'less_than': {
+        const left = toNumber(target);
+        return left !== null && values.some((value: any) => {
+          const right = toNumber(value);
+          return right !== null && left < right;
+        });
+      }
+      case 'range': {
+        const left = toNumber(target);
+        const low = toNumber(values[0]);
+        const high = toNumber(values[1]);
+        return values.length === 2 && left !== null && low !== null && high !== null
+          && left >= low && left <= high;
+      }
+      case 'isnull': return isEmpty(target);
+      case 'not_null': return !isEmpty(target);
+      case 'icontains': return values.some((value: any) => String(target ?? '').toLowerCase().includes(String(value ?? '').toLowerCase()));
+      case 'iexact': return values.some((value: any) => String(target ?? '').toLowerCase() === String(value ?? '').toLowerCase());
+      default: return false;
     }
   }
 
-  /** Evalúa operador range para fechas, números y strings. */
-  private _evaluateRange(target: any, values: any[], compareValue?: any): boolean {
-    let inicio: any, fin: any;
-    if (values.length === 2) {
-      inicio = values[0]; fin = values[1];
-    } else if (Array.isArray(compareValue) && compareValue.length === 2) {
-      inicio = compareValue[0]; fin = compareValue[1];
-    } else {
-      return false;
-    }
-    if (typeof target === 'string' && /^\d{4}-\d{2}-\d{2}/.test(target)) {
-      const d = new Date(target);
-      return d >= new Date(inicio) && d <= new Date(fin);
-    }
-    return target >= inicio && target <= fin;
+  private _canonicalChildField(field: any): string {
+    return typeof field === 'string' && field.startsWith('object_')
+      ? field.slice('object_'.length)
+      : String(field || '');
   }
 
-  /**
-   * Resuelve el valor real de un campo para evaluación de condiciones.
-   * Si es el campo padre devuelve el objeto completo del dropdown seleccionado,
-   * si no, busca en el formulario y opcionalmente enriquece con las opciones.
-   */
+  private _selectedConditionValue(field: string): any {
+    const canonical = this._canonicalChildField(field);
+    const form = this.formGroupSignal();
+    const selectedObject = form?.get(this._autoCompleteObjectFieldName(canonical))?.value;
+    if (selectedObject && typeof selectedObject === 'object' && !Array.isArray(selectedObject)) {
+      return selectedObject;
+    }
+    const raw = form?.get(field)?.value ?? form?.get(canonical)?.value;
+    if (raw && typeof raw === 'object') return raw;
+
+    const candidates = [field, canonical, `object_${canonical}`];
+    for (const candidate of candidates) {
+      const options = this.dropdownOptionsSignal()[candidate];
+      const found = Array.isArray(options)
+        ? options.find((option: any) => (option?.id ?? option?.value) === raw)
+        : null;
+      if (found) return found;
+    }
+    return raw;
+  }
+
   private _resolveConditionValue(
-    conditionField: string,
-    parentField: string,
-    parentOption: any
+    condition: any, parentField: string, parentOption: any, node?: any, selectedField?: string
   ): any {
-    const isParent = conditionField === parentField
-      || conditionField === parentField.replace('object_', '');
-    if (isParent) return parentOption;
+    const source = String(condition?.source || 'parent').toLowerCase();
+    const field = condition?.field;
+    const canonicalParent = this._canonicalChildField(parentField);
 
-    const formValue = this.formGroupSignal()?.get(conditionField)?.value;
-    if (formValue && typeof formValue === 'string') {
-      const opts = this.dropdownOptionsSignal()[conditionField];
-      return opts?.find((o: any) => o.id === formValue) || formValue;
+    if (source === 'literal') return condition?.value ?? field;
+    if (source === 'node') return node ?? parentOption;
+    if (source === 'selected') return this._selectedConditionValue(field || selectedField || '');
+    if (source === 'form') return this._selectedConditionValue(field);
+
+    if (this._canonicalChildField(field) === canonicalParent || !field) return parentOption;
+    if (parentOption && typeof parentOption === 'object' && parentOption[field] !== undefined) {
+      return parentOption[field];
     }
-    return formValue;
+    return this.formGroupSignal()?.get(field)?.value
+      ?? this.formGroupSignal()?.get(this._canonicalChildField(field))?.value;
   }
 
-  /**
-   * Evalúa un array de condiciones con lógica AND/OR.
-   * Devuelve true si las condiciones se cumplen.
-   */
-  private _evaluateConditions(
-    conditions: any[],
-    logic: string,
-    parentField: string,
-    parentOption: any
-  ): boolean {
-    const results = conditions.map((cond: any) => {
-      if (!cond.field) return false;
-      const condValue = this._resolveConditionValue(cond.field, parentField, parentOption);
-      if (!condValue) return false;
-      const filterGroup = cond.filter_group || 'id';
-      const compareValue = filterGroup ? condValue[filterGroup] : condValue;
-      return this._evaluateOperator(cond.operator || 'equals', compareValue, cond.values || []);
-    });
-    return logic === 'AND'
-      ? results.every(Boolean)
-      : results.some(Boolean);
+  private _conditionOperand(condition: any, value: any): any {
+    const key = condition?.value_key ?? condition?.filter_group;
+    return key && value && typeof value === 'object' ? value[key] : value;
   }
+
+  private _conditionExpectedValues(condition: any): any[] {
+    if (Array.isArray(condition?.values)) return condition.values;
+    return Object.prototype.hasOwnProperty.call(condition || {}, 'value') ? [condition.value] : [];
+  }
+
+  private _evaluateConditions(
+    conditions: any[], logic: string, parentField: string, parentOption: any, candidate?: any, node?: any,
+    selectedField?: string, candidateKey?: string
+  ): boolean | null {
+    const rules = Array.isArray(conditions) ? conditions : [];
+    if (!rules.length) return null;
+
+    const results = rules.map((condition: any) => {
+      const sourceValue = this._conditionOperand(
+        condition, this._resolveConditionValue(condition, parentField, parentOption, node, selectedField)
+      );
+      const target = candidate === undefined
+        ? sourceValue
+        : (candidateKey && candidate && typeof candidate === 'object'
+          ? candidate[candidateKey]
+          : this._conditionOperand(condition, candidate));
+      const expected = candidate === undefined
+        ? this._conditionExpectedValues(condition)
+        : [sourceValue];
+
+      return this._evaluateOperator(condition?.operator || 'equals', target, expected);
+    });
+    return String(logic || 'AND').toUpperCase() === 'OR' ? results.some(Boolean) : results.every(Boolean);
+  }
+
+  /** Calcula el overlay sin reemplazar el contrato base del control destino. */
+  private getEffectiveChildConfig(
+    rootFieldConfig: any, parentFieldConfig: any, childKey: string, childConfig: any, formValue: any
+  ): { state: 'active' | 'inactive' | 'hidden' | 'readonly'; required: boolean; edit: boolean } {
+    const activate = childConfig?.activate || {};
+    const requested = childConfig?.requested || {};
+    type ChildState = 'active' | 'inactive' | 'hidden' | 'readonly';
+    const allowedStates = new Set<ChildState>(['active', 'inactive', 'hidden', 'readonly']);
+    let state: ChildState = 'active';
+    if (activate.active === true) {
+      const configuredDefault = activate.default_state as ChildState;
+      const defaultState: ChildState = allowedStates.has(configuredDefault) ? configuredDefault : 'active';
+      const conditionMet = this._evaluateConditions(
+        activate.conditions, activate.logic, parentFieldConfig?.field, formValue,
+        undefined, undefined, childConfig?.field || childKey
+      );
+      const configuredAction = activate.action as ChildState;
+      const actionState: ChildState = allowedStates.has(configuredAction) ? configuredAction : 'inactive';
+      state = conditionMet === null ? 'active' : (conditionMet ? actionState : defaultState);
+    }
+
+    const baseRequired = rootFieldConfig?.required === true;
+    let required = baseRequired;
+    if (requested.active === true) {
+      const requestedMet = this._evaluateConditions(
+        requested.conditions, requested.logic, parentFieldConfig?.field, formValue,
+        undefined, undefined, childConfig?.field || childKey
+      );
+      if (requestedMet === true) required = requested.action !== 'not_required';
+    }
+
+    const rootReadonly = rootFieldConfig?.readonly === true || rootFieldConfig?.default?.edit === false;
+    const edit = childConfig?.edit !== false && !rootReadonly && state === 'active';
+    if (state === 'active' && !edit) state = 'readonly';
+
+    // Seguridad: un control no visible/no editable nunca puede pedir una captura nueva.
+    if (state === 'inactive' || state === 'hidden') required = false;
+    if (state === 'readonly') required = false;
+
+    return { state, required, edit };
+  }
+
+  /** Reevalúa una cascada cuando cambia su padre o alguno de sus hermanos declarados. */
+  private _refreshDependentChildren(): void {
+    const form = this.formGroupSignal();
+    if (!form || this.childRuntimeRefreshing) return;
+
+    const currentValue = form.getRawValue();
+    const changedFields = new Set<string>();
+    const allFields = new Set([
+      ...Object.keys(this.childRuntimePreviousValue || {}),
+      ...Object.keys(currentValue || {}),
+    ]);
+    allFields.forEach((field) => {
+      if (this.childRuntimePreviousValue?.[field] !== currentValue?.[field]) {
+        changedFields.add(this._canonicalChildField(field));
+      }
+    });
+    if (!changedFields.size) return;
+
+    this.childRuntimeRefreshing = true;
+    try {
+      this.scanDrawFormFields(this.drawFormSignal(), (rootConfig: any) => {
+        if (rootConfig?.children?.active !== true || !rootConfig?.field) return;
+        const rootField = this._canonicalChildField(rootConfig.field);
+        const childGroups = rootConfig.children?.fields || {};
+        const conditions = ['static', 'dynamic', 'derived'].flatMap((group) =>
+          Object.entries(childGroups[group] || {}).flatMap(([childKey, child]: [string, any]) => [
+            ...(child?.activate?.conditions || []),
+            ...(child?.requested?.conditions || []),
+            ...(child?.filter?.conditions || []),
+          ].map((condition: any) => ({ condition, targetField: child?.field || childKey })))
+        );
+        const dependsOnChangedField = changedFields.has(rootField) || conditions.some(({ condition, targetField }: any) => {
+          const source = String(condition?.source || 'parent').toLowerCase();
+          const dependencyField = source === 'selected' ? (condition?.field || targetField) : condition?.field;
+          return source !== 'literal' && changedFields.has(this._canonicalChildField(dependencyField));
+        });
+        if (!dependsOnChangedField) return;
+
+        const controlValue = form.get(rootConfig.field)?.value ?? form.get(rootField)?.value;
+        const selected = form.get(`__autocomplete_object_${rootField}`)?.value
+          ?? this._selectedConditionValue(rootConfig.field);
+        this._processChildrenFields(rootConfig.field, controlValue, rootConfig, selected);
+      });
+    } finally {
+      this.childRuntimePreviousValue = form.getRawValue();
+      this.childRuntimeRefreshing = false;
+      this.cdr.markForCheck();
+    }
+  }
+  // ]]]FI
 
   /**
    * Procesa los children.fields de un dropdown/autocomplete padre.
@@ -1990,7 +2329,7 @@ export class CustomDrawFormComponent implements OnInit, OnDestroy {
   ): void {
     const children = config.children || {};
     const fields = children?.fields || {};
-    if (!fields || Object.keys(fields).length === 0) return;
+    if (children?.active !== true || !fields || Object.keys(fields).length === 0) return;
 
     ['static', 'dynamic', 'derived'].forEach(fieldType => {
       if (!fields[fieldType]) return;
@@ -2017,84 +2356,61 @@ export class CustomDrawFormComponent implements OnInit, OnDestroy {
         const targetFieldConfig = this.findFieldConfigByField(targetField) ?? fieldConfig;
         // ]]]FI
 
-        // [[[II ESC:003-05 DOC:docs/documents/2026-05-25_003_dynamic-children-field-loading.md#escenario-05
-        // ── 0. RESOLUCIÓN EN SERVIDOR (filter.scope) ──
-        // `filter.scope` declara DÓNDE se resuelve el child:
-        //   'client' (o ausente) → comportamiento actual: se consulta al servidor
-        //                           en cada selección del padre y se muestran opciones.
-        //   'server'             → el cliente NO consulta al servidor. El campo se
-        //                           renderiza como solo-lectura (edit:false) o editable
-        //                           con valor sugerido vacío (edit:true). El servidor
-        //                           calcula y llena el valor al hacer create, por lo que
-        //                           se relaja el required en cliente para poder enviar
-        //                           el create sin estos campos.
-        const childScope = String(fieldConfig?.filter?.scope ?? 'client').toLowerCase();
-        if (childScope === 'server') {
-          this._applyServerScopedChild({ fieldConfig, targetField, formControl, mirroredField });
+        // [[[II ESC:030-01 DOC:docs/documents/2026-07-14-030-child-runtime-overlay.md#escenario-01
+        // La configuración del child solo es un overlay: conserva las reglas base
+        // del control renderizado y actualiza visibilidad, edición y required.
+        if (targetFieldConfig && typeof targetFieldConfig === 'object') {
+          if (!this.childBaseRequired.has(targetFieldConfig)) {
+            this.childBaseRequired.set(targetFieldConfig, targetFieldConfig.required === true);
+            this.childBaseHidden.set(targetFieldConfig, targetFieldConfig.hide === true);
+            this.childBaseReadonly.set(targetFieldConfig, targetFieldConfig.readonly === true);
+          }
+        }
+        const baseControlConfig = targetFieldConfig && typeof targetFieldConfig === 'object'
+          ? {
+            ...targetFieldConfig,
+            required: this.childBaseRequired.get(targetFieldConfig) === true,
+            hide: this.childBaseHidden.get(targetFieldConfig) === true,
+            readonly: this.childBaseReadonly.get(targetFieldConfig) === true,
+          }
+          : targetFieldConfig;
+        const parentHasContext = config?.type === 'auto-complete'
+          ? !!(currentDropdownOption && typeof currentDropdownOption === 'object')
+          : currentValue !== null && currentValue !== undefined && currentValue !== '';
+        const effective = this.getEffectiveChildConfig(
+          baseControlConfig, config, key, parentHasContext ? fieldConfig : {}, currentDropdownOption
+        );
+        const baseHidden = targetFieldConfig && typeof targetFieldConfig === 'object'
+          ? this.childBaseHidden.get(targetFieldConfig) === true
+          : false;
+        if (targetFieldConfig && typeof targetFieldConfig === 'object') {
+          targetFieldConfig.hide = baseHidden || effective.state === 'hidden';
+          targetFieldConfig.readonly = effective.state === 'readonly';
+          targetFieldConfig.required = effective.required;
+        }
+        this._applyEffectiveChildState({
+          formControl, mirroredField, state: effective.state, required: effective.required,
+          preserveValue: targetField.startsWith('no_form_data_') && formControl instanceof FormArray,
+        });
+
+        // Sin selección real del autocomplete no existe overlay de datos. El
+        // root conserva valor/opciones. La tabla NUNCA se toca por selección.
+        if (!parentHasContext) {
+          if (this.isDropdown(targetFieldConfig)) {
+            void this.dataDropdown(targetFieldConfig, false);
+          }
           continue;
         }
+
+        const childScope = String(fieldConfig?.filter?.scope ?? 'client').toLowerCase();
+        if (childScope === 'server') {
+          this._applyServerScopedChild({
+            fieldConfig, targetField, formControl, mirroredField, state: effective.state, edit: effective.edit,
+          });
+          continue;
+        }
+        const isActive = effective.state === 'active' || effective.state === 'readonly';
         // ]]]FI
-
-        // ── 1. ACTIVACIÓN ──
-        // [[[II ESC:003-06 DOC:docs/documents/2026-05-25_003_dynamic-children-field-loading.md#escenario-06
-        // Regla de obligatoriedad: para children client-scope cuyo key empieza con
-        // form_fields_data_/parent_form_data_ y cuyo root del schema efectivo es
-        // required, ni `activate` ni `requested.action='not_required'` pueden relajar
-        // la obligatoriedad. Si la UI lo ocultara, no debe nulificarse en silencio:
-        // se mantiene habilitado y required para que el form no pase vacío.
-        const childKeyRaw = targetField.startsWith('object_')
-          ? targetField.slice('object_'.length)
-          : targetField;
-        const isTargetChild = childKeyRaw.startsWith('form_fields_data_')
-          || childKeyRaw.startsWith('parent_form_data_');
-        const childScopeReq = String(fieldConfig?.filter?.scope ?? 'client').toLowerCase();
-        const rootRequired = targetFieldConfig?.required === true;
-        const lockRequired = isTargetChild && childScopeReq !== 'server' && rootRequired;
-        // ]]]FI
-
-        let isActive = true;
-        const act = fieldConfig?.activate;
-        if (act?.active) {
-          const met = this._evaluateConditions(
-            act.conditions || [], act.logic || 'AND', field, currentDropdownOption
-          );
-          isActive = (act.action || 'inactive') === 'inactive' ? !met : met;
-        }
-        // Un child client-scope con root required NO se desactiva/nulifica por activate.
-        if (lockRequired) { isActive = true; }
-        if (formControl) {
-          if (isActive) { formControl.enable(); }
-          else { formControl.disable(); formControl.setValue(null); }
-        }
-        if (mirroredField) {
-          const rel = this.formGroupSignal()?.get(mirroredField);
-          if (rel) {
-            if (isActive) { rel.enable(); } else { rel.disable(); rel.setValue(null); }
-          }
-        }
-
-        // ── 2. REQUIRED/NOT_REQUIRED ──
-        const req = fieldConfig?.requested;
-        if (req?.active && req.action) {
-          const met = this._evaluateConditions(
-            req.conditions || [], req.logic || 'AND', field, currentDropdownOption
-          );
-          // El root del schema efectivo prevalece: si lockRequired, siempre required.
-          const isRequired = lockRequired
-            ? true
-            : (req.action === 'required' ? met : !met);
-          if (formControl) {
-            formControl.setValidators(isRequired ? [Validators.required] : []);
-            formControl.updateValueAndValidity();
-          }
-          if (mirroredField) {
-            const rel = this.formGroupSignal()?.get(mirroredField);
-            if (rel) {
-              rel.setValidators(isRequired ? [Validators.required] : []);
-              rel.updateValueAndValidity();
-            }
-          }
-        }
 
         // ── 3. PROCESAR SEGÚN TIPO ──
         // [[[II ESC:003-04 DOC:docs/documents/2026-05-25_003_dynamic-children-field-loading.md#escenario-04
@@ -2114,7 +2430,7 @@ export class CustomDrawFormComponent implements OnInit, OnDestroy {
           this._processDerivedChild({
             fieldConfig, targetField, targetFieldConfig, formControl,
             parentField: field, parentOption: currentDropdownOption, parentValue,
-            childFilterGroup, isActive, depth,
+            childFilterGroup, parentFieldConfig: config, isActive, depth,
           });
         } else {
           // static + dynamic comparten el mismo motor de carga unificado.
@@ -2129,6 +2445,33 @@ export class CustomDrawFormComponent implements OnInit, OnDestroy {
     });
   }
 
+  // [[[II ESC:030-01 DOC:docs/documents/2026-07-14-030-child-runtime-overlay.md#escenario-01
+  private _applyEffectiveChildState(ctx: {
+    formControl: any; mirroredField: string | null; state: string; required: boolean; preserveValue?: boolean;
+  }): void {
+    const { formControl, mirroredField, state, required, preserveValue = false } = ctx;
+    const disabled = state === 'inactive' || state === 'hidden';
+    const setState = (control: any) => {
+      if (!control) return;
+      if (disabled) {
+        control.disable({ emitEvent: false });
+        if (!preserveValue && (state === 'inactive' || state === 'hidden')) {
+          if (control instanceof FormArray) control.clear({ emitEvent: false });
+          else control.setValue(null, { emitEvent: false });
+        }
+      } else {
+        control.enable({ emitEvent: false });
+      }
+      if (required) control.addValidators(Validators.required);
+      else control.removeValidators(Validators.required);
+      control.updateValueAndValidity({ emitEvent: false });
+    };
+
+    setState(formControl);
+    if (mirroredField) setState(this.formGroupSignal()?.get(mirroredField));
+  }
+  // ]]]FI
+
   // [[[II ESC:003-05 DOC:docs/documents/2026-05-25_003_dynamic-children-field-loading.md#escenario-05
   /**
    * Aplica un child declarado con `filter.scope: 'server'`: el cliente NO consulta
@@ -2141,18 +2484,19 @@ export class CustomDrawFormComponent implements OnInit, OnDestroy {
    * campo; la obligatoriedad real la reimpone el servidor.
    */
   private _applyServerScopedChild(ctx: {
-    fieldConfig: any; targetField: string; formControl: any; mirroredField: string | null;
+    fieldConfig: any; targetField: string; formControl: any; mirroredField: string | null; state: string; edit: boolean;
   }): void {
-    const { fieldConfig, targetField, formControl, mirroredField } = ctx;
-    const editable = fieldConfig?.edit === true;
+    const { fieldConfig, targetField, formControl, mirroredField, state, edit } = ctx;
+    const editable = state === 'active' && edit === true;
 
     // No mostramos opciones: la resolución es responsabilidad del servidor.
     this._updateDropdownOptions(targetField, [], fieldConfig);
 
     const reset = (ctrl: any) => {
       if (!ctrl) return;
-      ctrl.clearValidators();
-      ctrl.setValue(null);
+      ctrl.removeValidators(Validators.required);
+      if (ctrl instanceof FormArray) ctrl.clear({ emitEvent: false });
+      else ctrl.setValue(null, { emitEvent: false });
       if (editable) { ctrl.enable({ emitEvent: false }); }
       else { ctrl.disable({ emitEvent: false }); }
       ctrl.updateValueAndValidity({ emitEvent: false });
@@ -2163,7 +2507,7 @@ export class CustomDrawFormComponent implements OnInit, OnDestroy {
   }
   // ]]]FI
 
-  // [[[II ESC:003-04 DOC:docs/documents/2026-05-25_003_dynamic-children-field-loading.md#escenario-04
+  // [[[II ESC:003-04 DOC:docs/documents/2026-05-25_003_dynamic-children-field-loading.md#escenario-04 ESC:001-17 DOC:docs/documents/2026-05-16_001_consolidacion_dropdown_types_y_fix_escenarios.md#escenario-17 ESC:030-02 DOC:docs/documents/2026-07-14-030-child-runtime-overlay.md#escenario-02
   // ─── PIPELINE UNIFICADO DE children.fields (static / dynamic / derived) ───
 
   /** Profundidad máxima de la cascada recursiva disparada por auto_select. */
@@ -2184,7 +2528,8 @@ export class CustomDrawFormComponent implements OnInit, OnDestroy {
   /**
    * Construye el filtro de servidor para un child, combinando:
    *   1. data_type.filter — entradas `forced` reciben parentValue; `active` se respetan.
-   *   2. filter.conditions con scope 'server' (o 'auto' cuando la fuente es servidor).
+   *   2. `filter.conditions` mapeables. `filter.scope` decide quién resuelve el
+   *      child; el `scope` legado de cada condición se ignora.
    */
   private _buildChildServerFilter(ctx: {
     fieldConfig: any; parentField: string; parentOption: any; parentValue: any; childFilterGroup: string;
@@ -2207,20 +2552,21 @@ export class CustomDrawFormComponent implements OnInit, OnDestroy {
       }
     }
 
-    const conds: any[] = Array.isArray(childFilter?.conditions) ? childFilter.conditions : [];
+    const conds: any[] = childFilter?.active && Array.isArray(childFilter?.conditions)
+      ? childFilter.conditions
+      : [];
     for (const cond of conds) {
       if (!cond?.field) continue;
-      const scope = cond.scope || 'auto';
-      if (scope === 'client') continue;
       const serverOp = this._mapOperatorToServerOp(cond.operator || 'equals');
       if (!serverOp) continue; // operador no mapeable → se aplica en cliente
-      const cv = this._resolveConditionValue(cond.field, parentField, parentOption);
+      const cv = this._resolveConditionValue(cond, parentField, parentOption);
       if (cv == null) continue;
-      const vk = cond.value_key || cond.filter_group || childFilterGroup;
-      const resolved = (vk && typeof cv === 'object') ? cv[vk] : cv;
-      const value = (Array.isArray(cond.values) && cond.values.length) ? cond.values : resolved;
+      const resolved = this._conditionOperand(
+        { ...cond, value_key: cond.value_key || cond.filter_group || childFilterGroup }, cv
+      );
+      const value = resolved;
       if (value == null || value === '') continue;
-      filterCfg[cond.field] = { active: true, default: serverOp, default_value: value };
+      filterCfg[childFilterGroup] = { active: true, default: serverOp, default_value: value };
     }
 
     return this.crudS.buildDropdownFilterString(filterCfg);
@@ -2243,24 +2589,16 @@ export class CustomDrawFormComponent implements OnInit, OnDestroy {
       ? childFilter.conditions : [];
     const clientConds = allConds.filter((cond: any) => {
       if (!cond?.field) return false;
-      const scope = cond.scope || 'auto';
       const serverOp = this._mapOperatorToServerOp(cond.operator || 'equals');
-      if (scope === 'client') return true;
-      if (scope === 'server') return !isServer || !serverOp;
-      return !isServer ? true : !serverOp; // auto
+      return !isServer || !serverOp;
     });
 
     if (clientConds.length) {
       return options.filter((option: any) => {
-        const results = clientConds.map((cond: any) => {
-          const cv = this._resolveConditionValue(cond.field, parentField, parentOption);
-          if (cv == null) return false;
-          const fg = cond.filter_group || cond.value_key || childFilterGroup;
-          const cmpVal = (fg && typeof cv === 'object') ? cv[fg] : cv;
-          const optVal = (fg && option && typeof option === 'object') ? option[fg] : option?.id;
-          return this._evaluateOperator(cond.operator || 'equals', cmpVal, cond.values || [], optVal);
-        });
-        return (childFilter.logic || 'AND') === 'AND' ? results.every(Boolean) : results.some(Boolean);
+        return this._evaluateConditions(
+          clientConds, childFilter.logic || 'AND', parentField, parentOption, option,
+          undefined, undefined, childFilterGroup
+        ) === true;
       });
     }
 
@@ -2383,26 +2721,42 @@ export class CustomDrawFormComponent implements OnInit, OnDestroy {
   }
 
   /**
-   * Procesa un child 'derived': copia un atributo desde el padre seleccionado
-   * (from: 'parent', default) o desde el primer registro del servidor (from: 'server').
+   * Procesa un child 'derived': copia un atributo escalar desde el padre
+   * seleccionado (from: 'parent', default) o desde el primer registro del
+   * servidor (from: 'server') hacia un campo HERMANO del formulario.
+   *
+   * [[[II ESC:030-02 Un child derived NUNCA modifica una tabla. Al seleccionar el
+   * autocomplete la tabla debe permanecer sin cambios (spec: solo el boton save
+   * agrega filas, con la respuesta aplanada del servidor). Antes existia una
+   * "vista previa derivada" que insertaba la opcion seleccionada como fila sin
+   * aplanar (Descripcion=UUID); se elimino por contradecir ese contrato. ]]]FI
    */
   private _processDerivedChild(ctx: {
     fieldConfig: any; targetField: string; targetFieldConfig: any; formControl: any;
     parentField: string; parentOption: any; parentValue: any; childFilterGroup: string;
-    isActive: boolean; depth: number;
+    parentFieldConfig: any; isActive: boolean; depth: number;
   }): void {
     const { fieldConfig, targetField, targetFieldConfig, formControl,
       parentField, parentOption, parentValue, childFilterGroup, isActive } = ctx;
 
-    if (!isActive) { formControl?.setValue(null); return; }
+    // La tabla se llena exclusivamente por el boton save; un derived solo llena
+    // campos escalares hermanos (code, price, currency, ...).
+    if (targetFieldConfig?.type === 'table' || fieldConfig?.type === 'table') return;
+
+    if (!isActive) {
+      formControl?.setValue(null);
+      return;
+    }
 
     const fieldName = fieldConfig?.field_name ?? fieldConfig?.derived?.field_name;
     const from = fieldConfig?.derived?.from || 'parent';
     const fallback = fieldConfig?.derived?.fallback;
 
     const applyValue = (val: any) => {
-      if (val !== undefined && val !== null && val !== '') { formControl?.setValue(val); }
-      else if (fallback !== undefined) { formControl?.setValue(fallback); }
+      const resolvedValue = val !== undefined && val !== null && val !== ''
+        ? val
+        : fallback;
+      if (resolvedValue !== undefined) { formControl?.setValue(resolvedValue); }
     };
 
     if (from === 'server') {
@@ -3078,35 +3432,12 @@ export class CustomDrawFormComponent implements OnInit, OnDestroy {
     }
     // ]]]FI
 
-    const currentDropdownOption = Array.isArray(currentValue)
-      ? this._findDropdownOption(object, currentValue[0])
-      : this._findDropdownOption(object, currentValue);
-    this._processChildrenFields(field, currentValue, object, currentDropdownOption);
+    // El mismo camino atiende cambios UI y programáticos; si valueChanges ya lo
+    // evaluó, no habrá diferencias y no se repite la carga del child.
+    this._refreshDependentChildren();
+    // [[[II ESC:030-05 focus_after_select tras elegir opcion de dropdown/select. ]]]FI
+    this.applyFocusAfterSelect(object);
 
-    /* ── BLOQUE ORIGINAL COMENTADO (onChangeDropdown children) ──
-    const config = object || {};
-    const children = config.children || {};
-    const fields = children?.fields || {};
-
-    if (fields && Object.keys(fields).length > 0) {
-      const dropdownOptions = this.dataDropdownExists(object);
-      let currentDropdownOption: any = null;
-      if (dropdownOptions) {
-        currentDropdownOption = this.searchByValueObject(currentValue, dropdownOptions, 'id', false)[0];
-      }
-
-      ['static', 'dynamic', 'derived'].forEach(fieldType => {
-        if (fields[fieldType]) {
-          for (const key in fields[fieldType]) {
-            if (fields[fieldType].hasOwnProperty(key)) {
-              // ... ~500 líneas de lógica de activate, requested, static filter, derived, dynamic
-              // Ahora centralizada en _processChildrenFields, _evaluateConditions, _evaluateOperator
-            }
-          }
-        }
-      });
-    }
-    ── FIN BLOQUE ORIGINAL ── */
   }
 
   /**
@@ -3117,6 +3448,8 @@ export class CustomDrawFormComponent implements OnInit, OnDestroy {
    */
   async onSelectAutoComplete(event: any, config: any) {
     const field = config.field;
+    const selectedValue = this._extractAutoCompleteSelectedValue(event);
+    this._syncAutoCompleteRelationshipField(config, selectedValue);
     const currentValue = this.formGroupSignal()?.get(field)?.value;
     const formValues = this.formGroupSignal()?.value;
 
@@ -3133,52 +3466,12 @@ export class CustomDrawFormComponent implements OnInit, OnDestroy {
 
     this.onSelectAutoCompleteAction.emit(changeInfo);
 
-    // REFACTORIZADO: lógica de children movida a _processChildrenFields
-    // El bloque original (~400 líneas) era idéntico al de onChangeDropdown.
-    // [[[II ESC:013-01 DOC:docs/documents/2026-06-02_013_custom-draw-form-mobile-dropdown-cache.md#escenario-01
-    const dropdownOptions = await this.dataDropdownExists(config);
-    // ]]]FI
-    let currentDropdownOption: any = null;
-    if (dropdownOptions !== false) {
-      currentDropdownOption = this.searchByValueObject(currentValue, dropdownOptions, 'id', false)[0];
-    }
-    this._processChildrenFields(field, currentValue, config, currentDropdownOption);
+    // La sincronización anterior no emite tres valueChanges separados. Esta
+    // reevaluación única usa el objeto seleccionado guardado localmente.
+    this._refreshDependentChildren();
+    // [[[II ESC:030-05 focus_after_select tras seleccionar del autocomplete. ]]]FI
+    this.applyFocusAfterSelect(config);
 
-    /* ── BLOQUE ORIGINAL COMENTADO (onSelectAutoComplete children) ──
-    const children = config.children || {};
-    const fields = children?.fields || {};
-
-    if (fields && Object.keys(fields).length > 0) {
-      const dropdownOptions = this.dataDropdownExists(config);
-      let currentDropdownOption: any = null;
-      if (dropdownOptions) {
-        currentDropdownOption = this.searchByValueObject(currentValue, dropdownOptions, 'id', false)[0];
-      }
-
-      ['static', 'dynamic', 'derived'].forEach(fieldType => {
-        if (fields[fieldType]) {
-          for (const key in fields[fieldType]) {
-            if (fields[fieldType].hasOwnProperty(key)) {
-              const fieldConfig = fields[fieldType][key];
-
-              const activateConfig = fieldConfig?.activate;
-              let isActive = true;
-
-              if (activateConfig?.active) {
-                const conditions = activateConfig.conditions || [];
-                const logic = activateConfig.logic || 'AND';
-                const action = activateConfig.action || 'inactive';
-
-                // ... ~350 líneas adicionales de lógica de activate, requested, static filter,
-                // derived, dynamic — Ahora centralizada en _processChildrenFields,
-                // _evaluateConditions, _evaluateOperator
-              }
-            }
-          }
-        }
-      });
-    }
-    ── FIN BLOQUE ORIGINAL (onSelectAutoComplete children) ── */
   }
 
   /**
@@ -3194,6 +3487,17 @@ export class CustomDrawFormComponent implements OnInit, OnDestroy {
     }
 
   }
+
+  // [[[II ESC:001-16 DOC:docs/documents/2026-05-16_001_consolidacion_dropdown_types_y_fix_escenarios.md#escenario-16
+  clearAutoComplete(config: any): void {
+    if (!config?.field) return;
+    this.formGroupSignal()?.get(config.field)?.setValue('');
+    this.formGroupSignal()?.get(this._autoCompleteObjectFieldName(config.field))?.setValue(null);
+    if (this._isFreeOrRelationshipAutoComplete(config)) {
+      this.formGroupSignal()?.get(config.relationship_field.trim())?.setValue(null);
+    }
+  }
+  // ]]]FI
 
   /**
    * Set de keys ya cargadas por field para no re-disparar requests al
@@ -3475,12 +3779,112 @@ export class CustomDrawFormComponent implements OnInit, OnDestroy {
   }*/
 
 
+  // ============================================================================
+  // [[[II ESC:030-05 focus_after_select: navegacion de foco reusable y barata.
+  // Registry/cache `field -> elemento enfocable` resuelto SOLO en eventos de foco
+  // (onSelect de autocomplete, cambio de dropdown, Enter, Tab), NUNCA por tecla, y
+  // sin escanear ni clonar el drawForm. Si `focus_after_select` no esta, viene
+  // vacio o el destino no existe, NO se fuerza nada: actua la navegacion nativa
+  // por tabindex.
+  //
+  // ALCANCE: formulario normal de este componente. La tabla (type='table') puede
+  // reutilizar `resolveFocusTargetElement`/`applyFocusAfterSelect` para su propio
+  // destino. Si a futuro se amplia a foco global, REUTILIZAR esta base, no
+  // duplicarla.
+  // ============================================================================
+  private readonly _focusTargetCache = new Map<string, HTMLElement | null>();
+
+  private _clearFocusTargetCache(): void {
+    this._focusTargetCache.clear();
+  }
+
+  /** Clave canonica del destino (quita el prefijo object_ de los dropdown-like). */
+  private _canonicalFocusField(field: any): string {
+    if (typeof field !== 'string') return '';
+    const trimmed = field.trim();
+    return trimmed.startsWith('object_') ? trimmed.slice('object_'.length) : trimmed;
+  }
+
+  /**
+   * Resuelve (y cachea) el elemento enfocable de un field dentro de ESTE
+   * formulario. Soporta el marcador `data-focus-field`, el `inputId=field` que ya
+   * ponen varios componentes PrimeNG (`#field`) y el espejo `object_<field>`. Si
+   * el nodo hallado no es enfocable, baja al input interno. La resolucion se
+   * cachea hasta el proximo cambio de drawForm.
+   */
+  resolveFocusTargetElement(field: string): HTMLElement | null {
+    const key = this._canonicalFocusField(field);
+    if (!key) return null;
+    if (this._focusTargetCache.has(key)) return this._focusTargetCache.get(key) ?? null;
+
+    const root: HTMLElement | undefined = this.host?.nativeElement;
+    let el: HTMLElement | null = null;
+    if (root) {
+      const escaped = (typeof CSS !== 'undefined' && (CSS as any).escape) ? CSS.escape(key) : key;
+      el = root.querySelector<HTMLElement>(`[data-focus-field="${key}"]`)
+        ?? root.querySelector<HTMLElement>(`[data-focus-field="object_${key}"]`)
+        ?? root.querySelector<HTMLElement>(`#${escaped}`);
+      if (el && !this._isFocusableElement(el)) {
+        el = el.querySelector<HTMLElement>('input, textarea, select, [tabindex]') ?? el;
+      }
+    }
+    this._focusTargetCache.set(key, el);
+    return el;
+  }
+
+  private _isFocusableElement(el: HTMLElement): boolean {
+    const tag = el.tagName?.toLowerCase();
+    return tag === 'input' || tag === 'textarea' || tag === 'select'
+      || tag === 'button' || el.hasAttribute('tabindex');
+  }
+
+  /**
+   * Aplica `focus_after_select`. Devuelve true si movio el foco. No hace nada si
+   * el destino no esta configurado o no existe (fallback: navegacion tabindex).
+   */
+  applyFocusAfterSelect(config: any): boolean {
+    const target = config?.focus_after_select;
+    if (typeof target !== 'string' || target.trim() === '') return false;
+    const el = this.resolveFocusTargetElement(target.trim());
+    if (!el) return false;
+    // [[[II ESC:030-05 p-autoComplete re-enfoca su propio input tras onSelect (en
+    // un timeout interno), lo que "regresaba" el foco al autocomplete. Se reasegura
+    // el foco en una macrotarea posterior para ganar esa carrera sin depender de
+    // detalles internos de PrimeNG. Solo ocurre en select/Enter/Tab, no por tecla. ]]]FI
+    const focusTarget = () => { try { el.focus(); } catch { /* noop */ } };
+    setTimeout(focusTarget, 0);
+    setTimeout(focusTarget, 60);
+    return true;
+  }
+
+  /**
+   * [[[II ESC:030-05 Un autocomplete `free_or_relationship` permite captura MANUAL
+   * aunque el servidor lo marque `readonly`, MIENTRAS no exista una opcion
+   * seleccionada. Con seleccion activa se respeta el `readonly` del servidor. Los
+   * autocompletes normales (no free_or_relationship) respetan el readonly tal
+   * cual. No se hardcodea ningun nombre de campo. ]]]FI
+   */
+  isFreeAutoCompleteReadonly(config: any): boolean {
+    if (config?.readonly !== true) return false;
+    if (!this._isFreeOrRelationshipAutoComplete(config)) return true;
+    const selected = this.formGroupSignal()?.get(this._autoCompleteObjectFieldName(config.field))?.value;
+    return !!(selected && typeof selected === 'object' && !Array.isArray(selected));
+  }
+  // ]]]FI
+
   onKeydownTab(event: any, config: any) {
     this.onKeydownTabAction.emit({ event, field: config.field, config });
+    // [[[II ESC:030-05 Solo se sobreescribe el Tab nativo cuando focus_after_select
+    // resuelve un destino real; si no, se respeta la navegacion por tabindex. ]]]FI
+    if (this.applyFocusAfterSelect(config)) {
+      event?.preventDefault?.();
+    }
   }
 
   onKeydownEnter(event: any, config: any) {
     this.onKeydownEnterAction.emit({ event, field: config.field, config });
+    // [[[II ESC:030-05 ]]]FI
+    this.applyFocusAfterSelect(config);
   }
 
   /**
@@ -4955,7 +5359,7 @@ export class CustomDrawFormComponent implements OnInit, OnDestroy {
     return formGroup.get(field) as FormControl;
   }
 
-  // [[[II ESC:011-01 DOC:docs/documents/2026-06-02_011_custom-draw-form-table-formarray.md#escenario-01 ESC:015-01 DOC:docs/documents/2026-06-02_015_dynamic-table-field-component.md#escenario-01
+  // [[[II ESC:011-01 DOC:docs/documents/2026-06-02_011_custom-draw-form-table-formarray.md#escenario-01 ESC:015-01 DOC:docs/documents/2026-06-02_015_dynamic-table-field-component.md#escenario-01 ESC:001-17 DOC:docs/documents/2026-05-16_001_consolidacion_dropdown_types_y_fix_escenarios.md#escenario-17 ESC:030-03 DOC:docs/documents/2026-07-14-030-child-runtime-overlay.md#escenario-03
   getTableFormArray(field: string): FormArray | null {
     const formGroup = this.formGroupSignal();
     const control = formGroup?.get(field);
@@ -4992,13 +5396,23 @@ export class CustomDrawFormComponent implements OnInit, OnDestroy {
         validators.push(Validators.minLength(col.validation.min_length));
       }
 
+      const displayValue = rowData?.[`${col.field}__name`];
+      const rawValue = rowData?.[col.field];
+      const value = displayValue !== undefined && displayValue !== null && displayValue !== ''
+        ? displayValue
+        : (rawValue && typeof rawValue === 'object' && !Array.isArray(rawValue)
+          ? this.generalS.formatDynamicValue(rawValue, col)
+          : rawValue);
+
       rowGroup[col.field] = new FormControl(
-        rowData?.[col.field] !== undefined ? rowData[col.field] : this.getTableColumnDefaultValue(col),
+        value !== undefined ? value : this.getTableColumnDefaultValue(col),
         validators
       );
     });
 
-    return this.fb.group(rowGroup);
+    const group = this.fb.group(rowGroup);
+    (group as any)[this.tableRowSourceFlag] = rowData;
+    return group;
   }
 
   updateTableFormControl(field: string, data: any[], markDirty: boolean = true, tableConfig: any = null): void {
@@ -5020,6 +5434,95 @@ export class CustomDrawFormComponent implements OnInit, OnDestroy {
     }
 
     formArray.updateValueAndValidity();
+  }
+
+  private _tableServerResource(tableConfig: any): { app: string; type: string } | null {
+    const resource = this.crudS.getAppType(tableConfig?.data_type?.type);
+    return resource?.app && resource?.type ? { app: resource.app, type: resource.type } : null;
+  }
+
+  private _rollbackTableEdit(event: any): void {
+    const row = this.getTableFormArray(event?.field)?.at(event?.rowIndex);
+    if (!(row instanceof FormGroup)) return;
+
+    if (event?.colField && Object.prototype.hasOwnProperty.call(event, 'previousValue')) {
+      row.get(event.colField)?.setValue(event.previousValue, { emitEvent: false });
+    } else if (event?.previousRowData && typeof event.previousRowData === 'object') {
+      row.patchValue(event.previousRowData, { emitEvent: false });
+    }
+    row.updateValueAndValidity({ emitEvent: false });
+  }
+
+  /**
+   * Persiste solo columnas con `scope_edition: 'server'`. Las demás conservan
+   * la edición local y las filas derivadas de vista previa nunca hacen PATCH.
+   */
+  handleTableEdit(event: any, tableConfig: any, output: EventEmitter<any>): void {
+    output.emit(event);
+    if (event?.isDerivedDraft === true) return;
+
+    const resource = this._tableServerResource(tableConfig);
+    const sourceRow = event?.sourceRow;
+    const rowId = sourceRow?.id ?? event?.rowData?.id;
+    if (!resource || !rowId) return;
+
+    const configuredColumns = tableConfig?.columns || [];
+    const serverColumns = event?.colField
+      ? configuredColumns.filter((column: any) => column?.field === event.colField && column?.scope_edition === 'server')
+      : configuredColumns.filter((column: any) => column?.scope_edition === 'server');
+    if (!serverColumns.length) return;
+
+    const rowData = event?.rowData ?? event?.data?.[event?.rowIndex] ?? {};
+    const formData: any = {};
+    const relationships: any[] = [];
+    serverColumns.forEach((column: any) => {
+      const value = rowData?.[column.field];
+      const relation = this.crudS.getAppType(column?.data_type?.type);
+      if (relation?.type) {
+        relationships.push({ field: column.field, id: value, type: relation.type });
+      } else {
+        formData[column.field] = value;
+      }
+    });
+
+    this.crudS.edit({
+      app: resource.app,
+      type: resource.type,
+      id: rowId,
+      formData,
+      relationships,
+    }).subscribe({
+      next: () => {
+        if (sourceRow && typeof sourceRow === 'object') Object.assign(sourceRow, formData);
+      },
+      error: (error: any) => {
+        this._rollbackTableEdit(event);
+        this.messageS.changeMessage('No fue posible guardar la edición de la tabla.', error, {}, 'error');
+      },
+    });
+  }
+
+  /** Elimina en `data_type` únicamente filas confirmadas; ante error restaura la fila local. */
+  handleTableDelete(event: any, tableConfig: any): void {
+    this.onTableDeleteRow.emit(event);
+    if (event?.isDerivedDraft === true) return;
+
+    const resource = this._tableServerResource(tableConfig);
+    const rowId = event?.sourceRow?.id ?? event?.rowData?.id;
+    if (!resource || !rowId) return;
+
+    this.crudS.delete(rowId, resource.app).subscribe({
+      error: (error: any) => {
+        const formArray = this.getTableFormArray(event.field);
+        if (formArray) {
+          const restoredData = { ...(event.sourceRow || {}), ...(event.rowData || {}) };
+          const restored = this.createTableRowFormGroup(tableConfig, restoredData);
+          formArray.insert(Math.min(event.rowIndex ?? 0, formArray.length), restored, { emitEvent: false });
+          formArray.updateValueAndValidity({ emitEvent: false });
+        }
+        this.messageS.changeMessage('No fue posible eliminar la fila de la tabla.', error, {}, 'error');
+      },
+    });
   }
 
   validateTable(tableField: string): void {

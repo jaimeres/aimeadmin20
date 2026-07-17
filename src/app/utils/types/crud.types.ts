@@ -12,6 +12,10 @@ export type saveOptions = {
   update_item?: any;
   data?: any;
   custom_user?: any;
+  local_table?: {
+    field: string;
+    mode?: 'prepend' | 'append' | 'replace';
+  };
 };
 
 export type resetFormOptions = { selected?: any; pos?: string };

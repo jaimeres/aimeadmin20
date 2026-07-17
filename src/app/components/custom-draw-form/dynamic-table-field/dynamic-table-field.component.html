@@ -1,6 +1,6 @@
-<!-- [[[II ESC:015-01 DOC:docs/documents/2026-06-02_015_dynamic-table-field-component.md#escenario-01 -->
+<!-- [[[II ESC:015-01 DOC:docs/documents/2026-06-02_015_dynamic-table-field-component.md#escenario-01 ESC:030-01 DOC:docs/documents/2026-07-14-030-child-runtime-overlay.md#escenario-01 ESC:030-03 DOC:docs/documents/2026-07-14-030-child-runtime-overlay.md#escenario-03 -->
 <ng-container *ngIf="tableConfig as config">
-  <div *ngIf="config?.add_row || config?.delete_row" class="table-title-toolbar">
+  <div *ngIf="config?.add_row " class="table-title-toolbar">
     <app-custom-button-crud [selected]="[]" (newAction)="addTableRow(config.field, config)" style="margin: 0px;">
     </app-custom-button-crud>
     <h5 *ngIf="config.label">{{ config.label }}</h5>
@@ -19,7 +19,7 @@
         <th *ngIf="config?.row_number"
           style="width: 35px; min-width: 35px; position: sticky; left: 0; z-index: 1; background: var(--surface-ground); padding: 0.5rem 0.3rem;"
           class="border-right-1 border-300">#</th>
-        <th *ngIf="config?.add_row || config?.delete_row"
+        <th *ngIf="config?.delete_row"
           style="width: 75px; min-width: 75px; position: sticky; left: 35px; z-index: 1; background: var(--surface-ground); padding: 0.2rem 0.2rem !important;"
           class="border-right-1 border-300">Acciones</th>
         <th *ngFor="let col of normalizedColumns; trackBy: trackByColumnField"
@@ -39,13 +39,13 @@
             class="border-right-1 border-300">
             {{ rowIndex + 1 }}
           </td>
-          <td *ngIf="config?.add_row || config?.delete_row"
+          <td *ngIf="config?.delete_row"
             style="position: sticky; left: 35px; z-index: 1; background: var(--surface-0); padding: 0.2rem 0.2rem !important;"
             class="border-right-1 border-300">
             <div class="flex gap-1 justify-content-center">
-              <p-button *ngIf="!rowEditState.isRowOrCellEditing" icon="pi pi-pencil" size="small"
-                severity="secondary" [text]="true" (onClick)="startRowEdit(config.field, rowIndex)"
-                pTooltip="Editar fila" [style]="{'height': '28px', 'width': '28px'}">
+              <p-button *ngIf="!rowEditState.isRowOrCellEditing && !isTableReadonly(config.field)" icon="pi pi-pencil" size="small" severity="secondary"
+                [text]="true" (onClick)="startRowEdit(config.field, rowIndex)" pTooltip="Editar fila"
+                [style]="{'height': '28px', 'width': '28px'}">
               </p-button>
               <p-button *ngIf="rowEditState.isRowOrCellEditing" icon="pi pi-check" size="small" severity="success"
                 [text]="true" (onClick)="finishRowEdit(config.field, rowIndex)" pTooltip="Guardar cambios"
@@ -55,15 +55,15 @@
                 [text]="true" (onClick)="cancelRowEdit(config.field, rowIndex)" pTooltip="Cancelar edición"
                 [style]="{'height': '28px', 'width': '28px'}">
               </p-button>
-              <p-button *ngIf="config?.delete_row && !rowEditState.isRowOrCellEditing" icon="pi pi-trash"
-                size="small" severity="danger" [text]="true" (onClick)="deleteTableRow(rowIndex, config.field)"
+              <p-button *ngIf="config?.delete_row && !rowEditState.isRowOrCellEditing && !isTableReadonly(config.field)" icon="pi pi-trash" size="small"
+                severity="danger" [text]="true" (onClick)="deleteTableRow(rowIndex, config.field)"
                 pTooltip="Eliminar fila" [style]="{'height': '28px', 'width': '28px'}">
               </p-button>
             </div>
           </td>
           <td *ngFor="let col of normalizedColumns; trackBy: trackByColumnField"
-            (dblclick)="!rowEditState.isRowEditing && !rowEditState.editingCells[col.field] && (col._editable !== undefined ? col._editable : isColumnEditable(col)) && startCellEdit(config.field, rowIndex, col.field)"
-            [class.cursor-pointer]="!rowEditState.isRowEditing && !rowEditState.editingCells[col.field] && (col._editable !== undefined ? col._editable : isColumnEditable(col))">
+            (dblclick)="!isTableReadonly(config.field) && !rowEditState.isRowEditing && !rowEditState.editingCells[col.field] && (col._editable !== undefined ? col._editable : isColumnEditable(col)) && startCellEdit(config.field, rowIndex, col.field)"
+            [class.cursor-pointer]="!isTableReadonly(config.field) && !rowEditState.isRowEditing && !rowEditState.editingCells[col.field] && (col._editable !== undefined ? col._editable : isColumnEditable(col))">
             <div [ngSwitch]="col._type || getColumnType(col)">
               <div *ngSwitchCase="'input-text'">
                 <span *ngIf="!rowEditState.isRowEditing && !rowEditState.editingCells[col.field]"
@@ -83,8 +83,7 @@
                   [placeholder]="col.header" [maxlength]="col.validation?.max_length"
                   [minlength]="col.validation?.min_length" />
 
-                <input *ngIf="rowEditState.editingCells[col.field]" type="text" pInputText
-                  [formControlName]="col.field"
+                <input *ngIf="rowEditState.editingCells[col.field]" type="text" pInputText [formControlName]="col.field"
                   [class]="'w-full ' + getCellClass(rowData.get(col.field)?.value, col, config.field, rowIndex)"
                   [placeholder]="col.header" [maxlength]="col.validation?.max_length"
                   [minlength]="col.validation?.min_length"
@@ -122,8 +121,7 @@
                   [class]="'w-full ' + getCellClass(rowData.get(col.field)?.value, col, config.field, rowIndex)"
                   [placeholder]="col.header" />
 
-                <input *ngIf="rowEditState.editingCells[col.field]" type="text" pInputText
-                  [formControlName]="col.field"
+                <input *ngIf="rowEditState.editingCells[col.field]" type="text" pInputText [formControlName]="col.field"
                   [class]="'w-full ' + getCellClass(rowData.get(col.field)?.value, col, config.field, rowIndex)"
                   [placeholder]="col.header" (keydown)="onCellKeydown($event, config.field, rowIndex, col.field)"
                   [pAutoFocus]="true" />

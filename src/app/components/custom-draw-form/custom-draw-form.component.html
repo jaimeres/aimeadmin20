@@ -1,4 +1,4 @@
-<!-- [[[II ESC:007-07 DOC:docs/documents/2026-06-01_007_custom-draw-form-listbox.md#escenario-07 ESC:020-01 DOC:docs/documents/2026-06-04_020_custom-draw-form-virtual-scroll-dropdowns.md#escenario-01 ESC:020-04 DOC:docs/documents/2026-06-04_020_custom-draw-form-virtual-scroll-dropdowns.md#escenario-04 ESC:020-05 DOC:docs/documents/2026-06-04_020_custom-draw-form-virtual-scroll-dropdowns.md#escenario-05 ESC:001-09 DOC:docs/documents/2026-05-16_001_consolidacion_dropdown_types_y_fix_escenarios.md#escenario-09 -->
+<!-- [[[II ESC:007-07 DOC:docs/documents/2026-06-01_007_custom-draw-form-listbox.md#escenario-07 ESC:020-01 DOC:docs/documents/2026-06-04_020_custom-draw-form-virtual-scroll-dropdowns.md#escenario-01 ESC:020-04 DOC:docs/documents/2026-06-04_020_custom-draw-form-virtual-scroll-dropdowns.md#escenario-04 ESC:020-05 DOC:docs/documents/2026-06-04_020_custom-draw-form-virtual-scroll-dropdowns.md#escenario-05 ESC:001-09 DOC:docs/documents/2026-05-16_001_consolidacion_dropdown_types_y_fix_escenarios.md#escenario-09 ESC:030-01 DOC:docs/documents/2026-07-14-030-child-runtime-overlay.md#escenario-01 -->
 <!-- TEMPLATE REUTILIZABLE PARA DROPDOWN -->
 <!-- DEBO PONER TEMPLETE EN ESLO 3 PRIMEROS COMBOS -->
 <ng-template #dropdownTemplate let-fieldConfig="fieldConfig">
@@ -7,7 +7,8 @@
       <p-select [options]="dropdownOptionsSignal()[fieldConfig.field] || []"
         [optionValue]="fieldConfig.option_value || 'id'" [optionLabel]="fieldConfig.option_label | joinOrSelf"
         [placeholder]="fieldConfig.placeholder || '.'" [editable]="fieldConfig.editable"
-        [formControl]="$any(formGroupSignal()?.get(fieldConfig.field))" (onShow)="onShowDropdownAction.emit($event)"
+        [disabled]="fieldConfig.readonly === true" [formControl]="$any(formGroupSignal()?.get(fieldConfig.field))"
+        (onShow)="onShowDropdownAction.emit($event)"
         [showClear]="fieldConfig.showClear !== undefined ? fieldConfig.showClear : true"
         [filter]="fieldConfig.filter_local !== undefined ? fieldConfig.filter_local : false"
         [filterBy]="fieldConfig.filter_by ? fieldConfig.filter_by : null"
@@ -44,8 +45,9 @@
 <ng-template #multiSelectTemplate let-fieldConfig="fieldConfig">
   <p-floatlabel variant="on">
     <p-multiSelect [formControl]="$any(formGroupSignal()?.get(fieldConfig.field))" [pAutoFocus]="fieldConfig.autofocus"
-      [options]="dropdownOptionsSignal()[fieldConfig.field] || fieldConfig?.data_type?.options || fieldConfig?.options || []" (onChange)="onChangeDropdown($event, fieldConfig)"
-      [showClear]="true" [optionValue]="fieldConfig.option_value || 'id'"
+      [options]="dropdownOptionsSignal()[fieldConfig.field] || fieldConfig?.data_type?.options || fieldConfig?.options || []"
+      (onChange)="onChangeDropdown($event, fieldConfig)" [showClear]="true" [disabled]="fieldConfig.readonly === true"
+      [optionValue]="fieldConfig.option_value || 'id'"
       [filter]="fieldConfig.filter_local !== undefined ? fieldConfig.filter_local : false"
       [filterBy]="fieldConfig.filter_by ? fieldConfig.filter_by : null"
       [virtualScroll]="fieldConfig.virtual_scrolling?.active === true && virtualOptionsReadySignal()[fieldConfig.field] === true"
@@ -71,7 +73,8 @@
     <p-treeSelect display="chip" [metaKeySelection]="false" selectionMode="checkbox"
       [options]="dropdownOptionsSignal()[fieldConfig.field] || []" [pAutoFocus]="fieldConfig.autofocus"
       [formControl]="$any(formGroupSignal()?.get(fieldConfig.field))" key="id" [appendTo]="'body'" [showClear]="true"
-      (onClear)="clearTreeSelect(fieldConfig.field)" (onNodeSelect)="onTreeSelectNodeChange($event, fieldConfig)"
+      [disabled]="fieldConfig.readonly === true" (onClear)="clearTreeSelect(fieldConfig.field)"
+      (onNodeSelect)="onTreeSelectNodeChange($event, fieldConfig)"
       (onNodeUnselect)="onTreeSelectNodeChange($event, fieldConfig)"
       (onNodeExpand)="onTreeNodeExpand($event, fieldConfig)" [containerStyleClass]="'height-input-custom'"
       [panelStyleClass]="'custom-tree-select-panel'" class="height-input-custom"
@@ -114,7 +117,7 @@
 
     <div class="listbox-container">
       <p-listbox [options]="dropdownOptionsSignal()[fieldConfig.field] || []" [pAutoFocus]="fieldConfig.autofocus"
-        [formControl]="$any(formGroupSignal()?.get(fieldConfig.field))"
+        [formControl]="$any(formGroupSignal()?.get(fieldConfig.field))" [disabled]="fieldConfig.readonly === true"
         [multiple]="selectionMultipleSignal()[fieldConfig.field] !== false"
         [checkbox]="selectionMultipleSignal()[fieldConfig.field] !== false" [metaKeySelection]="false"
         [showToggleAll]="false" [dataKey]="fieldConfig.option_value || 'id'"
@@ -168,11 +171,14 @@
       [showEmptyMessage]="fieldConfig.show_empty_message" [emptyMessage]="fieldConfig.empty_message"
       [suggestions]="suggestions()" (completeMethod)="completeMethod($event, fieldConfig)" [delay]="fieldConfig.delay"
       [optionLabel]="fieldConfig.option_label || 'name'" (onSelect)="onSelectAutoComplete($event, fieldConfig)"
-      (onShow)="adjustPanelStyle(autoCompleteRef)" [panelStyle]="panelStyleSignal()"
+      (onClear)="clearAutoComplete(fieldConfig)" (onShow)="adjustPanelStyle(autoCompleteRef)"
+      [panelStyle]="panelStyleSignal()"
       [virtualScroll]="fieldConfig.virtual_scrolling?.active === true && virtualOptionsReadySignal()[fieldConfig.field] === true"
       [virtualScrollItemSize]="60" [pAutoFocus]="fieldConfig.autofocus"
+      [forceSelection]="fieldConfig.force_selection === true" [readonly]="isFreeAutoCompleteReadonly(fieldConfig)"
       [formControl]="$any(formGroupSignal()?.get(fieldConfig.field))" styleClass="height-input-custom"
-      [appendTo]="'body'">
+      [attr.data-focus-field]="fieldConfig.field" (keydown.enter)="onKeydownEnter($event, fieldConfig)"
+      (keydown.tab)="onKeydownTab($event, fieldConfig)" [appendTo]="'body'">
 
       <ng-template #header>
         <div class="grid grid-cols-12 gap-2 items-center border-bottom-1 pb-1 mb-2">
@@ -192,7 +198,8 @@
             class="flex items-center gap-1">
             <img *ngIf="$any(field.value)?.type === 'image'" [src]="$any($any(row)[$any($any(field.value).field)])"
               style="width: 35px;" />
-            <span *ngIf="$any(field.value)?.type === 'text'">{{ $any($any(row)[$any($any(field.value).field)]) }}</span>
+            <span *ngIf="$any(field.value)?.type === 'text'">{{ $any(row)[$any(field.value).field + '__name'] ??
+              $any(row)[$any(field.value).field] }}</span>
           </div>
         </div>
       </ng-template>
@@ -216,21 +223,23 @@
 
 <!-- TEMPLATE REUTILIZABLE PARA TABLE -->
 <ng-template #tableTemplate let-tableConfig="tableConfig">
-  <!-- [[[II ESC:015-01 DOC:docs/documents/2026-06-02_015_dynamic-table-field-component.md#escenario-01 -->
+  <!-- [[[II ESC:015-01 DOC:docs/documents/2026-06-02_015_dynamic-table-field-component.md#escenario-01 ESC:030-03 DOC:docs/documents/2026-07-14-030-child-runtime-overlay.md#escenario-03 -->
   <app-dynamic-table-field [tableConfig]="tableConfig" [formGroup]="$any(formGroupSignal())" [editingRows]="editingRows"
     [editingCells]="editingCells" [tablesToValidate]="tablesToValidate" [originalRowData]="originalRowData"
     [tableOptions]="tableOptions" [validationVersion]="tableValidationVersion"
     (rowSelect)="onTableRowSelect.emit($event)" (rowUnselect)="onTableRowUnselect.emit($event)"
-    (addRow)="onTableAddRow.emit($event)" (editRow)="onTableEditRow.emit($event)"
-    (deleteRow)="onTableDeleteRow.emit($event)" (cellEdit)="onTableCellEdit.emit($event)" />
+    (addRow)="onTableAddRow.emit($event)" (editRow)="handleTableEdit($event, tableConfig, onTableEditRow)"
+    (deleteRow)="handleTableDelete($event, tableConfig)"
+    (cellEdit)="handleTableEdit($event, tableConfig, onTableCellEdit)" />
   <!-- ]]]FI -->
 </ng-template>
 
 <!-- TEMPLATE REUTILIZABLE PARA INPUT-NUMBER -->
+<!-- [[[II ESC:030-01 DOC:docs/documents/2026-07-14-030-child-runtime-overlay.md#escenario-01 -->
 <ng-template #inputNumberTemplate let-fieldConfig="fieldConfig">
   <p-floatlabel variant="on">
     <p-inputNumber [minFractionDigits]="fieldConfig.min_fraction_digits" [mode]="fieldConfig.mode || 'decimal'"
-      [formControl]="$any(formGroupSignal()?.get(fieldConfig.field))"
+      [formControl]="$any(formGroupSignal()?.get(fieldConfig.field))" [readonly]="fieldConfig.readonly === true"
       [maxFractionDigits]="fieldConfig.max_fraction_digits" [min]="fieldConfig.min" [prefix]="fieldConfig.prefix"
       [suffix]="fieldConfig.suffix" [inputStyle]="{'padding-top': '0.5rem'}" [max]="fieldConfig.max"
       [showButtons]="fieldConfig.show_buttons" [buttonLayout]="fieldConfig.button_layout"
@@ -239,12 +248,14 @@
       [incrementButtonIcon]="fieldConfig.increment_button_icon"
       [decrementButtonIcon]="fieldConfig.decrement_button_icon" [inputId]="fieldConfig.field"
       (keydown.enter)="onKeydownEnter($event, fieldConfig)" class="w-full height-input-custom"
-      (keydown.tab)="onKeydownTab($event, fieldConfig)" [pAutoFocus]="fieldConfig.autofocus" />
+      (keydown.tab)="onKeydownTab($event, fieldConfig)" [pAutoFocus]="fieldConfig.autofocus"
+      [attr.data-focus-field]="fieldConfig.field" />
     <label [for]="fieldConfig.field">
       {{ fieldConfig.label }}
     </label>
   </p-floatlabel>
 </ng-template>
+<!-- ]]]FI -->
 
 <!-- TEMPLATE REUTILIZABLE PARA SIGNATURE -->
 <ng-template #signatureTemplate let-signatureConfig="signatureConfig">
@@ -431,12 +442,14 @@
 </ng-template>
 
 <!-- TEMPLATE REUTILIZABLE PARA INPUT-TEXT -->
+<!-- [[[II ESC:030-01 DOC:docs/documents/2026-07-14-030-child-runtime-overlay.md#escenario-01 -->
 <ng-template #inputTextTemplate let-fieldConfig="fieldConfig">
   <p-floatlabel variant="on">
     <input type="text" pInputText [formControl]="$any(formGroupSignal()?.get(fieldConfig.field))"
-      style="padding-top: 0.5rem !important;" [pAutoFocus]="fieldConfig.autofocus" class="height-input-custom" />
-    <label [for]="fieldConfig.field" (keydown.enter)="onKeydownEnter($event, fieldConfig)"
-      (keydown.tab)="onKeydownTab($event, fieldConfig)">
+      [readonly]="fieldConfig.readonly === true" style="padding-top: 0.5rem !important;"
+      [pAutoFocus]="fieldConfig.autofocus" class="height-input-custom" [attr.data-focus-field]="fieldConfig.field"
+      (keydown.enter)="onKeydownEnter($event, fieldConfig)" (keydown.tab)="onKeydownTab($event, fieldConfig)" />
+    <label [for]="fieldConfig.field">
       {{ fieldConfig?.label }}
     </label>
   </p-floatlabel>
@@ -446,7 +459,8 @@
 <ng-template #toggleButtonTemplate let-fieldConfig="fieldConfig">
   <p-toggleButton [pAutoFocus]="fieldConfig.autofocus" styleClass="height-input-custom"
     [formControl]="$any(formGroupSignal()?.get(fieldConfig.field))" [onLabel]="fieldConfig.label_true"
-    [offLabel]="fieldConfig.label_false" (onChange)="onChangeToggle($event, fieldConfig.field)">
+    [disabled]="fieldConfig.readonly === true" [offLabel]="fieldConfig.label_false"
+    (onChange)="onChangeToggle($event, fieldConfig.field)">
   </p-toggleButton>
 </ng-template>
 
@@ -454,7 +468,8 @@
 <ng-template #textareaTemplate let-fieldConfig="fieldConfig">
   <p-floatlabel variant="on">
     <textarea [rows]="fieldConfig.rows" cols="30" pTextarea [autoResize]="fieldConfig.auto_resize" class="w-full"
-      [formControl]="$any(formGroupSignal()?.get(fieldConfig.field))"></textarea>
+      [formControl]="$any(formGroupSignal()?.get(fieldConfig.field))"
+      [readonly]="fieldConfig.readonly === true"></textarea>
     <label [for]="fieldConfig.field">
       {{ fieldConfig.label }}
     </label>
@@ -465,8 +480,8 @@
 <ng-template #emailsChipsTemplate let-fieldConfig="fieldConfig">
   <p-floatlabel variant="on">
     <p-autocomplete [formControl]="$any(formGroupSignal()?.get(fieldConfig.field))" [multiple]="true"
-      [pAutoFocus]="fieldConfig.autofocus" [addOnBlur]="fieldConfig.separator?.blur !== false"
-      [addOnTab]="fieldConfig.separator?.tab !== false"
+      [readonly]="fieldConfig.readonly === true" [pAutoFocus]="fieldConfig.autofocus"
+      [addOnBlur]="fieldConfig.separator?.blur !== false" [addOnTab]="fieldConfig.separator?.tab !== false"
       [separator]="emailSeparatorsSignal()[fieldConfig.field] || emailSeparatorsSignal()['default']"
       [typeahead]="fieldConfig.suggestions?.enabled || false"
       [suggestions]="fieldConfig.suggestions?.enabled ? suggestions() : []"
@@ -495,7 +510,8 @@
 <ng-template #dateTemplate let-fieldConfig="fieldConfig">
   <p-floatlabel variant="on">
     <p-datepicker [formControl]="$any(formGroupSignal()?.get(fieldConfig.field))" styleClass="height-input-custom"
-      [appendTo]="'body'" [showIcon]="fieldConfig.show_icon" (onFocus)="removeFocus($event)" />
+      [disabled]="fieldConfig.readonly === true" [appendTo]="'body'" [showIcon]="fieldConfig.show_icon"
+      (onFocus)="removeFocus($event)" />
     <label [for]="fieldConfig.field">
       {{ fieldConfig?.label }}
     </label>
@@ -506,7 +522,8 @@
 <ng-template #timeTemplate let-fieldConfig="fieldConfig">
   <p-floatlabel variant="on">
     <p-datepicker [formControl]="$any(formGroupSignal()?.get(fieldConfig.field))" [iconDisplay]="'input'"
-      [showIcon]="fieldConfig.show_icon" styleClass="height-input-custom" [timeOnly]="true" [appendTo]="'body'">
+      [disabled]="fieldConfig.readonly === true" [showIcon]="fieldConfig.show_icon" styleClass="height-input-custom"
+      [timeOnly]="true" [appendTo]="'body'">
       <ng-template #inputicon let-clickCallBack="clickCallBack">
         <i class="pi pi-user pointer-events-none" (click)="clickCallBack($event)"></i>
       </ng-template>
@@ -527,10 +544,12 @@
     fieldConfig.description?.label }}
   </div>
   <p-selectButton styleClass="height-input-custom" [formControl]="$any(formGroupSignal()?.get(fieldConfig.field))"
+    [disabled]="fieldConfig.readonly === true"
     [options]="dropdownOptionsSignal()[fieldConfig.field] || fieldConfig?.data_type?.options || fieldConfig?.options || []"
     [optionLabel]="fieldConfig.option_label || 'name'" [optionValue]="fieldConfig.option_value || 'id'" class="w-full"
     (onChange)="onChangeDropdown($event, fieldConfig)" />
 </ng-template>
+<!-- ]]]FI -->
 
 <!-- TEMPLATE REUTILIZABLE PARA BUTTON -->
 <ng-template #buttonTemplate let-fieldConfig="fieldConfig">
@@ -642,7 +661,6 @@
               <ng-container *ngTemplateOutlet="emailsChipsTemplate; context: {fieldConfig: card.value}"></ng-container>
             </div>
 
-
             <div class="p-inputgroup" *ngSwitchCase="'dropdown'">
               <ng-container *ngTemplateOutlet="dropdownTemplate; context: {fieldConfig: card.value}"></ng-container>
             </div>
@@ -673,7 +691,6 @@
               <ng-container *ngTemplateOutlet="listboxTemplate; context: {fieldConfig: card.value}"></ng-container>
             </div>
 
-
             <div *ngSwitchCase="'toggle-button'">
               <ng-container *ngTemplateOutlet="toggleButtonTemplate; context: {fieldConfig: card.value}"></ng-container>
             </div>
@@ -682,8 +699,6 @@
               <ng-container *ngTemplateOutlet="inputNumberTemplate; context: {fieldConfig: card.value}"></ng-container>
             </div>
 
-
-
             <div class="p-inputgroup" *ngSwitchCase="'date'">
               <ng-container *ngTemplateOutlet="dateTemplate; context: {fieldConfig: card.value}"></ng-container>
             </div>
@@ -691,8 +706,6 @@
             <div class="p-inputgroup" *ngSwitchCase="'time'">
               <ng-container *ngTemplateOutlet="timeTemplate; context: {fieldConfig: card.value}"></ng-container>
             </div>
-
-
 
             <!-- TABLE COMPONENT IN CARD -->
             <div *ngSwitchCase="'table'" class="col-span-12">

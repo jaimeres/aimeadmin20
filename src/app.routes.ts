@@ -1,10 +1,34 @@
 import { AppLayout } from '@/layout/components/app.layout';
-import { Routes } from '@angular/router';
+import { inject } from '@angular/core';
+import { CanMatchFn, Router, Routes } from '@angular/router';
 import { appCanActivateGuardChild } from './app/auth/guards/app-can-activate-child.guard';
 import { permissionGuard, permissionChildGuard } from './app/auth/guards/permission.guard';
 
+// [[[II ESC:029-02 DOC:docs/documents/2026-07-11-029-registro-usuario-auth.md#escenario-02
+const activationHashRedirectGuard: CanMatchFn = () => {
+  if (typeof window === 'undefined') return false;
+
+  const activationPath = window.location.hash?.startsWith('#/activate/')
+    ? window.location.hash.slice(1)
+    : '';
+
+  return activationPath ? inject(Router).parseUrl(activationPath) : false;
+};
+// ]]]FI
 
 export const appRoutes: Routes = [
+  // [[[II ESC:029-02 DOC:docs/documents/2026-07-11-029-registro-usuario-auth.md#escenario-02
+  {
+    path: '',
+    pathMatch: 'full',
+    canMatch: [activationHashRedirectGuard],
+    loadComponent: () => import('@/pages/auth/activate').then((c) => c.Activate)
+  },
+  {
+    path: 'activate/:uid/:token',
+    loadComponent: () => import('@/pages/auth/activate').then((c) => c.Activate)
+  },
+  // ]]]FI
   {
     path: '',
     component: AppLayout,
