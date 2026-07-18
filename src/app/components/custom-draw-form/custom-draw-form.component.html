@@ -226,7 +226,7 @@
   <!-- [[[II ESC:015-01 DOC:docs/documents/2026-06-02_015_dynamic-table-field-component.md#escenario-01 ESC:030-03 DOC:docs/documents/2026-07-14-030-child-runtime-overlay.md#escenario-03 -->
   <app-dynamic-table-field [tableConfig]="tableConfig" [formGroup]="$any(formGroupSignal())" [editingRows]="editingRows"
     [editingCells]="editingCells" [tablesToValidate]="tablesToValidate" [originalRowData]="originalRowData"
-    [tableOptions]="tableOptions" [validationVersion]="tableValidationVersion"
+    [tableOptions]="tableOptions" [validationVersion]="tableValidationVersion" [deferRowSave]="delegateTableSave"
     (rowSelect)="onTableRowSelect.emit($event)" (rowUnselect)="onTableRowUnselect.emit($event)"
     (addRow)="onTableAddRow.emit($event)" (editRow)="handleTableEdit($event, tableConfig, onTableEditRow)"
     (deleteRow)="handleTableDelete($event, tableConfig)"

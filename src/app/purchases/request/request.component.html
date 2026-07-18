@@ -54,6 +54,7 @@
 
           <app-custom-draw-form *ngIf="form()[$any(typeDefault)] && drawForm()[typeDefault]"
             [drawForm]="drawForm()[typeDefault]['general']" [formGroup]="form()[$any(typeDefault)]"
+            [delegateTableSave]="true" (onTableRowSave)="handleTableRowSave($event)"
             (onKeydownEnterAction)="onKeydownEnter($event)" (onButtonClickAction)="handleButtonClick($event)" />
 
         </p-tabpanel>

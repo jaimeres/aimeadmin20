@@ -189,6 +189,11 @@ export class CustomDrawFormComponent implements OnInit, OnDestroy {
   @Input() isCreate: boolean = true;
   @Input() optionLabel: any = 'label';
   @Input() showIcon: boolean = true;
+  // [[[II Cuando el host provee el motor CRUD (extiende Crud), delega el alta/
+  // edición de filas de tabla derivada al motor del form (save({table_row}))
+  // en vez de persistir aquí. Opt-in para no cambiar el comportamiento de otras
+  // páginas que no manejan el evento. ]]]FI
+  @Input() delegateTableSave: boolean = false;
 
   @Output() onChangeDropdownAction = new EventEmitter<any>();
   @Output() onShowDropdownAction = new EventEmitter<any>();
@@ -210,6 +215,9 @@ export class CustomDrawFormComponent implements OnInit, OnDestroy {
   @Output() onTableEditRow = new EventEmitter<any>();
   @Output() onTableDeleteRow = new EventEmitter<any>();
   @Output() onTableCellEdit = new EventEmitter<any>();
+  // [[[II Solicitud de alta/edición de una fila de tabla derivada delegada al
+  // motor del host (contexto explícito, sin segundo motor de creación). ]]]FI
+  @Output() onTableRowSave = new EventEmitter<any>();
 
   formGroupSignal = signal<FormGroup | null>(null);
   drawFormSignal = signal<any>(null);
@@ -1797,128 +1805,17 @@ export class CustomDrawFormComponent implements OnInit, OnDestroy {
         respDJA: resp,
         fields: { [entry.field]: entry }
       });
-      // [[[II ESC:001-16 DOC:docs/documents/2026-05-16_001_consolidacion_dropdown_types_y_fix_escenarios.md#escenario-16
-      data = this._prepareAutoCompleteSuggestions(data, resp, entry);
-      // ]]]FI
+      // [[[II ESC:001-16 DOC:docs/documents/2026-05-16_001_consolidacion_dropdown_types_y_fix_escenarios.md#escenario-16 ESC:030-06
+      // Reúso: el enriquecimiento de `<rel>_data_<attr>` vive ahora en GeneralService
+      // (fuente única compartida con las celdas de tabla derivada). ]]]FI
+      data = this.generalS.enrichSuggestionRelationData(data, resp, entry);
       this.suggestions.set(data);
     });
   }
 
-  // [[[II ESC:001-16 DOC:docs/documents/2026-05-16_001_consolidacion_dropdown_types_y_fix_escenarios.md#escenario-16
-  private _autoCompleteRelationDataFieldParts(fieldName: any): { relationship: string; attribute: string } | null {
-    if (typeof fieldName !== 'string') return null;
-    const marker = '_data_';
-    const index = fieldName.indexOf(marker);
-    if (index <= 0) return null;
-
-    const relationship = fieldName.slice(0, index).trim();
-    const attribute = fieldName.slice(index + marker.length).trim();
-    if (!relationship || !attribute) return null;
-
-    return { relationship, attribute };
-  }
-
-  private _collectAutoCompleteRelationDataFields(config: any): string[] {
-    const fields = new Set<string>();
-    const addField = (value: any): void => {
-      const parts = this._autoCompleteRelationDataFieldParts(value);
-      if (parts) fields.add(String(value).trim());
-    };
-
-    const collectNode = (node: any): void => {
-      if (!node || typeof node !== 'object') return;
-      addField(node.field);
-      addField(node.field_name);
-      addField(node?.derived?.field_name);
-
-      if (node.columns && typeof node.columns === 'object') {
-        Object.values(node.columns).forEach(collectNode);
-      }
-      if (node.fields && typeof node.fields === 'object') {
-        Object.values(node.fields).forEach(collectNode);
-      }
-    };
-
-    this._autoCompleteLabelKeys(config?.option_label).forEach(addField);
-
-    const panelFields = config?.panel?.fields;
-    if (panelFields && typeof panelFields === 'object') {
-      Object.values(panelFields).forEach(collectNode);
-    }
-
-    const childGroups = config?.children?.fields;
-    if (childGroups && typeof childGroups === 'object') {
-      ['static', 'dynamic', 'derived'].forEach(groupKey => {
-        const group = childGroups[groupKey];
-        if (group && typeof group === 'object') {
-          Object.values(group).forEach(collectNode);
-        }
-      });
-    }
-
-    return Array.from(fields);
-  }
-
-  private _findAutoCompleteIncludedItem(included: any[], relationData: any): any | null {
-    if (!relationData || !Array.isArray(included)) return null;
-    return included.find((item: any) => item?.id == relationData.id && (!relationData.type || item?.type === relationData.type))
-      ?? included.find((item: any) => item?.id == relationData.id)
-      ?? null;
-  }
-
-  private _autoCompleteIncludedValue(includedItem: any, relationData: any, attribute: string): any {
-    if (attribute === 'id') return includedItem?.id ?? relationData?.id ?? '';
-    if (attribute === 'type') return includedItem?.type ?? relationData?.type ?? '';
-    return includedItem?.attributes?.[attribute];
-  }
-
-  private _applyAutoCompleteRelationDataFields(row: any, included: any[], requestedFields: string[]): void {
-    if (!row || typeof row !== 'object' || !Array.isArray(included) || included.length === 0) return;
-    const relationships = row.relationships || {};
-
-    requestedFields.forEach(fieldName => {
-      if (row[fieldName] !== undefined && row[fieldName] !== null && row[fieldName] !== '') return;
-
-      const parts = this._autoCompleteRelationDataFieldParts(fieldName);
-      if (!parts) return;
-
-      const relationData = relationships?.[parts.relationship]?.data;
-      if (!relationData) return;
-
-      if (Array.isArray(relationData)) {
-        const values = relationData
-          .map((item: any) => this._findAutoCompleteIncludedItem(included, item))
-          .map((includedItem: any, index: number) => this._autoCompleteIncludedValue(includedItem, relationData[index], parts.attribute))
-          .filter((value: any) => value !== undefined && value !== null && value !== '');
-        if (values.length) row[fieldName] = values.join(', ');
-        return;
-      }
-
-      const includedItem = this._findAutoCompleteIncludedItem(included, relationData);
-      if (!includedItem) return;
-
-      const value = this._autoCompleteIncludedValue(includedItem, relationData, parts.attribute);
-      if (value !== undefined && value !== null) {
-        row[fieldName] = value;
-      }
-    });
-  }
-
-  private _prepareAutoCompleteSuggestions(rows: any[], resp: any, config: any): any[] {
-    const requestedFields = this._collectAutoCompleteRelationDataFields(config);
-    if (!requestedFields.length || !Array.isArray(rows)) return rows;
-
-    const included = resp?.included || [];
-    if (!Array.isArray(included) || included.length === 0) return rows;
-
-    return rows.map((row: any) => {
-      if (!row || typeof row !== 'object') return row;
-      const next = { ...row };
-      this._applyAutoCompleteRelationDataFields(next, included, requestedFields);
-      return next;
-    });
-  }
-  // ]]]FI
+  // [[[II ESC:001-16 ESC:030-06 El enriquecimiento de sugerencias `<rel>_data_<attr>`
+  // se movió a GeneralService.enrichSuggestionRelationData (fuente única reutilizada
+  // por el form dinámico y las celdas de tabla derivada). Ver general.service.ts. ]]]FI
 
   // [[[II ESC:001-15 DOC:docs/documents/2026-05-16_001_consolidacion_dropdown_types_y_fix_escenarios.md#escenario-15
   private _isFreeOrRelationshipAutoComplete(config: any): boolean {
@@ -1949,14 +1846,6 @@ export class CustomDrawFormComponent implements OnInit, OnDestroy {
       control.disable({ emitEvent: false });
     }
     return control;
-  }
-
-  private _autoCompleteLabelKeys(optionLabel: any): string[] {
-    if (Array.isArray(optionLabel)) {
-      return optionLabel.map((key: any) => String(key).trim()).filter((key: string) => key.length > 0);
-    }
-    if (typeof optionLabel !== 'string') return [];
-    return optionLabel.split(',').map((key: string) => key.trim()).filter((key: string) => key.length > 0);
   }
 
   private _autoCompleteDisplayValue(selectedValue: any, config: any): string {
@@ -2393,16 +2282,33 @@ export class CustomDrawFormComponent implements OnInit, OnDestroy {
           preserveValue: targetField.startsWith('no_form_data_') && formControl instanceof FormArray,
         });
 
+        const childScope = String(fieldConfig?.filter?.scope ?? 'client').toLowerCase();
+
         // Sin selección real del autocomplete no existe overlay de datos. El
         // root conserva valor/opciones. La tabla NUNCA se toca por selección.
         if (!parentHasContext) {
+          // [[[II ESC:030-07 REGRESIÓN corregida: un child `filter.scope='server'`
+          // lo resuelve SIEMPRE el servidor; sin padre tampoco debe pedirse al
+          // usuario. Antes, esta rama evaluaba el estado con el child vacío
+          // (perdía edit:False/scope) y `_applyEffectiveChildState` re-imponía el
+          // required base: tras el reset del guardado ("Guardar y nuevo"), el
+          // segundo envío se bloqueaba por los campos calculados del servidor
+          // (p.ej. Cluster/Región). Se re-aplica el relax respetando el `edit`
+          // declarado por el child, como nace el form. ]]]FI
+          if (childScope === 'server') {
+            this._applyServerScopedChild({
+              fieldConfig, targetField, formControl, mirroredField,
+              state: effective.state,
+              edit: effective.edit && fieldConfig?.edit !== false,
+            });
+            continue;
+          }
           if (this.isDropdown(targetFieldConfig)) {
             void this.dataDropdown(targetFieldConfig, false);
           }
           continue;
         }
 
-        const childScope = String(fieldConfig?.filter?.scope ?? 'client').toLowerCase();
         if (childScope === 'server') {
           this._applyServerScopedChild({
             fieldConfig, targetField, formControl, mirroredField, state: effective.state, edit: effective.edit,
@@ -5340,10 +5246,11 @@ export class CustomDrawFormComponent implements OnInit, OnDestroy {
   initializeTableData(tableConfig: any): any[] {
     const data: any[] = [];
     const initialRows = tableConfig?.initial_rows || 0;
-    //console.log('Inicializando tabla con filas::::::::::', initialRows);
+    // [[[II ESC:030-06 columns acepta lista o dict numerado {0:...} ]]]FI
+    const columns = this.generalS.configuredTableColumns(tableConfig?.columns);
     for (let i = 0; i < initialRows; i++) {
       const row: any = {};
-      tableConfig.columns.forEach((col: any) => {
+      columns.forEach((col: any) => {
         row[col.field] = this.getTableColumnDefaultValue(col);
       });
       data.push(row);
@@ -5373,7 +5280,9 @@ export class CustomDrawFormComponent implements OnInit, OnDestroy {
     if (column?.type === 'multi-select' || column?.type === 'multi-choice' || column?.type === 'listbox') {
       return [];
     }
-    if (column?.type === 'checkbox') {
+    // [[[II ESC:030-06 toggle-button es el tipo bool de columnas (is_bool); sin
+    // esta rama caía a '' y la celda booleana quedaba vacía. ]]]FI
+    if (column?.type === 'checkbox' || column?.type === 'toggle-button') {
       return false;
     }
     return '';
@@ -5382,18 +5291,28 @@ export class CustomDrawFormComponent implements OnInit, OnDestroy {
   private createTableRowFormGroup(tableConfig: any, rowData: any = {}): FormGroup {
     const rowGroup: any = {};
 
-    (tableConfig?.columns || []).forEach((col: any) => {
+    this.generalS.configuredTableColumns(tableConfig?.columns).forEach((col: any) => {
       const validators: any[] = [];
-      const editable = col.editable !== false;
+      // [[[II ESC:030-06 Misma resolución de editabilidad que la celda (FALLO #1:
+      // `col.editable` NO significa "celda bloqueada"): local_editable fuerza,
+      // readonly bloquea, si no decide el campo natural default.edit. ]]]FI
+      const editable = col.local_editable === true
+        ? true
+        : (col.readonly === true ? false : col.default?.edit !== false);
 
       if (col.required && editable) {
         validators.push(Validators.required);
       }
-      if (col.validation?.max_length) {
-        validators.push(Validators.maxLength(col.validation.max_length));
+      // Longitudes: validation.* o los campos naturales de input_text (max_length/
+      // min_length top-level). En auto-complete min_length = chars de búsqueda.
+      const isTextColumn = col.type === 'input-text' || col.type === 'textarea';
+      const maxLength = col.validation?.max_length ?? (isTextColumn ? col.max_length : undefined);
+      const minLength = col.validation?.min_length ?? (isTextColumn ? col.min_length : undefined);
+      if (maxLength) {
+        validators.push(Validators.maxLength(maxLength));
       }
-      if (col.validation?.min_length) {
-        validators.push(Validators.minLength(col.validation.min_length));
+      if (minLength) {
+        validators.push(Validators.minLength(minLength));
       }
 
       const displayValue = rowData?.[`${col.field}__name`];
@@ -5461,12 +5380,32 @@ export class CustomDrawFormComponent implements OnInit, OnDestroy {
     output.emit(event);
     if (event?.isDerivedDraft === true) return;
 
+    // [[[II ESC:030-06 columns acepta lista o dict numerado {0:...}; se normaliza
+    // UNA vez y se propaga ya como array (el host no re-normaliza). ]]]FI
+    const configuredColumns = this.generalS.configuredTableColumns(tableConfig?.columns);
+
+    // [[[II Delegación al motor del host: en vez de persistir aquí (segundo motor),
+    // se emite el contexto explícito de la fila para que el host reutilice
+    // save({table_row}) (pos transitorio) — mismo flujo del detalle: validación,
+    // relaciones, creación del padre, POST/PATCH y proyección de respuesta. ]]]FI
+    if (this.delegateTableSave) {
+      const rowId = event?.sourceRow?.id ?? event?.rowData?.id;
+      this.onTableRowSave.emit({
+        field: tableConfig?.field,
+        row_index: event?.rowIndex,
+        row_data: event?.rowData,
+        source_row: event?.sourceRow,
+        columns: configuredColumns,
+        mode: rowId ? 'edit' : 'create',
+      });
+      return;
+    }
+
     const resource = this._tableServerResource(tableConfig);
     const sourceRow = event?.sourceRow;
     const rowId = sourceRow?.id ?? event?.rowData?.id;
     if (!resource || !rowId) return;
 
-    const configuredColumns = tableConfig?.columns || [];
     const serverColumns = event?.colField
       ? configuredColumns.filter((column: any) => column?.field === event.colField && column?.scope_edition === 'server')
       : configuredColumns.filter((column: any) => column?.scope_edition === 'server');

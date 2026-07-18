@@ -108,6 +108,27 @@ export class RequestComponent extends CRUD implements OnInit {
     console.log('cancelRequestDetail');
   }
 
+  // [[[II Alta/edición de una fila de la tabla derivada de request-detail: se
+  // delega al MISMO motor del detalle mediante save({table_row}). save() deriva
+  // internamente el "pos transitorio" (pos + 'trans'), valida y hace POST/PATCH
+  // reutilizando el flujo del formulario, sin tocar el form visible. El nombre de
+  // campo del detalle NO se hardcodea: viaja en la config de columnas. ]]]FI
+  handleTableRowSave(ctx: any): void {
+    if (!ctx?.field) return;
+    this.save({
+      pos: this.typeDefault,
+      table_row: {
+        base_pos: this.typeDefault,
+        field: ctx.field,
+        row_index: ctx.row_index,
+        row_data: ctx.row_data,
+        source_row: ctx.source_row,
+        columns: ctx.columns || [],
+        mode: ctx.mode === 'edit' ? 'edit' : 'create',
+      },
+    });
+  }
+
   private openTempDialogFor(status: string, label: string) {
     this.tempActionLabel = label;
     this.tempActionDialogVisible = true;

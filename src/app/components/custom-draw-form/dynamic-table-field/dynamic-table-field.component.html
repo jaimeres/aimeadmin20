@@ -109,6 +109,95 @@
                   [pAutoFocus]="true" />
               </div>
 
+              <!-- [[[II ESC:030-06 Celda auto-complete: sugerencias por escritura
+                   (completeMethod → filter[search]) y coincidencia exacta en Enter;
+                   al seleccionar se guarda el UUID canónico + children/derived. -->
+              <div *ngSwitchCase="'auto-complete'">
+                <span *ngIf="!rowEditState.isRowEditing && !rowEditState.editingCells[col.field]"
+                  [class]="getCellClass(rowData.get(col.field)?.value, col, config.field, rowIndex)">
+                  {{ rowData.get(col.field)?.value || '-' }}
+                </span>
+
+                <p-autoComplete
+                  *ngIf="(rowEditState.isRowEditing && (col._editable !== undefined ? col._editable : isColumnEditable(col))) || rowEditState.editingCells[col.field]"
+                  [formControlName]="col.field" [suggestions]="cellSuggestions()"
+                  (completeMethod)="onCellComplete($event, col)"
+                  (onSelect)="onCellAutoCompleteSelect($event, config.field, rowIndex, col)"
+                  (keydown)="onCellAutoCompleteKeydown($event, config.field, rowIndex, col)"
+                  [optionLabel]="col.option_label || 'name'" [minLength]="col.min_length || 1"
+                  [delay]="col.delay || 300" [forceSelection]="col.force_selection === true"
+                  [showEmptyMessage]="col.show_empty_message !== false"
+                  [emptyMessage]="col.empty_message || 'No hay resultados'"
+                  [pAutoFocus]="rowEditState.editingCells[col.field]" appendTo="body"
+                  styleClass="w-full" class="w-full">
+                  <ng-template let-option #item>
+                    <div class="grid grid-cols-12 gap-2 items-center" *ngIf="col.panel?.fields; else acPlain">
+                      <span *ngFor="let pf of (col.panel.fields | keyvalue); trackBy: trackByKey"
+                        [ngClass]="[$any(pf.value).class || 'col-span-6', $any(pf.value).class_md || 'md:col-span-3']"
+                        class="text-sm">
+                        {{ $any(option)[$any(pf.value).field + '__name'] ?? $any(option)[$any(pf.value).field] }}
+                      </span>
+                    </div>
+                    <ng-template #acPlain>
+                      <span class="text-sm">{{ $any(option)[col.option_label] ?? option.name ?? option.code ?? option.display_name }}</span>
+                    </ng-template>
+                  </ng-template>
+                </p-autoComplete>
+              </div>
+
+              <!-- Celda dropdown (combo) / dropdown-choice: opciones inline por config. -->
+              <div *ngSwitchCase="'dropdown'">
+                <span *ngIf="!rowEditState.isRowEditing && !rowEditState.editingCells[col.field]"
+                  [class]="getCellClass(rowData.get(col.field)?.value, col, config.field, rowIndex)">
+                  {{ rowData.get(col.field)?.value || '-' }}
+                </span>
+
+                <p-select
+                  *ngIf="(rowEditState.isRowEditing && (col._editable !== undefined ? col._editable : isColumnEditable(col))) || rowEditState.editingCells[col.field]"
+                  [formControlName]="col.field"
+                  [options]="col.options?.length ? col.options : (cellDropdownOptions()[col.field] || [])"
+                  [optionLabel]="col.option_label || 'name'" [optionValue]="col.option_value || 'id'"
+                  [filter]="col.filter_local !== false" [showClear]="true" appendTo="body"
+                  styleClass="w-full" class="w-full"
+                  [pAutoFocus]="rowEditState.editingCells[col.field]"
+                  (onChange)="onCellDropdownChange($event, config.field, rowIndex, col)" />
+              </div>
+
+              <div *ngSwitchCase="'dropdown-choice'">
+                <span *ngIf="!rowEditState.isRowEditing && !rowEditState.editingCells[col.field]"
+                  [class]="getCellClass(rowData.get(col.field)?.value, col, config.field, rowIndex)">
+                  {{ rowData.get(col.field)?.value || '-' }}
+                </span>
+
+                <p-select
+                  *ngIf="(rowEditState.isRowEditing && (col._editable !== undefined ? col._editable : isColumnEditable(col))) || rowEditState.editingCells[col.field]"
+                  [formControlName]="col.field"
+                  [options]="col.options?.length ? col.options : (cellDropdownOptions()[col.field] || [])"
+                  [optionLabel]="col.option_label || 'display_name'" [optionValue]="col.option_value || 'value'"
+                  [filter]="col.filter_local === true" appendTo="body"
+                  styleClass="w-full" class="w-full"
+                  [pAutoFocus]="rowEditState.editingCells[col.field]"
+                  (onChange)="onCellDropdownChange($event, config.field, rowIndex, col)" />
+              </div>
+
+              <!-- [[[II ESC:030-06 Celda bool: display con la MISMA convención que
+                   fieldsBool (label_true/label_false de la config → _labelTrue/
+                   _labelFalse); editor p-toggleButton con los mismos textos. -->
+              <div *ngSwitchCase="'toggle-button'">
+                <span *ngIf="!rowEditState.isRowEditing && !rowEditState.editingCells[col.field]"
+                  [class]="getCellClass(rowData.get(col.field)?.value, col, config.field, rowIndex)">
+                  {{ rowData.get(col.field)?.value ? col._labelTrue : col._labelFalse }}
+                </span>
+
+                <p-toggleButton
+                  *ngIf="(rowEditState.isRowEditing && (col._editable !== undefined ? col._editable : isColumnEditable(col))) || rowEditState.editingCells[col.field]"
+                  [formControlName]="col.field" [onLabel]="col._labelTrue" [offLabel]="col._labelFalse"
+                  [pAutoFocus]="rowEditState.editingCells[col.field]" styleClass="w-full"
+                  (onChange)="advanceAfterCell(config.field, rowIndex, col.field)" />
+              </div>
+              <!-- ]]]FI -->
+              <!-- ]]]FI -->
+
               <div *ngSwitchDefault>
                 <span *ngIf="!rowEditState.isRowEditing && !rowEditState.editingCells[col.field]"
                   [class]="getCellClass(rowData.get(col.field)?.value, col, config.field, rowIndex)">

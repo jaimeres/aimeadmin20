@@ -1388,7 +1388,8 @@ export class CRUD extends Vars implements OnChanges  /*implements OnInit*/ {
 
             } else if (field.type === 'table') {
               // Procesar tipo table - crear FormArray con FormGroups para cada fila
-              const columns = field.columns || [];
+              // [[[II ESC:030-06 columns acepta lista o dict numerado {0:...} ]]]FI
+              const columns = this.generalS.configuredTableColumns(field.columns);
               const initialRows = field.initial_rows || 0;
               const isRequired = field.required || false;
 
@@ -1924,7 +1925,8 @@ export class CRUD extends Vars implements OnChanges  /*implements OnInit*/ {
 
     } else if (fieldData.type === 'table') {
       // Procesar tipo table
-      const columns = fieldData.columns || [];
+      // [[[II ESC:030-06 columns acepta lista o dict numerado {0:...} ]]]FI
+      const columns = this.generalS.configuredTableColumns(fieldData.columns);
       const initialRows = fieldData.initial_rows || 0;
       // [[[II ESC:001-17 DOC:docs/documents/2026-05-16_001_consolidacion_dropdown_types_y_fix_escenarios.md#escenario-17
       const isNoFormDataField = this._isNoFormDataField(fieldName);
@@ -4318,7 +4320,15 @@ export class CRUD extends Vars implements OnChanges  /*implements OnInit*/ {
       }
 
       if (ctrl instanceof FormGroup) {
-        Object.entries(ctrl.controls).forEach(([k, child]) => visit(child, [...path, k]));
+        Object.entries(ctrl.controls).forEach(([k, child]) => {
+          // [[[II Una tabla `no_form_data_*` es un FormArray local (borradores de
+          // fila) que NO se envía al servidor (`_stripNoFormDataPayload`) y se valida
+          // al confirmar la fila (motor transitorio). Por eso su invalidez local no
+          // debe aportar `required` al formErrors del detalle padre ni bloquear su
+          // submit. Se omite el subárbol completo. ]]]FI
+          if (child instanceof FormArray && this._isNoFormDataField(k)) return;
+          visit(child, [...path, k]);
+        });
       } else if (ctrl instanceof FormArray) {
         ctrl.controls.forEach((child, i) => visit(child, [...path, String(i)]));
       }
@@ -4326,6 +4336,11 @@ export class CRUD extends Vars implements OnChanges  /*implements OnInit*/ {
     };
 
     visit(form, []);
+
+    // [[[II Si tras omitir las tablas `no_form_data_*` no queda ningún error real,
+    // el detalle padre es válido a efectos de envío: no se bloquea ni se muestra el
+    // toast (el form global estaba "invalid" sólo por los borradores de tabla). ]]]FI
+    if (!errors.local.length) return false;
 
     // Mensaje y salida
     // [[[II ESC:018-01 DOC:docs/documents/2026-06-03_018_crud-form-errors-drawform-labels.md#escenario-01
@@ -4968,7 +4983,9 @@ export class CRUD extends Vars implements OnChanges  /*implements OnInit*/ {
   private _tableColumnDefaultValueForCrud(column: any): any {
     if (column?.type === 'input-number' || column?.type === 'date') return null;
     if (column?.type === 'multi-select' || column?.type === 'multi-choice' || column?.type === 'listbox') return [];
-    if (column?.type === 'checkbox') return false;
+    // [[[II ESC:030-06 toggle-button es el tipo bool real de columnas (is_bool);
+    // sin esta rama caía al default '' y la celda booleana quedaba vacía. ]]]FI
+    if (column?.type === 'checkbox' || column?.type === 'toggle-button') return false;
     return '';
   }
 
@@ -4992,7 +5009,7 @@ export class CRUD extends Vars implements OnChanges  /*implements OnInit*/ {
   private _createNoFormDataTableRowFormGroup(tableConfig: any, rowData: any = {}): FormGroup {
     const rowGroup: any = {};
 
-    (tableConfig?.columns || []).forEach((column: any) => {
+    this.generalS.configuredTableColumns(tableConfig?.columns).forEach((column: any) => {
       rowGroup[column.field] = this.fb.control(this._tableCellValueForCrud(rowData, column));
     });
 
@@ -5035,14 +5052,26 @@ export class CRUD extends Vars implements OnChanges  /*implements OnInit*/ {
     let row = createdRow && typeof createdRow === 'object' && !Array.isArray(createdRow)
       ? { ...createdRow }
       : {};
+    const columns = this.generalS.configuredTableColumns(tableConfig?.columns);
+
+    // Proyecta la respuesta del detalle (ya aplanada por DJAtoObject) hacia las
+    // columnas declaradas usando el contrato source→target (field/field_name/
+    // derived.field_name/children.fields.derived), conservando UUID canonico +
+    // etiqueta visible. Esto completa columnas que antes quedaban vacias porque
+    // su nombre destino difiere del nombre en la respuesta (p.ej. currency ->
+    // currency__name, base_product_data_name -> name).
+    row = this.generalS.projectConfiguredTableRow(row, columns, createdRow);
+
     const form = this.currentForm(pos);
     const draw = this._drawFormForDevice(pos);
 
+    // Complemento: rellena huecos restantes con los objetos seleccionados en los
+    // autocomplete del formulario (mismo comportamiento previo).
     this._walkAutoCompleteFields(draw, (fieldCfg: any) => {
       const selected = this._autoCompleteSelectedObjectFromForm(form, fieldCfg);
       if (!selected) return;
       row = this.generalS.mergeConfiguredTableRow(
-        row, tableConfig?.columns || [], selected, fieldCfg
+        row, columns, selected, fieldCfg
       );
     });
 
@@ -5059,16 +5088,34 @@ export class CRUD extends Vars implements OnChanges  /*implements OnInit*/ {
     const tableConfig = this._findNoFormDataTableConfig(pos, localTable.field);
     if (!tableConfig) return;
 
+    const createdRows = (Array.isArray(createdItem) ? createdItem : [createdItem])
+      .map((row) => this._completeCreatedLocalTableRow(pos, tableConfig, row));
+    const rowGroups = createdRows.map((row) => this._createNoFormDataTableRowFormGroup(tableConfig, row));
+
+    // Modo 'row': reemplaza EXACTAMENTE la fila indicada (alta/edición confirmada
+    // desde la propia tabla). No elimina borradores globales ni multiplica filas.
+    if (localTable.mode === 'row') {
+      const targetIndex = localTable.row_index;
+      const replacement = rowGroups[0];
+      if (replacement && targetIndex != null && targetIndex >= 0 && targetIndex < control.length) {
+        control.setControl(targetIndex, replacement, { emitEvent: false });
+      } else if (replacement) {
+        control.push(replacement, { emitEvent: false });
+      }
+      control.markAsDirty();
+      control.root?.markAsDirty();
+      control.updateValueAndValidity();
+      return;
+    }
+
+    // Modos prepend/append/replace: se limpian los borradores locales antes de
+    // insertar la respuesta creada (comportamiento del botón Agregar).
     for (let index = control.length - 1; index >= 0; index--) {
       const rowControl = control.at(index);
       if ((rowControl as any)?.[this.derivedTableDraftFlag] === true) {
         control.removeAt(index, { emitEvent: false });
       }
     }
-
-    const createdRows = (Array.isArray(createdItem) ? createdItem : [createdItem])
-      .map((row) => this._completeCreatedLocalTableRow(pos, tableConfig, row));
-    const rowGroups = createdRows.map((row) => this._createNoFormDataTableRowFormGroup(tableConfig, row));
 
     if (localTable.mode === 'replace') {
       control.clear({ emitEvent: false });
@@ -5103,13 +5150,35 @@ export class CRUD extends Vars implements OnChanges  /*implements OnInit*/ {
 
   submitForm(options: saveOptions = {}) {
 
-    let { pos, hide = true, reset = true, is_file = false, node = false, selected = null, update_item = true, data = null, custom_user = null, local_table = undefined } = options;
+    let { pos, hide = true, reset = true, is_file = false, node = false, selected = null, update_item = true, data = null, custom_user = null, local_table = undefined, force_create = undefined } = options;
 
     const safePos = pos as any; // Type assertion para índices de array
 
+    // Rama crear (POST) vs editar (PATCH). Si force_create es un booleano explícito
+    // se respeta (alta/edición desde tabla derivada vía pos transitorio) sin tocar
+    // el signal global isCreate(); en el flujo normal se usa isCreate().
+    const doCreate = (typeof force_create === 'boolean') ? force_create : this.isCreate();
+
     //this.fields siempre se debe inclui sino no es validado el form
     const formData = data ? data : this.currentForm(safePos).value;
-    const include = this.include[safePos];
+    let include = this.include[safePos];
+    // [[[II ESC:030-06 Cuando la respuesta se inyecta en una tabla derivada
+    // (local_table), se fusiona el `response_include` declarado por la tabla para
+    // que la respuesta traiga las relaciones que sus celdas muestran (aplanadas a
+    // `<campo>__name` por DJAtoObject). Sin esto, la celda de una relación (p.ej.
+    // moneda) mostraba el UUID. Config-driven: cada endpoint declara el suyo. ]]]FI
+    if (local_table?.field) {
+      const tablePos = local_table.pos ?? safePos;
+      const responseInclude = this._findNoFormDataTableConfig(tablePos, local_table.field)?.response_include;
+      if (typeof responseInclude === 'string' && responseInclude.trim() !== '') {
+        const parts = new Set(
+          [...String(include || '').split(','), ...responseInclude.split(',')]
+            .map((part) => part.trim())
+            .filter((part) => part !== '')
+        );
+        include = Array.from(parts).join(',');
+      }
+    }
     const filter = this.filter;
     //console.log('save if', this.currentForm(safePos).get('maintenance_document_data_documents')?.value, formData)
 
@@ -5172,7 +5241,7 @@ export class CRUD extends Vars implements OnChanges  /*implements OnInit*/ {
 
     //console.log('forrmmmmmmmmmmmmmmmmmm', formData);
     //revisar porque la primer seleccion del archivo se envia vacio de asset-document
-    if (this.isCreate()) {
+    if (doCreate) {
       this.crudS.saveObject({ formData, include, filter /*, files*/ }).subscribe({
         next: (resp: any) => {
           const temp = [...this.items()];
@@ -5189,8 +5258,12 @@ export class CRUD extends Vars implements OnChanges  /*implements OnInit*/ {
 
           // [[[II ESC:001-17 DOC:docs/documents/2026-05-16_001_consolidacion_dropdown_types_y_fix_escenarios.md#escenario-17
           if (local_table) {
-            this._applyCreatedItemToLocalTable(safePos, local_table, createdItem);
-            this._syncRelationshipControlsFromCreatedItem(safePos, createdItem);
+            // El FormArray de la tabla puede vivir en un pos distinto al del
+            // guardado (p.ej. guardado en "pos transitorio" pero la tabla está en
+            // el form VISIBLE). local_table.pos indica ese destino.
+            const tablePos = local_table.pos ?? safePos;
+            this._applyCreatedItemToLocalTable(tablePos, local_table, createdItem);
+            this._syncRelationshipControlsFromCreatedItem(tablePos, createdItem);
           }
           // ]]]FI
 
@@ -5358,7 +5431,15 @@ export class CRUD extends Vars implements OnChanges  /*implements OnInit*/ {
    * @param update_item true para actualizar el item de la app principal, false para no hacerlo
    */
   save(options: saveOptions = {}) {
-    const { pos, hide = true, reset = true, is_file = false, node = false, selected = null, update_item = true, data = null, custom_user = null, local_table = undefined } = options;
+    // [[[II Alta/edición de un detalle desde la tabla derivada: se reutiliza el
+    // MISMO motor mediante un "pos transitorio" (pos + 'trans'), sin tocar el
+    // formulario visible ni el estado global del diálogo. ]]]FI
+    if (options.table_row) {
+      this._saveTableRowTransient(options);
+      return;
+    }
+
+    const { pos, hide = true, reset = true, is_file = false, node = false, selected = null, update_item = true, data = null, custom_user = null, local_table = undefined, force_create = undefined } = options;
     const safePos = pos as any; // Type assertion para índices de array
     const form = this.currentForm(safePos);
 
@@ -5387,11 +5468,174 @@ export class CRUD extends Vars implements OnChanges  /*implements OnInit*/ {
 
       //console.log('save else', data, form.get('documents'), form.get('maintenance_document_data_documents'), this.files64)
       //form.get('documents')?.setValue(this.files64);
-      this.submitForm({ pos, hide, reset, is_file, node, selected, update_item, data, custom_user, local_table });
+      this.submitForm({ pos, hide, reset, is_file, node, selected, update_item, data, custom_user, local_table, force_create });
     }
     /*} else {
       this.submitForm({ pos, hide, reset, is_file, node, selected, update_item, data, custom_user });
     }*/
+  }
+
+  // [[[II Guardado de una fila de tabla derivada reutilizando el motor del form.
+  //
+  // Estrategia (contexto transitorio, sin contaminar el diálogo visible):
+  //  1. Deriva transientPos = base_pos + 'trans' y espeja el contexto por-pos.
+  //  2. Clona los controles del detalle visible (mismos validators) en un
+  //     FormGroup transitorio; copia encabezados/relaciones del padre del form
+  //     visible y superpone los valores de la fila (mapeados por columna).
+  //  3. Llama a save() sobre el pos transitorio -> reutiliza formErrors,
+  //     validateRelationships, submitForm y creación del padre.
+  //  4. La respuesta se proyecta e inyecta en la fila exacta de la tabla del form
+  //     VISIBLE (local_table mode 'row').
+  //
+  // NOTA: `name` local se resuelve por columna (local_editable) fuera de aquí; el
+  // nombre de campo del detalle (hoy 'name') NO se hardcodea: se toma del propio
+  // control del detalle y de la config de columna. Si a futuro un endpoint usa
+  // otro nombre para el "name local", basta la config de columna. ]]]FI
+  // Validators de una COLUMNA de tabla para el form transitorio: required sólo si
+  // la columna es required y editable (misma editabilidad que resuelve la celda:
+  // local_editable fuerza edición; readonly la bloquea; si no, `default.edit`),
+  // más min/max length. No se hardcodean nombres de campo. ]]]FI
+  private _transientColumnValidators(column: any): ValidatorFn | null {
+    const validators: ValidatorFn[] = [];
+    const editable = column?.local_editable === true
+      ? true
+      : (column?.readonly === true ? false : column?.default?.edit !== false);
+    if (column?.required && editable) validators.push(Validators.required);
+    // Longitudes: `validation.{max,min}_length` o, para columnas de texto, los
+    // campos naturales de input_text (`max_length`/`min_length` top-level). En
+    // auto-complete `min_length` significa "caracteres para buscar", NO validación.
+    const isTextColumn = column?.type === 'input-text' || column?.type === 'textarea';
+    const maxLength = column?.validation?.max_length ?? (isTextColumn ? column?.max_length : undefined);
+    const minLength = column?.validation?.min_length ?? (isTextColumn ? column?.min_length : undefined);
+    if (maxLength) validators.push(Validators.maxLength(maxLength));
+    if (minLength) validators.push(Validators.minLength(minLength));
+    return validators.length ? Validators.compose(validators) : null;
+  }
+
+  private _saveTableRowTransient(options: saveOptions): void {
+    const ctx = options.table_row!;
+    const basePos = ctx.base_pos as any;
+    const transientPos = `${basePos}trans` as any;
+
+    const baseForm = this.currentForm(basePos);
+    if (!baseForm) return;
+
+    this._ensureTransientPosContext(basePos, transientPos);
+
+    // Clona los controles simples del detalle visible. Se omiten FormArray (p.ej.
+    // la propia tabla derivada) y grupos anidados: el payload del detalle es plano
+    // y los no_form_data_* se descartan al enviar.
+    //
+    // [[[II D2: la fila directa se valida contra SU propio contexto. Para los
+    // campos que también son COLUMNAS de la tabla (code/name/requested/currency/
+    // price) se usan los validators de la columna (required por columna), NO los
+    // del encabezado del form visible, que "Agregar" pudo resetear a vacío+required
+    // (evita el falso "Buscar producto/Moneda requerido"). Los controles que NO son
+    // columnas (encabezados, relaciones, fields_prefixes) conservan sus validators
+    // reales. ]]]FI
+    // columns acepta lista o dict numerado {0:...}: normalización única.
+    const ctxColumns = this.generalS.configuredTableColumns(ctx.columns);
+    const columnByField = new Map<string, any>();
+    ctxColumns.forEach((column: any) => {
+      if (column?.field) columnByField.set(column.field, column);
+    });
+    const transientForm = this.fb.group({});
+    Object.keys(baseForm.controls).forEach((key) => {
+      const ctrl = baseForm.get(key);
+      if (ctrl instanceof FormControl) {
+        const column = columnByField.get(key);
+        const validator = column ? this._transientColumnValidators(column) : ctrl.validator;
+        transientForm.addControl(
+          key,
+          new FormControl(ctrl.value, validator, ctrl.asyncValidator),
+          { emitEvent: false }
+        );
+      }
+    });
+
+    // Superpone los valores de la fila mapeados por columna: valor canónico en el
+    // campo del detalle y UUID de la relación en su relationship_field.
+    const rowData = ctx.row_data || {};
+    const sourceRow = ctx.source_row || {};
+    ctxColumns.forEach((column: any) => {
+      const field = column?.field;
+      if (!field) return;
+
+      // Valor canónico: prioriza el UUID/valor persistido de la fila (source_row)
+      // y cae al valor visible de la celda.
+      const canonical = sourceRow[field] !== undefined ? sourceRow[field] : rowData[field];
+      const control = transientForm.get(field);
+      if (control && canonical !== undefined) {
+        control.setValue(canonical, { emitEvent: false });
+      }
+
+      // UUID de relación en su campo canónico (p.ej. product).
+      const relationshipField = column?.relationship_field;
+      if (relationshipField) {
+        const relId = sourceRow[relationshipField] ?? rowData[relationshipField];
+        const relControl = transientForm.get(relationshipField);
+        if (relControl && relId !== undefined && relId !== null && relId !== '') {
+          relControl.setValue(relId, { emitEvent: false });
+        }
+      }
+    });
+
+    // Registra el form transitorio en la señal de forms para currentForm().
+    this.form.set({ ...this.form(), [transientPos]: transientForm });
+
+    const localTable: saveOptions['local_table'] = {
+      field: ctx.field,
+      mode: 'row',
+      pos: basePos,
+      row_index: ctx.row_index,
+    };
+
+    if (ctx.mode === 'edit') {
+      const detailId = sourceRow?.id ?? rowData?.id;
+      // Edición persistida: PATCH con el id del detalle. NO se toca el signal
+      // global isCreate(): force_create:false fuerza la rama de edición solo para
+      // este guardado transitorio.
+      this.save({
+        pos: transientPos,
+        hide: false,
+        reset: false,
+        update_item: false,
+        force_create: false,
+        selected: detailId ? { id: detailId } : null,
+        local_table: localTable,
+      });
+    } else {
+      // Alta: fuerza POST con force_create (no depende del isCreate global) y crea
+      // el padre si aún no existe mediante el mismo flujo del detalle.
+      this.save({
+        pos: transientPos,
+        hide: false,
+        reset: false,
+        update_item: false,
+        force_create: true,
+        local_table: localTable,
+      });
+    }
+  }
+
+  // Espeja el contexto por-pos del detalle al pos transitorio (referencias; no se
+  // duplica lógica). Sólo lo necesario para submitForm/validateRelationships/
+  // formErrors. `filter` es un escalar compartido y no requiere espejo.
+  private _ensureTransientPosContext(basePos: any, transientPos: any): void {
+    const mirrorArrays: any[] = [
+      this.include, this.relationships, this.type, this.app,
+      this.optionsFields, this.additionalFieldsAppCols,
+      this.singular, this.singularIndefiniteArticle,
+      this.fieldsBool, this.moreFields,
+    ];
+    for (const arr of mirrorArrays) {
+      if (arr && arr[basePos] !== undefined) arr[transientPos] = arr[basePos];
+    }
+    // drawForm es una señal (objeto por pos): comparte la config del detalle.
+    const draw = this.drawForm();
+    if (draw && draw[basePos] !== undefined && draw[transientPos] === undefined) {
+      this.drawForm.set({ ...draw, [transientPos]: draw[basePos] });
+    }
   }
 
   saveSecundary(options: saveOptions = {}) {

@@ -828,7 +828,7 @@ export class GeneralService {
     const sourceId = source?.id ?? source?.value;
     const displayValue = this.formatDynamicValue(source, sourceConfig);
 
-    for (const column of columns || []) {
+    for (const column of this.configuredTableColumns(columns)) {
       const field = column?.field;
       if (!field) continue;
 
@@ -847,7 +847,223 @@ export class GeneralService {
 
     return result;
   }
+
+  /**
+   * Proyecta un objeto fuente YA aplanado por DJAtoObject (p.ej. la respuesta de
+   * un detalle recién creado/editado) hacia las columnas declaradas de una tabla
+   * derivada, respetando el contrato source→target por configuración y SIN
+   * hardcodear nombres de campo. Resuelve la clave fuente de cada columna en este
+   * orden contractual:
+   *   1. `column.field`
+   *   2. `column.field_name`
+   *   3. `column.derived.field_name`
+   *   4. `column.children.fields.derived[column.field].field_name`
+   *
+   * Para columnas de relación (tienen `data_type.type` o `relationship_field`)
+   * conserva el UUID canónico en `result[field]` (y en `relationship_field`) y
+   * expone la etiqueta visible en `result[field + '__name']`. Nunca sustituye el
+   * UUID por la etiqueta ni muestra el UUID cuando existe etiqueta: la celda lee
+   * primero `field__name` y el `tableRowSourceFlag` conserva el UUID para PATCH.
+   *
+   * No sobrescribe valores locales ya presentes en `row` (p.ej. campos
+   * `scope_edition: 'local'` capturados en la fila); solo rellena huecos.
+   */
+  projectConfiguredTableRow(row: any, columns: any[], source: any): any {
+    const result = row && typeof row === 'object' && !Array.isArray(row) ? { ...row } : {};
+    if (!source || typeof source !== 'object' || Array.isArray(source)) return result;
+
+    const isEmpty = (value: any) => value === null || value === undefined || value === '';
+
+    for (const column of this.configuredTableColumns(columns)) {
+      const field = column?.field;
+      if (!field) continue;
+
+      // Clave fuente segun el contrato declarado (no se asume que target === source).
+      const derivedFromChildren = column?.children?.fields?.derived?.[field]?.field_name;
+      const sourceKey = column?.field_name
+        || column?.derived?.field_name
+        || derivedFromChildren
+        || field;
+
+      const hasDirect = source[sourceKey] !== undefined;
+      const displayValue = source[`${sourceKey}__name`];
+      const hasDisplay = displayValue !== undefined && displayValue !== null && displayValue !== '';
+      if (!hasDirect && !hasDisplay) continue;
+
+      const isRelationship = !!(column?.data_type?.type) || !!column?.relationship_field;
+
+      // Valor canonico (UUID para relaciones; valor plano en otro caso). Solo se
+      // rellena si la fila no trae ya un valor local para ese target.
+      if (isEmpty(result[field]) && hasDirect) {
+        const rawValue = source[sourceKey];
+        result[field] = (rawValue && typeof rawValue === 'object' && !Array.isArray(rawValue))
+          ? this.formatDynamicValue(rawValue, column)
+          : rawValue;
+      }
+
+      // Etiqueta de presentacion separada del UUID (para relaciones).
+      if (isRelationship && hasDisplay && isEmpty(result[`${field}__name`])) {
+        result[`${field}__name`] = displayValue;
+      }
+
+      // Conserva el UUID de la relacion en su campo canonico declarado.
+      const relationshipField = column?.relationship_field;
+      if (relationshipField && isEmpty(result[relationshipField]) && source[relationshipField] !== undefined) {
+        result[relationshipField] = source[relationshipField];
+      }
+    }
+
+    return result;
+  }
   // ]]]FI
+
+  // [[[II ESC:030-06 Normalizador de columnas de tabla derivada: la config puede
+  // declararlas como LISTA (legado) o como DICT numerado {0:{...}, 1:{...}} — la
+  // misma forma que panel.fields — para que la misma función "planche" ambas
+  // anidaciones. Devuelve SIEMPRE un array ordenado por clave numérica.
+  // Fuente única: todo consumidor de columns debe pasar por aquí. ]]]FI
+  configuredTableColumns(columns: any): any[] {
+    if (Array.isArray(columns)) return columns;
+    if (!columns || typeof columns !== 'object') return [];
+    return Object.keys(columns)
+      .sort((a, b) => {
+        const na = Number(a); const nb = Number(b);
+        if (Number.isFinite(na) && Number.isFinite(nb)) return na - nb;
+        return String(a).localeCompare(String(b));
+      })
+      .map((key) => columns[key])
+      .filter((column) => column && typeof column === 'object');
+  }
+
+  // ==========================================================================
+  // [[[II ESC:001-16 DOC:docs/documents/2026-05-16_001_consolidacion_dropdown_types_y_fix_escenarios.md#escenario-16 ESC:030-06 DOC:docs/documents/2026-07-14-030-child-runtime-overlay.md#escenario-06
+  // Enriquecimiento de sugerencias de autocomplete: rellena los campos anidados
+  // `<relacion>_data_<atributo>` (p.ej. `base_product_data_name`) que declara la
+  // config (option_label / panel / children.derived), leyéndolos de `included`
+  // del JSON:API. Compartido por el form dinámico (completeMethod) y las celdas
+  // de tabla derivada (autocomplete por celda). Reúso: fuente única, sin duplicar. ]]]FI
+  // ==========================================================================
+  enrichSuggestionRelationData(rows: any[], resp: any, config: any): any[] {
+    const requestedFields = this._collectRelationDataFields(config);
+    if (!requestedFields.length || !Array.isArray(rows)) return rows;
+
+    const included = resp?.included || [];
+    if (!Array.isArray(included) || included.length === 0) return rows;
+
+    return rows.map((row: any) => {
+      if (!row || typeof row !== 'object') return row;
+      const next = { ...row };
+      this._applyRelationDataFields(next, included, requestedFields);
+      return next;
+    });
+  }
+
+  private _relationDataFieldParts(fieldName: any): { relationship: string; attribute: string } | null {
+    if (typeof fieldName !== 'string') return null;
+    const marker = '_data_';
+    const index = fieldName.indexOf(marker);
+    if (index <= 0) return null;
+
+    const relationship = fieldName.slice(0, index).trim();
+    const attribute = fieldName.slice(index + marker.length).trim();
+    if (!relationship || !attribute) return null;
+
+    return { relationship, attribute };
+  }
+
+  private _labelKeysOf(optionLabel: any): string[] {
+    if (Array.isArray(optionLabel)) {
+      return optionLabel.map((key: any) => String(key).trim()).filter((key: string) => key.length > 0);
+    }
+    if (typeof optionLabel !== 'string') return [];
+    return optionLabel.split(',').map((key: string) => key.trim()).filter((key: string) => key.length > 0);
+  }
+
+  private _collectRelationDataFields(config: any): string[] {
+    const fields = new Set<string>();
+    const addField = (value: any): void => {
+      const parts = this._relationDataFieldParts(value);
+      if (parts) fields.add(String(value).trim());
+    };
+
+    const collectNode = (node: any): void => {
+      if (!node || typeof node !== 'object') return;
+      addField(node.field);
+      addField(node.field_name);
+      addField(node?.derived?.field_name);
+
+      if (node.columns && typeof node.columns === 'object') {
+        Object.values(node.columns).forEach(collectNode);
+      }
+      if (node.fields && typeof node.fields === 'object') {
+        Object.values(node.fields).forEach(collectNode);
+      }
+    };
+
+    this._labelKeysOf(config?.option_label).forEach(addField);
+
+    const panelFields = config?.panel?.fields;
+    if (panelFields && typeof panelFields === 'object') {
+      Object.values(panelFields).forEach(collectNode);
+    }
+
+    const childGroups = config?.children?.fields;
+    if (childGroups && typeof childGroups === 'object') {
+      ['static', 'dynamic', 'derived'].forEach(groupKey => {
+        const group = childGroups[groupKey];
+        if (group && typeof group === 'object') {
+          Object.values(group).forEach(collectNode);
+        }
+      });
+    }
+
+    return Array.from(fields);
+  }
+
+  private _findIncludedItem(included: any[], relationData: any): any | null {
+    if (!relationData || !Array.isArray(included)) return null;
+    return included.find((item: any) => item?.id == relationData.id && (!relationData.type || item?.type === relationData.type))
+      ?? included.find((item: any) => item?.id == relationData.id)
+      ?? null;
+  }
+
+  private _includedRelationValue(includedItem: any, relationData: any, attribute: string): any {
+    if (attribute === 'id') return includedItem?.id ?? relationData?.id ?? '';
+    if (attribute === 'type') return includedItem?.type ?? relationData?.type ?? '';
+    return includedItem?.attributes?.[attribute];
+  }
+
+  private _applyRelationDataFields(row: any, included: any[], requestedFields: string[]): void {
+    if (!row || typeof row !== 'object' || !Array.isArray(included) || included.length === 0) return;
+    const relationships = row.relationships || {};
+
+    requestedFields.forEach(fieldName => {
+      if (row[fieldName] !== undefined && row[fieldName] !== null && row[fieldName] !== '') return;
+
+      const parts = this._relationDataFieldParts(fieldName);
+      if (!parts) return;
+
+      const relationData = relationships?.[parts.relationship]?.data;
+      if (!relationData) return;
+
+      if (Array.isArray(relationData)) {
+        const values = relationData
+          .map((item: any) => this._findIncludedItem(included, item))
+          .map((includedItem: any, index: number) => this._includedRelationValue(includedItem, relationData[index], parts.attribute))
+          .filter((value: any) => value !== undefined && value !== null && value !== '');
+        if (values.length) row[fieldName] = values.join(', ');
+        return;
+      }
+
+      const includedItem = this._findIncludedItem(included, relationData);
+      if (!includedItem) return;
+
+      const value = this._includedRelationValue(includedItem, relationData, parts.attribute);
+      if (value !== undefined && value !== null) {
+        row[fieldName] = value;
+      }
+    });
+  }
 
   // Llama esto una vez desde cualquier componente (por ejemplo, al hacer submit)
   // ***********************ADAPTADO PARA CAPACITOR*********************
