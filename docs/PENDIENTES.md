@@ -267,15 +267,6 @@ Hay un `continue` comentado que los excluiría. Decidir si excluirlos o mantener
 Los campos de tipo `documents_*` deberían procesarse con lógica de configuración similar a `fields_prefixes`,
 pero actualmente se manejan como campos genéricos.
 
-### 5.8 — default_field no implementado (línea 2160)
-
-```typescript
-//°°°aqui deberia implementar 'default_field': 'name'
-```
-
-En la resolución de relaciones para el formulario, falta implementar `default_field`
-para que use un campo específico (ej. `name`) al mostrar el valor seleccionado.
-
 ### 5.9 — additionalFieldsAppCols deprecado (línea 5192)
 
 ```typescript

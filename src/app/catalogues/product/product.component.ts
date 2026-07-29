@@ -98,7 +98,7 @@ export class ProductComponent extends CRUD implements OnInit {
     //    }
     //}
     this.additionalFieldsAppCols[this.typeDefault as keyof typeof this.additionalFieldsAppCols] = {
-      'base_product_data': { 'column_header_prefix': '', 'form_prefix': '', 'default_field': 'name' },
+      'base_product_data': { 'column_header_prefix': '', 'form_prefix': '' },
     };
 
     this.initCRUD();

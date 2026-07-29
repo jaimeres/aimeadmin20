@@ -9,7 +9,11 @@ import { MenuItem } from 'primeng/api';
 // ************************ADAPTADO PARA CAPACITOR*********************
 import { Camera, CameraResultType, CameraSource } from '@capacitor/camera';
 // Scanner de códigos de barras para Capacitor
-import { CapacitorBarcodeScanner, CapacitorBarcodeScannerTypeHint } from '@capacitor/barcode-scanner';
+// [[[II ESC:031-02 DOC:docs/documents/2026-07-18-031-optimizacion-navegacion-activos.md#escenario-02
+// Import solo de tipos: se borra al compilar. El módulo runtime (html5-qrcode +
+// ZXing, ~374 KB) se carga con import() dentro de onScanCode() al escanear.
+import type { CapacitorBarcodeScannerTypeHint } from '@capacitor/barcode-scanner';
+// ]]]FI
 import { AutoCompleteModule } from 'primeng/autocomplete';
 import { ButtonModule } from 'primeng/button';
 import { CardModule } from 'primeng/card';
@@ -22,13 +26,10 @@ import { InputNumberModule } from 'primeng/inputnumber';
 import { InputTextModule } from 'primeng/inputtext';
 import { MultiSelectModule } from 'primeng/multiselect';
 import { PasswordModule } from 'primeng/password';
-import { ListboxModule } from 'primeng/listbox';
 import { SelectModule } from 'primeng/select';
-import { SelectButtonModule } from 'primeng/selectbutton';
 import { SplitButton } from 'primeng/splitbutton';
 import { TextareaModule } from 'primeng/textarea';
 import { ToggleButtonModule } from 'primeng/togglebutton';
-import { TreeSelectModule } from 'primeng/treeselect';
 import { FloatLabelModule } from 'primeng/floatlabel';
 import { InputGroupModule } from 'primeng/inputgroup';
 import { InputGroupAddonModule } from 'primeng/inputgroupaddon';
@@ -42,49 +43,24 @@ import { MessageService } from '../services/message.service';
 import { AuthService } from '@/auth/services/auth.service';
 import { Capacitor } from '@capacitor/core';
 import { FormCacheConfig, FormCacheService } from '@/utils/services/form-cache.service';
-import { Pipe, PipeTransform } from '@angular/core';
 import { DynamicTableFieldComponent } from './dynamic-table-field/dynamic-table-field.component';
 import { DynamicDropdownDataContext, DynamicDropdownDataService } from './dynamic-dropdown-data.service';
+// [[[II ESC:031-04 DOC:docs/documents/2026-07-18-031-optimizacion-navegacion-activos.md#escenario-04
+// JoinOrSelfPipe vive ahora en su propio archivo (se re-exporta abajo por
+// compatibilidad). Los tipos raros (tree-select, listbox, select-button) se
+// extraen a hijos standalone usados solo dentro de @defer: sus módulos PrimeNG
+// salen del chunk eager del formulario y se cargan solo si el formulario
+// abierto contiene ese tipo.
+import { JoinOrSelfPipe } from './join-or-self.pipe';
+import { DrawTreeSelectFieldComponent } from './fields/draw-tree-select-field.component';
+import { DrawListboxFieldComponent } from './fields/draw-listbox-field.component';
+import { DrawSelectButtonFieldComponent } from './fields/draw-select-button-field.component';
+
+export { JoinOrSelfPipe } from './join-or-self.pipe';
+// ]]]FI
 
 // Plugin nativo SafeCamera — decodifica con inSampleSize para evitar OOM
 const SafeCamera: any = Capacitor.registerPlugin('SafeCamera');
-
-@Pipe({ name: 'joinOrSelf', standalone: true, pure: true })
-export class JoinOrSelfPipe implements PipeTransform {
-
-  /**
-   * Normaliza `option_label` para PrimeNG.
-   * - Si es array, lo concatena usando `sep`.
-   * - Si es string con comas, lo divide y concatena usando `sep`.
-   * - Si es string simple, lo retorna tal cual.
-   */
-  transform(value: unknown, sep = ''): string {
-
-    if (Array.isArray(value)) {
-      return value.join(sep);
-    }
-
-    if (typeof value === 'string') {
-      const parts = value.split(','); // split funciona igual si no hay coma
-
-      if (parts.length === 1) {
-        const trimmed = parts[0].trim();
-        return trimmed || 'name';
-      }
-
-      const cleaned: string[] = [];
-
-      for (const p of parts) {
-        const t = p.trim();
-        if (t) cleaned.push(t);
-      }
-
-      return cleaned.join(sep);
-    }
-
-    return 'name';
-  }
-}
 
 
 @Component({
@@ -97,15 +73,19 @@ export class JoinOrSelfPipe implements PipeTransform {
 
     AutoCompleteModule,
     MultiSelectModule,
-    ListboxModule,
     ToggleButtonModule,
     TextareaModule,
     InputNumberModule,
-    TreeSelectModule,
     DatePickerModule,
     SelectModule,
-    SelectButtonModule,
     SplitButton,
+    // [[[II ESC:031-04 DOC:docs/documents/2026-07-18-031-optimizacion-navegacion-activos.md#escenario-04
+    // Usados solo dentro de @defer en el template: se compilan como chunks
+    // diferidos (reemplazan a ListboxModule/TreeSelectModule/SelectButtonModule).
+    DrawTreeSelectFieldComponent,
+    DrawListboxFieldComponent,
+    DrawSelectButtonFieldComponent,
+    // ]]]FI
     CardModule,
     ChipModule,
     FieldsetModule,
@@ -194,6 +174,10 @@ export class CustomDrawFormComponent implements OnInit, OnDestroy {
   // en vez de persistir aquí. Opt-in para no cambiar el comportamiento de otras
   // páginas que no manejan el evento. ]]]FI
   @Input() delegateTableSave: boolean = false;
+  // [[[II ESC:030-12 DOC:docs/documents/2026-07-14-030-child-runtime-overlay.md#escenario-12
+  // Desenlace del guardado de fila publicado por el motor (CRUD.tableRowSaveOutcome).
+  // Sólo se transporta hasta la tabla; este componente no lo interpreta. ]]]FI
+  @Input() tableRowSaveOutcome: { field: string; row_index: any; ok: boolean; token: number } | null = null;
 
   @Output() onChangeDropdownAction = new EventEmitter<any>();
   @Output() onShowDropdownAction = new EventEmitter<any>();
@@ -262,6 +246,45 @@ export class CustomDrawFormComponent implements OnInit, OnDestroy {
   tablesToValidate: { [key: string]: boolean } = {};
   originalRowData: { [key: string]: any } = {};
   tableValidationVersion = 0;
+  // ]]]FI
+
+  // [[[II ESC:030-16 DOC:docs/documents/2026-07-14-030-child-runtime-overlay.md#escenario-16
+  // Una fila de tabla se guarda como operación independiente: mientras se edita,
+  // el resto del formulario queda realmente deshabilitado para no mezclar datos.
+  // Se conserva el estado disabled previo de cada control y se restaura igual.
+  private readonly tableEditingFields = new Set<string>();
+  private readonly tableEditingDisabledControls = new Map<FormControl, boolean>();
+  readonly tableEditingLockOwner = signal<string | null>(null);
+  readonly tableEditingActive = computed(() => this.tableEditingLockOwner() !== null);
+
+  onTableEditingStateChange(event: { field: string; active: boolean }): void {
+    if (!event?.field) return;
+    if (event.active) this.tableEditingFields.add(event.field);
+    else this.tableEditingFields.delete(event.field);
+
+    const owner = this.tableEditingFields.values().next().value ?? null;
+    this.tableEditingLockOwner.set(owner);
+    this._setMainFormControlsDisabled(owner !== null);
+  }
+
+  private _setMainFormControlsDisabled(disabled: boolean): void {
+    const form = this.formGroupSignal();
+    if (!form) return;
+
+    if (disabled) {
+      Object.values(form.controls).forEach((control) => {
+        if (!(control instanceof FormControl) || this.tableEditingDisabledControls.has(control)) return;
+        this.tableEditingDisabledControls.set(control, control.disabled);
+        if (!control.disabled) control.disable({ emitEvent: false });
+      });
+      return;
+    }
+
+    this.tableEditingDisabledControls.forEach((wasDisabled, control) => {
+      if (!wasDisabled) control.enable({ emitEvent: false });
+    });
+    this.tableEditingDisabledControls.clear();
+  }
   // ]]]FI
 
   // Signal para forzar recálculo del computed signal de firmas
@@ -1763,6 +1786,36 @@ export class CustomDrawFormComponent implements OnInit, OnDestroy {
     return value?.field ?? value?.id ?? item?.key ?? index;
   }
 
+  // [[[II ESC:030-14 DOC:docs/documents/2026-07-14-030-child-runtime-overlay.md#escenario-14
+  // El panel de sugerencias es lectura de datos: respeta la configuración
+  // decimal de CADA columna, igual que p-inputNumber, sin afectar valores. ]]]FI
+  formatSuggestionValue(value: any, panelField: any): string {
+    if (value === null || value === undefined || value === '') return '-';
+    const numericConfig = panelField?.type === 'input-number'
+      || panelField?.min_fraction_digits !== undefined
+      || panelField?.max_fraction_digits !== undefined
+      || panelField?.mode === 'currency';
+    if (!numericConfig || !Number.isFinite(Number(value))) return String(value);
+
+    const options: Intl.NumberFormatOptions = {
+      minimumFractionDigits: panelField?.min_fraction_digits ?? 0,
+      maximumFractionDigits: panelField?.max_fraction_digits ?? Math.max(panelField?.min_fraction_digits ?? 0, 2),
+    };
+    if (panelField?.mode === 'currency' && panelField?.currency) {
+      options.style = 'currency';
+      options.currency = panelField.currency;
+    }
+    const formatted = new Intl.NumberFormat(panelField?.locale || undefined, options).format(Number(value));
+    return `${panelField?.prefix || ''}${formatted}${panelField?.suffix || ''}`;
+  }
+
+  // [[[II ESC:030-15 DOC:docs/documents/2026-07-14-030-child-runtime-overlay.md#escenario-15
+  // `panel.active` decide si se usa el panel compuesto; sin él la sugerencia
+  // conserva la etiqueta declarada por `option_label`, sin asumir un campo. ]]]FI
+  optionLabelText(option: any, fieldConfig: any): string {
+    return this.generalS.formatDynamicValue(option, fieldConfig);
+  }
+
   trackByColumnField(index: number, column: any): any {
     return column?.field ?? column?.id ?? index;
   }
@@ -1780,36 +1833,177 @@ export class CustomDrawFormComponent implements OnInit, OnDestroy {
 
   public suggestions = signal<any[]>([]);
 
+  // [[[II ESC:030-16 DOC:docs/documents/2026-07-14-030-child-runtime-overlay.md#escenario-16
+  // Contrato de búsqueda por CONFIGURACIÓN, compartido con las celdas: para
+  // parcial `smart_search` decide entre filter[search] y field.icontains;
+  // `min_search_length` es sólo umbral de consulta (no un validador del dato).
+  // Ningún campo es especial por su nombre. ]]]FI
+
+  // [[[II ESC:030-16 DOC:docs/documents/2026-07-14-030-child-runtime-overlay.md#escenario-16
+  private _autoCompleteSearchMode(config: any): 'exact' | 'partial' {
+    return config?.search_mode === 'exact' ? 'exact' : 'partial';
+  }
+
+  /**
+   * `search_key` ausente conserva una interacción explícita segura: Enter.
+   * En exacto, un valor vacío no puede habilitar búsqueda automática: cae en
+   * Enter, pero una tecla explícita (F3/Tab/flechas) se conserva.
+   */
+  private _autoCompleteSearchKeys(config: any): Set<string> {
+    if (!Object.prototype.hasOwnProperty.call(config || {}, 'search_key')) return new Set(['enter']);
+    const raw = config?.search_key;
+    if (typeof raw !== 'string') return new Set(['enter']);
+    if (raw.trim() === '') return this._autoCompleteSearchMode(config) === 'exact'
+      ? new Set(['enter'])
+      : new Set<string>();
+    return new Set(raw.split(',').map((key: string) => key.trim().toLowerCase()).filter((key: string) => !!key));
+  }
+
+  private _autoCompleteSearchesOnType(config: any): boolean {
+    return this._autoCompleteSearchKeys(config).size === 0;
+  }
+
+  // El servidor exige >= 5 caracteres en `filter[search]`; el mismo piso se
+  // aplica a toda búsqueda parcial, incluso la dirigida por el nombre de campo.
+  private readonly SEARCH_MIN_CHARS = 5;
+
+  /** Umbral de consulta parcial; nunca usa `min_length` de validación del dato. */
+  autoCompleteMinLength(config: any): number {
+    if (this._autoCompleteSearchMode(config) === 'exact') return 0;
+    return Math.max(this.SEARCH_MIN_CHARS, Number(config?.min_search_length) || 0);
+  }
+
+  /** Filtro genérico: el campo declara si usa búsqueda global o su propio nombre. */
+  private _searchFilterFor(config: any, query: string): string {
+    const q = encodeURIComponent(query);
+    const field = typeof config?.field === 'string' ? config.field.trim() : '';
+    let fallbackFilter = '';
+    if (this._autoCompleteSearchMode(config) === 'exact') {
+      fallbackFilter = field ? `filter[${field}.iexact]=${q}` : '';
+    } else if (config?.smart_search === true) {
+      fallbackFilter = `filter[search]=${q}`;
+    } else {
+      fallbackFilter = field ? `filter[${field}.icontains]=${q}` : `filter[search]=${q}`;
+    }
+    // [[[II ESC:030-17 DOC:docs/documents/2026-07-14-030-child-runtime-overlay.md#escenario-17
+    // `data_type.filter` decide el atributo remoto sin acoplar el control a
+    // una relación concreta. Sin binding declarativo conserva el perfil previo.
+    return this.crudS.buildConfiguredSearchFilter(config?.data_type?.filter, query, fallbackFilter);
+    // ]]]FI
+  }
+  // ]]]FI
+
+  /** Panel suprimido mientras no haya una búsqueda real (evita "No hay resultados"). */
+  public autoCompletePanelSuppressed = signal<boolean>(false);
+  // Token de la última búsqueda por campo: descarta respuestas que llegan tarde
+  // (evita que una respuesta vieja pise a la nueva — "a veces no encuentra").
+  private _autoCompleteSearchToken: { [field: string]: number } = {};
+
+  showAutoCompleteEmptyMessage(config: any): boolean {
+    return config?.show_empty_message !== false && !this.autoCompletePanelSuppressed();
+  }
+
   completeMethod(event: any, entry: any) {
     // [[[II ESC:001-16 DOC:docs/documents/2026-05-16_001_consolidacion_dropdown_types_y_fix_escenarios.md#escenario-16
     this._clearAutoCompleteSelectionIfManual(entry, event?.query);
     // ]]]FI
-    const filter = "filter[search]=" + event.query;
+    const query = (event?.query ?? '').toString();
+    // [[[II ESC:030-16 DOC:docs/documents/2026-07-14-030-child-runtime-overlay.md#escenario-16
+    if (this._autoCompleteSearchMode(entry) === 'exact') {
+      // Exacto sólo se consulta con Enter: ni al escribir ni con el botón
+      // dropdown se abre el panel de sugerencias.
+      this.autoCompletePanelSuppressed.set(true);
+      this.suggestions.set([]);
+      return;
+    }
+    // ]]]FI
+    // Petición del botón `dropdown` (query vacío): siempre permitida.
+    const isDropdownRequest = query.trim() === '';
+    if (!isDropdownRequest) {
+      const minLength = this.autoCompleteMinLength(entry);
+      if (!this._autoCompleteSearchesOnType(entry) || (minLength > 0 && query.length < minLength)) {
+        // La config exige tecla (o faltan caracteres): sin búsqueda y sin panel.
+        this.autoCompletePanelSuppressed.set(true);
+        this.suggestions.set([]);
+        return;
+      }
+    }
+    this.autoCompletePanelSuppressed.set(false);
+    // Escritura parcial no auto-selecciona: conserva el panel para elegir.
+    this._runAutoCompleteSearch(entry, query);
+  }
+
+  /**
+   * Ejecuta la búsqueda del autocomplete del formulario. Con
+   * `search_mode: 'exact'` una coincidencia exacta ÚNICA se selecciona sin
+   * desplegar el panel; en otro caso se publican las sugerencias. Descarta
+   * respuestas obsoletas (guard por token) y ante error deja el panel vacío sin
+   * perder el texto escrito.
+   */
+  private _runAutoCompleteSearch(entry: any, query: string, options: { advanceOnNoMatch?: boolean; autoApplyUnique?: boolean } = {}): void {
+    const { advanceOnNoMatch = false, autoApplyUnique = false } = options;
+    const filter = this._searchFilterFor(entry, query);
     const include = entry.include;
-    //debo cambiarlo por cols de de combo
-    //"cols": {
-    //    "hide": True,
-    //    "label": "",
-    //    "sortable": True,
-    //    "locked": False,
-    //    "fields":  {
-    //        #0:{"field":"name"}
-    //    }
-    //}
     const _dt = entry?.data_type ?? {};
     const app = this.crudS.getAppType(_dt?.type)?.app;
     const type = this.crudS.getAppType(_dt?.type)?.type;
 
-    this.crudS.getObject({ app, type, filter, include }).subscribe((resp: any) => {
-      let data = this.generalS.DJAtoObject({
-        respDJA: resp,
-        fields: { [entry.field]: entry }
-      });
-      // [[[II ESC:001-16 DOC:docs/documents/2026-05-16_001_consolidacion_dropdown_types_y_fix_escenarios.md#escenario-16 ESC:030-06
-      // Reúso: el enriquecimiento de `<rel>_data_<attr>` vive ahora en GeneralService
-      // (fuente única compartida con las celdas de tabla derivada). ]]]FI
-      data = this.generalS.enrichSuggestionRelationData(data, resp, entry);
-      this.suggestions.set(data);
+    const field = entry?.field;
+    const token = (this._autoCompleteSearchToken[field] = (this._autoCompleteSearchToken[field] || 0) + 1);
+    const isStale = () => this._autoCompleteSearchToken[field] !== token;
+
+    this.crudS.getObject({ app, type, filter, include }).subscribe({
+      next: (resp: any) => {
+        if (isStale()) return; // llegó una búsqueda más nueva: se ignora esta
+        let data = this.generalS.DJAtoObject({
+          respDJA: resp,
+          fields: { [entry.field]: entry }
+        });
+        // [[[II ESC:001-16 ESC:030-06 Enriquecimiento `<rel>_data_<attr>` en
+        // GeneralService (fuente única compartida con las celdas). ]]]FI
+        data = this.generalS.enrichSuggestionRelationData(data, resp, entry);
+
+        // Coincidencia exacta ÚNICA => se selecciona sin mostrar el panel — SOLO
+        // cuando se pidió (exacto/tecla), nunca durante escritura parcial. La
+        // comparación usa el `option_label` declarado (soporta concatenación).
+        const target = (query || '').trim().toLowerCase();
+        const exactMatches = target
+          ? data.filter((row: any) => {
+            const label = this.generalS.formatDynamicValue(row, entry);
+            return typeof label === 'string' && label.trim().toLowerCase() === target;
+          })
+          : [];
+
+        if (autoApplyUnique && target && exactMatches.length === 1) {
+          this.suggestions.set([]);
+          this.onSelectAutoComplete({ value: exactMatches[0] }, entry);
+          return;
+        }
+
+        // [[[II ESC:030-16 DOC:docs/documents/2026-07-14-030-child-runtime-overlay.md#escenario-16
+        if (this._autoCompleteSearchMode(entry) === 'exact') {
+          // El modo exacto nunca publica opciones: la única coincidencia se
+          // aplica arriba y las restantes se mantienen como texto libre.
+          this.autoCompletePanelSuppressed.set(true);
+          this.suggestions.set([]);
+          if (advanceOnNoMatch) this.applyFocusAfterSelect(entry);
+          return;
+        }
+        // ]]]FI
+
+        this.autoCompletePanelSuppressed.set(false);
+        this.suggestions.set(data);
+
+        // Búsqueda por tecla sin selección: el texto libre se CONSERVA (no se
+        // resetea) y, si se pidió, se avanza el foco (free_or_relationship).
+        if (advanceOnNoMatch) this.applyFocusAfterSelect(entry);
+      },
+      // Error (p.ej. 400): sin sugerencias, pero se conserva el texto escrito.
+      error: () => {
+        if (isStale()) return;
+        this.suggestions.set([]);
+        if (advanceOnNoMatch) this.applyFocusAfterSelect(entry);
+      }
     });
   }
 
@@ -2048,6 +2242,36 @@ export class CustomDrawFormComponent implements OnInit, OnDestroy {
     return String(logic || 'AND').toUpperCase() === 'OR' ? results.some(Boolean) : results.every(Boolean);
   }
 
+  /**
+   * Resuelve el contrato común root→child. Las propiedades explícitas del child
+   * prevalecen; `default`, `data_type` y `data_type.filter` se mezclan por
+   * propiedad. `filter`, `activate` y `requested` son orquestación exclusiva del
+   * child y no heredan bloques homónimos del root.
+   */
+  private _effectiveChildNode(rootFieldConfig: any, childConfig: any): any {
+    const root = rootFieldConfig && typeof rootFieldConfig === 'object' ? rootFieldConfig : {};
+    const child = childConfig && typeof childConfig === 'object' ? childConfig : {};
+    return {
+      ...root,
+      ...child,
+      default: {
+        ...(root.default || {}),
+        ...(child.default || {}),
+      },
+      data_type: {
+        ...(root.data_type || {}),
+        ...(child.data_type || {}),
+        filter: {
+          ...(root.data_type?.filter || {}),
+          ...(child.data_type?.filter || {}),
+        },
+      },
+      filter: child.filter || {},
+      activate: child.activate || {},
+      requested: child.requested || {},
+    };
+  }
+
   /** Calcula el overlay sin reemplazar el contrato base del control destino. */
   private getEffectiveChildConfig(
     rootFieldConfig: any, parentFieldConfig: any, childKey: string, childConfig: any, formValue: any
@@ -2079,9 +2303,29 @@ export class CustomDrawFormComponent implements OnInit, OnDestroy {
       if (requestedMet === true) required = requested.action !== 'not_required';
     }
 
-    const rootReadonly = rootFieldConfig?.readonly === true || rootFieldConfig?.default?.edit === false;
-    const edit = childConfig?.edit !== false && !rootReadonly && state === 'active';
+    // [[[II ESC:003-07 DOC:docs/documents/2026-05-25_003_dynamic-children-field-loading.md#escenario-07
+    // El child es un overlay del root: `default` se mezcla por propiedad y la
+    // declaración del child prevalece. `default.edit` es exclusivamente permiso
+    // de edición; `default.active` solo activa el valor por defecto y nunca
+    // concede ni revoca edición.
+    const effectiveDefault = {
+      ...(rootFieldConfig?.default || {}),
+      ...(childConfig?.default || {}),
+    };
+    const rootReadonly = rootFieldConfig?.readonly === true;
+    // [[[II ESC:030-20 DOC:docs/documents/2026-07-14-030-child-runtime-overlay.md#escenario-20
+    // Un campo que INICIALIZA la relación (`free_or_relationship` +
+    // `relationship_field`) nunca se bloquea por un valor derivado de esa misma
+    // relación: bloquearlo deja al usuario sin forma de cambiar de producto
+    // antes de agregar la fila. El candado del child sigue aplicando a los
+    // campos de destino normales (price, currency, ...); sólo se exceptúa el
+    // propio buscador. `readonly` del root sigue mandando por encima.
+    const isRelationshipSearcher = this._isFreeOrRelationshipAutoComplete(rootFieldConfig);
+    const edit = (effectiveDefault.edit !== false || isRelationshipSearcher)
+      && !rootReadonly && state === 'active';
+    // ]]]FI
     if (state === 'active' && !edit) state = 'readonly';
+    // ]]]FI
 
     // Seguridad: un control no visible/no editable nunca puede pedir una captura nueva.
     if (state === 'inactive' || state === 'hidden') required = false;
@@ -2112,6 +2356,16 @@ export class CustomDrawFormComponent implements OnInit, OnDestroy {
     try {
       this.scanDrawFormFields(this.drawFormSignal(), (rootConfig: any) => {
         if (rootConfig?.children?.active !== true || !rootConfig?.field) return;
+        // [[[II ESC:007-08 DOC:docs/documents/2026-06-01_007_custom-draw-form-listbox.md#escenario-08
+        // Los niveles lazy de un campo árbol (children.fields.dynamic) se cargan
+        // al expandir con _loadTreeNodeChildren y quedan cacheados en
+        // _treeLoadedKeys; no son cascada dependiente. Reprocesarlos aquí hacía
+        // una consulta al servidor en cada selección de nodo (web y móvil).
+        if (this._isTreeLikeField(rootConfig)
+          && rootConfig?.tree?.lazy
+          && Array.isArray(rootConfig?.tree?.levels)
+          && rootConfig.tree.levels.length > 0) return;
+        // ]]]FI
         const rootField = this._canonicalChildField(rootConfig.field);
         const childGroups = rootConfig.children?.fields || {};
         const conditions = ['static', 'dynamic', 'derived'].flatMap((group) =>
@@ -2131,7 +2385,8 @@ export class CustomDrawFormComponent implements OnInit, OnDestroy {
         const controlValue = form.get(rootConfig.field)?.value ?? form.get(rootField)?.value;
         const selected = form.get(`__autocomplete_object_${rootField}`)?.value
           ?? this._selectedConditionValue(rootConfig.field);
-        this._processChildrenFields(rootConfig.field, controlValue, rootConfig, selected);
+        // Reevaluación, no selección: los derived sólo rellenan huecos.
+        this._processChildrenFields(rootConfig.field, controlValue, rootConfig, selected, 0, 'refresh');
       });
     } finally {
       this.childRuntimePreviousValue = form.getRawValue();
@@ -2214,7 +2469,14 @@ export class CustomDrawFormComponent implements OnInit, OnDestroy {
     currentValue: any,
     config: any,
     currentDropdownOption: any,
-    depth: number = 0
+    depth: number = 0,
+    // [[[II ESC:030-20 DOC:docs/documents/2026-07-14-030-child-runtime-overlay.md#escenario-20
+    // 'selection' = el usuario acaba de elegir una opción del padre: la
+    // derivación manda y refresca el valor. 'refresh' = reevaluación por un
+    // cambio cualquiera del formulario: la derivación NO puede pisar lo que el
+    // usuario ya escribió si tiene permiso de edición. Sin esta distinción cada
+    // pulsación reescribía el control con el valor del padre cacheado. ]]]FI
+    origin: 'selection' | 'refresh' = 'selection'
   ): void {
     const children = config.children || {};
     const fields = children?.fields || {};
@@ -2263,11 +2525,12 @@ export class CustomDrawFormComponent implements OnInit, OnDestroy {
             readonly: this.childBaseReadonly.get(targetFieldConfig) === true,
           }
           : targetFieldConfig;
+        const effectiveFieldConfig = this._effectiveChildNode(baseControlConfig, fieldConfig);
         const parentHasContext = config?.type === 'auto-complete'
           ? !!(currentDropdownOption && typeof currentDropdownOption === 'object')
           : currentValue !== null && currentValue !== undefined && currentValue !== '';
         const effective = this.getEffectiveChildConfig(
-          baseControlConfig, config, key, parentHasContext ? fieldConfig : {}, currentDropdownOption
+          baseControlConfig, config, key, effectiveFieldConfig, currentDropdownOption
         );
         const baseHidden = targetFieldConfig && typeof targetFieldConfig === 'object'
           ? this.childBaseHidden.get(targetFieldConfig) === true
@@ -2282,7 +2545,7 @@ export class CustomDrawFormComponent implements OnInit, OnDestroy {
           preserveValue: targetField.startsWith('no_form_data_') && formControl instanceof FormArray,
         });
 
-        const childScope = String(fieldConfig?.filter?.scope ?? 'client').toLowerCase();
+        const childScope = String(effectiveFieldConfig?.filter?.scope ?? 'client').toLowerCase();
 
         // Sin selección real del autocomplete no existe overlay de datos. El
         // root conserva valor/opciones. La tabla NUNCA se toca por selección.
@@ -2293,13 +2556,44 @@ export class CustomDrawFormComponent implements OnInit, OnDestroy {
           // (perdía edit:False/scope) y `_applyEffectiveChildState` re-imponía el
           // required base: tras el reset del guardado ("Guardar y nuevo"), el
           // segundo envío se bloqueaba por los campos calculados del servidor
-          // (p.ej. Cluster/Región). Se re-aplica el relax respetando el `edit`
+          // (p.ej. Cluster/Región). Se re-aplica el relax respetando
+          // `default.edit`
           // declarado por el child, como nace el form. ]]]FI
           if (childScope === 'server') {
             this._applyServerScopedChild({
-              fieldConfig, targetField, formControl, mirroredField,
+              fieldConfig: effectiveFieldConfig, targetField, formControl, mirroredField,
               state: effective.state,
-              edit: effective.edit && fieldConfig?.edit !== false,
+              edit: effective.edit,
+            });
+            continue;
+          }
+          // Un derived sin selección conserva el contrato root y aplica su
+          // default efectivo cuando está activo. No consulta ni toca tablas.
+          if (fieldType === 'derived') {
+            // [[[II ESC:030-20 DOC:docs/documents/2026-07-14-030-child-runtime-overlay.md#escenario-20
+            // DUEÑO DE LA RELACIÓN. Un formulario puede tener VARIOS buscadores
+            // del mismo `relationship_field` (code y name -> product). Cualquier
+            // cambio reevalúa a los dos, y el que no tiene selección propia
+            // llegaba hasta aquí y aplicaba su `default.value` (''), borrando lo
+            // que acababa de poner el otro. Al quedar el texto vacío,
+            // `_clearAutoCompleteSelectionIfManual` anulaba `product` y la fila
+            // pasaba a "manual" (icono naranja) pese a venir del servidor.
+            // Sin selección propia este buscador NO es dueño de la relación: si
+            // la relación ya está resuelta, no deriva ni aplica su default. Si
+            // no hay relación alguna, conserva el comportamiento previo. ]]]FI
+            const relationField = typeof config?.relationship_field === 'string'
+              ? config.relationship_field.trim() : '';
+            const relationResolved = relationField
+              ? ![null, undefined, ''].includes(this.formGroupSignal()?.get(relationField)?.value)
+              : false;
+            if (relationResolved) continue;
+            this._processDerivedChild({
+              fieldConfig: effectiveFieldConfig, targetField, targetFieldConfig, formControl,
+              parentField: field, parentOption: null, parentValue: currentValue,
+              childFilterGroup: effectiveFieldConfig?.filter_group || 'id',
+              parentFieldConfig: config,
+              isActive: effective.state === 'active' || effective.state === 'readonly',
+              depth, origin,
             });
             continue;
           }
@@ -2311,7 +2605,8 @@ export class CustomDrawFormComponent implements OnInit, OnDestroy {
 
         if (childScope === 'server') {
           this._applyServerScopedChild({
-            fieldConfig, targetField, formControl, mirroredField, state: effective.state, edit: effective.edit,
+            fieldConfig: effectiveFieldConfig, targetField, formControl, mirroredField,
+            state: effective.state, edit: effective.edit,
           });
           continue;
         }
@@ -2327,21 +2622,21 @@ export class CustomDrawFormComponent implements OnInit, OnDestroy {
         //   - 'derived' copia un atributo del padre (from: 'parent') o del servidor
         //     (from: 'server'); también respeta activate/requested.
         // El valor del padre para los filtros se extrae con filter_group (default 'id').
-        const childFilterGroup = fieldConfig?.filter_group || 'id';
+        const childFilterGroup = effectiveFieldConfig?.filter_group || 'id';
         const parentValue = (currentDropdownOption && typeof currentDropdownOption === 'object')
           ? (currentDropdownOption[childFilterGroup] ?? (childFilterGroup === 'id' ? currentValue : null))
           : currentValue;
 
         if (fieldType === 'derived') {
           this._processDerivedChild({
-            fieldConfig, targetField, targetFieldConfig, formControl,
+            fieldConfig: effectiveFieldConfig, targetField, targetFieldConfig, formControl,
             parentField: field, parentOption: currentDropdownOption, parentValue,
-            childFilterGroup, parentFieldConfig: config, isActive, depth,
+            childFilterGroup, parentFieldConfig: config, isActive, depth, origin,
           });
         } else {
           // static + dynamic comparten el mismo motor de carga unificado.
           this._loadChildOptions({
-            fieldConfig, targetField, targetFieldConfig, formControl,
+            fieldConfig: effectiveFieldConfig, targetField, targetFieldConfig, formControl,
             parentField: field, parentOption: currentDropdownOption, parentValue,
             childFilterGroup, isActive, depth,
           });
@@ -2356,8 +2651,30 @@ export class CustomDrawFormComponent implements OnInit, OnDestroy {
     formControl: any; mirroredField: string | null; state: string; required: boolean; preserveValue?: boolean;
   }): void {
     const { formControl, mirroredField, state, required, preserveValue = false } = ctx;
+
+    // [[[II ESC:030-09 Una tabla `no_form_data_*` es un CONTENEDOR local de
+    // borradores, no un campo de captura: el overlay no debe deshabilitarla ni
+    // exigirla. Al deshabilitarse quedaba `isTableReadonly()` en true y el botón
+    // "+" (y el alta desde el formulario) dejaban de funcionar de forma
+    // intermitente, según el estado del padre. Se mantiene habilitada siempre. ]]]FI
+    const isLocalDraftTable = preserveValue && formControl instanceof FormArray;
+    if (isLocalDraftTable) {
+      formControl.enable({ emitEvent: false });
+      formControl.removeValidators(Validators.required);
+      formControl.updateValueAndValidity({ emitEvent: false });
+      return;
+    }
+
     const disabled = state === 'inactive' || state === 'hidden';
-    const setState = (control: any) => {
+    // [[[II ESC:030-08 REGRESIÓN: un campo dropdown-like vive como PAREJA
+    // (`object_<campo>` renderizado + `<campo>` canónico enviado). Aplicar
+    // `required` a AMBOS producía DOS entradas de error para el mismo campo y el
+    // toast repetía la etiqueta ("Tipo de gasto" x2), porque ambos nombres
+    // resuelven al mismo label. El espejo replica habilitado/valor, pero el
+    // `required` lo porta SOLO el control primario; al espejo se le retira
+    // siempre. La validación sigue bloqueando (el primario queda inválido y en
+    // rojo) y se reporta una sola vez. ]]]FI
+    const setState = (control: any, isMirror: boolean) => {
       if (!control) return;
       if (disabled) {
         control.disable({ emitEvent: false });
@@ -2368,13 +2685,13 @@ export class CustomDrawFormComponent implements OnInit, OnDestroy {
       } else {
         control.enable({ emitEvent: false });
       }
-      if (required) control.addValidators(Validators.required);
+      if (required && !isMirror) control.addValidators(Validators.required);
       else control.removeValidators(Validators.required);
       control.updateValueAndValidity({ emitEvent: false });
     };
 
-    setState(formControl);
-    if (mirroredField) setState(this.formGroupSignal()?.get(mirroredField));
+    setState(formControl, false);
+    if (mirroredField) setState(this.formGroupSignal()?.get(mirroredField), true);
   }
   // ]]]FI
 
@@ -2383,8 +2700,8 @@ export class CustomDrawFormComponent implements OnInit, OnDestroy {
    * Aplica un child declarado con `filter.scope: 'server'`: el cliente NO consulta
    * al servidor por selección del padre. El servidor resuelve y llena el valor al
    * hacer create. En cliente:
-   *   - `edit: false` (default) → control deshabilitado (solo-lectura).
-   *   - `edit: true`            → control habilitado con valor sugerido vacío.
+   *   - `default.edit: false` → control deshabilitado (solo-lectura).
+   *   - `default.edit: true`  → control habilitado con valor sugerido vacío.
    * En ambos casos se limpian las opciones y el valor previo (queda obsoleto al
    * cambiar el padre) y se relaja el `required` para poder enviar el create sin el
    * campo; la obligatoriedad real la reimpone el servidor.
@@ -2528,7 +2845,9 @@ export class CustomDrawFormComponent implements OnInit, OnDestroy {
   }
 
   /**
-   * Publica las opciones del child y aplica auto_select (+ cascada recursiva) o default_field.
+   * Publica las opciones del child y aplica auto_select (+ cascada recursiva).
+   * Sin coincidencias limpia el control. `default_field` se retiró del contrato:
+   * ninguna configuración activa lo utilizaba durante la auditoría de 2026-07-25.
    * auto_select reemplaza al antiguo `selected`; se conserva `selected` como alias legado.
    */
   private _publishChildOptions(ctx: {
@@ -2551,11 +2870,7 @@ export class CustomDrawFormComponent implements OnInit, OnDestroy {
         this._processChildrenFields(targetField, value, targetFieldConfig, selectedRow, depth + 1);
       }
     } else if (!normalized.length) {
-      if (fieldConfig?.default_field !== undefined && fieldConfig?.default_field !== null) {
-        formControl?.setValue(fieldConfig.default_field);
-      } else {
-        formControl?.setValue(null);
-      }
+      formControl?.setValue(null);
     }
   }
 
@@ -2641,9 +2956,11 @@ export class CustomDrawFormComponent implements OnInit, OnDestroy {
     fieldConfig: any; targetField: string; targetFieldConfig: any; formControl: any;
     parentField: string; parentOption: any; parentValue: any; childFilterGroup: string;
     parentFieldConfig: any; isActive: boolean; depth: number;
+    origin?: 'selection' | 'refresh';
   }): void {
     const { fieldConfig, targetField, targetFieldConfig, formControl,
-      parentField, parentOption, parentValue, childFilterGroup, isActive } = ctx;
+      parentField, parentOption, parentValue, childFilterGroup, isActive,
+      origin = 'selection' } = ctx;
 
     // La tabla se llena exclusivamente por el boton save; un derived solo llena
     // campos escalares hermanos (code, price, currency, ...).
@@ -2654,24 +2971,66 @@ export class CustomDrawFormComponent implements OnInit, OnDestroy {
       return;
     }
 
-    const fieldName = fieldConfig?.field_name ?? fieldConfig?.derived?.field_name;
-    const from = fieldConfig?.derived?.from || 'parent';
-    const fallback = fieldConfig?.derived?.fallback;
+    // `type` y los contratos anidados comunes se heredan del root; el child
+    // solo sobrescribe las propiedades que declara.
+    const effectiveDefault = {
+      ...(targetFieldConfig?.default || {}),
+      ...(fieldConfig?.default || {}),
+    };
+    const effectiveDataType = {
+      ...(targetFieldConfig?.data_type || {}),
+      ...(fieldConfig?.data_type || {}),
+      filter: {
+        ...(targetFieldConfig?.data_type?.filter || {}),
+        ...(fieldConfig?.data_type?.filter || {}),
+      },
+    };
+    const effectiveType = fieldConfig?.type ?? targetFieldConfig?.type;
+    const fieldName = fieldConfig?.field_name ?? targetFieldConfig?.field_name ?? targetField;
+    const from = fieldConfig?.from || 'parent';
+    const fallback = effectiveDefault.active === true ? effectiveDefault.value : undefined;
+
+    // [[[II ESC:030-20 DOC:docs/documents/2026-07-14-030-child-runtime-overlay.md#escenario-20
+    // `default.edit` es PERMISO de edición, también para la derivación:
+    //   - edit:false  -> el valor de la relación manda siempre.
+    //   - edit:true   -> el usuario es dueño del valor. Una SELECCIÓN nueva del
+    //     padre sí lo refresca (es una acción explícita), pero una reevaluación
+    //     ('refresh', disparada por cualquier cambio del formulario) sólo puede
+    //     rellenar un control vacío. Sin esto, cada cambio reescribía el control
+    //     con el valor del padre cacheado y el usuario no lograba conservar el
+    //     suyo (hacían falta 2-3 intentos).
+    // Además el fallback (`default.value`) NUNCA vacía un control que ya tiene
+    // valor: es un relleno para cuando la fuente no aporta dato, no un borrado.
+    const editable = effectiveDefault.edit !== false;
+    const hasValue = (v: any) => v !== undefined && v !== null && v !== '';
 
     const applyValue = (val: any) => {
-      const resolvedValue = val !== undefined && val !== null && val !== ''
-        ? val
-        : fallback;
-      if (resolvedValue !== undefined) { formControl?.setValue(resolvedValue); }
+      const current = formControl?.value;
+      // Reevaluación sobre un valor que el usuario controla: no se toca.
+      if (editable && origin === 'refresh' && hasValue(current)) return;
+      // La fuente aportó dato: manda en ambos permisos.
+      if (hasValue(val)) { formControl?.setValue(val); return; }
+      if (fallback === undefined) return;
+      // Sin dato de la fuente entra el fallback. Con permiso de edición sólo
+      // rellena un hueco (nunca borra lo escrito); sin permiso, la relación
+      // sigue siendo la autoridad y el fallback se impone.
+      if (editable && hasValue(current)) return;
+      formControl?.setValue(fallback);
     };
+    // ]]]FI
 
     if (from === 'server') {
-      const dt = fieldConfig?.data_type ?? {};
+      const dt = effectiveDataType;
       const app = this.crudS.getAppType(dt?.type)?.app;
       const type = this.crudS.getAppType(dt?.type)?.type;
       if (!app || !type || !fieldName) { applyValue(undefined); return; }
       const filter = this._buildChildServerFilter({
-        fieldConfig, parentField, parentOption, parentValue, childFilterGroup,
+        fieldConfig: {
+          ...fieldConfig,
+          type: effectiveType,
+          data_type: effectiveDataType,
+        },
+        parentField, parentOption, parentValue, childFilterGroup,
       });
       const sort = dt?.ordering || '';
       this.messageS.showBlocked(true);
@@ -2687,7 +3046,10 @@ export class CustomDrawFormComponent implements OnInit, OnDestroy {
 
     // from === 'parent'
     if (fieldName && parentOption && typeof parentOption === 'object') {
-      applyValue(parentOption[fieldName]);
+      // [[[II ESC:030-20 La clave fuente puede llegar plana, anidada en
+      // `<rel>_data` o dentro del objeto de la relación; resolución compartida
+      // con las celdas de tabla (GeneralService). ]]]FI
+      applyValue(this.generalS.resolveRelationDataValue(parentOption, fieldName));
     } else {
       applyValue(undefined);
     }
@@ -3372,8 +3734,15 @@ export class CustomDrawFormComponent implements OnInit, OnDestroy {
 
     this.onSelectAutoCompleteAction.emit(changeInfo);
 
+    // [[[II ESC:030-18 DOC:docs/documents/2026-07-14-030-child-runtime-overlay.md#escenario-18
+    // La selección puede conservar exactamente el texto que el usuario escribió
+    // (p.ej. code="6"), por lo que valueChanges no detecta diferencia. Procesar
+    // este padre con el objeto elegido garantiza que sus derived se inicialicen
+    // sin depender de que cambie el texto visible.
+    this._processChildrenFields(field, currentValue, config, selectedValue);
+    // ]]]FI
     // La sincronización anterior no emite tres valueChanges separados. Esta
-    // reevaluación única usa el objeto seleccionado guardado localmente.
+    // reevaluación única conserva las demás dependencias que sí cambiaron.
     this._refreshDependentChildren();
     // [[[II ESC:030-05 focus_after_select tras seleccionar del autocomplete. ]]]FI
     this.applyFocusAfterSelect(config);
@@ -3780,6 +4149,7 @@ export class CustomDrawFormComponent implements OnInit, OnDestroy {
 
   onKeydownTab(event: any, config: any) {
     this.onKeydownTabAction.emit({ event, field: config.field, config });
+    if (this._autoCompleteSearchKeys(config).has('tab') && this._triggerAutoCompleteSearchKey(event, config)) return;
     // [[[II ESC:030-05 Solo se sobreescribe el Tab nativo cuando focus_after_select
     // resuelve un destino real; si no, se respeta la navegacion por tabindex. ]]]FI
     if (this.applyFocusAfterSelect(config)) {
@@ -3789,9 +4159,39 @@ export class CustomDrawFormComponent implements OnInit, OnDestroy {
 
   onKeydownEnter(event: any, config: any) {
     this.onKeydownEnterAction.emit({ event, field: config.field, config });
+
+    // [[[II ESC:030-16 Enter es la ruta explícita (también el default cuando no
+    // viene search_key). En parcial conserva el mínimo de cinco caracteres. ]]]FI
+    if (this._autoCompleteSearchKeys(config).has('enter') && this._triggerAutoCompleteSearchKey(event, config)) return;
+
     // [[[II ESC:030-05 ]]]FI
     this.applyFocusAfterSelect(config);
   }
+
+  // [[[II ESC:030-16 DOC:docs/documents/2026-07-14-030-child-runtime-overlay.md#escenario-16
+  /** Ejecuta una tecla de búsqueda explícita sin inventar perfiles por campo. */
+  onAutoCompleteKeydown(event: KeyboardEvent, config: any): void {
+    const key = String(event?.key || '').toLowerCase();
+    if (key === 'enter' || key === 'tab') return; // manejados por bindings propios
+    if (!this._autoCompleteSearchKeys(config).has(key)) return;
+    this._triggerAutoCompleteSearchKey(event, config);
+  }
+
+  private _triggerAutoCompleteSearchKey(event: any, config: any): boolean {
+    const query = (this.formGroupSignal()?.get(config.field)?.value ?? '').toString().trim();
+    const exact = this._autoCompleteSearchMode(config) === 'exact';
+    if (!query || (!exact && query.length < this.autoCompleteMinLength(config))) {
+      this.autoCompletePanelSuppressed.set(true);
+      this.suggestions.set([]);
+      return !!query;
+    }
+
+    event?.preventDefault?.();
+    this.autoCompletePanelSuppressed.set(exact);
+    this._runAutoCompleteSearch(config, query, { advanceOnNoMatch: true, autoApplyUnique: true });
+    return true;
+  }
+  // ]]]FI
 
   /**
    * Maneja el click en botones personalizados del formulario con lógica CRUD
@@ -3817,6 +4217,16 @@ export class CustomDrawFormComponent implements OnInit, OnDestroy {
     this.onButtonClickAction.emit(buttonInfo);
   }
 
+  // [[[II ESC:031-02 DOC:docs/documents/2026-07-18-031-optimizacion-navegacion-activos.md#escenario-02
+  /**
+   * Carga diferida del plugin de escáner. Separado en un método para poder
+   * espiarlo en los specs sin abrir la cámara real.
+   */
+  private loadBarcodeScanner(): Promise<typeof import('@capacitor/barcode-scanner')> {
+    return import('@capacitor/barcode-scanner');
+  }
+  // ]]]FI
+
   /**
    * Escanea códigos de barras/QR usando la cámara del dispositivo
    * Soporta múltiples formatos: QR, EAN, UPC, Code128, Data Matrix, etc.
@@ -3831,6 +4241,12 @@ export class CustomDrawFormComponent implements OnInit, OnDestroy {
       const hint: CapacitorBarcodeScannerTypeHint = fieldConfig.scanner?.hint || 17; // 17 = ALL
 
       //console.log('📋 Formato configurado:', hint);
+
+      // [[[II ESC:031-02 DOC:docs/documents/2026-07-18-031-optimizacion-navegacion-activos.md#escenario-02
+      // Carga el plugin solo al escanear; un fallo de carga cae en el catch
+      // existente y emite el mismo evento de error que antes.
+      const { CapacitorBarcodeScanner } = await this.loadBarcodeScanner();
+      // ]]]FI
 
       // Iniciar el scanner con opciones
       const result = await CapacitorBarcodeScanner.scanBarcode({
@@ -5293,18 +5709,18 @@ export class CustomDrawFormComponent implements OnInit, OnDestroy {
 
     this.generalS.configuredTableColumns(tableConfig?.columns).forEach((col: any) => {
       const validators: any[] = [];
-      // [[[II ESC:030-06 Misma resolución de editabilidad que la celda (FALLO #1:
-      // `col.editable` NO significa "celda bloqueada"): local_editable fuerza,
-      // readonly bloquea, si no decide el campo natural default.edit. ]]]FI
-      const editable = col.local_editable === true
-        ? true
-        : (col.readonly === true ? false : col.default?.edit !== false);
+      // [[[II ESC:030-14 DOC:docs/documents/2026-07-14-030-child-runtime-overlay.md#escenario-14
+      // Misma resolución que la celda: `editable` no es permiso de tabla,
+      // local_editable está temporalmente deshabilitado; readonly/edit/default.edit
+      // deciden el validator required. ]]]FI
+      const editable = col.readonly !== true && col.edit !== false && col.default?.edit !== false;
 
       if (col.required && editable) {
         validators.push(Validators.required);
       }
       // Longitudes: validation.* o los campos naturales de input_text (max_length/
-      // min_length top-level). En auto-complete min_length = chars de búsqueda.
+      // min_length top-level). En auto-complete el umbral es
+      // min_search_length, no una validación del valor persistido.
       const isTextColumn = col.type === 'input-text' || col.type === 'textarea';
       const maxLength = col.validation?.max_length ?? (isTextColumn ? col.max_length : undefined);
       const minLength = col.validation?.min_length ?? (isTextColumn ? col.min_length : undefined);
@@ -5315,18 +5731,27 @@ export class CustomDrawFormComponent implements OnInit, OnDestroy {
         validators.push(Validators.minLength(minLength));
       }
 
-      const displayValue = rowData?.[`${col.field}__name`];
       const rawValue = rowData?.[col.field];
-      const value = displayValue !== undefined && displayValue !== null && displayValue !== ''
-        ? displayValue
+      const isDropdown = col.type === 'dropdown' || col.type === 'dropdown-choice';
+      const displayValue = rowData?.[`${col.field}__name`];
+      const value = isDropdown
+        ? rawValue
+        : (displayValue !== undefined && displayValue !== null && displayValue !== ''
+          ? displayValue
         : (rawValue && typeof rawValue === 'object' && !Array.isArray(rawValue)
           ? this.generalS.formatDynamicValue(rawValue, col)
-          : rawValue);
+          : rawValue));
 
       rowGroup[col.field] = new FormControl(
         value !== undefined ? value : this.getTableColumnDefaultValue(col),
         validators
       );
+    });
+
+    // [[[II ESC:030-20 La relación viaja como control real de la fila. ]]]FI
+    this.generalS.configuredRelationshipFields(tableConfig?.columns).forEach((field: string) => {
+      if (rowGroup[field]) return;
+      rowGroup[field] = new FormControl(rowData?.[field] ?? null);
     });
 
     const group = this.fb.group(rowGroup);

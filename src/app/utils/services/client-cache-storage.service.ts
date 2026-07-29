@@ -1,6 +1,9 @@
 import { Injectable } from '@angular/core';
 import { Preferences } from '@capacitor/preferences';
 import { GeneralService } from './general.service';
+// [[[II ESC:031-01 DOC:docs/documents/2026-07-18-031-optimizacion-navegacion-activos.md#escenario-01
+import { perfLog, perfNow, perfTraceEnabled } from '../perf-trace';
+// ]]]FI
 
 @Injectable({
   providedIn: 'root'
@@ -13,7 +16,31 @@ export class ClientCacheStorageService {
 
   constructor(private generalS: GeneralService) { }
 
+  // [[[II ESC:031-01 DOC:docs/documents/2026-07-18-031-optimizacion-navegacion-activos.md#escenario-01
+  /**
+   * Envoltura de instrumentación activable con `bos_perf_trace`. Con el flag
+   * apagado delega directo a la implementación original sin costo adicional.
+   * Solo registra clave, duración y tamaño en caracteres; nunca el valor.
+   */
   async getItem(key: string): Promise<string | null> {
+    if (!perfTraceEnabled()) return this.getItemImpl(key);
+
+    const startedAt = perfNow();
+    const value = await this.getItemImpl(key);
+    perfLog(`cache.getItem ${key}`, perfNow() - startedAt, { chars: value?.length ?? 0 });
+    return value;
+  }
+
+  async setItem(key: string, value: string): Promise<void> {
+    if (!perfTraceEnabled()) return this.setItemImpl(key, value);
+
+    const startedAt = perfNow();
+    await this.setItemImpl(key, value);
+    perfLog(`cache.setItem ${key}`, perfNow() - startedAt, { chars: value?.length ?? 0 });
+  }
+  // ]]]FI
+
+  private async getItemImpl(key: string): Promise<string | null> {
     if (this.generalS.isMobile()) {
       return (await Preferences.get({ key })).value;
     }
@@ -31,7 +58,7 @@ export class ClientCacheStorageService {
     }
   }
 
-  async setItem(key: string, value: string): Promise<void> {
+  private async setItemImpl(key: string, value: string): Promise<void> {
     if (this.generalS.isMobile()) {
       await Preferences.set({ key, value });
       return;

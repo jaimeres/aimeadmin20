@@ -45,6 +45,12 @@ Cuando haya ambiguedad, hacer una pregunta breve y concreta antes de editar:
 Esto puede cambiar el comportamiento previo: antes <comportamiento anterior>, con este ajuste pasaria <nuevo comportamiento>. Confirmas que quieres esa regresion?
 ```
 
+## Revision Proactiva de Conflictos
+
+Antes de modificar, revisar configuracion, contratos cliente/servidor, overrides y
+reglas existentes que puedan chocar con la solicitud. Los hallazgos colaterales no
+autorizan cambios: deben reportarse con evidencia y riesgo, y esperar confirmacion.
+
 ## Aplicacion en Codigo
 
 - Reutilizar helpers existentes antes de crear reglas nuevas.

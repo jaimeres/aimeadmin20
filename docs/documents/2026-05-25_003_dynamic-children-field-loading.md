@@ -84,12 +84,13 @@
   - `derived` solo copiaba un atributo del padre y nunca podía consultar al servidor.
   - `filter_group`, `result_position`, `selected` y las `conditions` significaban cosas distintas según el modo.
 - **Solución (pipeline único):** Los 3 modos comparten el mismo flujo:
-  1. **Fuente de datos automática:** si `data_type.type` resuelve `app/type` ⇒ se consulta al servidor; en caso contrario se usan `options` locales (`fieldConfig.options` o `data_type.options`). Aplica a `static`, `dynamic` y `derived` (este último con `derived.from: 'server'`).
+  1. **Fuente de datos automática:** si `data_type.type` resuelve `app/type` ⇒ se consulta al servidor; en caso contrario se usan `options` locales (`fieldConfig.options` o `data_type.options`). Aplica a `static`, `dynamic` y `derived` (este último con `from: 'server'`).
   2. **Filtro de servidor** (`_buildChildServerFilter`): combina `data_type.filter` (entradas `forced` reciben el valor del padre; `active` se respetan) con las `filter.conditions` de scope `server`/`auto` que sean mapeables a operador de servidor.
   3. **Filtro de cliente** (`_applyClientFilter`): aplica las `conditions` con scope `client`/`auto` no resueltas en servidor, más el filtro implícito por `filter_group` declarado (solo fuente local).
   4. **result_position** (`_applyResultPosition`): `'all'` (default), `'first'`, `'last'` o índice numérico. **Ya no se asume `'first'`** (arregla REGIÓN→PLAZA que requería mostrar todas las coincidencias).
   5. **Publicación + auto_select** (`_publishChildOptions`): normaliza, publica en `dropdownOptionsSignal` y, si `auto_select: true`, fija el control con el primer resultado, sincroniza el campo espejo y **dispara la cascada del propio hijo recursivamente** (resuelve asset→workshop→cluster sin clic intermedio; profundidad máx. `_MAX_CASCADE_DEPTH = 6`).
-  6. `default_field`: valor por defecto cuando no hay coincidencias.
+  6. Sin coincidencias se limpia el control. `default_field` se retiró porque
+     ninguna configuración activa lo utilizaba al auditar el contrato.
 - **Cambios deprecados eliminados:**
   - Se eliminó el helper `_normalizeDataType` y todos los bloques `// --- TEMPORAL: compatibilidad data_type como cadena ---`. `data_type` **siempre es un objeto**.
 - **Decisiones de nomenclatura (confirmadas con el usuario):**
@@ -105,9 +106,9 @@
 | `selected: true` (solo dynamic) | `auto_select: true` (los 3 modos) | `selected` se mantiene como **alias legado** temporal; el servidor debe emitir `auto_select`. |
 | `result_position` asumido `'first'` | `result_position: 'all'` por default | `'first'`/`'last'`/N siguen disponibles de forma explícita. |
 | `conditions[*].ops: [...]` | `conditions[*].operator` + `conditions[*].scope` | `ops` ya no se usa; el operador es escalar. |
-| `filter_group` ausente ⇒ comportamiento variable | `filter_group` default `'id'` en los 3 modos | También es el default de `conditions[*].value_key`. |
+| `filter_group` declarado sin extracción/filtro | Omitirlo y usarlo sólo al extraer una propiedad del padre | No depende del tipo visual; en `derived from: 'parent'` directo normalmente sobra. |
 | `static` sin acceso a servidor | `static` usa servidor si trae `data_type.type` | Unificado con `dynamic`. |
-| `derived` solo copia del padre | `derived.from: 'parent' | 'server'` | `'server'` consulta y copia `field_name` del primer registro. |
+| `derived` solo copia del padre | `from: 'parent' | 'server'` | `'server'` consulta y copia `field_name` del primer registro. |
 | `dynamic` se bloquea sin valor del padre | Consulta igualmente; `forced` se omite si no hay valor | "no debe limitar a sus padres". |
 
 #### Diccionario completo de nodos de `children.fields.<modo>.<key>`
@@ -120,10 +121,9 @@
 | `field` | string | nombre del campo | `<key>` | 3 modos | Se sincroniza con `object_<key>` en `addFieldsByPrefix`. |
 | `option_value` | string | nombre de propiedad | `'id'` | static, dynamic | Valor que se guarda en el control. |
 | `option_label` | string | propiedad o lista separada por comas | `'name'` | static, dynamic | Etiqueta visible. |
-| `filter_group` | string | propiedad del padre/opción | `'id'` | 3 modos | Valor del padre para filtrar y default de `conditions[*].value_key`. |
+| `filter_group` | string | propiedad del padre/opción | `'id'` cuando se requiere | 3 modos | Sólo cuando hay que extraer una propiedad para filtrar/consultar; no depende del tipo visual. |
 | `result_position` | string \| number | `'all'` `'first'` `'last'` \| índice ≥ 0 | `'all'` | static, dynamic | También aceptado en `filter.result_position`. |
 | `auto_select` | boolean | `true` \| `false` | `false` | static, dynamic | Autollena con el primer resultado y dispara cascada recursiva. Reemplaza `selected`. |
-| `default_field` | any | valor literal | — | static, dynamic | Valor a fijar si no hay coincidencias. |
 | `options` | array | `[{ id, name, ... }]` | `[]` | static (local) | Opciones locales. **Excluyente** con `data_type.type` (si hay `type`, se ignora `options`). |
 | **`data_type`** | object | ver sub-nodos | `{}` | 3 modos | Configuración de fuente de servidor. |
 | `data_type.type` | string | clave de recurso (ej. `workshop`) | — | 3 modos | Si resuelve `app/type` ⇒ fuente = servidor. **Excluyente** con `options` locales. |
@@ -136,7 +136,7 @@
 | `data_type.filter.<campo>.default` | string | `exact` `in` `range` `isnull` `icontains` … | `'exact'` | server | Operador del filtro JSON:API. |
 | `data_type.filter.<campo>.default_value` | any | valor / array (in/range) | — | server | Valor del filtro estático. |
 | `data_type.filter.<campo>.option_value` | string | propiedad | `'id'` | server | Para extraer id de FK. |
-| **`filter`** | object | ver sub-nodos | — | static, dynamic | Filtro declarativo por condiciones. |
+| **`filter`** | object | ver sub-nodos | — | 3 modos | Cascada, condiciones y `scope`; no describe el filtro HTTP del recurso. |
 | `filter.active` | boolean | `true` \| `false` | `false` | static, dynamic | Si `false`, aplica filtro implícito por `filter_group`. |
 | `filter.logic` | string | `'AND'` \| `'OR'` | `'AND'` | static, dynamic | Combinación de condiciones. |
 | `filter.result_position` | string \| number | igual que `result_position` | `'all'` | static, dynamic | Tiene prioridad sobre `result_position` top-level. |
@@ -160,18 +160,16 @@
 | `requested.logic` | string | `'AND'` \| `'OR'` | `'AND'` | 3 modos | — |
 | `requested.action` | string | `'required'` \| `'not_required'` | — | 3 modos | — |
 | `requested.conditions` | array | `[<Condition>]` | `[]` | 3 modos | Misma forma que `filter.conditions`. |
-| `field_name` | string | propiedad del padre / registro servidor | — | **solo derived** | Atributo a copiar al control. |
-| **`derived`** | object | ver sub-nodos | — | **solo derived** | Configuración de copia. |
-| `derived.from` | string | `'parent'` \| `'server'` | `'parent'` | derived | `'server'` consulta (limit 1) y copia `field_name`. |
-| `derived.field_name` | string | propiedad | (usa `field_name` top-level) | derived | Alternativa a `field_name` top-level. |
-| `derived.fallback` | any | valor literal | — | derived | Valor si no hay dato. |
+| `field_name` | string | propiedad del padre / registro servidor | — | **solo derived** | Único atributo fuente a copiar al control. |
+| `from` | string | `'parent'` \| `'server'` | `'parent'` | derived | `'server'` consulta (limit 1) y copia `field_name`. |
+| `default` | object | `{active, value, edit}` | root | 3 modos | Mezcla por propiedad root→child. `active/value` controlan el fallback; `edit` el permiso. |
 
 ##### Nodos excluyentes (resumen)
 
 - `options` (local) **vs** `data_type.type` (servidor): si `data_type.type` resuelve un recurso, la fuente es el servidor y `options`/`data_type.options` se ignoran.
 - `data_type.filter.<campo>.forced` **vs** `active`: `forced` toma prioridad (inyecta valor del padre); `active` sin `forced` es filtro estático.
 - `filter.conditions[*].value` **vs** `values`: usar uno u otro según el operador (escalar vs lista/rango).
-- `field_name` / `derived.*` solo tienen efecto en modo **derived**; `options`/`data_type`/`filter`/`result_position`/`auto_select` no aplican a `derived` con `from: 'parent'`.
+- `field_name` / `from` solo tienen efecto en modo **derived**; `options`/`data_type`/`filter`/`result_position`/`auto_select` no aplican a `derived` con `from: 'parent'`.
 
 ##### `<Condition>` (forma compartida por `filter`, `activate`, `requested`)
 
@@ -200,7 +198,9 @@
 
 ### Escenario 05 · Resolución de children en servidor (`filter.scope`)
 
-- **Prompt original (resumen literal):** "el servidor también puede hacerse cargo de los cambios para evitar que el cliente esté consultando al servidor y después enviando los datos. `children.fields` ahora declara dónde se resuelven vía `filter.scope`: `client` (o ausente) → como hasta hoy; `server` → NO consultar al servidor por selección, renderizar el campo como auto/solo-lectura (si `edit:false`) o editable con valor sugerido vacío (si `edit:true`), el servidor calcula y llena el valor al hacer create. `required` se lee del campo raíz como siempre. Caso CEB: al elegir asset, NO pedir `workshop`, `form_fields_data_cluster` ni `form_fields_data_region` al servidor; enviar el create sin ellos y el servidor los completa."
+- **Prompt original (resumen):** el servidor también puede hacerse cargo de la
+  cascada para evitar viajes del cliente. En el contrato vigente,
+  `filter.scope: server` delega la resolución y `default.edit` decide el permiso.
 - **Archivo:** `src/app/components/custom-draw-form/custom-draw-form.component.ts`
 - **Métodos:** `_processChildrenFields` (rama nueva por `filter.scope`) y nuevo helper `_applyServerScopedChild`.
 - **Problema:** Todos los children se resolvían en cliente: cada selección del padre disparaba una consulta al servidor (`_loadChildOptions` / `_processDerivedChild`) y el resultado se reenviaba en el create. En cascadas como CEB (`asset → workshop → cluster/region`) esto generaba viajes cliente⇆servidor innecesarios y duplicaba la lógica de resolución.
@@ -210,22 +210,22 @@
   3. `_applyServerScopedChild`:
      - Limpia las opciones del `targetField` (`_updateDropdownOptions(targetField, [])`).
      - Limpia el valor previo (queda obsoleto al cambiar el padre) → valor sugerido vacío.
-     - `edit: false` (default) ⇒ `formControl.disable()` (solo-lectura).
-     - `edit: true` ⇒ `formControl.enable()` (editable con valor vacío).
+     - `default.edit: false` ⇒ `formControl.disable()` (solo-lectura).
+     - `default.edit: true` ⇒ `formControl.enable()` (editable con valor vacío).
      - Relaja el `required` en cliente (`clearValidators()` + `updateValueAndValidity()`) para poder **enviar el create sin el campo**; la obligatoriedad real la reimpone el servidor en `resolve_children`.
      - Aplica lo mismo al campo espejo (`object_*` ↔ sin prefijo) cuando existe.
 - **Decisiones de diseño:**
   - `filter.scope` es la única fuente de verdad de DÓNDE se resuelve el hijo (alineado con el contrato del servidor `2026-05-29-007`). `scope` en `conditions[*]` sigue rigiendo solo el filtrado cliente/servidor cuando `scope='client'`.
-  - Los controles `edit:false` quedan deshabilitados, por lo que Angular los excluye de `formGroup.value` (no viajan en el create) y no disparan validación required. Para `edit:true` se relaja el required explícitamente.
+  - Los controles `default.edit:false` quedan deshabilitados, por lo que Angular los excluye de `formGroup.value` y no disparan validación required. Para `default.edit:true` se relaja el required explícitamente.
   - `required` se sigue declarando en el campo raíz (form builder); en cliente solo se relaja para los hijos resueltos por servidor.
-- **Caso CEB:** marcar `workshop`, `form_fields_data_cluster` y `form_fields_data_region` con `filter.scope: 'server'` (y `edit: false`). Al elegir `asset` el cliente ya no consulta esos recursos; el create se envía sin esos campos y el servidor los completa.
+- **Caso CEB:** marcar `workshop`, `form_fields_data_cluster` y `form_fields_data_region` con `filter.scope: 'server'` y `default.edit: false`. Al elegir `asset` el cliente ya no consulta esos recursos; el create se envía sin esos campos y el servidor los completa.
 
 #### Nodos nuevos en el diccionario
 
 | Nodo | Tipo | Valores posibles | Default | Aplica a | Notas |
 |---|---|---|---|---|---|
 | `filter.scope` | string | `'client'` \| `'server'` | `'client'` | 3 modos | `server` ⇒ el cliente no consulta; el servidor resuelve y llena en create. |
-| `edit` | boolean | `true` \| `false` | `false` | 3 modos (solo con `filter.scope='server'`) | `false` ⇒ control solo-lectura (deshabilitado); `true` ⇒ editable con valor sugerido vacío. |
+| `default.edit` | boolean | `true` \| `false` | root | 3 modos (solo con `filter.scope='server'`) | `false` ⇒ control solo-lectura; `true` ⇒ editable. Es independiente de `default.active`. |
 
 - **Validación:** `get_errors` sin errores de compilación. Pendiente validación funcional en navegador (CEB: alta de tarea con `asset` y verificación de que el create se envía sin `workshop`/`cluster`/`region`).
 
@@ -247,14 +247,32 @@
   1. Children **no objetivo** (no empiezan con los prefijos): `applyRequired = (schemaEntry?.required ?? layoutNode?.required) === true`, `readOnly = false` (comportamiento previo).
   2. Children **objetivo sin schema efectivo** (`hasSchema=false`): `{ applyRequired:false, readOnly:false }` (no se impone obligatoriedad local).
   3. Children **objetivo con schema**: usa `scopeInfo` del registro del padre:
-     - `scopeInfo.scope==='server'` ⇒ `{ applyRequired:false, readOnly: !scopeInfo.edit }` (no exige captura; solo-lectura si `edit:false`, editable opcional si `edit:true`). El servidor inicializa el valor en el create.
+     - `scopeInfo.scope==='server'` ⇒ no exige captura y calcula `readOnly`
+       con `child.default.edit → root.default.edit → true`. El servidor
+       inicializa el valor en el create.
      - sin declaración server (cliente o no es child de nadie) ⇒ `{ applyRequired: rootRequired, readOnly:false }`.
 - **Algoritmo de detección (cliente):** para cada `form_fields_data_X`/`parent_form_data_X`, buscar si aparece como key en algún `<padre>.children.fields.(static|dynamic|derived)`; si ese nodo tiene `filter.scope==='server'`, marcarlo como "resuelto por servidor" (no exigir, no bloquear submit, respetar `edit` para readonly/editable). Si el backend no logra resolverlo, devolverá el error required y la lógica existente lo mapea al control.
 - **Integración en el form builder:**
   - `addFieldsByPrefix` (`form_fields_data_*`): construye `_childScopeRegistry = _collectChildScopeRegistry(draw)` una vez; calcula `_childPolicy` con `schemaEntry = fieldsForm(pos)[fieldName]`, `hasSchema = startsWith('form_fields_data_') ? !!schemaEntry : true` y `scopeInfo = _childScopeRegistry.get(fieldName)`; usa `_childPolicy.applyRequired` para `Validators.required` y `_childPolicy.readOnly` en el `disabled`.
   - `openTasksDetail` (`parent_form_data_*`): construye el registro desde `childFormFields.draw` + `drawForm()[pos]` (por si el padre vive en cualquiera); calcula `_childPolicy` con `schemaEntry = fields[fieldData.field]`, `hasSchema = !!field`, `scopeInfo = registro.get(fieldData.field)`.
   - La validación efectiva del submit la realiza la lógica existente (`formErrors`/`Validators.required`); no se añadió mapeo de errores de servidor (ya cubierto por el manejo existente en `submitForm`).
-- **Caso concreto (Alta de tipo de mantenimiento):** `form_fields_data_cluster` y `form_fields_data_region` son children de `workshop` con `filter.scope='server'` y `edit=false` ⇒ NO se muestran obligatorios ni bloquean el guardado aunque su root tenga `required=true`; el usuario solo elige `workshop` y el servidor llena Cluster/Región. `workshop` mantiene su obligatoriedad normal (campo de modelo, padre que dispara la resolución).
+- **Caso concreto (Alta de tipo de mantenimiento):** `form_fields_data_cluster` y `form_fields_data_region` son children de `workshop` con `filter.scope='server'` y `default.edit=false` ⇒ NO se muestran obligatorios ni bloquean el guardado aunque su root tenga `required=true`; el usuario solo elige `workshop` y el servidor llena Cluster/Región. `workshop` mantiene su obligatoriedad normal (campo de modelo, padre que dispara la resolución).
+
+### Escenario 07 · Herencia root y gramática derived sin duplicados
+
+- El child es un overlay: toda propiedad común omitida conserva el contrato del
+  root destino. `default` y `data_type` se mezclan por propiedad y el child
+  explícito prevalece.
+- En `derived`, `field_name` existe una sola vez y `from` es un nodo hermano.
+  El antiguo `derived.{from,field_name,fallback}` se eliminó.
+- El fallback usa `default.active/default.value`; el permiso usa
+  `default.edit`. Activar o desactivar el valor por defecto no cambia permisos.
+- `child.filter` controla cascada/condiciones/scope. `data_type.filter` controla
+  la consulta remota. No se pisan ni son alias.
+- `filter_group` sólo se declara cuando debe extraerse una propiedad del padre
+  para filtrar o consultar; no depende del tipo visual.
+- `default_field` se eliminó del runtime y de la configuración del cliente
+  porque no existía ningún uso activo al momento de la auditoría.
 - **Guard de runtime (`_processChildrenFields`):** Para un child objetivo (prefijos), `scope` cliente (`fieldConfig.filter.scope !== 'server'`) y `targetFieldConfig.required === true` se calcula `lockRequired = true`:
   - `activate` NO puede desactivar/nulificar el control (`isActive` se fuerza a `true`).
   - `requested` NO puede relajar el required (`isRequired = true` siempre); el root prevalece sobre `requested.action='not_required'`.

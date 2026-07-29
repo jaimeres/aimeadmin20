@@ -4,7 +4,10 @@ import { LoggedUser } from '../../types/logged-user';
 import { CookieOptions, CookieService } from 'ngx-cookie-service';
 import { environment } from '../../../environments/environment';
 import { HttpClient } from '@angular/common/http';
-import { catchError, firstValueFrom, from, map, Observable, of, switchMap, tap, throwError } from 'rxjs';
+import { catchError, finalize, firstValueFrom, from, map, Observable, of, switchMap, tap, throwError } from 'rxjs';
+// [[[II ESC:031-01 DOC:docs/documents/2026-07-18-031-optimizacion-navegacion-activos.md#escenario-01
+import { perfLog, perfNow } from '../../utils/perf-trace';
+// ]]]FI
 import { jwtDecode } from "jwt-decode";
 import { MessageService } from '../../components/services/message.service';
 import { Router } from '@angular/router';
@@ -62,6 +65,11 @@ export class AuthService {
   private readonly _configVisitWindowMs = 30 * 24 * 60 * 60 * 1000;
   private _configFetchPromise: Promise<{ processedConfig: Record<string, any>; appIndex: Record<string, string[]> }> | null = null;
   private _configVisitMemory: Record<string, ConfigVisitEntry> | null = null;
+  // [[[II ESC:001-08 DOC:docs/documents/2026-06-04-001-token-config-cache.md#escenario-08
+  /** Memoria de sesión de los índices de configuración (mismo patrón que _configVisitMemory). */
+  private _configIndexMemory: string[] | null = null;
+  private _configAppIndexMemory: Record<string, string[]> | null = null;
+  // ]]]FI
   // ]]]FI
   private _storageReady: Promise<void> = Promise.resolve();
   private _cookieOptions: CookieOptions = {
@@ -172,6 +180,11 @@ export class AuthService {
     this._user.set(userData);
     // [[[II ESC:001-07 DOC:docs/documents/2026-06-04-001-token-config-cache.md#escenario-07
     this._configVisitMemory = null;
+    // ]]]FI
+    // [[[II ESC:001-08 DOC:docs/documents/2026-06-04-001-token-config-cache.md#escenario-08
+    // Al cambiar de usuario cambia el scope del storage: invalidar índices en memoria.
+    this._configIndexMemory = null;
+    this._configAppIndexMemory = null;
     // ]]]FI
 
     console.log(this._user());
@@ -680,12 +693,18 @@ export class AuthService {
    * Primero intenta resolver por índice local; si falta, actualiza la configuración desde servidor.
    */
   ensureConfigForUrl(url: string, modules: string[] = []): Observable<boolean> {
+    // [[[II ESC:031-01 DOC:docs/documents/2026-07-18-031-optimizacion-navegacion-activos.md#escenario-01
+    const perfStartedAt = perfNow();
+    // ]]]FI
     return from(this.ensureConfigForUrlAsync(url, modules)).pipe(
       map(() => true),
       catchError((error) => {
         console.warn('Warning: Could not ensure route configuration:', error);
         return of(false);
-      })
+      }),
+      // [[[II ESC:031-01 DOC:docs/documents/2026-07-18-031-optimizacion-navegacion-activos.md#escenario-01
+      finalize(() => perfLog(`ensureConfigForUrlAsync ${url}`, perfNow() - perfStartedAt))
+      // ]]]FI
     );
   }
 
@@ -724,8 +743,11 @@ export class AuthService {
   private async ensureConfigForUrlAsync(url: string, modules: string[] = []): Promise<void> {
     const explicitModules = this.normalizeConfigModules(modules);
     if (explicitModules.length) {
-      await this.recordConfigModulesVisitAsync(explicitModules);
+      // [[[II ESC:001-08 DOC:docs/documents/2026-06-04-001-token-config-cache.md#escenario-08
+      // La visita se registra una sola vez dentro de ensureConfigModulesAsync,
+      // siempre antes de cualquier fetch: se elimina el registro duplicado.
       await this.ensureConfigModulesAsync(explicitModules);
+      // ]]]FI
       return;
     }
 
@@ -743,8 +765,10 @@ export class AuthService {
       return;
     }
 
-    await this.recordConfigModulesVisitAsync(routeModules);
+    // [[[II ESC:001-08 DOC:docs/documents/2026-06-04-001-token-config-cache.md#escenario-08
+    // La visita se registra una sola vez dentro de ensureConfigModulesAsync.
     await this.ensureConfigModulesAsync(routeModules);
+    // ]]]FI
   }
 
   private async ensureConfigModulesAsync(modules: string[] = []): Promise<void> {
@@ -762,12 +786,16 @@ export class AuthService {
     for (const module of requestedModules) {
       if (this._config?.[module]) {
         activeConfig[module] = this._config[module];
+        // [[[II ESC:030-13 ]]]FI
+        this._markConfigOrigin(module, 'memoria');
         continue;
       }
 
       const cachedModule = await this.readConfigModuleFromStorage(module);
       if (cachedModule) {
         activeConfig[module] = cachedModule;
+        // [[[II ESC:030-13 Vino de la clave `bos_config_module_v3:<usuario>:<módulo>`. ]]]FI
+        this._markConfigOrigin(module, 'cache-v3');
       } else {
         missingModules.push(module);
       }
@@ -778,12 +806,33 @@ export class AuthService {
       for (const module of requestedModules) {
         if (processedConfig[module]) {
           activeConfig[module] = processedConfig[module];
+          // [[[II ESC:030-13 Sólo los que faltaban se resolvieron contra el
+          // servidor; los demás conservan el origen ya marcado. ]]]FI
+          if (missingModules.includes(module)) this._markConfigOrigin(module, 'servidor');
         }
       }
     }
 
     this._config = activeConfig;
   }
+
+  // [[[II ESC:030-13 DOC:docs/documents/2026-07-14-030-child-runtime-overlay.md#escenario-13
+  // DIAGNÓSTICO TEMPORAL — retirar al cerrar el escenario 13.
+  //
+  // Procedencia REAL de la configuración activa de cada módulo. Se discutió a
+  // ciegas si el cliente leía config cacheada o recién traída; esto lo responde
+  // con el dato, no con deducciones sobre el código:
+  //   'memoria'  ya estaba en `_config` de esta sesión.
+  //   'cache-v3' se hidrató desde la clave `bos_config_module_v3:<usuario>:<módulo>`
+  //              del object store `entries` de la BD IndexedDB `bos-client-cache-v1`.
+  //   'servidor' faltaba en cache y se resolvió contra `settings/settings/me/`.
+  public configModuleOrigin = signal<Record<string, 'memoria' | 'cache-v3' | 'servidor'>>({});
+
+  private _markConfigOrigin(module: string, origin: 'memoria' | 'cache-v3' | 'servidor'): void {
+    if (!module) return;
+    this.configModuleOrigin.update((current) => ({ ...current, [module]: origin }));
+  }
+  // ]]]FI
 
   private normalizeConfigModules(modules: string[] = []): string[] {
     return Array.from(new Set(
@@ -872,11 +921,15 @@ export class AuthService {
 
     const prunedMap = this.pruneConfigVisitMap(map);
     this._configVisitMemory = prunedMap;
-    try {
-      await this.writeConfigVisitMapToStorage(prunedMap);
-    } catch (error) {
+    // [[[II ESC:001-08 DOC:docs/documents/2026-06-04-001-token-config-cache.md#escenario-08
+    // La memoria ya quedó actualizada arriba y es lo que leen getRecentConfigModules
+    // y la persistencia de módulos; la escritura a Preferences sale de la ruta
+    // crítica del guard: instrumentación en dispositivo midió 15 109 ms para un
+    // solo Preferences.set con el puente saturado.
+    void this.writeConfigVisitMapToStorage(prunedMap).catch((error) => {
       console.warn('Warning: Could not persist configuration visit map:', error);
-    }
+    });
+    // ]]]FI
   }
 
   private async getRecentConfigModules(): Promise<string[]> {
@@ -1159,6 +1212,9 @@ export class AuthService {
   }
 
   private async readConfigIndexFromStorage(): Promise<string[]> {
+    // [[[II ESC:001-08 DOC:docs/documents/2026-06-04-001-token-config-cache.md#escenario-08
+    if (this._configIndexMemory) return [...this._configIndexMemory];
+    // ]]]FI
     try {
       const key = this.configIndexStorageKey();
       let raw = await this.clientCacheS.getItem(key);
@@ -1166,13 +1222,19 @@ export class AuthService {
         raw = localStorage.getItem(key);
       }
       const parsed = raw ? JSON.parse(raw) : [];
-      return Array.isArray(parsed) ? parsed : [];
+      // [[[II ESC:001-08 DOC:docs/documents/2026-06-04-001-token-config-cache.md#escenario-08
+      this._configIndexMemory = Array.isArray(parsed) ? parsed : [];
+      return [...this._configIndexMemory];
+      // ]]]FI
     } catch {
       return [];
     }
   }
 
   private async readConfigAppIndexFromStorage(): Promise<Record<string, string[]>> {
+    // [[[II ESC:001-08 DOC:docs/documents/2026-06-04-001-token-config-cache.md#escenario-08
+    if (this._configAppIndexMemory) return { ...this._configAppIndexMemory };
+    // ]]]FI
     try {
       const key = this.configAppIndexStorageKey();
       let raw = await this.clientCacheS.getItem(key);
@@ -1182,10 +1244,13 @@ export class AuthService {
       const parsed = raw ? JSON.parse(raw) : {};
       if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return {};
 
-      return Object.entries(parsed).reduce((acc: Record<string, string[]>, [key, modules]) => {
+      // [[[II ESC:001-08 DOC:docs/documents/2026-06-04-001-token-config-cache.md#escenario-08
+      this._configAppIndexMemory = Object.entries(parsed).reduce((acc: Record<string, string[]>, [key, modules]) => {
         acc[key] = this.normalizeConfigModules(Array.isArray(modules) ? modules : []);
         return acc;
       }, {});
+      return { ...this._configAppIndexMemory };
+      // ]]]FI
     } catch {
       return {};
     }
@@ -1193,7 +1258,12 @@ export class AuthService {
 
   private async writeConfigIndexToStorage(modules: string[]): Promise<void> {
     const key = this.configIndexStorageKey();
-    const raw = JSON.stringify(this.normalizeConfigModules(modules));
+    // [[[II ESC:001-08 DOC:docs/documents/2026-06-04-001-token-config-cache.md#escenario-08
+    // Write-through: la memoria de sesión refleja lo escrito (patrón de _configVisitMemory).
+    const normalizedModules = this.normalizeConfigModules(modules);
+    this._configIndexMemory = normalizedModules;
+    const raw = JSON.stringify(normalizedModules);
+    // ]]]FI
     await this.clientCacheS.setItem(key, raw);
   }
 
@@ -1202,6 +1272,10 @@ export class AuthService {
       acc[key] = this.normalizeConfigModules(modules);
       return acc;
     }, {});
+    // [[[II ESC:001-08 DOC:docs/documents/2026-06-04-001-token-config-cache.md#escenario-08
+    // Write-through: la memoria de sesión refleja lo escrito (patrón de _configVisitMemory).
+    this._configAppIndexMemory = normalizedIndex;
+    // ]]]FI
     const key = this.configAppIndexStorageKey();
     const raw = JSON.stringify(normalizedIndex);
     await this.clientCacheS.setItem(key, raw);
@@ -1224,6 +1298,11 @@ export class AuthService {
     await this.removeConfigStorageKey(this.configIndexStorageKey());
     await this.removeConfigStorageKey(this.configAppIndexStorageKey());
     this._config = {};
+    // [[[II ESC:001-08 DOC:docs/documents/2026-06-04-001-token-config-cache.md#escenario-08
+    // Los índices persistidos se acaban de borrar: invalidar su memoria de sesión.
+    this._configIndexMemory = null;
+    this._configAppIndexMemory = null;
+    // ]]]FI
   }
 
   // ]]]FI

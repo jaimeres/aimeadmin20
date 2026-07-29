@@ -1,84 +1,165 @@
-/* Botón flotante con la animación */
+/* [[[II ESC:032-01,032-03 DOC:docs/documents/2026-07-24-032-assistant-widget-mascota-natural.md#escenario-01 */
 .assistant-fab {
   position: fixed;
-  width: 84px;
-  height: 84px;
-  border-radius: 50%;
-  background: #ffffff;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
+  right: var(--assistant-right);
+  bottom: var(--assistant-bottom);
+  z-index: 1000;
+  width: 98px;
+  height: 98px;
   display: grid;
   place-items: center;
+  border-radius: 30px;
   cursor: grab;
-  z-index: 1000;
-  transition: box-shadow 0.2s ease;
+  touch-action: none;
   user-select: none;
-  -webkit-user-select: none;
-  -moz-user-select: none;
-  -ms-user-select: none;
+  outline: 0;
 }
 
-.assistant-fab:active {
+.assistant-fab.dragging {
   cursor: grabbing;
-  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.25);
 }
 
-.assistant-fab ng-lottie {
-  width: 64px;
-  height: 64px;
-  pointer-events: none;
-  /* para que el click sea en el contenedor */
+.assistant-mascot {
+  position: relative;
+  width: 88px;
+  height: 88px;
+  filter: drop-shadow(0 8px 8px rgba(21, 35, 75, 0.22));
 }
 
-.assistant-fab .assistant-image {
-  width: 64px;
-  height: 64px;
+.assistant-image,
+.assistant-mascot ng-lottie {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
   object-fit: contain;
   pointer-events: none;
-  /* para que el click sea en el contenedor */
 }
 
-/* Panel de chat */
+.assistant-eye {
+  position: absolute;
+  top: 54.5%;
+  width: 18.5%;
+  height: 19%;
+  overflow: hidden;
+  border-radius: 42%;
+  background: #f7fcff;
+  transform-origin: center;
+  animation: blink 5.8s infinite;
+}
+
+.assistant-eye-left {
+  left: 23%;
+}
+
+.assistant-eye-right {
+  right: 22.7%;
+}
+
+.assistant-pupil {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 43%;
+  aspect-ratio: 1;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, #fff 0 9%, transparent 11%), #15234b;
+  transform: translate(calc(-50% + var(--eye-x)), calc(-50% + var(--eye-y)));
+  transition: transform 0.13s ease-out;
+}
+
+.assistant-mood-badge {
+  position: absolute;
+  top: -1px;
+  right: -2px;
+  min-width: 27px;
+  height: 27px;
+  padding: 0 6px;
+  display: grid;
+  place-items: center;
+  border-radius: 14px;
+  background: #fff;
+  color: #15234b;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.assistant-fab[data-mood='think'] .assistant-pupil {
+  transform: translate(calc(-50% + var(--eye-x)), calc(-50% - 3px));
+}
+
+.assistant-fab[data-mood='confused'] .assistant-eye-left .assistant-pupil {
+  transform: translate(-30%, -65%);
+}
+
+.assistant-fab[data-mood='confused'] .assistant-eye-right .assistant-pupil {
+  transform: translate(-70%, -35%);
+}
+
+.assistant-fab[data-mood='yawning'] .assistant-eye {
+  animation: sleepy 2.2s ease-in-out infinite;
+}
+
+.assistant-fab[data-mood='frightened'] .assistant-pupil {
+  width: 24%;
+}
+
 .assistant-panel {
   position: fixed;
-  width: 340px;
-  max-height: 60vh;
-  background: #fff;
-  border-radius: 12px;
-  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.2);
+  right: var(--assistant-right);
+  bottom: var(--assistant-bottom);
+  z-index: 1001;
+  width: min(360px, calc(100vw - 24px));
+  max-height: 68vh;
   display: none;
   flex-direction: column;
   overflow: hidden;
-  z-index: 1001;
+  border: 1px solid rgba(21, 35, 75, 0.13);
+  border-radius: 18px;
+  background: #fff;
+  box-shadow: 0 20px 48px rgba(21, 35, 75, 0.2);
 }
 
 .assistant-panel.open {
   display: flex;
 }
 
-.assistant-header {
+.assistant-header,
+.assistant-footer {
   display: flex;
   align-items: center;
+  gap: 9px;
+  padding: 11px 13px;
+}
+
+.assistant-header {
   justify-content: space-between;
-  padding: 10px 12px;
-  border-bottom: 1px solid #eee;
+  border-bottom: 1px solid #e8eaf0;
+  background: #f8fafc;
 }
 
 .assistant-title {
-  font-weight: 600;
+  color: #15234b;
+  font-size: 15px;
+  font-weight: 700;
 }
 
 .assistant-close {
-  background: transparent;
   border: 0;
-  font-size: 20px;
+  background: transparent;
+  color: #475467;
+  font-size: 22px;
   cursor: pointer;
 }
 
 .assistant-body {
-  padding: 12px;
-  gap: 8px;
+  min-height: 145px;
+  padding: 14px;
   display: flex;
+  flex: 1;
   flex-direction: column;
+  gap: 9px;
   overflow: auto;
 }
 
@@ -90,70 +171,112 @@
   justify-content: flex-end;
 }
 
-.msg.assistant {
-  justify-content: flex-start;
-}
-
 .bubble {
-  max-width: 80%;
+  max-width: 84%;
   padding: 8px 10px;
-  border-radius: 10px;
-  background: #f5f7fb;
+  border-radius: 13px 13px 13px 4px;
+  background: #f2f4f7;
+  color: #344054;
+  font-size: 13px;
+  line-height: 1.4;
 }
 
 .msg.user .bubble {
-  background: #e6f0ff;
+  border-radius: 13px 13px 4px;
+  background: #15234b;
+  color: #fff;
 }
 
 .bubble.error {
-  background: #ffe6e6;
+  background: #fff0ef;
+  color: #b42318;
 }
 
 .bubble.thinking {
-  font-style: italic;
-  opacity: .7;
+  display: flex;
+  gap: 4px;
+}
+
+.bubble.thinking span {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: #1aa6c8;
 }
 
 .assistant-footer {
-  display: flex;
-  gap: 8px;
-  padding: 10px;
-  border-top: 1px solid #eee;
+  align-items: flex-end;
+  padding-bottom: 5px;
+  border-top: 1px solid #e8eaf0;
 }
 
 .assistant-footer textarea {
+  min-height: 42px;
   flex: 1;
   resize: none;
-  border-radius: 8px;
-  border: 1px solid #ddd;
-  padding: 8px;
+  border: 1px solid #d4d8e1;
+  border-radius: 11px;
+  padding: 9px;
   font: inherit;
+  outline: 0;
+}
+
+.assistant-footer textarea:focus {
+  border-color: #1aa6c8;
 }
 
 .assistant-footer .send {
-  padding: 8px 12px;
-  border: none;
-  border-radius: 8px;
-  background: #007ad9;
+  width: 42px;
+  height: 42px;
+  border: 0;
+  border-radius: 11px;
+  background: #15234b;
   color: #fff;
+  font-size: 20px;
   cursor: pointer;
 }
 
 .assistant-footer .send:disabled {
-  opacity: .6;
+  opacity: 0.38;
   cursor: not-allowed;
+}
+
+@keyframes blink {
+  0%,
+  90%,
+  93%,
+  100% {
+    transform: scaleY(1);
+  }
+  91%,
+  92% {
+    transform: scaleY(0.08);
+  }
+}
+
+@keyframes sleepy {
+  0%,
+  100% {
+    transform: scaleY(0.55);
+  }
+  50% {
+    transform: scaleY(0.12);
+  }
 }
 
 @media (max-width: 480px) {
   .assistant-panel {
+    right: 12px;
+    bottom: 112px;
     width: calc(100vw - 24px);
-    right: 12px;
-    left: 12px;
-    bottom: 110px;
-  }
-
-  .assistant-fab {
-    right: 12px;
-    bottom: 12px;
   }
 }
+
+@media (prefers-reduced-motion: reduce) {
+  .assistant-eye,
+  .assistant-pupil {
+    animation: none !important;
+    transition: none !important;
+  }
+}
+/* ]]]FI */

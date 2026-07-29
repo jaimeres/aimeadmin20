@@ -1,6 +1,6 @@
 import { HttpClient } from '@angular/common/http';
 import { inject, Injectable, signal } from '@angular/core';
-import { map, Observable, Subject } from 'rxjs';
+import { map, Observable, of, Subject, tap } from 'rxjs';
 import { ConfigService } from 'src/app/auth/services/config.service';
 import { GeneralService } from 'src/app/utils/services/general.service';
 import { environment } from 'src/environments/environment';
@@ -359,6 +359,46 @@ export class CRUDService {
     return parts.join('&');
   }
 
+  // [[[II ESC:030-17 DOC:docs/documents/2026-07-14-030-child-runtime-overlay.md#escenario-17
+  /**
+   * Resuelve el filtro de una búsqueda declarada por `data_type.filter`.
+   *
+   * Una entrada activa, no `forced`, cuyo `default_value` es null/undefined
+   * enlaza el texto que el usuario está buscando. Las entradas con valor
+   * declarado se conservan como restricciones estáticas. Si ninguna entrada
+   * declara ese enlace dinámico, se preserva el filtro de respaldo del control.
+   */
+  buildConfiguredSearchFilter(
+    filterConfig: Record<string, any> | undefined,
+    query: string,
+    fallbackFilter = ''
+  ): string {
+    if (!filterConfig || typeof filterConfig !== 'object') return fallbackFilter;
+
+    let bindsQuery = false;
+    const resolvedConfig: Record<string, any> = {};
+    for (const [fieldName, entry] of Object.entries(filterConfig)) {
+      if (fieldName === 'logic') {
+        resolvedConfig[fieldName] = entry;
+        continue;
+      }
+      if (!entry || typeof entry !== 'object' || Array.isArray(entry)) continue;
+
+      const isQueryBinding = entry.active === true
+        && entry.forced !== true
+        && (entry.default_value === null || entry.default_value === undefined);
+      resolvedConfig[fieldName] = isQueryBinding
+        ? { ...entry, default_value: query }
+        : { ...entry };
+      bindsQuery = bindsQuery || isQueryBinding;
+    }
+
+    const configuredFilter = this.buildDropdownFilterString(resolvedConfig);
+    if (bindsQuery) return configuredFilter;
+    return [configuredFilter, fallbackFilter].filter(Boolean).join('&');
+  }
+  // ]]]FI
+
   private _appendColumnFilterParts(parts: string[], fieldName: string, filter: any): void {
     if (!filter || typeof filter !== 'object') return;
 
@@ -537,20 +577,47 @@ export class CRUDService {
     return query;
   }
 
+  // [[[II ESC:031-05 DOC:docs/documents/2026-07-18-031-optimizacion-navegacion-activos.md#escenario-05
   /**
-   * 
+   * Memoria de sesión de respuestas OPTIONS por usuario y endpoint. Los CRUD
+   * guardaban optionsFields/formTempo en la instancia del componente, que se
+   * destruye al cambiar de ruta: volver a un endpoint ya visitado repetía el
+   * OPTIONS y reconstruía todo desde cero. Se entrega un clon por lectura para
+   * que las mutaciones de un componente no contaminen otras instancias.
+   */
+  private readonly optionsMemory = new Map<string, any>();
+  // ]]]FI
+
+  /**
+   *
    * @param app Opcional, aplicacion a consultar, si no se envia se toma la de this.app
    * @returns retorna los datos
    */
   options(app = '') {
 
     //const query = this.query('', '', '', '', '', type);
-    return this.http.options(`${this.baseUrl(app)}`).pipe(
+    // [[[II ESC:031-05 DOC:docs/documents/2026-07-18-031-optimizacion-navegacion-activos.md#escenario-05
+    // La clave incluye el usuario: un cambio de sesión no reutiliza permisos
+    // (actions.POST) de otro usuario. Sin TTL: vive lo que la sesión de página.
+    const url = `${this.baseUrl(app)}`;
+    const memoryKey = `${this.authS.userId() ?? this.authS.username() ?? 'anonymous'}:${url}`;
+    const cached = this.optionsMemory.get(memoryKey);
+    if (cached) {
+      return of(structuredClone(cached));
+    }
+
+    return this.http.options(url).pipe(
       //IMPRIMIR RESPUESTA
       map((resp: any) => {
         return resp
+      }),
+      tap((resp: any) => {
+        try {
+          this.optionsMemory.set(memoryKey, structuredClone(resp));
+        } catch { /* Memoria opcional: si no se puede clonar, no se cachea. */ }
       })
     )
+    // ]]]FI
   }
 
   /** °°°SE TIENE QUE ELIMINAR Y CAMBIAR POR GETOBJECT

@@ -14,13 +14,21 @@
     [filterDelayTable]="filterDelayTable()" />
 </div>
 
-<app-custom-local-settings [visible]="localSettingsDialogVisible" [field]="fieldConfig()" [formGroup]="configForm"
-  (saveAction)="saveConfig()" (visibleAction)="onLocalSettingsDialogVisible($event)" />
+<!-- [[[II ESC:031-03 DOC:docs/documents/2026-07-18-031-optimizacion-navegacion-activos.md#escenario-03 -->
+@defer (when localSettingsDialogVisible) {
+  <app-custom-local-settings [visible]="localSettingsDialogVisible" [field]="fieldConfig()" [formGroup]="configForm"
+    (saveAction)="saveConfig()" (visibleAction)="onLocalSettingsDialogVisible($event)" />
+}
 
-<app-custom-import [visible]="importDialogVisible" (visibleAction)="onImportDialogVisible($event)"
-  (saveAction)="onImportSave($event)" />
+@defer (when importDialogVisible) {
+  <app-custom-import [visible]="importDialogVisible" (visibleAction)="onImportDialogVisible($event)"
+    (saveAction)="onImportSave($event)" />
+}
 
-<app-custom-actions-selection [visible]="actionsSelectionDialogVisible" (visibleChange)="onVisibleChange($event)" />
+@defer (when actionsSelectionDialogVisible) {
+  <app-custom-actions-selection [visible]="actionsSelectionDialogVisible" (visibleChange)="onVisibleChange($event)" />
+}
+<!-- ]]]FI -->
 
 <p-dialog [(visible)]="formDialogVisible[$any(typeDefault)]" (onHide)="onHide($any(typeDefault))"
   (onShow)="onShow($any(typeDefault))" [styleClass]="styleClassDialog()" modal="true" [resizable]="true"
@@ -50,13 +58,17 @@
 
         <p-tabpanel value="0">
 
-          <app-custom-draw-form *ngIf="form()[$any(typeDefault)] && drawForm()[typeDefault]"
-            [drawForm]="drawForm()[typeDefault]['general']" [formGroup]="form()[$any(typeDefault)]"
-            (onSelectAutoCompleteAction)="onSelectAutoComplete($event)"
-            (onChangeDropdownAction)="onChangeDropdown($event)" (onNewIconDropdownAction)="onNewIconDropdown($event)"
-            (onReloadIconDropdownAction)="onReloadIconDropdown($event)" (onChangeToggleAction)="onChangeToggle($event)"
-            (onClosableIconDropdownAction)="onClosableIconDropdown($event)"
-            (onKeydownEnterAction)="onKeydownEnter($event)" />
+          <!-- [[[II ESC:031-03 DOC:docs/documents/2026-07-18-031-optimizacion-navegacion-activos.md#escenario-03 -->
+          @defer (when formDialogVisible[$any(typeDefault)]) {
+            <app-custom-draw-form *ngIf="form()[$any(typeDefault)] && drawForm()[typeDefault]"
+              [drawForm]="drawForm()[typeDefault]['general']" [formGroup]="form()[$any(typeDefault)]"
+              (onSelectAutoCompleteAction)="onSelectAutoComplete($event)"
+              (onChangeDropdownAction)="onChangeDropdown($event)" (onNewIconDropdownAction)="onNewIconDropdown($event)"
+              (onReloadIconDropdownAction)="onReloadIconDropdown($event)" (onChangeToggleAction)="onChangeToggle($event)"
+              (onClosableIconDropdownAction)="onClosableIconDropdown($event)"
+              (onKeydownEnterAction)="onKeydownEnter($event)" />
+          }
+          <!-- ]]]FI -->
 
         </p-tabpanel>
 
@@ -65,12 +77,20 @@
         </p-tabpanel>
 
         <p-tabpanel value="3">
-          <app-custom-audit [cf]="customField()[typeDefault]" [selected]="selected()" />
+          <!-- [[[II ESC:031-03 DOC:docs/documents/2026-07-18-031-optimizacion-navegacion-activos.md#escenario-03 -->
+          @defer (when formDialogVisible[$any(typeDefault)]) {
+            <app-custom-audit [cf]="customField()[typeDefault]" [selected]="selected()" />
+          }
+          <!-- ]]]FI -->
         </p-tabpanel>
 
         <p-tabpanel value="4">
-          <app-custom-documents [selected]="selected()" [type]="'asset-document'" [app]="'assets/asset-document'"
-            [filter]="'asset'" (newAction)="openNewSecundary({pos:'asset-document-asset'})" />
+          <!-- [[[II ESC:031-03 DOC:docs/documents/2026-07-18-031-optimizacion-navegacion-activos.md#escenario-03 -->
+          @defer (when formDialogVisible[$any(typeDefault)]) {
+            <app-custom-documents [selected]="selected()" [type]="'asset-document'" [app]="'assets/asset-document'"
+              [filter]="'asset'" (newAction)="openNewSecundary({pos:'asset-document-asset'})" />
+          }
+          <!-- ]]]FI -->
         </p-tabpanel>
 
       </p-tabpanels>
@@ -110,17 +130,25 @@
       <p-tabpanels>
 
         <p-tabpanel value="0">
-          <app-custom-draw-form *ngIf="form()[$any('asset-type')] && drawForm()['asset-type']"
-            [drawForm]="drawForm()['asset-type']['general']" [formGroup]="form()[$any('asset-type')]"
-            (onSelectAutoCompleteAction)="onSelectAutoComplete($event)"
-            (onChangeDropdownAction)="onChangeDropdown($event)" (onNewIconDropdownAction)="onNewIconDropdown($event)"
-            (onReloadIconDropdownAction)="onReloadIconDropdown($event)" (onChangeToggleAction)="onChangeToggle($event)"
-            (onKeydownEnterAction)="onKeydownEnter($event)"
-            (onClosableIconDropdownAction)="onClosableIconDropdown($event)" />
+          <!-- [[[II ESC:031-03 DOC:docs/documents/2026-07-18-031-optimizacion-navegacion-activos.md#escenario-03 -->
+          @defer (when formDialogVisible[$any('asset-type')]) {
+            <app-custom-draw-form *ngIf="form()[$any('asset-type')] && drawForm()['asset-type']"
+              [drawForm]="drawForm()['asset-type']['general']" [formGroup]="form()[$any('asset-type')]"
+              (onSelectAutoCompleteAction)="onSelectAutoComplete($event)"
+              (onChangeDropdownAction)="onChangeDropdown($event)" (onNewIconDropdownAction)="onNewIconDropdown($event)"
+              (onReloadIconDropdownAction)="onReloadIconDropdown($event)" (onChangeToggleAction)="onChangeToggle($event)"
+              (onKeydownEnterAction)="onKeydownEnter($event)"
+              (onClosableIconDropdownAction)="onClosableIconDropdown($event)" />
+          }
+          <!-- ]]]FI -->
         </p-tabpanel>
 
         <p-tabpanel value="3">
-          <app-custom-audit [cf]="customField()['asset-type']" [selected]="selected()" />
+          <!-- [[[II ESC:031-03 DOC:docs/documents/2026-07-18-031-optimizacion-navegacion-activos.md#escenario-03 -->
+          @defer (when formDialogVisible[$any('asset-type')]) {
+            <app-custom-audit [cf]="customField()['asset-type']" [selected]="selected()" />
+          }
+          <!-- ]]]FI -->
         </p-tabpanel>
 
       </p-tabpanels>
@@ -163,13 +191,17 @@
       <p-tabpanels>
 
         <p-tabpanel value="0">
-          <app-custom-draw-form *ngIf="form()[$any('capacity-type')] && drawForm()['capacity-type']"
-            [drawForm]="drawForm()['capacity-type']['general']" [formGroup]="form()[$any('capacity-type')]"
-            (onSelectAutoCompleteAction)="onSelectAutoComplete($event)"
-            (onChangeDropdownAction)="onChangeDropdown($event)" (onNewIconDropdownAction)="onNewIconDropdown($event)"
-            (onReloadIconDropdownAction)="onReloadIconDropdown($event)" (onChangeToggleAction)="onChangeToggle($event)"
-            (onKeydownEnterAction)="onKeydownEnter($event)"
-            (onClosableIconDropdownAction)="onClosableIconDropdown($event)" />
+          <!-- [[[II ESC:031-03 DOC:docs/documents/2026-07-18-031-optimizacion-navegacion-activos.md#escenario-03 -->
+          @defer (when formDialogVisible[$any('capacity-type')]) {
+            <app-custom-draw-form *ngIf="form()[$any('capacity-type')] && drawForm()['capacity-type']"
+              [drawForm]="drawForm()['capacity-type']['general']" [formGroup]="form()[$any('capacity-type')]"
+              (onSelectAutoCompleteAction)="onSelectAutoComplete($event)"
+              (onChangeDropdownAction)="onChangeDropdown($event)" (onNewIconDropdownAction)="onNewIconDropdown($event)"
+              (onReloadIconDropdownAction)="onReloadIconDropdown($event)" (onChangeToggleAction)="onChangeToggle($event)"
+              (onKeydownEnterAction)="onKeydownEnter($event)"
+              (onClosableIconDropdownAction)="onClosableIconDropdown($event)" />
+          }
+          <!-- ]]]FI -->
         </p-tabpanel>
 
         <p-tabpanel header="Clasificadores" value="1">
@@ -191,13 +223,21 @@
         </p-tabpanel>
 
         <p-tabpanel value="3">
-          <app-custom-audit [cf]="customField()['capacity-type']" [selected]="selected()" />
+          <!-- [[[II ESC:031-03 DOC:docs/documents/2026-07-18-031-optimizacion-navegacion-activos.md#escenario-03 -->
+          @defer (when formDialogVisible[$any('capacity-type')]) {
+            <app-custom-audit [cf]="customField()['capacity-type']" [selected]="selected()" />
+          }
+          <!-- ]]]FI -->
         </p-tabpanel>
 
         <p-tabpanel value="4">
-          <app-custom-documents [selected]="selected()" [type]="'capacity-type asset-document'"
-            [app]="'capacity-type assets/asset-document'" [filter]="'capacity-type asset'"
-            (newAction)="openNewSecundary({pos:'capacity-type'})" />
+          <!-- [[[II ESC:031-03 DOC:docs/documents/2026-07-18-031-optimizacion-navegacion-activos.md#escenario-03 -->
+          @defer (when formDialogVisible[$any('capacity-type')]) {
+            <app-custom-documents [selected]="selected()" [type]="'capacity-type asset-document'"
+              [app]="'capacity-type assets/asset-document'" [filter]="'capacity-type asset'"
+              (newAction)="openNewSecundary({pos:'capacity-type'})" />
+          }
+          <!-- ]]]FI -->
         </p-tabpanel>
 
       </p-tabpanels>
@@ -240,24 +280,34 @@
       <p-tabpanels>
 
         <p-tabpanel value="0">
-          <app-custom-draw-form *ngIf="form()[$any('asset-subsidiary')] && drawForm()['asset-subsidiary']"
-            [drawForm]="drawForm()['asset-subsidiary']['general']" [formGroup]="form()[$any('asset-subsidiary')]"
-            (onSelectAutoCompleteAction)="onSelectAutoComplete($event)"
-            (onChangeDropdownAction)="onChangeDropdown($event)" (onNewIconDropdownAction)="onNewIconDropdown($event)"
-            (onReloadIconDropdownAction)="onReloadIconDropdown($event)" (onChangeToggleAction)="onChangeToggle($event)"
-            (onKeydownEnterAction)="onKeydownEnter($event)"
-            (onClosableIconDropdownAction)="onClosableIconDropdown($event)" />
+          <!-- [[[II ESC:031-03 DOC:docs/documents/2026-07-18-031-optimizacion-navegacion-activos.md#escenario-03 -->
+          @defer (when formDialogVisible[$any('asset-subsidiary')]) {
+            <app-custom-draw-form *ngIf="form()[$any('asset-subsidiary')] && drawForm()['asset-subsidiary']"
+              [drawForm]="drawForm()['asset-subsidiary']['general']" [formGroup]="form()[$any('asset-subsidiary')]"
+              (onSelectAutoCompleteAction)="onSelectAutoComplete($event)"
+              (onChangeDropdownAction)="onChangeDropdown($event)" (onNewIconDropdownAction)="onNewIconDropdown($event)"
+              (onReloadIconDropdownAction)="onReloadIconDropdown($event)" (onChangeToggleAction)="onChangeToggle($event)"
+              (onKeydownEnterAction)="onKeydownEnter($event)"
+              (onClosableIconDropdownAction)="onClosableIconDropdown($event)" />
+          }
+          <!-- ]]]FI -->
         </p-tabpanel>
 
         <p-tabpanel value="1">
-          <!-- [[[II ESC:002-01 DOC:docs/documents/2026-05-19_002_ui_timeline_asset_subsidiary.md#escenario-01 -->
-          <app-asset-subsidiary-timeline [selected]="selected()"
-            [active]="formDialogVisible[$any('asset-subsidiary')]" />
+          <!-- [[[II ESC:002-01 DOC:docs/documents/2026-05-19_002_ui_timeline_asset_subsidiary.md#escenario-01 ESC:031-03 DOC:docs/documents/2026-07-18-031-optimizacion-navegacion-activos.md#escenario-03 -->
+          @defer (when formDialogVisible[$any('asset-subsidiary')]) {
+            <app-asset-subsidiary-timeline [selected]="selected()"
+              [active]="formDialogVisible[$any('asset-subsidiary')]" />
+          }
           <!-- ]]]FI -->
         </p-tabpanel>
 
         <p-tabpanel value="3">
-          <app-custom-audit [cf]="customField()['asset-subsidiary']" [selected]="selected()" />
+          <!-- [[[II ESC:031-03 DOC:docs/documents/2026-07-18-031-optimizacion-navegacion-activos.md#escenario-03 -->
+          @defer (when formDialogVisible[$any('asset-subsidiary')]) {
+            <app-custom-audit [cf]="customField()['asset-subsidiary']" [selected]="selected()" />
+          }
+          <!-- ]]]FI -->
         </p-tabpanel>
 
       </p-tabpanels>

@@ -53,6 +53,14 @@ El nuevo control soporta dos modos:
 - Decisión: `onChangeDropdown()` conserva la emisión del cambio y la sincronización de campos espejo, pero retorna antes de `_processChildrenFields(...)` para `listbox` con `tree`.
 - Motivo: en este modo los `children.fields.dynamic` forman parte de la carga/precarga del árbol agrupado; reutilizarlos en cada selección provoca consultas adicionales al servidor.
 
+<a id="escenario-08"></a>
+## Escenario 08: Selección en tree-select con niveles lazy sin recarga al servidor
+
+- Fecha: 2026-07-19. El usuario reportó que en `tree-select` con `tree` (niveles), cada selección de un elemento volvía a consultar al servidor (web y móvil); la expansión no repetía consultas gracias a `_treeLoadedKeys`.
+- Causa: el Escenario 04 protegía la llamada explícita de `onChangeDropdown()` solo para `listbox` con `tree`, pero la suscripción global `valueChanges` del formulario también ejecuta `_refreshDependentChildren()`, y ahí el root del árbol se reprocesaba con `_processChildrenFields(...)`: sus `children.fields.dynamic` (que son la configuración de carga por nivel, no una cascada dependiente) volvían a pedirse al servidor en cada selección.
+- Decisión: `_refreshDependentChildren()` omite los roots árbol (`tree-select` o `listbox` con `tree`) cuando tienen `tree.lazy` y `tree.levels` no vacío — el mismo criterio que usa `_loadTreeNodeChildren()`. Los tree-select clásicos (sin niveles lazy) y todas las cascadas no-árbol conservan su comportamiento; la carga por expansión y el ícono de recarga no cambian.
+- Verificación sugerida: seleccionar varios nodos de un `tree-select` con niveles y confirmar en Network que no hay requests por selección; expandir un nodo nuevo sí consulta una única vez.
+
 <a id="escenario-06"></a>
 ## Escenario 06: Normalizar valor multiple antes de renderizar
 

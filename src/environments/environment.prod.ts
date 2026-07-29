@@ -23,6 +23,16 @@ export const environment = {
    * Aún no implementado en el servidor; se deja preparado localmente.
    * Cambiar a la URL real del socket cuando el backend esté disponible.
    */
-  socket_url: 'https://erp.jukai.io'
+  socket_url: 'https://erp.jukai.io',
+  // ]]]FI
+  // [[[II ESC:008-01 DOC:docs/paso-8-jukai.md CONFIG
+  /**
+   * URL del agente jukai. NO es el endpoint del runtime de AgentCore: ese exige
+   * firma SigV4 y un navegador no puede firmarla. Apunta al proxy de invocación
+   * (API Gateway + Lambda, stack `jukaiagen-agent-proxy`), que firma por el
+   * navegador y reenvía el JWT del usuario sin tocarlo.
+   * Ver jukaiagen/proxy/ y jukaiagen/docs/despliegue-agente.md.
+   */
+  agent_url: 'https://4mkjyjyaqf.execute-api.us-east-1.amazonaws.com/chat'
   // ]]]FI
 };

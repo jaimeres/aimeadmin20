@@ -389,7 +389,7 @@ Para debug, revisa los console.log:
 
 Para producción, busca y comenta los `console.log()` o usa:
 ```typescript
-private DEBUG = false; // Cambiar a true para debug
+private DEBUG = true; // Cambiar a true para debug
 
 if (this.DEBUG) console.log('[AssistantWidget] ...');
 ```

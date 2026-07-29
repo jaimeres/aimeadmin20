@@ -1,6 +1,11 @@
 #!/bin/bash
 
 # ---------------- VERIFICACIONES PREVIAS ----------------
+# [[[II ESC:033-01 DOC:docs/documents/2026-07-29-033-perfil-deployclient-cloudfront.md#escenario-01 CONFIG: Todas las llamadas AWS del despliegue deben usar el perfil dedicado deployclient.
+AWS_PROFILE="deployclient"
+export AWS_PROFILE
+# ]]]FI
+
 echo "Verificando herramientas y credenciales AWS..."
 
 # Verificar AWS CLI

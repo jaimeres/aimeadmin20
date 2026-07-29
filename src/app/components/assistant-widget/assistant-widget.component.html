@@ -1,29 +1,67 @@
-<!-- Botón/flotante de la mascota -->
-<div class="assistant-fab" [ngStyle]="getFabStyle()" (click)="!isDragging && toggle()" (mousedown)="onDragStart($event)"
-  (touchstart)="onDragStart($event)" title="Asistente - Arrastra para mover">
-  <ng-lottie *ngIf="!isStaticImage" [options]="options"></ng-lottie>
-  <img *ngIf="isStaticImage" [src]="imagePath" alt="Asistente" class="assistant-image" />
+<!-- [[[II ESC:032-01 DOC:docs/documents/2026-07-24-032-assistant-widget-mascota-natural.md#escenario-01 -->
+<div
+  #assistantFab
+  class="assistant-fab"
+  [class.dragging]="isDragging()"
+  [attr.data-mood]="mood()"
+  [attr.aria-label]="'Asistente Jukai. ' + moodLabel()"
+  [attr.aria-expanded]="open()"
+  [style.--assistant-right]="fabPosition().x + 'px'"
+  [style.--assistant-bottom]="fabPosition().y + 'px'"
+  role="button"
+  tabindex="0"
+  title="Asistente Jukai · arrastra para mover"
+  (click)="onFabClick()"
+  (keydown)="onFabKeyDown($event)"
+  (pointerdown)="onDragStart($event)"
+>
+  <div class="assistant-mascot" [class.assistant-mascot-clean]="!useCustomAnimation()" [style.--eye-x]="eyeStyle().x" [style.--eye-y]="eyeStyle().y">
+    @if (useCustomAnimation()) {
+      @if (isStaticImage()) {
+        <img [src]="imagePath()" alt="" class="assistant-image" draggable="false" />
+      } @else {
+        <ng-lottie [options]="animationOptions()" />
+      }
+    } @else {
+      <img [src]="mascotImagePath" alt="" class="assistant-image assistant-base" draggable="false" />
+      <span class="assistant-eye assistant-eye-left" aria-hidden="true">
+        <span class="assistant-pupil"></span>
+      </span>
+      <span class="assistant-eye assistant-eye-right" aria-hidden="true">
+        <span class="assistant-pupil"></span>
+      </span>
+    }
+
+    @if (moodSymbol()) {
+      <span class="assistant-mood-badge" aria-hidden="true">{{ moodSymbol() }}</span>
+    }
+  </div>
 </div>
 
-<!-- Ventana de chat -->
-<div class="assistant-panel" [class.open]="open" [ngStyle]="getPanelStyle()">
-  <div class="assistant-header">
-    <div class="assistant-title">Asistencia Jukai</div>
-    <button class="assistant-close" (click)="toggle()" aria-label="Cerrar">×</button>
+<section class="assistant-panel" [class.open]="open()" [style.--assistant-right]="panelPosition().right + 'px'" [style.--assistant-bottom]="panelPosition().bottom + 'px'" aria-label="Chat de asistencia Jukai" [attr.aria-hidden]="!open()">
+  <header class="assistant-header">
+    <div class="assistant-title">Asistencia Jukai · {{ moodLabel() }}</div>
+    <button class="assistant-close" type="button" (click)="toggle()" aria-label="Cerrar asistente">×</button>
+  </header>
+
+  <div class="assistant-body" aria-live="polite">
+    @for (message of messages(); track $index) {
+      <div class="msg" [class.user]="message.role === 'user'" [class.assistant]="message.role === 'assistant'">
+        <div class="bubble" [class.error]="message.error">{{ message.content }}</div>
+      </div>
+    }
+    @if (thinking()) {
+      <div class="msg assistant">
+        <div class="bubble thinking" aria-label="El asistente está pensando"><span></span><span></span><span></span></div>
+      </div>
+    }
   </div>
 
-  <div class="assistant-body">
-    <div *ngFor="let m of messages" [class.user]="m.role==='user'" [class.assistant]="m.role==='assistant'" class="msg">
-      <div class="bubble" [class.error]="m.error">{{ m.content }}</div>
-    </div>
-    <div *ngIf="thinking" class="msg assistant">
-      <div class="bubble thinking">…</div>
-    </div>
-  </div>
-
-  <div class="assistant-footer">
-    <textarea [(ngModel)]="draft" (keydown)="onKeyDown($event)" rows="2"
-      placeholder="Escribe tu pregunta (Ctrl/Cmd + Enter para enviar)"></textarea>
-    <button class="send" (click)="send()" [disabled]="thinking || !draft.trim()">Enviar</button>
-  </div>
-</div>
+  <footer class="assistant-footer">
+    <textarea [formControl]="draftControl" (keydown)="onKeyDown($event)" rows="2" aria-label="Pregunta para el asistente" placeholder="Escribe tu pregunta"></textarea>
+    <button class="send" type="button" (click)="send()" [disabled]="thinking() || draftEmpty()" aria-label="Enviar pregunta">
+      <span aria-hidden="true">➜</span>
+    </button>
+  </footer>
+</section>
+<!-- ]]]FI -->

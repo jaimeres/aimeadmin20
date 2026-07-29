@@ -79,6 +79,33 @@ Cada `CRUD.changePos()` registra el `pos` visitado en un mapa persistente por us
 
 En web y desktop, la configuración modular se guarda mediante IndexedDB usando `ClientCacheStorageService`; en móvil se conserva Capacitor Preferences como etapa actual. Si la persistencia falla, la navegación no debe quedarse bloqueada: el guard apaga la máscara al finalizar y la configuración solicitada queda disponible en memoria cuando el servidor respondió.
 
+<a id="escenario-08"></a>
+## Escenario 08: Índices en memoria de sesión y registro único de visita
+
+2026-07-18. Dentro de la optimización de navegación (`2026-07-18-031-optimizacion-navegacion-activos.md`), la instrumentación mostró que cada navegación sin peticiones HTTP seguía cruzando varias veces el puente de Capacitor Preferences:
+
+- `ensureConfigForUrlAsync()` leía el índice de aplicaciones dos veces (dentro de `resolveConfigModulesForUrl()` y de nuevo para `hasAppIndex`).
+- La visita del módulo se registraba dos veces: en `ensureConfigForUrlAsync()` y otra vez dentro de `ensureConfigModulesAsync()`, con dos escrituras idénticas del mapa.
+- Los índices de módulos y de aplicaciones se releían de storage en cada navegación, aunque el mapa de visitas ya tenía memoria de sesión (`_configVisitMemory`).
+
+### Decisiones
+
+- Se agregan `_configIndexMemory` y `_configAppIndexMemory` con el mismo patrón que `_configVisitMemory`: se llenan al leer, write-through al escribir, y se invalidan en `setUser()` (cambio de usuario/scope) y en `clearConfigStorageForCurrentUser()` (reemplazo de configuración al iniciar sesión). Preferences/IndexedDB sigue siendo el almacenamiento persistente.
+- Se eliminan los dos registros de visita duplicados de `ensureConfigForUrlAsync()`; queda el registro único de `ensureConfigModulesAsync()`, que sigue ejecutándose antes de cualquier `fetchAndCacheFullConfig()`, por lo que el mapa de visitas sigue persistiendo y sigue decidiendo qué módulos se refrescan en el login (Escenario 07 sin cambios).
+- No cambian aliases (`pumps-utilities` → `asset`, etc.), fallbacks, resolución por URL, contrato de `authS.config[module]` ni llamadas al servidor.
+
+### Resultado por navegación con caché caliente
+
+Antes: 2 lecturas de índice de aplicaciones + 1 de índice de módulos + 2 escrituras del mapa de visitas (+ relecturas en cada navegación siguiente). Después: los índices se leen de storage una sola vez por sesión y hay una única escritura de visita por navegación.
+
+### Nota
+
+Igual que `_configVisitMemory`, en web multi-pestaña los índices en memoria no ven escrituras hechas por otra pestaña hasta recargar; en móvil (WebView único) no aplica.
+
+### Ajuste 2026-07-19: escritura de visitas fuera de la ruta crítica
+
+La instrumentación en dispositivo real midió `cache.setItem bos_config_module_visit_map: 15 109.3 ms` — una sola escritura de Preferences con el puente saturado — mientras el pipeline del router terminaba en ~365 ms. Como `_configVisitMemory` se actualiza síncronamente antes de escribir y es lo que leen `getRecentConfigModules()` y la persistencia de módulos, la escritura del mapa a Preferences pasó a ser fire-and-forget dentro de `recordConfigModulesVisitAsync()`: el registro sigue persistiendo (asíncrono, con warning si falla) pero ya no puede bloquear el guard. Riesgo aceptado: si la app se cierra en la ventana entre memoria y escritura, esa visita puntual se pierde (ya era posible en los callers fire-and-forget existentes como `recordConfigModuleVisit()`).
+
 ## Decisiones tomadas
 
 - No se usa SQLite.

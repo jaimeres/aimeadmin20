@@ -1,5 +1,21 @@
 import { Component, OnInit, OnDestroy } from '@angular/core';
-import { RouterModule } from '@angular/router';
+// [[[II ESC:031-01 DOC:docs/documents/2026-07-18-031-optimizacion-navegacion-activos.md#escenario-01
+import {
+  ActivationEnd,
+  ActivationStart,
+  GuardsCheckEnd,
+  GuardsCheckStart,
+  NavigationCancel,
+  NavigationEnd,
+  NavigationError,
+  NavigationStart,
+  RouteConfigLoadEnd,
+  RouteConfigLoadStart,
+  Router,
+  RouterModule
+} from '@angular/router';
+import { perfLog, perfMark, perfNow, perfTraceEnabled } from './app/utils/perf-trace';
+// ]]]FI
 import { BlockUIModule } from 'primeng/blockui';
 import { SkeletonModule } from 'primeng/skeleton';
 import { CommonModule } from '@angular/common';
@@ -46,8 +62,51 @@ export class AppComponent implements OnInit, OnDestroy {
   isDownloading = false;
 
   constructor(
-    private updateManager: UpdateManagerService
-  ) { }
+    private updateManager: UpdateManagerService,
+    private router: Router
+  ) {
+    // [[[II ESC:031-01 DOC:docs/documents/2026-07-18-031-optimizacion-navegacion-activos.md#escenario-01
+    this._setupNavigationPerfTrace();
+    // ]]]FI
+  }
+
+  // [[[II ESC:031-01 DOC:docs/documents/2026-07-18-031-optimizacion-navegacion-activos.md#escenario-01
+  /**
+   * Traza de navegación activable con el flag local `bos_perf_trace`.
+   * Loguea el delta desde NavigationStart de cada hito del router y deja la
+   * marca `bos:nav-start` para medir hasta el primer render del componente.
+   * Desactivada por defecto: sin flag no se suscribe ni loguea nada.
+   */
+  private _setupNavigationPerfTrace(): void {
+    if (!perfTraceEnabled()) return;
+
+    let navStartedAt = 0;
+    this.router.events.subscribe((event) => {
+      const now = perfNow();
+
+      if (event instanceof NavigationStart) {
+        navStartedAt = now;
+        perfMark('bos:nav-start');
+        perfLog(`nav NavigationStart ${event.url}`, 0);
+        return;
+      }
+      if (!navStartedAt) return;
+
+      const label =
+        event instanceof RouteConfigLoadStart ? 'RouteConfigLoadStart' :
+        event instanceof RouteConfigLoadEnd ? 'RouteConfigLoadEnd' :
+        event instanceof GuardsCheckStart ? 'GuardsCheckStart' :
+        event instanceof GuardsCheckEnd ? 'GuardsCheckEnd' :
+        event instanceof ActivationStart ? 'ActivationStart' :
+        event instanceof ActivationEnd ? 'ActivationEnd' :
+        event instanceof NavigationEnd ? 'NavigationEnd' :
+        event instanceof NavigationCancel ? 'NavigationCancel' :
+        event instanceof NavigationError ? 'NavigationError' : '';
+
+      if (label) perfLog(`nav ${label}`, now - navStartedAt);
+    });
+  }
+  // ]]]FI
 
   async ngOnInit() {
     // Inicializar el sistema de actualizaciones

@@ -1,28 +1,57 @@
-import { Component, OnInit, signal } from '@angular/core';
+import { afterNextRender, Component, OnInit, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { TagModule } from 'primeng/tag';
-import { TableModule } from 'primeng/table';
+// [[[II ESC:031-01 DOC:docs/documents/2026-07-18-031-optimizacion-navegacion-activos.md#escenario-01
+import { perfLog, perfMeasure, perfNow, perfTraceEnabled } from '../../utils/perf-trace';
+// ]]]FI
+// [[[II ESC:031-03 DOC:docs/documents/2026-07-18-031-optimizacion-navegacion-activos.md#escenario-03
+import { ReactiveFormsModule } from '@angular/forms';
+import { DialogModule } from 'primeng/dialog';
+import { TabsModule } from 'primeng/tabs';
 import { SelectModule } from 'primeng/select';
 import { CRUD } from '../../utils/crud.class';
 import { AssetService } from '../services/asset.service';
-import { ConfirmationService, PRIME_MODULES } from '../../shared/primeng.index';
-import { LOCAL_BASE } from '../../shared/components.index';
+import { ConfirmationService } from '../../shared/primeng.index';
 import { MenuItem } from 'primeng/api';
+import { CustomButtonCrudComponent } from '../../components/custom-button-crud/custom-button-crud.component';
+import { CustomButtonFooterComponent } from '../../components/custom-button-footer/custom-button-footer.component';
+import { CustomTableComponent } from '../../components/custom-table/custom-table.component';
+import { CustomDrawFormComponent } from '../../components/custom-draw-form/custom-draw-form.component';
+import { CustomImportComponent } from '../../components/custom-import/custom-import.component';
+import { CustomLocalSettingsComponent } from '../../components/custom-local-settings/custom-local-settings.component';
+import { CustomAuditComponent } from '../../components/custom-audit/custom-audit.component';
+import { CustomDocumentsComponent } from '../../components/custom-documents/custom-documents.component';
+import { CustomActionsSelectionComponent } from '../../components/custom-actions-selection/custom-actions-selection.component';
+// ]]]FI
 // [[[II ESC:002-01 DOC:docs/documents/2026-05-19_002_ui_timeline_asset_subsidiary.md#escenario-01
 import { AssetSubsidiaryTimelineComponent } from '../../components/asset-subsidiary-timeline/asset-subsidiary-timeline.component';
 // ]]]FI
 
 @Component({
   selector: 'app-asset',
+  // [[[II ESC:031-03 DOC:docs/documents/2026-07-18-031-optimizacion-navegacion-activos.md#escenario-03
+  // Imports exactos en lugar de LOCAL_BASE/PRIME_MODULES. Los componentes del
+  // segundo grupo se usan solo dentro de bloques @defer del template, por lo
+  // que el compilador los separa en chunks diferidos que se cargan al abrir
+  // el dialog/acción correspondiente.
   imports: [
     CommonModule,
-    TableModule,
-    TagModule,
+    ReactiveFormsModule,
+    DialogModule,
+    TabsModule,
     SelectModule,
-    ...PRIME_MODULES,
-    ...LOCAL_BASE,
+    CustomButtonCrudComponent,
+    CustomTableComponent,
+    CustomButtonFooterComponent,
+    // Diferidos (solo en @defer):
+    CustomDrawFormComponent,
+    CustomAuditComponent,
+    CustomDocumentsComponent,
+    CustomLocalSettingsComponent,
+    CustomImportComponent,
+    CustomActionsSelectionComponent,
     AssetSubsidiaryTimelineComponent,
   ],
+  // ]]]FI
   templateUrl: './asset.component.html',
   styleUrl: './asset.component.scss',
   standalone: true,
@@ -98,6 +127,17 @@ export class AssetComponent extends CRUD implements OnInit {
 
   constructor(crudS: AssetService) {
     super(crudS, 'asset');
+
+    // [[[II ESC:031-01 DOC:docs/documents/2026-07-18-031-optimizacion-navegacion-activos.md#escenario-01
+    // Primer render estable del listado, medible solo con el flag bos_perf_trace.
+    if (perfTraceEnabled()) {
+      const constructedAt = perfNow();
+      afterNextRender(() => {
+        perfMeasure('AssetComponent primer render desde NavigationStart', 'bos:nav-start');
+        perfLog('AssetComponent constructor -> primer render', perfNow() - constructedAt);
+      });
+    }
+    // ]]]FI
   }
 
   ngOnInit(): void {

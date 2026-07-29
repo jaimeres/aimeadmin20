@@ -11,8 +11,9 @@ import { TableModule } from 'primeng/table';
 import { TagModule } from 'primeng/tag';
 import { ToggleButtonModule } from 'primeng/togglebutton';
 import { TooltipModule } from 'primeng/tooltip';
-import { Subscription } from 'rxjs';
+import { catchError, filter as rxFilter, map, Observable, of, Subscription } from 'rxjs';
 import { CustomButtonCrudComponent } from '../../custom-button-crud/custom-button-crud.component';
+import { JoinOrSelfPipe } from '../join-or-self.pipe';
 import { DERIVED_TABLE_DRAFT_FLAG, TABLE_ROW_SOURCE_FLAG } from '../../../utils/table-row-flags.const';
 import { CRUDService } from '../../../utils/services/crud.service';
 import { GeneralService } from '../../../utils/services/general.service';
@@ -34,7 +35,8 @@ import { GeneralService } from '../../../utils/services/general.service';
     TagModule,
     ToggleButtonModule,
     TooltipModule,
-    CustomButtonCrudComponent
+    CustomButtonCrudComponent,
+    JoinOrSelfPipe
   ],
   templateUrl: './dynamic-table-field.component.html',
   styleUrl: './dynamic-table-field.component.scss',
@@ -51,6 +53,9 @@ export class DynamicTableFieldComponent implements OnChanges, OnDestroy {
   // [[[II ESC:030-01 Fuente única compartida en utils/table-row-flags.const.ts ]]]FI
   private readonly tableRowSourceFlag = TABLE_ROW_SOURCE_FLAG;
   private readonly derivedTableDraftFlag = DERIVED_TABLE_DRAFT_FLAG;
+  // Fila agregada desde la tabla y aún NO confirmada contra el servidor: si se
+  // cancela la edición se elimina (no debe quedar una fila fantasma).
+  private readonly pendingNewRowFlag = '__pendingNewRow';
   private tableValueSubscription?: Subscription;
 
   @Input() tableConfig: any;
@@ -61,11 +66,23 @@ export class DynamicTableFieldComponent implements OnChanges, OnDestroy {
   @Input() originalRowData: { [key: string]: any } = {};
   @Input() tableOptions: { rows?: number } | null = null;
   @Input() validationVersion = 0;
+  // Bloqueo externo cuando otra tabla del mismo formulario está en edición.
+  @Input() externalEditingLocked = false;
   // [[[II ESC:030-06 Cuando el host delega el guardado por fila (delegateTableSave),
   // el recorrido de celdas NO persiste por celda: terminar una celda intermedia
   // sólo avanza el foco; sólo la ÚLTIMA celda editable (o la paloma verde) cierra
   // la fila y dispara el guardado. Cuando es false, se conserva el flujo previo. ]]]FI
   @Input() deferRowSave = false;
+  // [[[II ESC:030-06 Opciones que el FORM ya cargó al abrir el diálogo
+  // (dropdownOptionsSignal de custom-draw-form). Las celdas combo se alimentan de
+  // aquí — misma fuente que los inputs del form — en vez de repetir la consulta
+  // (evita además el "primer render muestra el id"). ]]]FI
+  @Input() formDropdownOptions: { [field: string]: any[] } = {};
+  // [[[II ESC:030-12 DOC:docs/documents/2026-07-14-030-child-runtime-overlay.md#escenario-12
+  // Canal de retorno del motor: desenlace del guardado de la fila delegada.
+  // Sólo se consume cuando `deferRowSave` está activo — es el único caso en que
+  // esta tabla no sabe por sí misma si la fila llegó al servidor. ]]]FI
+  @Input() rowSaveOutcome: { field: string; row_index: any; ok: boolean; token: number } | null = null;
 
   @Output() rowSelect = new EventEmitter<any>();
   @Output() rowUnselect = new EventEmitter<any>();
@@ -73,9 +90,20 @@ export class DynamicTableFieldComponent implements OnChanges, OnDestroy {
   @Output() editRow = new EventEmitter<any>();
   @Output() deleteRow = new EventEmitter<any>();
   @Output() cellEdit = new EventEmitter<any>();
+  @Output() editingStateChange = new EventEmitter<{ field: string; active: boolean }>();
 
   normalizedColumns: any[] = [];
   controlColumnFields: string[] = [];
+  // [[[II ESC:030-06 Campos relación declarados por columnas (relationship_field)
+  // y targets con `edit:false` en el derived de columnas autocomplete: gobiernan
+  // la editabilidad POR FILA (fila manual = sin relación resuelta => todo
+  // editable; fila relacionada => derived edit:false bloquea la celda). ]]]FI
+  private _relationshipColumnFields: string[] = [];
+  private _derivedLockedFields = new Set<string>();
+  // [[[II ESC:030-12 Fila que ya se emitió al motor y espera confirmación del
+  // servidor. Mientras exista, esa fila permanece en edición. ]]]FI
+  private _pendingRowSave: { tableField: string; rowIndex: number } | null = null;
+  private _reportedEditingState: boolean | null = null;
 
   private tableColumnMetaCache = new WeakMap<any, any>();
   private formattedTagValueCache = new WeakMap<any, Map<string, any>>();
@@ -107,10 +135,48 @@ export class DynamicTableFieldComponent implements OnChanges, OnDestroy {
     if (changes['tableConfig'] || changes['formGroup']) {
       this.bindTableValueChanges();
     }
+
+    // [[[II ESC:030-12 DOC:docs/documents/2026-07-14-030-child-runtime-overlay.md#escenario-12
+    if (changes['rowSaveOutcome']) {
+      this._applyRowSaveOutcome();
+    }
+    // ]]]FI
   }
+
+  // [[[II ESC:030-12 DOC:docs/documents/2026-07-14-030-child-runtime-overlay.md#escenario-12
+  /**
+   * Desenlace del guardado delegado de una fila:
+   *   - OK       -> recién ahora se cierra la fila (ya está persistida).
+   *   - FALLIDO  -> la fila SIGUE en edición y el foco vuelve al campo inválido;
+   *                 si falla un encabezado ajeno a la fila (p.ej. Sucursal),
+   *                 vuelve a la ÚLTIMA celda editable.
+   * Se ignoran los desenlaces de otra tabla o de otra fila.
+   */
+  private _applyRowSaveOutcome(): void {
+    const pending = this._pendingRowSave;
+    const outcome = this.rowSaveOutcome;
+    if (!pending || !outcome) return;
+    if (outcome.field !== pending.tableField) return;
+    if (Number(outcome.row_index) !== Number(pending.rowIndex)) return;
+
+    this._pendingRowSave = null;
+
+    if (outcome.ok) {
+      this._closeRowEditFlags(pending.tableField, pending.rowIndex);
+    } else {
+      this._focusPendingOrLastEditable(pending.tableField, pending.rowIndex);
+    }
+
+    this.clearTableRuntimeCaches();
+    this.cdr.markForCheck();
+  }
+  // ]]]FI
 
   ngOnDestroy(): void {
     this.tableValueSubscription?.unsubscribe();
+    if (this._reportedEditingState === true && this.tableConfig?.field) {
+      this.editingStateChange.emit({ field: this.tableConfig.field, active: false });
+    }
   }
 
   /** Mantiene visible una mutación externa del FormArray en este componente OnPush. */
@@ -129,6 +195,54 @@ export class DynamicTableFieldComponent implements OnChanges, OnDestroy {
 
   trackByKey(index: number, item: any): any {
     return item?.key ?? index;
+  }
+
+  /** Etiqueta de una opción según `option_label` (soporta concatenación). */
+  optionLabelText(option: any, column: any): string {
+    return this._optionLabelValue(option, column);
+  }
+
+  // [[[II ESC:030-14 DOC:docs/documents/2026-07-14-030-child-runtime-overlay.md#escenario-14
+  // Formato numérico de la celda y de las sugerencias: mismas claves
+  // de config que el p-inputNumber del form (mode/currency/locale y
+  // min/max_fraction_digits). Memoizado por (columna|valor) para no formatear en
+  // cada ciclo de detección. ]]]FI
+  private numberCellFormatCache = new Map<string, string>();
+
+  formatNumberCell(value: any, column: any): string {
+    if (value === null || value === undefined || value === '') return '-';
+    const numeric = Number(value);
+    if (!Number.isFinite(numeric)) return String(value);
+
+    const cacheKey = [
+      column?.field, value, column?.mode, column?.currency, column?.locale,
+      column?.min_fraction_digits, column?.max_fraction_digits,
+      column?.prefix, column?.suffix,
+    ].join('|');
+    const cached = this.numberCellFormatCache.get(cacheKey);
+    if (cached !== undefined) return cached;
+
+    const options: Intl.NumberFormatOptions = {
+      minimumFractionDigits: column?.min_fraction_digits ?? 0,
+      maximumFractionDigits: column?.max_fraction_digits ?? Math.max(column?.min_fraction_digits ?? 0, 2),
+    };
+    if (column?.mode === 'currency' && column?.currency) {
+      options.style = 'currency';
+      options.currency = column.currency;
+    }
+    const formatted = new Intl.NumberFormat(column?.locale || undefined, options).format(numeric);
+    const withAffixes = `${column?.prefix || ''}${formatted}${column?.suffix || ''}`;
+    this.numberCellFormatCache.set(cacheKey, withAffixes);
+    return withAffixes;
+  }
+
+  /** Formatea una columna del panel sólo cuando su propia config es numérica. */
+  formatSuggestionValue(value: any, panelField: any): string {
+    const numericConfig = panelField?.type === 'input-number'
+      || panelField?.min_fraction_digits !== undefined
+      || panelField?.max_fraction_digits !== undefined
+      || panelField?.mode === 'currency';
+    return numericConfig ? this.formatNumberCell(value, panelField) : String(value ?? '-');
   }
 
   /**
@@ -153,16 +267,36 @@ export class DynamicTableFieldComponent implements OnChanges, OnDestroy {
   }
 
   addTableRow(field: string, tableConfig: any): void {
-    if (this.isTableReadonly(field)) return;
+    // [[[II ESC:030-09 Solo la config decide si la tabla es de solo lectura. Si el
+    // FormArray quedó deshabilitado por una ruta ajena (disableForm global, overlay
+    // de children), se rehabilita: era la causa de que el "+" dejara de responder
+    // de forma intermitente. ]]]FI
+    if (this.isTableReadonly(field) || this.isAnyRowEditing(field)) return;
     const formArray = this.getTableFormArray(field);
     if (!formArray) return;
+    if (formArray.disabled) formArray.enable({ emitEvent: false });
 
     const newRowFormGroup = this.createTableRowFormGroup(tableConfig);
+    // [[[II ESC:030-06 Fila creada DESDE la tabla: se marca como pendiente para
+    // que, si se cancela la edición sin completarla, se elimine (nunca llegó al
+    // servidor). Además arranca en edición en su primera celda editable. ]]]FI
+    (newRowFormGroup as any)[this.pendingNewRowFlag] = true;
     formArray.push(newRowFormGroup);
     formArray.markAsDirty();
     formArray.root?.markAsDirty();
     formArray.updateValueAndValidity();
     this.clearTableRuntimeCaches();
+
+    const newRowIndex = formArray.length - 1;
+    const firstEditable = (this.normalizedColumns || []).find((column: any) =>
+      this._cellEditable(column, newRowFormGroup)
+    );
+    if (firstEditable) {
+      requestAnimationFrame(() => {
+        this.startCellEdit(field, newRowIndex, firstEditable.field);
+        this.cdr.markForCheck();
+      });
+    }
 
     this.addRow.emit({
       field,
@@ -192,6 +326,10 @@ export class DynamicTableFieldComponent implements OnChanges, OnDestroy {
     formArray.root?.markAsDirty();
     formArray.markAsTouched();
     formArray.updateValueAndValidity();
+    // [[[II ESC:030-06 Al quitar una fila los índices se corren: los flags de
+    // edición por índice quedaban apuntando a filas equivocadas y bloqueaban
+    // acciones (lápiz/+). Se limpian todos los de esta tabla. ]]]FI
+    this._clearTableEditFlags(field);
     this.clearTableRuntimeCaches();
 
     this.deleteRow.emit({
@@ -341,7 +479,7 @@ export class DynamicTableFieldComponent implements OnChanges, OnDestroy {
 
   /** Una tabla readonly conserva sus datos resueltos, pero no acepta edición local. */
   isTableReadonly(field: string): boolean {
-    return this.tableConfig?.readonly === true || this.getTableFormArray(field)?.disabled === true;
+    return this.externalEditingLocked || this.tableConfig?.readonly === true || this.getTableFormArray(field)?.disabled === true;
   }
 
   isRowOrCellEditing(tableField: string, rowIndex: number): boolean {
@@ -380,9 +518,60 @@ export class DynamicTableFieldComponent implements OnChanges, OnDestroy {
     return state;
   }
 
+  /**
+   * Descarta una fila agregada desde la tabla que nunca llegó a confirmarse
+   * (no existe en el servidor). Devuelve true si la eliminó.
+   */
+  private _discardPendingNewRow(tableField: string, rowIndex: number): boolean {
+    const rowGroup = this.getTableRowGroup(tableField, rowIndex);
+    if (!rowGroup || (rowGroup as any)[this.pendingNewRowFlag] !== true) return false;
+
+    const formArray = this.getTableFormArray(tableField);
+    if (!formArray) return false;
+
+    formArray.removeAt(rowIndex, { emitEvent: false });
+    formArray.updateValueAndValidity();
+    this._clearTableEditFlags(tableField);
+    this.clearTableRuntimeCaches();
+    this.cdr.markForCheck();
+    return true;
+  }
+
+  /** Limpia todos los flags de edición (fila y celda) de una tabla. */
+  private _clearTableEditFlags(tableField: string): void {
+    const prefix = `${tableField}_`;
+    [this.editingRows, this.editingCells].forEach((flags) => {
+      Object.keys(flags).forEach((key) => {
+        if (key.startsWith(prefix)) {
+          flags[key] = false;
+          delete this.originalRowData[key];
+        }
+      });
+    });
+  }
+
+  // [[[II ESC:030-06 Solo UNA edición activa a la vez: iniciar la edición de otra
+  // celda/fila cierra en silencio la que estuviera abierta (conserva el valor
+  // escrito, no valida ni emite guardado). ]]]FI
+  private _closeOtherEdits(exceptKey: string | null = null): void {
+    Object.keys(this.editingCells).forEach((cellKey) => {
+      if (this.editingCells[cellKey] && cellKey !== exceptKey) {
+        this.editingCells[cellKey] = false;
+        delete this.originalRowData[cellKey];
+      }
+    });
+    Object.keys(this.editingRows).forEach((rowKey) => {
+      if (this.editingRows[rowKey] && rowKey !== exceptKey) {
+        this.editingRows[rowKey] = false;
+        delete this.originalRowData[rowKey];
+      }
+    });
+  }
+
   startRowEdit(tableField: string, rowIndex: number): void {
     if (this.isTableReadonly(tableField)) return;
     const rowKey = `${tableField}_${rowIndex}`;
+    this._closeOtherEdits(rowKey);
     this.editingRows[rowKey] = true;
     this.clearTableRuntimeCaches();
     this.originalRowData[rowKey] = { ...this.getTableRowGroup(tableField, rowIndex)?.getRawValue() };
@@ -397,14 +586,47 @@ export class DynamicTableFieldComponent implements OnChanges, OnDestroy {
 
   startCellEdit(tableField: string, rowIndex: number, colField: string): void {
     if (this.isTableReadonly(tableField)) return;
+    const column = this._columnByField(colField);
+    const rowGroup = this.getTableRowGroup(tableField, rowIndex);
+    // [[[II ESC:030-15 DOC:docs/documents/2026-07-14-030-child-runtime-overlay.md#escenario-15
+    // El inicio programático de edición usa el mismo candado readonly que la
+    // plantilla; así no se reabre una celda bloqueada por focus o reintento. ]]]FI
+    if (!column || !this.isCellEditableForRow(rowGroup, column)) return;
     const cellKey = `${tableField}_${rowIndex}_${colField}`;
+    this._closeOtherEdits(cellKey);
     this.editingCells[cellKey] = true;
     this.clearTableRuntimeCaches();
     this.originalRowData[cellKey] = this.getTableCellValue(tableField, rowIndex, colField);
     // [[[II ESC:030-06 Combo de celda: sus opciones se cargan al entrar en
     // edición (perezoso + cacheado por columna). ]]]FI
-    const column = this._columnByField(colField);
     if (this._isDropdownColumn(column)) this._loadCellDropdownOptions(column);
+  }
+
+  /**
+   * Cierra visualmente la fila y limpia sus banderas de edición. Se extrajo de
+   * `finishRowEdit` para poder ejecutarlo en DOS momentos distintos según quién
+   * persiste: de inmediato en el flujo local, o sólo tras la confirmación del
+   * servidor cuando el guardado se delega (`deferRowSave`).
+   */
+  private _closeRowEditFlags(tableField: string, rowIndex: number): void {
+    const rowKey = `${tableField}_${rowIndex}`;
+    const rowFormGroup = this.getTableRowGroup(tableField, rowIndex);
+
+    this.editingRows[rowKey] = false;
+    this.clearTableRuntimeCaches();
+    delete this.originalRowData[rowKey];
+
+    const cellPrefix = `${tableField}_${rowIndex}_`;
+    Object.keys(this.editingCells).forEach(cellKey => {
+      if (cellKey.startsWith(cellPrefix)) {
+        this.editingCells[cellKey] = false;
+        this.clearTableRuntimeCaches();
+        delete this.originalRowData[cellKey];
+      }
+    });
+
+    // Confirmada: deja de ser una fila "pendiente".
+    if (rowFormGroup) delete (rowFormGroup as any)[this.pendingNewRowFlag];
   }
 
   finishRowEdit(tableField: string, rowIndex: number): void {
@@ -420,18 +642,24 @@ export class DynamicTableFieldComponent implements OnChanges, OnDestroy {
 
     if (rowFormGroup.valid) {
       const previousRowData = this.originalRowData[rowKey];
-      this.editingRows[rowKey] = false;
-      this.clearTableRuntimeCaches();
-      delete this.originalRowData[rowKey];
 
-      const cellPrefix = `${tableField}_${rowIndex}_`;
-      Object.keys(this.editingCells).forEach(cellKey => {
-        if (cellKey.startsWith(cellPrefix)) {
-          this.editingCells[cellKey] = false;
-          this.clearTableRuntimeCaches();
-          delete this.originalRowData[cellKey];
-        }
-      });
+      // [[[II ESC:030-12 DOC:docs/documents/2026-07-14-030-child-runtime-overlay.md#escenario-12
+      // Con `deferRowSave` la persistencia la hace el motor del host y puede
+      // ABORTAR por un campo del ENCABEZADO que esta fila ni siquiera conoce
+      // (p.ej. Sucursal). Cerrar aquí dejaba la fila con aspecto de guardada sin
+      // que saliera petición alguna. Ahora la fila SIGUE EN EDICIÓN hasta que
+      // `rowSaveOutcome` confirme; el cierre real lo hace `_applyRowSaveOutcome`.
+      // El flujo NO delegado conserva el cierre inmediato de siempre. ]]]FI
+      // Una fila de vista previa (`isDerivedDraft`) NUNCA se persiste: el host
+      // corta antes de guardar, así que no habrá desenlace y esperarlo la dejaría
+      // abierta para siempre. Sólo se difiere el cierre cuando la fila realmente
+      // va a viajar al servidor.
+      const isDerivedDraft = (rowFormGroup as any)[this.derivedTableDraftFlag] === true;
+      if (this.deferRowSave && !isDerivedDraft) {
+        this._pendingRowSave = { tableField, rowIndex };
+      } else {
+        this._closeRowEditFlags(tableField, rowIndex);
+      }
 
       this.cellEdit.emit({
         field: tableField,
@@ -446,7 +674,7 @@ export class DynamicTableFieldComponent implements OnChanges, OnDestroy {
       // [[[II D1: fila inválida al cerrar (última celda o paloma verde) -> se
       // conserva en edición y se enfoca el primer campo obligatorio pendiente
       // editable; NO se hace POST/PATCH. ]]]FI
-      this._focusFirstPendingEditable(tableField, rowIndex);
+      this._focusPendingOrLastEditable(tableField, rowIndex);
     }
   }
 
@@ -481,6 +709,8 @@ export class DynamicTableFieldComponent implements OnChanges, OnDestroy {
   cancelRowEdit(tableField: string, rowIndex: number): void {
     const rowKey = `${tableField}_${rowIndex}`;
     const rowFormGroup = this.getTableRowGroup(tableField, rowIndex);
+    // Fila agregada desde la tabla y nunca confirmada: cancelar = descartarla.
+    if (this._discardPendingNewRow(tableField, rowIndex)) return;
     if (this.originalRowData[rowKey] && rowFormGroup) {
       rowFormGroup.patchValue({ ...this.originalRowData[rowKey] }, { emitEvent: false });
       rowFormGroup.updateValueAndValidity();
@@ -502,6 +732,8 @@ export class DynamicTableFieldComponent implements OnChanges, OnDestroy {
 
   cancelCellEdit(tableField: string, rowIndex: number, colField: string): void {
     const cellKey = `${tableField}_${rowIndex}_${colField}`;
+    // Fila agregada desde la tabla y nunca confirmada: cancelar = descartarla.
+    if (this._discardPendingNewRow(tableField, rowIndex)) return;
 
     if (this.originalRowData[cellKey] !== undefined) {
       const cellControl = this.getTableCellControl(tableField, rowIndex, colField);
@@ -540,6 +772,10 @@ export class DynamicTableFieldComponent implements OnChanges, OnDestroy {
 
   /** Sugerencias de la celda de autocomplete activa (sólo una edita a la vez). */
   cellSuggestions = signal<any[]>([]);
+  // [[[II ESC:030-06 Cuando la columna exige tecla (`search_key`) y el usuario solo
+  // está escribiendo, NO debe desplegarse el panel (ni el "No hay resultados").
+  // Este flag apaga el mensaje vacío mientras no haya una búsqueda real. ]]]FI
+  cellPanelSuppressed = signal<boolean>(false);
   // Marca temporal de la última selección de autocomplete para no duplicar la
   // búsqueda exacta cuando p-autoComplete ya resolvió Enter seleccionando.
   private _lastCellSelectAt = 0;
@@ -570,6 +806,45 @@ export class DynamicTableFieldComponent implements OnChanges, OnDestroy {
     return column._editable !== undefined ? column._editable : this.isColumnEditable(column);
   }
 
+  // [[[II ESC:030-06 Fila MANUAL: ninguna relación declarada por las columnas
+  // (relationship_field) está resuelta en su source_row — texto libre
+  // free_or_relationship. En fila manual TODO es editable (independiente de
+  // root/derived); en fila relacionada aplican las reglas de columna más el
+  // bloqueo de los targets derived con edit:false. ]]]FI
+  isManualRow(rowData: any): boolean {
+    if (!this._relationshipColumnFields.length) return false;
+    const source = (rowData instanceof FormGroup
+      ? (rowData as any)[this.tableRowSourceFlag]
+      : rowData) || {};
+    // [[[II ESC:030-18 DOC:docs/documents/2026-07-14-030-child-runtime-overlay.md#escenario-18
+    // Una respuesta puede conservar el UUID relacional en el FormGroup antes de
+    // que source_row se rehidrate. Ambos son estado canónico de la fila; si uno
+    // declara la relación, la fila no es manual.
+    const rowValue = rowData instanceof FormGroup ? rowData.getRawValue() : {};
+    // ]]]FI
+    return !this._relationshipColumnFields.some((field) => {
+      const value = source[field] ?? rowValue[field];
+      return value !== undefined && value !== null && value !== '';
+    });
+  }
+
+  /** Editabilidad de la celda considerando la FILA (manual vs relacionada). */
+  isCellEditableForRow(rowData: any, column: any): boolean {
+    // [[[II ESC:030-15 DOC:docs/documents/2026-07-14-030-child-runtime-overlay.md#escenario-15
+    // `readonly` es un candado absoluto: tampoco una fila manual puede abrir la
+    // celda. La excepción manual conserva únicamente la libertad frente a
+    // `edit`/`default.edit` para relaciones no seleccionadas. ]]]FI
+    if (column?.readonly === true) return false;
+    if (this.isManualRow(rowData)) return true;
+    if (!this._isColumnEditable(column)) return false;
+    return !this._derivedLockedFields.has(column?.field);
+  }
+
+  /** Editabilidad para el recorrido de fila: por fila si se conoce el grupo. */
+  private _cellEditable(column: any, rowGroup: FormGroup | null): boolean {
+    return rowGroup ? this.isCellEditableForRow(rowGroup, column) : this._isColumnEditable(column);
+  }
+
   /**
    * Siguiente columna EDITABLE del recorrido de fila, por prioridad:
    *   1. `focus_after_select` (si apunta a una columna de la tabla). Si el destino
@@ -580,13 +855,13 @@ export class DynamicTableFieldComponent implements OnChanges, OnDestroy {
    *   3. siguiente editable por orden de columnas
    * Devuelve null cuando la actual es la última editable (fin de recorrido).
    */
-  private _resolveNextEditableColumn(column: any): any | null {
+  private _resolveNextEditableColumn(column: any, rowGroup: FormGroup | null = null): any | null {
     const cols = this.normalizedColumns || [];
 
     const nextEditableAfter = (fromField: any): any | null => {
       const idx = cols.findIndex((c: any) => c?.field === fromField);
       for (let i = idx + 1; i < cols.length; i++) {
-        if (this._isColumnEditable(cols[i])) return cols[i];
+        if (this._cellEditable(cols[i], rowGroup)) return cols[i];
       }
       return null;
     };
@@ -595,7 +870,7 @@ export class DynamicTableFieldComponent implements OnChanges, OnDestroy {
     if (typeof target === 'string' && target.trim() !== '') {
       const t = this._columnByField(target.trim());
       if (t) {
-        if (this._isColumnEditable(t)) return t;
+        if (this._cellEditable(t, rowGroup)) return t;
         // Destino declarado pero no editable: seguir el orden desde el destino.
         return nextEditableAfter(t.field);
       }
@@ -604,7 +879,7 @@ export class DynamicTableFieldComponent implements OnChanges, OnDestroy {
     const currentTab = Number(column?.tabindex);
     if (Number.isFinite(currentTab)) {
       const candidates = cols
-        .filter((c: any) => Number.isFinite(Number(c?.tabindex)) && Number(c.tabindex) > currentTab && this._isColumnEditable(c))
+        .filter((c: any) => Number.isFinite(Number(c?.tabindex)) && Number(c.tabindex) > currentTab && this._cellEditable(c, rowGroup))
         .sort((a: any, b: any) => Number(a.tabindex) - Number(b.tabindex));
       if (candidates.length) return candidates[0];
     }
@@ -646,7 +921,7 @@ export class DynamicTableFieldComponent implements OnChanges, OnDestroy {
     delete this.originalRowData[cellKey];
     this.clearTableRuntimeCaches();
 
-    const next = this._resolveNextEditableColumn(column);
+    const next = this._resolveNextEditableColumn(column, this.getTableRowGroup(tableField, rowIndex));
     if (next) {
       requestAnimationFrame(() => {
         this.startCellEdit(tableField, rowIndex, next.field);
@@ -660,15 +935,18 @@ export class DynamicTableFieldComponent implements OnChanges, OnDestroy {
     this.cdr.markForCheck();
   }
 
-  /** Enfoca la primera celda editable con error pendiente de la fila. */
-  private _focusFirstPendingEditable(tableField: string, rowIndex: number): void {
+  /**
+   * Enfoca la primera celda editable inválida; si el error pertenece al
+   * encabezado y la fila es válida, reactiva su última celda editable.
+   */
+  private _focusPendingOrLastEditable(tableField: string, rowIndex: number): void {
     const rowGroup = this.getTableRowGroup(tableField, rowIndex);
     if (!rowGroup) return;
-    const target = (this.normalizedColumns || []).find((col: any) => {
-      if (!this._isColumnEditable(col)) return false;
+    const editableColumns = (this.normalizedColumns || []).filter((col: any) => this._cellEditable(col, rowGroup));
+    const target = editableColumns.find((col: any) => {
       const ctrl = rowGroup.get(col.field);
       return !!ctrl && ctrl.invalid;
-    });
+    }) ?? editableColumns.at(-1);
     if (!target) return;
     requestAnimationFrame(() => {
       this.startCellEdit(tableField, rowIndex, target.field);
@@ -694,46 +972,197 @@ export class DynamicTableFieldComponent implements OnChanges, OnDestroy {
     });
   }
 
-  // --------------------------------------------------------------------------
-  // Autocomplete en celda (D3): reutiliza la misma resolución app/type, carga
-  // (crudS.getObject), aplanado (generalS.DJAtoObject) y proyección
-  // (project/mergeConfiguredTableRow) que el formulario dinámico. No hay atajo
-  // F3/searchable: `code`/`name` son autocomplete normales por config.
-  // --------------------------------------------------------------------------
+  // ==========================================================================
+  // [[[II ESC:030-06 CONTRATO DE BÚSQUEDA EN CELDA — DIRIGIDO POR CONFIGURACIÓN
+  //
+  // NINGÚN campo es especial por su NOMBRE (no hay trato para `code`/`name`).
+  // Un campo se vuelve buscador por la COMBINACIÓN de estas claves de config,
+  // exactamente las mismas que usa el autocomplete del formulario:
+  //
+  //   data_type.type   Recurso remoto a consultar. SIN él no hay búsqueda
+  //                    (igual que en el form: no se hereda el data_type de la
+  //                    tabla; cada columna declara el suyo).
+  //   dropdown         true = muestra el botón para consultar TODAS las opciones.
+  //   search_key       Ausente = Enter; '' = busca automáticamente al escribir.
+  //                    'f3'|'enter'|'tab'|'arrowup'|'arrowdown' (o lista separada
+  //                    por comas) = espera esa tecla para buscar.
+  //   force_selection  true = solo admite valores de la lista. CEDE ante
+  //                    `free_or_relationship`, que admite texto libre (se envía
+  //                    como atributo normal del campo) además de la relación.
+  //   search_mode      'partial' = coincidencias parciales (panel).
+  //                    'exact'   = tecla explícita, sin panel ni búsqueda automática.
+  //   smart_search     true = filter[search]; false = field.icontains (parcial).
+  //   min_search_length Umbral de consulta parcial (mínimo 5); no es validación.
+  //   local_editable   Está temporalmente deshabilitado: se conserva visible en
+  //                    config para auditarlo, pero NO altera búsqueda ni edición.
+  //   default.active   true = se preselecciona ese valor ANTES de cualquier
+  //                    búsqueda (respetando result_position/field_name).
+  //
+  // Coincidencia exacta ÚNICA => se selecciona sin desplegar el panel.
+  // La comparación usa el `option_label` declarado (vía formatDynamicValue, que
+  // soporta concatenación 'name,last_name') y el propio `field` de la columna.
+  // ==========================================================================
 
-  /** Recurso remoto (app/type/include) de una columna, con fallback a la tabla. */
+  /** Recurso remoto declarado POR LA COLUMNA (sin heredar el de la tabla). */
   private _cellSearchResource(column: any): { app: string; type: string; include: string } | null {
-    const dt = (column?.data_type && column.data_type.type) ? column.data_type : (this.tableConfig?.data_type || {});
-    const appType = this.crudS.getAppType?.(dt?.type);
+    const dt = column?.data_type;
+    if (!dt?.type) return null; // sin data_type no hay búsqueda (igual que el form)
+    const appType = this.crudS.getAppType?.(dt.type);
     if (!appType?.app) return null;
     return { app: appType.app, type: appType.type, include: column?.include || dt?.include || '' };
   }
 
-  // [[[II ESC:030-06 Combos de celda (dropdown/dropdown-choice): las opciones
-  // vienen inline (column.options) o del recurso remoto declarado (data_type),
-  // con la MISMA resolución que el form (getAppType/getObject/DJAtoObject). La
-  // carga es perezosa (al entrar en edición) y se cachea por columna: sin
-  // peticiones por render ni por tecla. ]]]FI
+  /** 'exact' | 'partial' (default partial). */
+  private _searchModeOf(column: any): 'exact' | 'partial' {
+    return column?.search_mode === 'exact' ? 'exact' : 'partial';
+  }
+
+  // [[[II ESC:030-16 DOC:docs/documents/2026-07-14-030-child-runtime-overlay.md#escenario-16
+  /** Falta de search_key usa Enter; vacío sólo busca al escribir en parcial. */
+  private _searchKeysOf(column: any): Set<string> {
+    if (!Object.prototype.hasOwnProperty.call(column || {}, 'search_key')) return new Set(['enter']);
+    const raw = column?.search_key;
+    if (typeof raw !== 'string') return new Set(['enter']);
+    if (raw.trim() === '') return this._searchModeOf(column) === 'exact'
+      ? new Set(['enter'])
+      : new Set<string>();
+    return new Set(raw.split(',').map((key: string) => key.trim().toLowerCase()).filter((key: string) => !!key));
+  }
+
+  private _searchesOnType(column: any): boolean {
+    return this._searchKeysOf(column).size === 0;
+  }
+
+  // El servidor exige >= 5 caracteres en `filter[search]` (CustomSearchFilter).
+  private readonly SEARCH_MIN_CHARS = 5;
+
+  /** Umbral de búsqueda parcial, separado del `min_length` de validación. */
+  cellMinLength(column: any): number {
+    if (this._searchModeOf(column) === 'exact') return 0;
+    return Math.max(this.SEARCH_MIN_CHARS, Number(column?.min_search_length) || 0);
+  }
+
+  /** Filtro genérico: smart_search usa global; false usa el nombre de columna. */
+  private _cellSearchFilter(column: any, query: string): string {
+    const q = encodeURIComponent(query);
+    const field = typeof column?.field === 'string' ? column.field.trim() : '';
+    let fallbackFilter = '';
+    if (this._searchModeOf(column) === 'exact') {
+      fallbackFilter = field ? `filter[${field}.iexact]=${q}` : '';
+    } else if (column?.smart_search === true) {
+      fallbackFilter = `filter[search]=${q}`;
+    } else {
+      fallbackFilter = field ? `filter[${field}.icontains]=${q}` : `filter[search]=${q}`;
+    }
+    // [[[II ESC:030-17 DOC:docs/documents/2026-07-14-030-child-runtime-overlay.md#escenario-17
+    // Misma resolución declarativa que el autocomplete del formulario.
+    return this.crudS.buildConfiguredSearchFilter(column?.data_type?.filter, query, fallbackFilter);
+    // ]]]FI
+  }
+  // ]]]FI
+
+  private _isSearchKey(event: KeyboardEvent, column: any): boolean {
+    const keys = this._searchKeysOf(column);
+    if (!keys.size) return false;
+    return keys.has(String(event.key || '').toLowerCase());
+  }
+
+  /** `local_editable` no tiene efecto temporalmente; ver Escenario 14. */
+  private _shouldSkipSearch(_rowGroup: FormGroup | null, _column: any): boolean {
+    return false;
+  }
+
+  /** Texto visible de una opción según `option_label` (soporta concatenación). */
+  private _optionLabelValue(option: any, column: any): string {
+    return this.generalS.formatDynamicValue(option, column);
+  }
+
+  // [[[II ESC:030-06 Combos de celda (dropdown/dropdown-choice): las opciones NO
+  // se vuelven a pedir. Prioridad: (1) inline `column.options`; (2) las que el
+  // FORM ya cargó al abrir el diálogo (`formDropdownOptions`, alimentadas por
+  // dataDropdown del custom-draw-form — misma fuente que los inputs del form);
+  // (3) solo si el form no las tiene, se consulta el recurso declarado. ]]]FI
   cellDropdownOptions = signal<{ [colField: string]: any[] }>({});
   private _cellOptionsRequested = new Set<string>();
+
+  /** Opciones efectivas de una columna combo (config → form → carga propia). */
+  cellOptionsFor(column: any): any[] {
+    if (Array.isArray(column?.options) && column.options.length) return column.options;
+    const field = column?.field;
+    if (!field) return [];
+    // [[[II ESC:030-15 DOC:docs/documents/2026-07-14-030-child-runtime-overlay.md#escenario-15
+    // Los children del formulario publican sus opciones bajo `object_<field>`:
+    // la tabla recibe el mismo mapa y debe consultar ambas claves para
+    // rehidratar etiqueta y objeto, no sólo el id guardado. ]]]FI
+    const fromForm = this.formDropdownOptions?.[field] ?? this.formDropdownOptions?.[`object_${field}`];
+    if (Array.isArray(fromForm) && fromForm.length) return fromForm;
+    return this.cellDropdownOptions()[field] || [];
+  }
+
+  // [[[II ESC:030-10 Cascada de children POR FILA. En el formulario, cambiar un
+  // padre (p.ej. COMPONENTE) filtra/activa a sus hijos declarados en
+  // `children.fields` (SUBCOMPONENTE, SÍNTOMA, TIPO DE GASTO). En la tabla, esa
+  // relación es POR FILA: cada fila tiene su propio padre y sus propias opciones
+  // filtradas. Se guardan por (fila, campo). Mismos contratos que el form:
+  // `filter` (filtra opciones contra el valor del padre) y `activate`
+  // (inactiva/limpia el hijo). ]]]FI
+  cellChildOptions = signal<{ [rowFieldKey: string]: any[] }>({});
+  cellChildDisabled = signal<{ [rowFieldKey: string]: boolean }>({});
+
+  private _rowFieldKey(rowIndex: number, field: string): string {
+    return `${rowIndex}::${field}`;
+  }
+
+  /** Opciones de un combo de celda considerando la cascada por fila. */
+  cellOptionsForRow(column: any, rowIndex: number): any[] {
+    const perRow = this.cellChildOptions()[this._rowFieldKey(rowIndex, column?.field)];
+    if (Array.isArray(perRow)) return perRow;
+    return this.cellOptionsFor(column);
+  }
+
+  /** Un hijo inactivado por su padre en esa fila no se edita. */
+  isChildCellDisabled(rowIndex: number, column: any): boolean {
+    return this.cellChildDisabled()[this._rowFieldKey(rowIndex, column?.field)] === true;
+  }
+
+  /**
+   * Etiqueta de lectura de un dropdown: el control guarda el VALUE (id); aquí se
+   * mapea a su `option_label` con las opciones de la fila. Si no se encuentra
+   * (valor ya legible o sin opciones), se muestra tal cual.
+   */
+  cellDropdownLabel(value: any, column: any, rowIndex: number): string {
+    if (value === null || value === undefined || value === '') return '-';
+    const rowGroup = this.getTableRowGroup(this.tableConfig?.field, rowIndex);
+    const source = (rowGroup as any)?.[this.tableRowSourceFlag] || {};
+    const storedLabel = source[`${column?.field}__name`];
+    if (storedLabel !== undefined && storedLabel !== null && storedLabel !== '') return String(storedLabel);
+    const storedOption = source[`object_${column?.field}`];
+    if (storedOption && typeof storedOption === 'object') {
+      return this._optionLabelValue(storedOption, column) || String(value);
+    }
+    const options = this.cellOptionsForRow(column, rowIndex);
+    const valueKey = column?.option_value || ((column?._type || column?.type) === 'dropdown-choice' ? 'value' : 'id');
+    const match = options.find((option: any) => option?.[valueKey] == value);
+    if (match) return this._optionLabelValue(match, column) || String(value);
+    return String(value);
+  }
 
   private _loadCellDropdownOptions(column: any): void {
     const field = column?.field;
     if (!field) return;
     if (Array.isArray(column?.options) && column.options.length) return; // inline por config
+    const fromForm = this.formDropdownOptions?.[field] ?? this.formDropdownOptions?.[`object_${field}`];
+    if (Array.isArray(fromForm) && fromForm.length) return; // ya cargadas por el form
     if (this._cellOptionsRequested.has(field)) return;
-    const resource = this._cellSearchResource(column);
-    if (!resource) return;
+    if (!this._cellSearchResource(column)) return;
     this._cellOptionsRequested.add(field);
-    this.crudS.getObject({ app: resource.app, type: resource.type, include: resource.include }).subscribe({
-      next: (resp: any) => {
-        let rows = this.generalS.DJAtoObject({ respDJA: resp, fields: { [field]: column } }) || [];
-        rows = this.generalS.enrichSuggestionRelationData(rows, resp, column);
-        this.cellDropdownOptions.set({ ...this.cellDropdownOptions(), [field]: rows });
-        this.cdr.markForCheck();
-      },
-      // Ante error se permite reintentar en la siguiente edición.
-      error: () => this._cellOptionsRequested.delete(field)
+    this._fetchCellOptions(column, '').subscribe((rows: any[]) => {
+      if (!rows.length) {
+        this._cellOptionsRequested.delete(field); // permitir reintento
+        return;
+      }
+      this.cellDropdownOptions.set({ ...this.cellDropdownOptions(), [field]: rows });
+      this.cdr.markForCheck();
     });
   }
 
@@ -749,38 +1178,114 @@ export class DynamicTableFieldComponent implements OnChanges, OnDestroy {
    * visible + derived declarados), luego avanza el recorrido de fila.
    */
   onCellDropdownChange(event: any, tableField: string, rowIndex: number, column: any): void {
-    const options = (Array.isArray(column?.options) && column.options.length)
-      ? column.options
-      : (this.cellDropdownOptions()[column.field] || []);
+    const options = this.cellOptionsFor(column);
     const optionValueKey = column?.option_value || ((column?._type || column?.type) === 'dropdown-choice' ? 'value' : 'id');
     const value = event?.value;
     const selected = options.find((option: any) => option?.[optionValueKey] == value) ?? null;
     if (selected && typeof selected === 'object') {
+      // Cascada por fila ANTES de avanzar el foco (filtra/activa a los hijos de
+      // esta fila con el padre recién elegido).
+      this._cascadeRowChildren(tableField, rowIndex, column, selected);
       this._applyCellSelection(tableField, rowIndex, column, selected);
     } else {
       this.advanceAfterCell(tableField, rowIndex, column.field);
     }
   }
 
-  /** completeMethod del p-autoComplete de celda: búsqueda parcial por escritura. */
-  onCellComplete(event: any, column: any): void {
-    const query = (event?.query ?? '').toString().trim();
+  // Token de la última búsqueda por columna: descarta respuestas obsoletas
+  // (evita el "a veces encuentra, a veces no" por respuestas fuera de orden).
+  private _cellSearchToken: { [field: string]: number } = {};
+
+  /** Consulta el recurso de la columna y devuelve filas ya aplanadas/enriquecidas. */
+  private _fetchCellOptions(column: any, query: string): Observable<any[]> {
     const resource = this._cellSearchResource(column);
-    if (!resource || !query) {
+    if (!resource) return of([]);
+    const field = column?.field;
+    const token = (this._cellSearchToken[field] = (this._cellSearchToken[field] || 0) + 1);
+    const filterParam = query ? this._cellSearchFilter(column, query) : '';
+    return this.crudS.getObject({ app: resource.app, type: resource.type, filter: filterParam, include: resource.include }).pipe(
+      map((resp: any) => {
+        // Respuesta obsoleta (llegó una búsqueda más nueva): se descarta.
+        if (this._cellSearchToken[field] !== token) return null;
+        const rows = this.generalS.DJAtoObject({ respDJA: resp, fields: { [column.field]: column } }) || [];
+        // Mismo enriquecimiento `<rel>_data_<attr>` que el form dinámico.
+        return this.generalS.enrichSuggestionRelationData(rows, resp, column);
+      }),
+      // Se ignora la emisión nula de una respuesta obsoleta.
+      rxFilter((rows: any[] | null): rows is any[] => rows !== null),
+      catchError(() => of([]))
+    );
+  }
+
+  /**
+   * completeMethod del p-autoComplete de celda. Exacto no busca al escribir ni
+   * muestra panel; parcial sólo busca al escribir con search_key vacío.
+   */
+  // [[[II ESC:030-16 DOC:docs/documents/2026-07-14-030-child-runtime-overlay.md#escenario-16
+  onCellComplete(event: any, tableField: string, rowIndex: number, column: any): void {
+    const query = (event?.query ?? '').toString().trim();
+    const rowGroup = this.getTableRowGroup(tableField, rowIndex);
+    if (this._searchModeOf(column) === 'exact') {
+      this.cellPanelSuppressed.set(true);
       this.cellSuggestions.set([]);
       return;
     }
-    const filter = `filter[search]=${encodeURIComponent(query)}`;
-    this.crudS.getObject({ app: resource.app, type: resource.type, filter, include: resource.include }).subscribe({
-      next: (resp: any) => {
-        let rows = this.generalS.DJAtoObject({ respDJA: resp, fields: { [column.field]: column } }) || [];
-        // Mismo enriquecimiento `<rel>_data_<attr>` que el form dinámico (fuente
-        // única en GeneralService): habilita option_label/panel/children.derived.
-        rows = this.generalS.enrichSuggestionRelationData(rows, resp, column);
-        this.cellSuggestions.set(rows);
-        this.cdr.markForCheck();
-      },
-      error: () => this.cellSuggestions.set([])
+    // `dropdown` (botón "ver todas") llega con query vacío: se permite consultar
+    // todo aunque la config exija tecla para la búsqueda por escritura.
+    const isDropdownRequest = query === '';
+    if (!isDropdownRequest && (!this._searchesOnType(column) || this._shouldSkipSearch(rowGroup, column))) {
+      // No hay búsqueda: se apaga el panel por completo (sin "No hay resultados").
+      this.cellPanelSuppressed.set(true);
+      this.cellSuggestions.set([]);
+      return;
+    }
+    // Respeta min_search_length sólo en búsqueda parcial por escritura.
+    const minLength = this.cellMinLength(column);
+    if (!isDropdownRequest && minLength > 0 && query.length < minLength) {
+      this.cellPanelSuppressed.set(true);
+      this.cellSuggestions.set([]);
+      return;
+    }
+    this.cellPanelSuppressed.set(false);
+    this._runCellSearch(tableField, rowIndex, column, query);
+  }
+
+  /**
+   * Ejecuta la búsqueda y decide entre aplicar una coincidencia exacta única o
+   * desplegar el panel, según `search_mode`.
+   */
+  private _runCellSearch(
+    tableField: string, rowIndex: number, column: any, query: string,
+    options: { autoApplyUnique?: boolean; advanceWhenNoMatch?: boolean } = {}
+  ): void {
+    const { autoApplyUnique = true, advanceWhenNoMatch = false } = options;
+    this._fetchCellOptions(column, query).subscribe((rows: any[]) => {
+      const exactMatches = query
+        ? rows.filter((row: any) => this._exactCellMatch(row, column, query))
+        : [];
+
+      // Coincidencia exacta ÚNICA: se selecciona sin mostrar el panel.
+      if (autoApplyUnique && exactMatches.length === 1) {
+        this.cellSuggestions.set([]);
+        this._applyCellSelection(tableField, rowIndex, column, exactMatches[0]);
+        return;
+      }
+
+      if (this._searchModeOf(column) === 'exact') {
+        this.cellPanelSuppressed.set(true);
+        this.cellSuggestions.set([]);
+        if (advanceWhenNoMatch) this._finishFreeTextCell(tableField, rowIndex, column);
+        return;
+      }
+
+      this.cellPanelSuppressed.set(false);
+      const suggestions = rows;
+      this.cellSuggestions.set(suggestions);
+      this.cdr.markForCheck();
+
+      if (advanceWhenNoMatch && !suggestions.length) {
+        this._finishFreeTextCell(tableField, rowIndex, column);
+      }
     });
   }
 
@@ -792,52 +1297,87 @@ export class DynamicTableFieldComponent implements OnChanges, OnDestroy {
   }
 
   /**
-   * Enter en celda de autocomplete: si p-autoComplete ya resolvió una selección
-   * (onSelect reciente) no se duplica; en otro caso busca coincidencia exacta del
-   * texto escrito. Con o sin match, cierra la celda y avanza el recorrido.
+   * Teclado en celda de autocomplete. La tecla declarada en `search_key` dispara
+   * la búsqueda; Enter además cierra/avanza cuando no hay búsqueda pendiente.
    */
   onCellAutoCompleteKeydown(event: KeyboardEvent, tableField: string, rowIndex: number, column: any): void {
     if (event.key === 'Escape') {
       this.cancelCellEdit(tableField, rowIndex, column.field);
       return;
     }
+
+    const rowGroup = this.getTableRowGroup(tableField, rowIndex);
+    const isConfiguredSearchKey = this._isSearchKey(event, column)
+      && !!this._cellSearchResource(column)
+      && !this._shouldSkipSearch(rowGroup, column);
+
+    if (isConfiguredSearchKey) {
+      const control = this.getTableCellControl(tableField, rowIndex, column.field);
+      const raw = (control?.value ?? '').toString().trim();
+      if (raw) {
+        event.preventDefault();
+        const exact = this._searchModeOf(column) === 'exact';
+        if (!exact && raw.length < this.cellMinLength(column)) {
+          this.cellPanelSuppressed.set(true);
+          this.cellSuggestions.set([]);
+          return;
+        }
+        this.cellPanelSuppressed.set(exact);
+        // Diferido: si p-autoComplete resolvió Enter seleccionando, no se duplica.
+        setTimeout(() => {
+          if (Date.now() - this._lastCellSelectAt < 150) return;
+          this._runCellSearch(tableField, rowIndex, column, raw, {
+            autoApplyUnique: true,
+            advanceWhenNoMatch: true,
+          });
+        }, 0);
+        return;
+      }
+    }
+
     if (event.key !== 'Enter') return;
+    event.preventDefault();
     setTimeout(() => {
       if (Date.now() - this._lastCellSelectAt < 150) return; // onSelect ya resolvió
-      this._cellExactSearch(tableField, rowIndex, column);
+      this._finishFreeTextCell(tableField, rowIndex, column);
     }, 0);
   }
+  // ]]]FI
 
-  private _cellExactSearch(tableField: string, rowIndex: number, column: any): void {
-    const control = this.getTableCellControl(tableField, rowIndex, column.field);
-    const raw = (control?.value ?? '').toString().trim();
-    const resource = this._cellSearchResource(column);
-    if (!raw || !resource) {
-      this._finishCellAndAdvance(tableField, rowIndex, column.field, column);
-      return;
-    }
-    const filter = `filter[search]=${encodeURIComponent(raw)}`;
-    this.crudS.getObject({ app: resource.app, type: resource.type, filter, include: resource.include }).subscribe({
-      next: (resp: any) => {
-        let rows = this.generalS.DJAtoObject({ respDJA: resp, fields: { [column.field]: column } }) || [];
-        rows = this.generalS.enrichSuggestionRelationData(rows, resp, column);
-        const match = rows.find((r: any) => this._exactCellMatch(r, column.field, raw)) ?? null;
-        if (match) {
-          this._applyCellSelection(tableField, rowIndex, column, match);
-        } else {
-          // Texto libre: se conserva y se avanza (free_or_relationship).
-          this._finishCellAndAdvance(tableField, rowIndex, column.field, column);
-        }
-      },
-      error: () => this._finishCellAndAdvance(tableField, rowIndex, column.field, column)
-    });
+  /**
+   * Cierre de una celda buscadora sin selección resuelta.
+   *
+   * [[[II ESC:030-06 El buscador tiene DOS funciones y ambas son válidas:
+   *   1. Inicializar la RELACIÓN: al seleccionar una opción se guarda el UUID en
+   *      `relationship_field` y se envía como relationship.
+   *   2. Enviar TEXTO LIBRE: si no se selecciona nada, el texto escrito se
+   *      conserva y se envía como atributo normal del propio campo
+   *      (p.ej. name="texto libre escrito").
+   * El texto libre NUNCA se descarta. `free_or_relationship` es quien declara que
+   * el campo admite ambas formas. ]]]FI
+   */
+  private _finishFreeTextCell(tableField: string, rowIndex: number, column: any): void {
+    this._finishCellAndAdvance(tableField, rowIndex, column.field, column);
   }
 
-  private _exactCellMatch(row: any, colField: string, raw: string): boolean {
+  /**
+   * Coincidencia exacta contra el texto declarado por `option_label` (soporta
+   * concatenación) y contra la clave fuente de la columna. Sin nombres de campo
+   * hardcodeados.
+   */
+  private _exactCellMatch(row: any, column: any, raw: string): boolean {
     if (!row) return false;
-    const target = raw.toLowerCase();
-    const candidates = [row[colField], row[`${colField}__name`], row.code, row.name, row.display_name];
-    return candidates.some((v: any) => v != null && String(v).trim().toLowerCase() === target);
+    const target = raw.trim().toLowerCase();
+    if (!target) return false;
+    const field = column?.field;
+    const sourceKey = column?.field_name;
+    const candidates = [
+      this._optionLabelValue(row, column),
+      sourceKey ? row[sourceKey] : undefined,
+      field ? row[field] : undefined,
+      field ? row[`${field}__name`] : undefined,
+    ];
+    return candidates.some((value: any) => value != null && String(value).trim().toLowerCase() === target);
   }
 
   /**
@@ -883,13 +1423,23 @@ export class DynamicTableFieldComponent implements OnChanges, OnDestroy {
         }
       });
 
-      // 3. celda seleccionada: siempre el texto visible (option_label), nunca el
-      //    UUID. En source_row el display sólo sustituye al campo cuando el UUID
-      //    vive en un relationship_field separado (autocomplete); si el campo ES
-      //    la relación (combo directo), conserva el UUID canónico y el display
-      //    queda en `<campo>__name`.
+      // 3. celda seleccionada.
       const display = this.generalS.formatDynamicValue(selected, column);
-      if (display) {
+      if (this._isDropdownColumn(column)) {
+        // Dropdown: el control guarda el VALUE (id) que enlaza p-select; la
+        // etiqueta se resuelve en lectura (cellDropdownLabel). Se conserva el id
+        // y se guarda el objeto seleccionado para el espejo `object_<campo>` que
+        // usa el guardado transitorio (payload de form_fields_data_*).
+        const valueKey = column?.option_value || ((column?._type || column?.type) === 'dropdown-choice' ? 'value' : 'id');
+        const value = selected?.[valueKey] ?? uuid;
+        if (value !== undefined && value !== null && value !== '') {
+          rowGroup.get(column.field)?.setValue(value, { emitEvent: false });
+          source[column.field] = value;
+        }
+        if (display) source[`${column.field}__name`] = display;
+        source[`object_${column.field}`] = selected;
+      } else if (display) {
+        // Autocomplete/texto: el control guarda el texto visible (option_label).
         rowGroup.get(column.field)?.setValue(display, { emitEvent: false });
         source[`${column.field}__name`] = display;
         if (column?.relationship_field) source[column.field] = display;
@@ -912,33 +1462,176 @@ export class DynamicTableFieldComponent implements OnChanges, OnDestroy {
    * y la re-hidratación) y escribe el texto visible en la celda: la columna
    * seleccionada siempre; las demás sólo si están vacías (no pisa ediciones locales).
    */
-  private _applyDerivedChildren(rowGroup: FormGroup, column: any, selected: any, source: any): void {
-    const derived = column?.children?.fields?.derived;
-    if (!derived || typeof derived !== 'object') return;
+  /**
+   * Cascada de children por fila: al elegir un padre en una celda, filtra las
+   * opciones y aplica el activate de cada hijo declarado en `children.fields`
+   * (static/dynamic) para ESA fila. La derivación (`derived`) la resuelve
+   * `_applyDerivedChildren`. No-op si la columna no declara children activos.
+   */
+  private _cascadeRowChildren(tableField: string, rowIndex: number, parentColumn: any, parentOption: any): void {
+    const children = parentColumn?.children;
+    if (children?.active !== true) return;
+    const rowGroup = this.getTableRowGroup(tableField, rowIndex);
+    if (!rowGroup) return;
 
-    Object.keys(derived).forEach((targetField: string) => {
-      const cfg = derived[targetField] || {};
-      const sourceKey = cfg.field_name || cfg?.derived?.field_name || targetField;
+    const groups = children.fields || {};
+    const nextOptions = { ...this.cellChildOptions() };
+    const nextDisabled = { ...this.cellChildDisabled() };
+
+    ['static', 'dynamic'].forEach((mode) => {
+      this.generalS.configuredChildNodes(groups[mode]).forEach((child: any) => {
+        const childField = child.field;
+        const childCol = this._columnByField(childField);
+        if (!childCol) return; // solo aplica a columnas de la tabla
+        const key = this._rowFieldKey(rowIndex, childField);
+        const ctrl = rowGroup.get(childField);
+
+        // activate: si la condición se cumple, el hijo se inactiva (y se limpia).
+        const inactive = this._childActivateInactive(child, parentOption);
+        nextDisabled[key] = inactive;
+        if (inactive && ctrl) {
+          ctrl.setValue(this.getTableColumnDefaultValueOf(childCol), { emitEvent: false });
+        }
+
+        // filter: opciones filtradas contra el valor del padre en esta fila.
+        if (child.filter?.active === true) {
+          const base = (Array.isArray(childCol.options) && childCol.options.length)
+            ? childCol.options
+            : (Array.isArray(child.options) ? child.options : []);
+          const filtered = base.filter((option: any) => this._childOptionPasses(option, child, parentOption));
+          nextOptions[key] = filtered;
+
+          // Si el valor actual ya no es válido con el nuevo padre, se limpia.
+          if (ctrl && ctrl.value != null && ctrl.value !== '') {
+            const valueKey = childCol.option_value || 'id';
+            const stillValid = filtered.some((option: any) => option?.[valueKey] == ctrl.value);
+            if (!stillValid) ctrl.setValue(this.getTableColumnDefaultValueOf(childCol), { emitEvent: false });
+          }
+        }
+      });
+    });
+
+    this.cellChildOptions.set(nextOptions);
+    this.cellChildDisabled.set(nextDisabled);
+    this.clearTableRuntimeCaches();
+    this.cdr.markForCheck();
+  }
+
+  /** Default de una columna (mismo contrato que createTableRowFormGroup). */
+  private getTableColumnDefaultValueOf(column: any): any {
+    return this.getTableColumnDefaultValue(column);
+  }
+
+  /** ¿El activate del hijo se cumple? (=> inactivar). */
+  private _childActivateInactive(child: any, parentOption: any): boolean {
+    const activate = child?.activate;
+    if (activate?.active !== true) return false;
+    const met = this._evalParentConditions(activate.conditions, activate.logic, parentOption);
+    const action = activate.action || 'inactive';
+    return action === 'inactive' ? met : !met;
+  }
+
+  /** ¿La opción del hijo pasa el filtro contra el valor del padre? */
+  private _childOptionPasses(option: any, child: any, parentOption: any): boolean {
+    const conditions = child?.filter?.conditions || [];
+    if (!conditions.length) return true;
+    const groupKey = child?.filter_group || 'group';
+    const logic = String(child?.filter?.logic || 'AND').toUpperCase();
+    const results = conditions.map((cond: any) => {
+      const parentValue = parentOption?.[cond?.value_key];
+      const optionValue = option?.[groupKey];
+      return this._compareCondition(optionValue, cond?.operator, parentValue);
+    });
+    return logic === 'OR' ? results.some(Boolean) : results.every(Boolean);
+  }
+
+  /** Evalúa condiciones que comparan el valor del padre contra `values`. */
+  private _evalParentConditions(conditions: any[], logic: any, parentOption: any): boolean {
+    if (!conditions?.length) return false;
+    const results = conditions.map((cond: any) => {
+      const parentValue = parentOption?.[cond?.value_key];
+      const values = cond?.values ?? (cond?.value !== undefined ? [cond.value] : []);
+      return this._compareCondition(parentValue, cond?.operator, values);
+    });
+    return String(logic || 'AND').toUpperCase() === 'OR' ? results.some(Boolean) : results.every(Boolean);
+  }
+
+  /** Operadores mínimos compartidos por filter y activate. */
+  private _compareCondition(left: any, operator: string, right: any): boolean {
+    const values = Array.isArray(right) ? right : [right];
+    const has = values.some((value: any) => String(value) === String(left));
+    switch (operator) {
+      case 'not_equals':
+      case 'not_in':
+        return !has;
+      case 'equals':
+      case 'in':
+      default:
+        return has;
+    }
+  }
+
+  private _applyDerivedChildren(rowGroup: FormGroup, column: any, selected: any, source: any): void {
+    // Nodos derived por nombre o numerados ({0:...}): normalización única.
+    const derivedNodes = this.generalS.configuredChildNodes(column?.children?.fields?.derived);
+
+    derivedNodes.forEach((cfg: any) => {
+      const targetField: string = cfg.field;
+      const sourceKey = cfg.field_name || targetField;
       const ctrl = rowGroup.get(targetField);
       const targetCol = this._columnByField(targetField);
       if (!ctrl || !targetCol) return;
 
       const dispName = selected[`${sourceKey}__name`];
-      const raw = selected[sourceKey];
-      const display = (dispName !== undefined && dispName !== null && dispName !== '')
-        ? dispName
-        : (raw && typeof raw === 'object' ? this.generalS.formatDynamicValue(raw, targetCol) : raw);
+      // [[[II ESC:030-20 DOC:docs/documents/2026-07-14-030-child-runtime-overlay.md#escenario-20
+      // La clave fuente puede llegar plana (`base_product_data_code`), anidada
+      // en `base_product_data: {code}` o dentro del objeto de la relación. Leer
+      // sólo la plana dejaba la celda vacía cuando la respuesta no traía
+      // `included`. Resolución compartida con el formulario. ]]]FI
+      const raw = this.generalS.resolveRelationDataValue(selected, sourceKey);
+      const hasValue = (dispName !== undefined && dispName !== null && dispName !== '')
+        || (raw !== undefined && raw !== null && raw !== '');
+
+      const effectiveDefault = {
+        ...(targetCol?.default || {}),
+        ...(cfg?.default || {}),
+      };
+      // El default del child sobrescribe por propiedad al root. `active`
+      // gobierna el valor; `edit` gobierna el permiso por separado.
+      const fallback = effectiveDefault.active === true ? effectiveDefault.value : undefined;
+      const display = hasValue
+        ? ((dispName !== undefined && dispName !== null && dispName !== '')
+          ? dispName
+          : (raw && typeof raw === 'object' ? this.generalS.formatDynamicValue(raw, targetCol) : raw))
+        : fallback;
 
       if (raw !== undefined) source[targetField] = (raw && typeof raw === 'object') ? (raw.id ?? display) : raw;
+      else if (!hasValue && display !== undefined) source[targetField] = display;
       if (dispName !== undefined && dispName !== null && dispName !== '') source[`${targetField}__name`] = dispName;
 
-      const isEmpty = ctrl.value === '' || ctrl.value == null;
-      // Un bool derivado nunca está "vacío" (default false): se rellena mientras
-      // el usuario no lo haya tocado (pristine), sin pisar ediciones locales.
-      const boolFillable = typeof display === 'boolean' && !ctrl.dirty;
-      if ((targetField === column.field || isEmpty || boolFillable)
-        && display !== undefined && display !== null && display !== '') {
-        ctrl.setValue(display, { emitEvent: false });
+      // [[[II ESC:030-06 RECÁLCULO: esta función solo corre cuando se (re)elige el
+      // PADRE, así que los targets `from: parent` se SOBRESCRIBEN — no se
+      // "rellenan huecos". Antes se conservaba lo escrito antes de resolver el
+      // padre (texto libre a medias) y el derivado nunca se recalculaba al
+      // cambiar de producto. La columna elegida ya se escribe aparte. ]]]FI
+      // [[[II ESC:030-11 Una columna dropdown-like guarda en su control el VALUE
+      // canónico (el id que enlaza p-select) y resuelve la etiqueta EN LECTURA con
+      // el `option_label` de ESA columna (cellDropdownLabel) — exactamente la misma
+      // regla que aplica `_applyCellSelection` al elegir en la celda.
+      //
+      // Antes se escribía aquí el texto `<rel>__name`, que DJAtoObject calcula con
+      // la convención genérica de la relación y NO con el `option_label` del
+      // destino. Con Moneda (columna `option_label: short_name`, relación derivada
+      // `purchase_currency`) la celda mostraba el `name` recién derivada y el
+      // `short_name` tras recargar la fila: la misma columna alternaba etiqueta.
+      // Cada vista respeta su propio `option_label`; el valor canónico ya quedó en
+      // `source[targetField]` más arriba. Las columnas no dropdown conservan el
+      // comportamiento previo (texto visible en el control). ]]]FI
+      if (targetField !== column.field && display !== undefined && display !== null) {
+        const canonical = source[targetField];
+        const isCanonicalUsable = canonical !== undefined && canonical !== null && canonical !== '';
+        const value = (this._isDropdownColumn(targetCol) && isCanonicalUsable) ? canonical : display;
+        ctrl.setValue(value, { emitEvent: false });
       }
     });
   }
@@ -955,6 +1648,17 @@ export class DynamicTableFieldComponent implements OnChanges, OnDestroy {
     // que panel.fields); el normalizador de GeneralService es la fuente única. ]]]FI
     const columns = this.generalS.configuredTableColumns(this.tableConfig.columns);
     this.normalizedColumns = columns.map((column: any) => this.normalizeTableColumn(column));
+
+    // Relaciones declaradas y targets bloqueados por derived default.edit:false.
+    this._relationshipColumnFields = this.generalS.configuredRelationshipFields(this.normalizedColumns);
+    this._derivedLockedFields = new Set<string>();
+    this.normalizedColumns.forEach((column: any) => {
+      this.generalS.configuredChildNodes(column?.children?.fields?.derived).forEach((node: any) => {
+        const targetColumn = this.normalizedColumns.find((candidate: any) => candidate?.field === node.field);
+        const effectiveEdit = node?.default?.edit ?? targetColumn?.default?.edit ?? true;
+        if (effectiveEdit === false && node.field) this._derivedLockedFields.add(node.field);
+      });
+    });
     this.controlColumnFields = this.normalizedColumns
       .map((column: any) => column?.field)
       .filter((field: any) => !!field)
@@ -974,22 +1678,34 @@ export class DynamicTableFieldComponent implements OnChanges, OnDestroy {
   }
 
   /**
-   * Editabilidad de la celda basada en el campo natural `default.edit` que envía
-   * el servidor, más el override explícito `local_editable`.
+   * Editabilidad de la celda basada en `readonly`, `edit` de la columna y el
+   * campo heredado `default.edit`.
    *
    * FALLO CONOCIDO #1: NO se usa `column.editable`. En `combo`/`auto_complete`
    * ese flag hereda `editable: false`, cuyo significado es "permitir crear valores
    * nuevos", NO "celda bloqueada". Interpretarlo como bloqueo dejaba `code`/`name`
    * sin poder editarse. Aquí se ignora por completo para la decisión de edición.
    *
-   * `local_editable: true` fuerza edición local (caso `name` local). `readonly:
-   * true` se conserva como candado explícito declarado por columna (currency /
-   * comprobantes) para no introducir regresiones. En ausencia de ambos se usa el
-   * campo natural `default.edit` (true por defecto).
+   * `readonly: true` se conserva como candado explícito declarado por columna.
+   * `edit: false` top-level también es un candado explícito; si no aparece, se
+   * honra `default.edit` (true por defecto).
+   *
+   * IMPORTANTE — este motor NO debe adaptarse a los VALORES que la config tenga
+   * hoy: cualquier combinación es válida y el usuario puede cambiarla. Que una
+   * columna llegue con `default.edit: false` (p.ej. `code`) significa "celda
+   * bloqueada" y es el comportamiento correcto, no un fallo a corregir; si mañana
+   * llega `true`, la misma celda debe volverse editable sin tocar código. Lo que
+   * se deriva es la ESTRUCTURA del contrato, nunca el valor puntual.
+   *
+   * [[[II ESC:030-14 DOC:docs/documents/2026-07-14-030-child-runtime-overlay.md#escenario-14
+   * `local_editable` está TEMPORALMENTE DESHABILITADO por decisión explícita del
+   * usuario. Su valor se conserva para diagnóstico, pero no puede revocar
+   * `edit:false` ni frenar una búsqueda. La excepción preexistente de fila manual
+   * sigue fuera de este método (`isManualRow`/`isCellEditableForRow`). ]]]FI
    */
   private _resolveColumnEditable(column: any): boolean {
-    if (column?.local_editable === true) return true;
     if (column?.readonly === true) return false;
+    if (column?.edit === false) return false;
     return column?.default?.edit !== false;
   }
 
@@ -1049,7 +1765,21 @@ export class DynamicTableFieldComponent implements OnChanges, OnDestroy {
   private clearTableRuntimeCaches(): void {
     this.tableRowEditStateCache = {};
     this.tableCellClassCache = {};
+    this._publishEditingState();
   }
+
+  // [[[II ESC:030-16 DOC:docs/documents/2026-07-14-030-child-runtime-overlay.md#escenario-16
+  // Publica una sola transición por tabla: el padre bloquea el resto del
+  // formulario mientras exista una fila o celda activa y lo restaura al cerrar.
+  private _publishEditingState(): void {
+    const field = this.tableConfig?.field;
+    if (!field) return;
+    const active = this.isAnyRowEditing(field);
+    if (this._reportedEditingState === active) return;
+    this._reportedEditingState = active;
+    this.editingStateChange.emit({ field, active });
+  }
+  // ]]]FI
 
   private getTableFormArray(field: string): FormArray | null {
     const control = this.formGroup?.get(field);
@@ -1074,6 +1804,13 @@ export class DynamicTableFieldComponent implements OnChanges, OnDestroy {
   }
 
   private getTableColumnDefaultValue(column: any): any {
+    // [[[II ESC:030-10 `default.value` de la columna manda cuando `default.active`
+    // (mismo contrato que el formulario). Sin esto una fila nueva ignoraba, p.ej.,
+    // el 1 por defecto de "Solicitar". `false`/`0` son valores válidos. ]]]FI
+    const columnDefault = column?.default;
+    if (columnDefault?.active === true && columnDefault.value !== undefined && columnDefault.value !== null) {
+      return columnDefault.value;
+    }
     if (column?.type === 'input-number' || column?.type === 'date') {
       return null;
     }
@@ -1101,7 +1838,8 @@ export class DynamicTableFieldComponent implements OnChanges, OnDestroy {
         validators.push(Validators.required);
       }
       // Longitudes: validation.* o los campos naturales de input_text; en
-      // auto-complete min_length = chars de búsqueda, no validación.
+      // auto-complete usa min_search_length para buscar; min_length no valida
+      // ni modifica este control transitorio.
       const isTextColumn = col.type === 'input-text' || col.type === 'textarea';
       const maxLength = col.validation?.max_length ?? (isTextColumn ? col.max_length : undefined);
       const minLength = col.validation?.min_length ?? (isTextColumn ? col.min_length : undefined);
@@ -1116,6 +1854,14 @@ export class DynamicTableFieldComponent implements OnChanges, OnDestroy {
         rowData?.[col.field] !== undefined ? rowData[col.field] : this.getTableColumnDefaultValue(col),
         validators
       );
+    });
+
+    // [[[II ESC:030-20 La relación declarada por las columnas es ESTADO DE LA
+    // FILA, no un dato incidental de `source_row`: se crea como control real
+    // para que sobreviva a todas las rutas de alta/edición/rehidratación. ]]]FI
+    this.generalS.configuredRelationshipFields(tableConfig?.columns).forEach((field: string) => {
+      if (rowGroup[field]) return;
+      rowGroup[field] = new FormControl(rowData?.[field] ?? null);
     });
 
     const group = this.fb.group(rowGroup);

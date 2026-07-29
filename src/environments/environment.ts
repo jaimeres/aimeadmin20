@@ -30,4 +30,24 @@ export const environment = {
    */
   socket_url: 'http://127.0.0.1:8000',
   // ]]]FI
+  // [[[II ESC:008-01 DOC:docs/paso-8-jukai.md CONFIG
+  /**
+   * URL del agente jukai. El widget le envía `{message, session_id?, cliente,
+   * time_zone}` con el JWT del usuario.
+   *
+   * Apunta al **proxy de invocación real desplegado en AWS** (API Gateway +
+   * Lambda, stack `jukaiagen-agent-proxy`), no a una ruta relativa: en `ng
+   * serve` no hay ningún proxy local que atienda `/api/assistant/chat`, y el
+   * endpoint del runtime de AgentCore no se puede llamar desde el navegador
+   * porque exige firma SigV4.
+   *
+   * ⚠️ Ojo: el agente desplegado habla con la BOS de **dev.jukai.io**, no con
+   * el `runserver` local. Aunque el front corra en localhost, las respuestas
+   * salen de los datos de dev. El JWT tiene que ser de dev.jukai.io.
+   *
+   * El origen del navegador debe estar en `AllowedOrigins` de
+   * `jukaiagen/proxy/template.yaml` (hoy: erp.jukai.io, localhost:4200 y 4201).
+   */
+  agent_url: 'https://4mkjyjyaqf.execute-api.us-east-1.amazonaws.com/chat',
+  // ]]]FI
 };

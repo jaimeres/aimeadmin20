@@ -1,0 +1,4 @@
+interface:
+  display_name: "BOS Config Contract Audit"
+  short_description: "Audita contratos de configuración cliente-servidor"
+  default_prompt: "Usa $bos-config-contract-audit para rastrear cada clave de configuración en cliente y servidor, detectar campos muertos o duplicados y reportar conflictos antes de editar."

@@ -69,96 +69,34 @@
 
 <!-- TEMPLATE REUTILIZABLE PARA TREE-SELECT -->
 <ng-template #treeSelectTemplate let-fieldConfig="fieldConfig">
-  <p-floatlabel variant="on">
-    <p-treeSelect display="chip" [metaKeySelection]="false" selectionMode="checkbox"
-      [options]="dropdownOptionsSignal()[fieldConfig.field] || []" [pAutoFocus]="fieldConfig.autofocus"
-      [formControl]="$any(formGroupSignal()?.get(fieldConfig.field))" key="id" [appendTo]="'body'" [showClear]="true"
-      [disabled]="fieldConfig.readonly === true" (onClear)="clearTreeSelect(fieldConfig.field)"
-      (onNodeSelect)="onTreeSelectNodeChange($event, fieldConfig)"
-      (onNodeUnselect)="onTreeSelectNodeChange($event, fieldConfig)"
-      (onNodeExpand)="onTreeNodeExpand($event, fieldConfig)" [containerStyleClass]="'height-input-custom'"
-      [panelStyleClass]="'custom-tree-select-panel'" class="height-input-custom"
-      [filter]="fieldConfig.filter_local !== undefined ? fieldConfig.filter_local : false"
-      [virtualScroll]="fieldConfig.virtual_scrolling?.active === true && virtualOptionsReadySignal()[fieldConfig.field] === true"
-      [virtualScrollItemSize]="60" [scrollHeight]="fieldConfig.scroll_height || '220px'"
-      [panelStyle]="treeSelectPanelStyleSignal()"
-      [filterBy]="fieldConfig.filter_by ? fieldConfig.filter_by + ',label,filter_text' : 'label,filter_text'" />
-
-    <button *ngIf="fieldConfig.reload_icon !== undefined ? fieldConfig.reload_icon : false" type="button" pButton
-      icon="pi pi-replay" class="height-icon-custom" style="width: 40px !important;"
-      (click)="dataDropdown(fieldConfig, true); onReloadIconDropdownAction.emit(fieldConfig.field)"></button>
-    <button *ngIf="fieldConfig.icon" type="button" pButton [icon]="fieldConfig.icon.icon" class="height-icon-custom"
-      style="width: 40px !important;"></button>
-    <button *ngIf="fieldConfig?.icon2" type="button" pButton [icon]="fieldConfig.icon2.icon" class="height-icon-custom"
-      style="width: 40px !important;"></button>
-    <label [for]="fieldConfig.field">
-      {{ fieldConfig?.label }}
-    </label>
-  </p-floatlabel>
+  <!-- [[[II ESC:031-04 DOC:docs/documents/2026-07-18-031-optimizacion-navegacion-activos.md#escenario-04 -->
+  @defer (on immediate) {
+  <app-draw-tree-select-field [fieldConfig]="fieldConfig" [control]="$any(formGroupSignal()?.get(fieldConfig.field))"
+    [options]="dropdownOptionsSignal()[fieldConfig.field] || []"
+    [virtualReady]="virtualOptionsReadySignal()[fieldConfig.field] === true" [panelStyle]="treeSelectPanelStyleSignal()"
+    (clearAction)="clearTreeSelect(fieldConfig.field)" (nodeChangeAction)="onTreeSelectNodeChange($event, fieldConfig)"
+    (nodeExpandAction)="onTreeNodeExpand($event, fieldConfig)"
+    (reloadAction)="dataDropdown(fieldConfig, true); onReloadIconDropdownAction.emit(fieldConfig.field)" />
+  }
+  <!-- ]]]FI -->
 </ng-template>
 <!-- ]]]FI -->
 
 <!-- [[[II ESC:007-01 DOC:docs/documents/2026-06-01_007_custom-draw-form-listbox.md#escenario-01 ESC:007-07 DOC:docs/documents/2026-06-01_007_custom-draw-form-listbox.md#escenario-07 ESC:020-01 DOC:docs/documents/2026-06-04_020_custom-draw-form-virtual-scroll-dropdowns.md#escenario-01 ESC:020-04 DOC:docs/documents/2026-06-04_020_custom-draw-form-virtual-scroll-dropdowns.md#escenario-04 -->
 <!-- TEMPLATE REUTILIZABLE PARA LISTBOX -->
 <ng-template #listboxTemplate let-fieldConfig="fieldConfig">
-  <div class="flex flex-col gap-2 w-full">
-    <div class="flex items-center justify-between gap-2"
-      *ngIf="fieldConfig?.label || fieldConfig.reload_icon || fieldConfig.icon || fieldConfig?.icon2">
-      <label *ngIf="fieldConfig?.label" [for]="fieldConfig.field" class="text-sm listbox-label">
-        {{ fieldConfig?.label }}
-      </label>
-
-      <!-- acciones movidas junto a la caja de búsqueda dentro del listbox -->
-      <div class="hidden md:flex items-center gap-1">
-        <button *ngIf="fieldConfig.icon" type="button" pButton [icon]="fieldConfig.icon.icon"
-          class="height-icon-custom"></button>
-      </div>
-    </div>
-
-    <div class="listbox-container">
-      <p-listbox [options]="dropdownOptionsSignal()[fieldConfig.field] || []" [pAutoFocus]="fieldConfig.autofocus"
-        [formControl]="$any(formGroupSignal()?.get(fieldConfig.field))" [disabled]="fieldConfig.readonly === true"
-        [multiple]="selectionMultipleSignal()[fieldConfig.field] !== false"
-        [checkbox]="selectionMultipleSignal()[fieldConfig.field] !== false" [metaKeySelection]="false"
-        [showToggleAll]="false" [dataKey]="fieldConfig.option_value || 'id'"
-        [optionLabel]="fieldConfig.tree ? 'label' : (fieldConfig.option_label | joinOrSelf)"
-        [optionValue]="fieldConfig.tree ? null : (fieldConfig.option_value || 'id')"
-        [group]="fieldConfig.tree ? true : false" [optionGroupChildren]="'items'" [optionGroupLabel]="'label'" [filter]="fieldConfig.tree
-        ? (fieldConfig.filter_local !== undefined ? fieldConfig.filter_local : false)
-        : (fieldConfig.filter_local !== undefined ? fieldConfig.filter_local : true)"
-        [virtualScroll]="fieldConfig.virtual_scrolling?.active === true && virtualOptionsReadySignal()[fieldConfig.field] === true"
-        [virtualScrollItemSize]="40" [virtualScrollOptions]="listboxVirtualScrollOptions"
-        [styleClass]="fieldConfig.virtual_scrolling?.active === true ? 'listbox-virtual-fixed' : undefined" [filterBy]="fieldConfig.tree
-        ? (fieldConfig.filter_by ? fieldConfig.filter_by + ',label,filter_text,raw.name,raw.display_name,raw.code,raw.id' : 'label,filter_text,raw.name,raw.display_name,raw.code,raw.id')
-        : (fieldConfig.filter_by ? fieldConfig.filter_by : (fieldConfig.option_label | joinOrSelf))"
-        [scrollHeight]="fieldConfig.scroll_height || '120px'" class="w-full listbox-float"
-        (onChange)="onChangeDropdown($event, fieldConfig)">
-
-        <ng-template #group let-group>
-          <div class="text-sm font-semibold text-color-secondary listbox-group-label floating-listbox-simple-label ">
-            {{ group.label }}
-          </div>
-        </ng-template>
-
-        <ng-template #item let-option>
-          <div class="flex items-center leading-normal min-h-6 listbox-virtual-option-content">
-            {{ fieldConfig.tree ? option.label : option[(fieldConfig.option_label | joinOrSelf)] || option.label }}
-          </div>
-        </ng-template>
-      </p-listbox>
-      <div class="listbox-actions">
-        <button *ngIf="fieldConfig.reload_icon !== undefined ? fieldConfig.reload_icon : false" type="button" pButton
-          icon="pi pi-replay" class="height-icon-custom" title="Recargar"
-          (click)="dataDropdown(fieldConfig, true); onReloadIconDropdownAction.emit(fieldConfig.field)"></button>
-        <button *ngIf="fieldConfig.new_icon !== undefined ? fieldConfig.new_icon : false" type="button" pButton
-          icon="pi pi-plus" class="height-icon-custom" title="Nuevo"
-          (click)="onNewIconDropdownAction.emit(fieldConfig.field)"></button>
-        <button *ngIf="fieldConfig.closable_icon !== undefined ? fieldConfig.closable_icon : false" type="button"
-          pButton icon="pi pi-times" class="height-icon-custom" title="Cerrar"
-          (click)="onClosableIconDropdownAction.emit(fieldConfig.field)"></button>
-      </div>
-    </div>
-  </div>
+  <!-- [[[II ESC:031-04 DOC:docs/documents/2026-07-18-031-optimizacion-navegacion-activos.md#escenario-04 -->
+  @defer (on immediate) {
+  <app-draw-listbox-field [fieldConfig]="fieldConfig" [control]="$any(formGroupSignal()?.get(fieldConfig.field))"
+    [options]="dropdownOptionsSignal()[fieldConfig.field] || []"
+    [multiple]="selectionMultipleSignal()[fieldConfig.field] !== false"
+    [virtualReady]="virtualOptionsReadySignal()[fieldConfig.field] === true"
+    [virtualScrollOptions]="listboxVirtualScrollOptions" (changeAction)="onChangeDropdown($event, fieldConfig)"
+    (reloadAction)="dataDropdown(fieldConfig, true); onReloadIconDropdownAction.emit(fieldConfig.field)"
+    (newAction)="onNewIconDropdownAction.emit(fieldConfig.field)"
+    (closableAction)="onClosableIconDropdownAction.emit(fieldConfig.field)" />
+  }
+  <!-- ]]]FI -->
 </ng-template>
 <!-- ]]]FI -->
 
@@ -167,21 +105,25 @@
 <!-- TEMPLATE REUTILIZABLE PARA AUTO-COMPLETE -->
 <ng-template #autoCompleteTemplate let-fieldConfig="fieldConfig">
   <p-floatlabel variant="on">
-    <p-autoComplete #autoCompleteRef [minLength]="fieldConfig.min_length"
-      [showEmptyMessage]="fieldConfig.show_empty_message" [emptyMessage]="fieldConfig.empty_message"
-      [suggestions]="suggestions()" (completeMethod)="completeMethod($event, fieldConfig)" [delay]="fieldConfig.delay"
-      [optionLabel]="fieldConfig.option_label || 'name'" (onSelect)="onSelectAutoComplete($event, fieldConfig)"
+    <p-autoComplete #autoCompleteRef [minLength]="autoCompleteMinLength(fieldConfig)"
+      [showEmptyMessage]="showAutoCompleteEmptyMessage(fieldConfig)" [emptyMessage]="fieldConfig.empty_message"
+      [dropdown]="fieldConfig.dropdown === true && fieldConfig.search_mode !== 'exact'" [suggestions]="suggestions()"
+      (completeMethod)="completeMethod($event, fieldConfig)" [delay]="fieldConfig.delay"
+      [optionLabel]="fieldConfig.option_label | joinOrSelf" (onSelect)="onSelectAutoComplete($event, fieldConfig)"
       (onClear)="clearAutoComplete(fieldConfig)" (onShow)="adjustPanelStyle(autoCompleteRef)"
       [panelStyle]="panelStyleSignal()"
       [virtualScroll]="fieldConfig.virtual_scrolling?.active === true && virtualOptionsReadySignal()[fieldConfig.field] === true"
       [virtualScrollItemSize]="60" [pAutoFocus]="fieldConfig.autofocus"
-      [forceSelection]="fieldConfig.force_selection === true" [readonly]="isFreeAutoCompleteReadonly(fieldConfig)"
+      [forceSelection]="fieldConfig.force_selection === true && fieldConfig.free_or_relationship !== true"
+      [readonly]="isFreeAutoCompleteReadonly(fieldConfig)"
       [formControl]="$any(formGroupSignal()?.get(fieldConfig.field))" styleClass="height-input-custom"
       [attr.data-focus-field]="fieldConfig.field" (keydown.enter)="onKeydownEnter($event, fieldConfig)"
-      (keydown.tab)="onKeydownTab($event, fieldConfig)" [appendTo]="'body'">
+      (keydown.tab)="onKeydownTab($event, fieldConfig)" (keydown)="onAutoCompleteKeydown($event, fieldConfig)"
+      [appendTo]="'body'">
 
       <ng-template #header>
-        <div class="grid grid-cols-12 gap-2 items-center border-bottom-1 pb-1 mb-2">
+        <div *ngIf="fieldConfig.search_mode !== 'exact' && fieldConfig.panel?.active !== false && fieldConfig.panel?.fields"
+          class="grid grid-cols-12 gap-2 items-center border-bottom-1 pb-1 mb-2">
           <div *ngFor="let field of fieldConfig.panel.fields | keyvalue; trackBy: trackByKey"
             [ngClass]="[$any(field.value).class || 'col-span-6', $any(field.value).class_md || 'md:col-span-3']">
             <div class="text-xs font-semibold text-gray-600">
@@ -192,16 +134,20 @@
       </ng-template>
 
       <ng-template let-row #item>
-        <div class="grid grid-cols-12 gap-2 items-center">
+        <div *ngIf="fieldConfig.search_mode !== 'exact' && fieldConfig.panel?.active !== false && fieldConfig.panel?.fields; else autoCompletePlain"
+          class="grid grid-cols-12 gap-2 items-center">
           <div *ngFor="let field of fieldConfig.panel.fields | keyvalue; trackBy: trackByKey"
             [ngClass]="[$any(field.value).class || 'col-span-6', $any(field.value).class_md || 'md:col-span-3']"
             class="flex items-center gap-1">
             <img *ngIf="$any(field.value)?.type === 'image'" [src]="$any($any(row)[$any($any(field.value).field)])"
               style="width: 35px;" />
-            <span *ngIf="$any(field.value)?.type === 'text'">{{ $any(row)[$any(field.value).field + '__name'] ??
-              $any(row)[$any(field.value).field] }}</span>
+            <span *ngIf="$any(field.value)?.type !== 'image'">{{ formatSuggestionValue($any(row)[$any(field.value).field + '__name'] ??
+              $any(row)[$any(field.value).field], $any(field.value)) }}</span>
           </div>
         </div>
+        <ng-template #autoCompletePlain>
+          <span>{{ optionLabelText(row, fieldConfig) }}</span>
+        </ng-template>
       </ng-template>
     </p-autoComplete>
 
@@ -224,14 +170,24 @@
 <!-- TEMPLATE REUTILIZABLE PARA TABLE -->
 <ng-template #tableTemplate let-tableConfig="tableConfig">
   <!-- [[[II ESC:015-01 DOC:docs/documents/2026-06-02_015_dynamic-table-field-component.md#escenario-01 ESC:030-03 DOC:docs/documents/2026-07-14-030-child-runtime-overlay.md#escenario-03 -->
+  <!-- [[[II ESC:030-16 DOC:docs/documents/2026-07-14-030-child-runtime-overlay.md#escenario-16 -->
+  <div *ngIf="tableEditingLockOwner() === tableConfig?.field"
+    class="mb-2 px-3 py-2 text-xs border-round surface-100 text-color-secondary">
+    <i class="pi pi-pencil mr-2"></i>Edición de fila activa. Termina o cancela para continuar con el formulario.
+  </div>
+  <!-- ]]]FI -->
   <app-dynamic-table-field [tableConfig]="tableConfig" [formGroup]="$any(formGroupSignal())" [editingRows]="editingRows"
     [editingCells]="editingCells" [tablesToValidate]="tablesToValidate" [originalRowData]="originalRowData"
     [tableOptions]="tableOptions" [validationVersion]="tableValidationVersion" [deferRowSave]="delegateTableSave"
+    [rowSaveOutcome]="tableRowSaveOutcome" [formDropdownOptions]="dropdownOptionsSignal()"
+    [externalEditingLocked]="tableEditingLockOwner() !== null && tableEditingLockOwner() !== tableConfig?.field"
     (rowSelect)="onTableRowSelect.emit($event)" (rowUnselect)="onTableRowUnselect.emit($event)"
     (addRow)="onTableAddRow.emit($event)" (editRow)="handleTableEdit($event, tableConfig, onTableEditRow)"
     (deleteRow)="handleTableDelete($event, tableConfig)"
-    (cellEdit)="handleTableEdit($event, tableConfig, onTableCellEdit)" />
+    (cellEdit)="handleTableEdit($event, tableConfig, onTableCellEdit)"
+    (editingStateChange)="onTableEditingStateChange($event)" />
   <!-- ]]]FI -->
+
 </ng-template>
 
 <!-- TEMPLATE REUTILIZABLE PARA INPUT-NUMBER -->
@@ -536,28 +492,25 @@
 
 <!-- TEMPLATE REUTILIZABLE PARA SELECT-BUTTON -->
 <ng-template #selectButtonTemplate let-fieldConfig="fieldConfig">
-  <div *ngIf="fieldConfig.description" [style.height]="fieldConfig?.description?.height"
-    class="overflow-hidden text-ellipsis flex items-end justify-start">
-    {{ fieldConfig.description?.label?.length > 100 ?
-    (fieldConfig.description?.label | slice:0:fieldConfig.description?.slice) +
-    fieldConfig.description?.caracter_slice :
-    fieldConfig.description?.label }}
-  </div>
-  <p-selectButton styleClass="height-input-custom" [formControl]="$any(formGroupSignal()?.get(fieldConfig.field))"
-    [disabled]="fieldConfig.readonly === true"
+  <!-- [[[II ESC:031-04 DOC:docs/documents/2026-07-18-031-optimizacion-navegacion-activos.md#escenario-04 -->
+  @defer (on immediate) {
+  <app-draw-select-button-field [fieldConfig]="fieldConfig" [control]="$any(formGroupSignal()?.get(fieldConfig.field))"
     [options]="dropdownOptionsSignal()[fieldConfig.field] || fieldConfig?.data_type?.options || fieldConfig?.options || []"
-    [optionLabel]="fieldConfig.option_label || 'name'" [optionValue]="fieldConfig.option_value || 'id'" class="w-full"
-    (onChange)="onChangeDropdown($event, fieldConfig)" />
+    (changeAction)="onChangeDropdown($event, fieldConfig)" />
+  }
+  <!-- ]]]FI -->
 </ng-template>
 <!-- ]]]FI -->
 
 <!-- TEMPLATE REUTILIZABLE PARA BUTTON -->
 <ng-template #buttonTemplate let-fieldConfig="fieldConfig">
+  <!-- [[[II ESC:030-16 DOC:docs/documents/2026-07-14-030-child-runtime-overlay.md#escenario-16 -->
   <p-button [label]="fieldConfig?.label" [icon]="fieldConfig?.icon" [iconPos]="fieldConfig?.icon_position || 'left'"
     [severity]="fieldConfig?.severity || 'primary'" [rounded]="fieldConfig?.rounded || false"
-    [disabled]="fieldConfig?.disabled || false" [pAutoFocus]="fieldConfig?.autofocus || false"
+    [disabled]="fieldConfig?.disabled || tableEditingActive()" [pAutoFocus]="fieldConfig?.autofocus || false"
     (onClick)="onButtonClick(fieldConfig)" styleClass="w-full height-input-custom">
   </p-button>
+  <!-- ]]]FI -->
 </ng-template>
 
 <!-- TEMPLATE REUTILIZABLE PARA DOCUMENT -->

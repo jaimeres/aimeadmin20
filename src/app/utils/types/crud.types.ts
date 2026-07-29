@@ -58,4 +58,9 @@ export type getDJAtoObject = {
   node?: boolean;
   additionalFieldsAppCols?: any[];
   pos?: any;
+  // [[[II ESC:030-06 Config de campos con la que se aplana (option_label,
+  // booleanos, choices). Por defecto la del formulario; una tabla derivada envía
+  // aquí SUS columnas para que `<campo>__name` se calcule con el `option_label`
+  // declarado por la columna (p.ej. moneda -> short_name) y no con el del form. ]]]FI
+  fields?: any;
 };

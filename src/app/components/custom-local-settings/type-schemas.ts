@@ -52,7 +52,7 @@ const COMMON_BASE: AdvancedFieldDef[] = [
 const DEFAULT_BLOCK: AdvancedFieldDef[] = [
   { path: 'default.active', label: 'Aplicar valor por defecto', kind: 'boolean' },
   { path: 'default.value', label: 'Valor por defecto', kind: 'text', showIf: c => c?.default?.active },
-  { path: 'default.edit', label: 'Permitir editar el default', kind: 'boolean', showIf: c => c?.default?.active },
+  { path: 'default.edit', label: 'Permitir editar el campo', kind: 'boolean' },
 ];
 
 const DESCRIPTION_BLOCK: AdvancedFieldDef[] = [
@@ -149,7 +149,7 @@ const TOGGLE_SCHEMA: AdvancedSection[] = [
     title: 'Valor por defecto', icon: 'pi pi-bolt', defs: [
       { path: 'default.active', label: 'Aplicar default', kind: 'boolean' },
       { path: 'default.value', label: 'Valor (Si/No)', kind: 'boolean', showIf: c => c?.default?.active },
-      { path: 'default.edit', label: 'Editable', kind: 'boolean', showIf: c => c?.default?.active },
+      { path: 'default.edit', label: 'Editable', kind: 'boolean' },
     ]
   },
   {
@@ -174,7 +174,7 @@ const DATE_SCHEMA: AdvancedSection[] = [
         ],
         showIf: c => c?.default?.active,
       },
-      { path: 'default.edit', label: 'Editable', kind: 'boolean', showIf: c => c?.default?.active },
+      { path: 'default.edit', label: 'Editable', kind: 'boolean' },
     ]
   },
   {

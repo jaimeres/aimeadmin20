@@ -856,8 +856,7 @@ export class GeneralService {
    * orden contractual:
    *   1. `column.field`
    *   2. `column.field_name`
-   *   3. `column.derived.field_name`
-   *   4. `column.children.fields.derived[column.field].field_name`
+   *   3. `column.children.fields.derived[column.field].field_name`
    *
    * Para columnas de relación (tienen `data_type.type` o `relationship_field`)
    * conserva el UUID canónico en `result[field]` (y en `relationship_field`) y
@@ -874,16 +873,38 @@ export class GeneralService {
 
     const isEmpty = (value: any) => value === null || value === undefined || value === '';
 
+    // [[[II ESC:030-20 DOC:docs/documents/2026-07-14-030-child-runtime-overlay.md#escenario-20
+    // La RELACIÓN de la fila se conserva SIEMPRE y ANTES de proyectar columnas.
+    // Antes vivía dentro del bucle, después del `continue` que salta una columna
+    // cuya clave fuente no está en la respuesta. Las columnas `code`/`name`
+    // declaran su fuente en el PADRE (`base_product_data_code`), clave que la
+    // respuesta del propio detalle NO tiene: el bucle hacía `continue` y el UUID
+    // de `product` nunca se copiaba. Sin él, `isManualRow()` daba true y toda
+    // fila guardada aparecía como MANUAL (icono naranja) aunque viniera del
+    // servidor con su producto. ]]]FI
+    for (const column of this.configuredTableColumns(columns)) {
+      const relationshipField = column?.relationship_field;
+      if (relationshipField && isEmpty(result[relationshipField]) && !isEmpty(source[relationshipField])) {
+        result[relationshipField] = source[relationshipField];
+      }
+    }
+
     for (const column of this.configuredTableColumns(columns)) {
       const field = column?.field;
       if (!field) continue;
 
       // Clave fuente segun el contrato declarado (no se asume que target === source).
-      const derivedFromChildren = column?.children?.fields?.derived?.[field]?.field_name;
-      const sourceKey = column?.field_name
-        || column?.derived?.field_name
-        || derivedFromChildren
-        || field;
+      // El derived de children puede venir por nombre o numerado: se busca por field.
+      const derivedNode = this.configuredChildNodes(column?.children?.fields?.derived)
+        .find((node: any) => node.field === field);
+      const derivedFromChildren = derivedNode?.field_name;
+      const declaredKey = column?.field_name || derivedFromChildren || field;
+      // [[[II ESC:030-20 `field_name`/`children.derived.field_name` describen la
+      // clave en el objeto PADRE (la sugerencia de producto). Al rehidratar la
+      // fila la fuente es la respuesta del PROPIO recurso, donde la clave es
+      // `field`. Si la declarada no viene, se cae a `field`; antes la columna se
+      // saltaba y la celda quedaba vacía o con el valor anterior. ]]]FI
+      const sourceKey = source[declaredKey] !== undefined ? declaredKey : field;
 
       const hasDirect = source[sourceKey] !== undefined;
       const displayValue = source[`${sourceKey}__name`];
@@ -906,16 +927,30 @@ export class GeneralService {
         result[`${field}__name`] = displayValue;
       }
 
-      // Conserva el UUID de la relacion en su campo canonico declarado.
-      const relationshipField = column?.relationship_field;
-      if (relationshipField && isEmpty(result[relationshipField]) && source[relationshipField] !== undefined) {
-        result[relationshipField] = source[relationshipField];
-      }
     }
 
     return result;
   }
   // ]]]FI
+
+  // [[[II ESC:030-06 Normalizador de nodos children.fields.<modo> (static/
+  // dynamic/derived): la config puede declararlos por NOMBRE de campo (legado,
+  // {code: {...}}) o NUMERADOS ({0: {...}}) — misma forma que panel.fields y
+  // columns. Devuelve SIEMPRE un array de nodos donde `field` está resuelto
+  // (node.field o, en su defecto, la clave cuando no es numérica). ]]]FI
+  configuredChildNodes(group: any): any[] {
+    if (!group || typeof group !== 'object') return [];
+    const entries: [string, any][] = Array.isArray(group)
+      ? group.map((node: any, index: number) => [String(index), node] as [string, any])
+      : Object.entries(group);
+    return entries
+      .map(([key, node]) => {
+        if (!node || typeof node !== 'object') return null;
+        const field = node.field || (/^\d+$/.test(key) ? '' : key);
+        return field ? { ...node, field } : null;
+      })
+      .filter((node): node is any => !!node);
+  }
 
   // [[[II ESC:030-06 Normalizador de columnas de tabla derivada: la config puede
   // declararlas como LISTA (legado) o como DICT numerado {0:{...}, 1:{...}} — la
@@ -934,6 +969,28 @@ export class GeneralService {
       .map((key) => columns[key])
       .filter((column) => column && typeof column === 'object');
   }
+
+  // [[[II ESC:030-20 DOC:docs/documents/2026-07-14-030-child-runtime-overlay.md#escenario-20
+  /**
+   * Campos de RELACIÓN declarados por las columnas (`relationship_field`).
+   * FUENTE ÚNICA: la usan el constructor de filas (para crear un control real
+   * por relación) y `isManualRow()` (para decidir si la fila es manual).
+   *
+   * La relación NO puede vivir sólo en `source_row`: ese objeto se reconstruye
+   * en varias rutas (alta desde el formulario, confirmación por fila, respuesta
+   * del servidor, rehidratación) y en algunas se perdía, dejando filas
+   * relacionadas marcadas como manuales. Como control del FormGroup viaja
+   * siempre con la fila.
+   */
+  configuredRelationshipFields(columns: any): string[] {
+    return Array.from(new Set(
+      this.configuredTableColumns(columns)
+        .map((column: any) => column?.relationship_field)
+        .filter((field: any) => typeof field === 'string' && field.trim() !== '')
+        .map((field: string) => field.trim())
+    ));
+  }
+  // ]]]FI
 
   // ==========================================================================
   // [[[II ESC:001-16 DOC:docs/documents/2026-05-16_001_consolidacion_dropdown_types_y_fix_escenarios.md#escenario-16 ESC:030-06 DOC:docs/documents/2026-07-14-030-child-runtime-overlay.md#escenario-06
@@ -957,6 +1014,43 @@ export class GeneralService {
       return next;
     });
   }
+
+  // [[[II ESC:030-20 DOC:docs/documents/2026-07-14-030-child-runtime-overlay.md#escenario-20
+  /**
+   * Lee de un objeto (sugerencia de autocomplete / fila seleccionada) el valor
+   * de la clave fuente declarada en `field_name`. FUENTE ÚNICA compartida por
+   * el formulario dinámico y las celdas de tabla derivada.
+   *
+   * Una clave `<relacion>_data_<atributo>` puede llegar en TRES formas según el
+   * endpoint y según si el enriquecimiento por `included` llegó a ejecutarse:
+   *   1. plana ya enriquecida   -> `base_product_data_code`
+   *   2. anidada del serializer -> `base_product_data: { code }`
+   *   3. relación como objeto   -> `base_product: { code }`
+   * Leyendo sólo (1), una respuesta sin `included` (o con un `include` que no
+   * cubre esa relación) dejaba el valor en `undefined` y el control terminaba
+   * con el fallback del default, es decir VACÍO. No se hardcodea ningún nombre:
+   * el separador `_data_` ya es el estándar de las uniones.
+   */
+  resolveRelationDataValue(option: any, fieldName: any): any {
+    if (!option || typeof option !== 'object' || typeof fieldName !== 'string') return undefined;
+
+    const hasValue = (v: any) => v !== undefined && v !== null && v !== '';
+    const direct = option[fieldName];
+    if (hasValue(direct)) return direct;
+
+    const parts = this._relationDataFieldParts(fieldName);
+    if (!parts) return direct;
+
+    const candidates = [option[`${parts.relationship}_data`], option[parts.relationship]];
+    for (const container of candidates) {
+      if (container && typeof container === 'object' && !Array.isArray(container)) {
+        const value = container[parts.attribute];
+        if (hasValue(value)) return value;
+      }
+    }
+    return direct;
+  }
+  // ]]]FI
 
   private _relationDataFieldParts(fieldName: any): { relationship: string; attribute: string } | null {
     if (typeof fieldName !== 'string') return null;
@@ -990,7 +1084,6 @@ export class GeneralService {
       if (!node || typeof node !== 'object') return;
       addField(node.field);
       addField(node.field_name);
-      addField(node?.derived?.field_name);
 
       if (node.columns && typeof node.columns === 'object') {
         Object.values(node.columns).forEach(collectNode);

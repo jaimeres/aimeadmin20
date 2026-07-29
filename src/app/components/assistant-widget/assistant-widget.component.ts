@@ -1,689 +1,632 @@
-import { Component, Input, OnDestroy, OnInit } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, ElementRef, Input, OnDestroy, OnInit, signal, ViewChild } from '@angular/core';
+import { ReactiveFormsModule, FormControl } from '@angular/forms';
+import { toSignal } from '@angular/core/rxjs-interop';
 import { AnimationOptions, LottieComponent } from 'ngx-lottie';
-import { AssistantWidgetService, AssistantMessage, AssistantResponse } from '../services/assistant-widget.service'; //
-import { Subject, debounceTime, takeUntil } from 'rxjs';
-import { CommonModule } from '@angular/common';
-import { FormsModule } from '@angular/forms';
+import { Subject, debounceTime, firstValueFrom, map, startWith, takeUntil } from 'rxjs';
+import { AssistantMessage, AssistantWidgetService } from '../services/assistant-widget.service';
+import { GeneralService } from '@/utils/services/general.service';
 
 export type AssistantMood = 'idle' | 'talk' | 'think' | 'notify' | 'speed' | 'yawning' | 'look-left' | 'look-right' | 'look-up' | 'look-down' | 'confused' | 'waiting';
+export type AssistantExpression = AssistantMood | 'frightened';
 
-/**
- * CONSIDERACIONES DE RENDIMIENTO:
- * - Los listeners globales pueden afectar el rendimiento si no se optimizan
- * - Se usa throttling para limitar la frecuencia de ejecución
- * - Se usa debouncing para esperar a que el usuario termine de interactuar
- * - Es importante limpiar todos los listeners en ngOnDestroy
- * - Los timers largos (inactividad) deben cancelarse al destruir el componente
- */
+const INACTIVITY_TIMEOUT = 60 * 60 * 1000;
+const SLOW_ACTION_THRESHOLD = 5000;
+const CURSOR_TRACKING_THROTTLE = 90;
+const TYPING_DETECTION_THROTTLE = 140;
+const ACTIVITY_DETECTION_THROTTLE = 120;
+const PANEL_OFFSET = 108;
+const RAPID_ACTION_WINDOW = 1800;
+const RAPID_ACTION_COUNT = 4;
+const DELETE_ACTION_SELECTOR = 'button, [role="button"], a, .p-menuitem-link';
+const DELETE_ICON_SELECTOR = '.pi-trash, .fa-trash, .fa-trash-alt, .bi-trash';
+const DELETE_INTENT_PATTERN = /\b(eliminar|borrar|delete|trash|remove|quitar)\b/i;
 
-/**
- * CONFIGURACIÓN DE DETECCIÓN:
- * Estos valores afectan el rendimiento y la experiencia del usuario
- */
-const INACTIVITY_TIMEOUT = 60 * 60 * 1000; // 1 hora en ms (AJUSTAR según necesidad)
-const TYPING_DETECTION_THROTTLE = 300; // ms entre detecciones de escritura (RENDIMIENTO: más bajo = más CPU)
-const SLOW_ACTION_THRESHOLD = 5000; // ms sin actividad para considerar "lento" (AJUSTAR según UX)
-const CURSOR_TRACKING_THROTTLE = 500; // ms entre actualizaciones de posición del cursor (RENDIMIENTO CRÍTICO)
-const EYE_UPDATE_DEBOUNCE = 200; // ms para actualizar dirección de ojos (RENDIMIENTO: evita cambios rápidos)
+const DEFAULT_ANIMATION_PATHS: Record<AssistantMood, string> = {
+  idle: '/assets/assistant/assistant_idle.json',
+  talk: '/assets/assistant/assistant_talk.json',
+  think: '/assets/assistant/assistant_think.json',
+  notify: '/assets/assistant/assistant_notify.json',
+  speed: '/assets/assistant/assistant_speed.json',
+  yawning: '/assets/assistant/assistant_yawning.json',
+  'look-left': '/assets/assistant/assistant_look_left.json',
+  'look-right': '/assets/assistant/assistant_look_right.json',
+  'look-up': '/assets/assistant/assistant_look_up.json',
+  'look-down': '/assets/assistant/assistant_look_down.json',
+  confused: '/assets/assistant/assistant_confused.json',
+  waiting: '/assets/assistant/assistant_waiting.json'
+};
 
+const MOOD_PRESENTATION: Record<AssistantExpression, { label: string; symbol: string }> = {
+  idle: { label: 'Disponible', symbol: '' },
+  talk: { label: 'Conversando', symbol: '•••' },
+  think: { label: 'Pensando', symbol: '···' },
+  notify: { label: 'Aviso', symbol: '!' },
+  speed: { label: 'Vas muy rápido', symbol: 'ϟ' },
+  yawning: { label: 'Con sueño', symbol: 'Zz' },
+  'look-left': { label: 'Mirando a la izquierda', symbol: '' },
+  'look-right': { label: 'Mirando a la derecha', symbol: '' },
+  'look-up': { label: 'Mirando arriba', symbol: '' },
+  'look-down': { label: 'Mirando abajo', symbol: '' },
+  confused: { label: '¿Necesitas ayuda?', symbol: '?' },
+  waiting: { label: 'Esperando', symbol: '◷' },
+  frightened: { label: '¡Cuidado!', symbol: '!!' }
+};
 
+const IMAGE_EXTENSIONS = ['.png', '.jpg', '.jpeg', '.gif', '.webp', '.svg'];
+const LOOK_MOODS: ReadonlySet<AssistantExpression> = new Set(['look-left', 'look-right', 'look-up', 'look-down']);
+const EXPRESSION_MOODS: ReadonlySet<AssistantExpression> = new Set(['talk', 'think', 'notify', 'speed', 'yawning', 'confused', 'waiting', 'frightened']);
+
+// [[[II ESC:032-01,032-03 DOC:docs/documents/2026-07-24-032-assistant-widget-mascota-natural.md#escenario-01
 @Component({
   selector: 'app-assistant-widget',
-  imports: [CommonModule, FormsModule, LottieComponent],
+  imports: [ReactiveFormsModule, LottieComponent],
   templateUrl: './assistant-widget.component.html',
   styleUrl: './assistant-widget.component.scss',
   standalone: true,
+  changeDetection: ChangeDetectionStrategy.OnPush
 })
-export class AssistantWidgetComponent {
+export class AssistantWidgetComponent implements OnInit, OnDestroy {
+  @ViewChild('assistantFab', { read: ElementRef })
+  private fabElement?: ElementRef<HTMLElement>;
+
+  private _animationPath: string | Record<AssistantMood, string> = DEFAULT_ANIMATION_PATHS;
 
   /**
-   * Rutas LOCALES a tus JSON Lottie. No hay llamadas HTTP externas.
-   * Coloca los archivos en /assets/assistant/ (o ajusta las rutas).
+   * Conserva la compatibilidad con imágenes o Lottie personalizados.
+   * Sin un valor explícito se usa la mascota ligera de imagen + CSS.
    */
+  @Input()
+  set animationPath(value: string | Record<AssistantMood, string>) {
+    this._animationPath = value;
+    this.useCustomAnimation.set(true);
+    this.refreshCustomAnimation();
+  }
 
-  /**
-   * Puede ser un string (ruta única) o un objeto Record<AssistantMood, string>.
-   * Si es string, se usará para todos los estados.
-   * 
-   * RENDIMIENTO: Considera usar sprites o imágenes optimizadas (WebP)
-1   * IMPORTANTE: Los JSON de Lottie pueden ser pesados, usa imágenes estáticas cuando sea posible
-   */
-  @Input() animationPath: string | Record<AssistantMood, string> = {
-    idle: '/assets/assistant/assistant_idle.json',              // Estado inactivo
-    talk: '/assets/assistant/assistant_talk.json',              // Hablando (burbujas de diálogo)
-    think: '/assets/assistant/assistant_think.json',            // Pensando/respondiendo (burbujas de diálogo)
-    notify: '/assets/assistant/assistant_notify.json',          // Estado de notificación (error o alerta importante)
-    speed: '/assets/assistant/assistant_speed.json',            // Usuario rápido/eficiente
-    yawning: '/assets/assistant/assistant_yawning.json',        // Estado: bostezando por inactividad
-    'look-left': '/assets/assistant/assistant_look_left.json',  // Mirando a la izquierda
-    'look-right': '/assets/assistant/assistant_look_right.json',// Mirando a la derecha
-    'look-up': '/assets/assistant/assistant_look_up.json',      // Mirando arriba
-    'look-down': '/assets/assistant/assistant_look_down.json',  // Mirando abajo
-    confused: '/assets/assistant/assistant_confused.json',     // Usuario lento/confundido
-    waiting: '/assets/assistant/assistant_waiting.json',       // Esperando acción del usuario
-  };
+  get animationPath(): string | Record<AssistantMood, string> {
+    return this._animationPath;
+  }
 
-  /**
-   * Habilitar/deshabilitar detección de eventos avanzados
-   * RENDIMIENTO: Deshabilita funcionalidades que no necesites para ahorrar recursos
-   */
-  @Input() enableInactivityDetection = true;      // Detectar 1 hora sin actividad
-  @Input() enableTypingDetection = true;          // Detectar escritura y mover ojos
-  @Input() enableSlowActionDetection = true;      // Detectar lentitud del usuario
-  @Input() enableCursorTracking = false;          // ADVERTENCIA: Alto costo de rendimiento
-
+  @Input() mascotImagePath = '/assets/assistant/assistant_logo_original.png';
+  @Input() enableInactivityDetection = true;
+  @Input() enableTypingDetection = true;
+  @Input() enableSlowActionDetection = true;
+  @Input() enableCursorTracking = true;
   @Input() apiUrl = '/api/assistant/chat';
   @Input() welcomeTips: string[] = [];
   @Input() context: Record<string, any> = {};
 
-  // Estado UI
-  open = false;
-  thinking = false;
-  messages: AssistantMessage[] = [];
-  draft = '';
+  readonly open = signal(false);
+  readonly thinking = signal(false);
+  readonly messages = signal<AssistantMessage[]>([]);
+  readonly mood = signal<AssistantExpression>('idle');
+  readonly isDragging = signal(false);
+  readonly fabPosition = signal({ x: 20, y: 20 });
+  readonly eyeOffset = signal({ x: 0, y: 0 });
 
-  // Estado de la animación (local, sin HTTP externo)
-  mood: AssistantMood = 'idle';
-  options: AnimationOptions = { path: '', loop: true, autoplay: true };
+  readonly useCustomAnimation = signal(false);
+  readonly isStaticImage = signal(false);
+  readonly imagePath = signal('');
+  readonly animationOptions = signal<AnimationOptions>({
+    path: '',
+    loop: true,
+    autoplay: true
+  });
 
-  // Detectar si es imagen estática o animación Lottie
-  isStaticImage = false;
-  imagePath = '';
+  readonly panelPosition = computed(() => {
+    const position = this.fabPosition();
+    return {
+      right: position.x,
+      bottom: position.y + PANEL_OFFSET
+    };
+  });
+  readonly moodLabel = computed(() => MOOD_PRESENTATION[this.mood()].label);
+  readonly moodSymbol = computed(() => MOOD_PRESENTATION[this.mood()].symbol);
+  readonly eyeStyle = computed(() => ({
+    x: `${this.eyeOffset().x}px`,
+    y: `${this.eyeOffset().y}px`
+  }));
 
-  // Variables para drag and drop
-  isDragging = false;
-  fabPosition = { x: 20, y: 20 }; // posición desde right y bottom
-  dragStart = { x: 0, y: 0 };
-  dragOffset = { x: 0, y: 0 };
+  readonly draftControl = new FormControl('', { nonNullable: true });
+  readonly draftEmpty = toSignal(
+    this.draftControl.valueChanges.pipe(
+      startWith(this.draftControl.value),
+      map((value) => value.trim().length === 0)
+    ),
+    { initialValue: true }
+  );
 
-  // ===== SISTEMA DE DETECCIÓN DE ACTIVIDAD =====
-  // RENDIMIENTO: Estos timers deben limpiarse en ngOnDestroy
-  private lastActivityTime = Date.now();
-  private inactivityTimer: any = null;
-  private slowActionTimer: any = null;
-  private cursorTrackingTimer: any = null;
-  private eyeUpdateTimer: any = null;
+  private dragStart = { x: 0, y: 0 };
+  private dragOffset = { x: 0, y: 0 };
+  private dragMoved = false;
+  private suppressNextClick = false;
+  private dragListenersActive = false;
 
-  // Estado actual del usuario
+  private inactivityTimer: ReturnType<typeof setTimeout> | null = null;
+  private slowActionTimer: ReturnType<typeof setTimeout> | null = null;
+  private typingResetTimer: ReturnType<typeof setTimeout> | null = null;
+  private moodResetTimer: ReturnType<typeof setTimeout> | null = null;
+  private welcomeTipTimer: ReturnType<typeof setTimeout> | null = null;
+  private ambientEyeTimer: ReturnType<typeof setTimeout> | null = null;
+  private dragClickResetTimer: ReturnType<typeof setTimeout> | null = null;
+
   private isUserTyping = false;
-  private isUserInactive = false;
-  private isUserSlow = false;
-  private lastCursorPosition = { x: 0, y: 0 };
-  private currentEyeDirection: AssistantMood | null = null;
+  private lastTimerResetAt = 0;
+  private lastPointerActivityAt = 0;
+  private ambientEyeIndex = 0;
+  private recentActivityTimes: number[] = [];
+  private nextSlowMood: AssistantMood = 'waiting';
 
-  /**
-   * IMPORTANTE: Funciones bound para poder removerlas correctamente
-   * Si no se bindean, no se pueden remover y causan memory leaks
-   */
-  private boundHandleUserActivity: any;
-  private boundHandleKeyPress: any;
-  private boundHandleCursorMove: any;
+  private readonly destroy$ = new Subject<void>();
+  private readonly idle$ = new Subject<void>();
+  private readonly activityEvents = ['scroll', 'touchstart'] as const;
+  private readonly ambientEyePositions = [
+    { x: 0, y: 0 },
+    { x: -1.8, y: -0.4 },
+    { x: 1.4, y: -1.1 },
+    { x: 0.8, y: 1.2 },
+    { x: -1.2, y: 0.8 }
+  ];
 
-  private destroy$ = new Subject<void>();
-  private idle$ = new Subject<void>();
+  private readonly boundDragMove = (event: PointerEvent): void => this.onDragMove(event);
+  private readonly boundDragEnd = (event: PointerEvent): void => this.onDragEnd(event);
+  private readonly boundHandleUserActivity = this.throttle((): void => this.handleUserActivity(), ACTIVITY_DETECTION_THROTTLE);
+  private readonly boundHandleClick = (event: MouseEvent): void => {
+    this.boundHandleUserActivity();
+    this.handleDeleteIntent(event);
+  };
+  private readonly boundHandleKeyPress = this.throttle((event: KeyboardEvent): void => this.handleKeyPress(event), TYPING_DETECTION_THROTTLE);
+  private readonly boundHandleCursorMove = this.throttle((event: PointerEvent): void => this.handleCursorMove(event), CURSOR_TRACKING_THROTTLE);
 
-  constructor(private svc: AssistantWidgetService) { }
+  /** Contexto de conversación que devuelve el agente; se reenvía en cada turno. */
+  private sessionId?: string;
+
+  constructor(
+    private readonly svc: AssistantWidgetService,
+    private readonly general: GeneralService,
+  ) {}
 
   ngOnInit(): void {
-    // Detectar si es imagen estática o animación Lottie
-    this.detectFileType();
-
-    // Inicializa opciones con el JSON local correspondiente
-    if (!this.isStaticImage) {
-      this.refreshOptions();
-    }
-
-    // Tip de bienvenida tras 2.5s de inactividad
     this.idle$.pipe(debounceTime(2500), takeUntil(this.destroy$)).subscribe(() => {
-      if (!this.open && this.welcomeTips?.length) {
-        const tip = this.welcomeTips[Math.floor(Math.random() * this.welcomeTips.length)];
-        this.pushAssistant(tip);
-        setTimeout(() => this.messages.pop(), 5000);
-      }
+      if (this.open() || this.welcomeTips.length === 0) return;
+
+      const tip = this.welcomeTips[Math.floor(Math.random() * this.welcomeTips.length)];
+      const tipMessage: AssistantMessage = {
+        role: 'assistant',
+        content: tip,
+        ts: new Date().toISOString()
+      };
+      this.messages.update((messages) => [...messages, tipMessage]);
+      this.welcomeTipTimer = setTimeout(() => {
+        this.messages.update((messages) => messages.filter((message) => message !== tipMessage));
+      }, 5000);
     });
     this.pokeIdle();
 
-    // Agregar listeners globales para drag and drop
-    document.addEventListener('mousemove', this.onDragMove.bind(this));
-    document.addEventListener('mouseup', this.onDragEnd.bind(this));
-    document.addEventListener('touchmove', this.onDragMove.bind(this), { passive: false });
-    document.addEventListener('touchend', this.onDragEnd.bind(this));
-
-    // ===== INICIALIZAR SISTEMA DE DETECCIÓN AVANZADO =====
     this.initializeAdvancedDetection();
+    this.scheduleAmbientEyeMotion();
   }
 
   ngOnDestroy(): void {
     this.destroy$.next();
     this.destroy$.complete();
 
-    // Remover listeners globales de drag and drop
-    document.removeEventListener('mousemove', this.onDragMove.bind(this));
-    document.removeEventListener('mouseup', this.onDragEnd.bind(this));
-    document.removeEventListener('touchmove', this.onDragMove.bind(this));
-    document.removeEventListener('touchend', this.onDragEnd.bind(this));
+    this.removeDragListeners();
+    document.body.style.userSelect = '';
 
-    // ===== LIMPIEZA CRÍTICA: PREVENIR MEMORY LEAKS =====
-    // IMPORTANTE: Si no se limpian estos listeners, seguirán ejecutándose
-    // incluso después de destruir el componente, causando:
-    // 1. Memory leaks
-    // 2. Errores de referencia a objetos destruidos
-    // 3. Degradación del rendimiento
     this.cleanupAdvancedDetection();
+    this.clearTimer(this.typingResetTimer);
+    this.clearTimer(this.moodResetTimer);
+    this.clearTimer(this.welcomeTipTimer);
+    this.clearTimer(this.ambientEyeTimer);
+    this.clearTimer(this.dragClickResetTimer);
   }
 
-  private detectFileType() {
-    const path = typeof this.animationPath === 'string'
-      ? this.animationPath
-      : this.animationPath[this.mood];
-
-    // Detectar extensiones de imagen estática
-    const imageExtensions = ['.png', '.jpg', '.jpeg', '.gif', '.webp', '.svg'];
-    this.isStaticImage = imageExtensions.some(ext => path.toLowerCase().endsWith(ext));
-
-    if (this.isStaticImage) {
-      this.imagePath = path;
+  onFabClick(): void {
+    if (this.suppressNextClick) {
+      this.suppressNextClick = false;
+      this.clearTimer(this.dragClickResetTimer);
+      return;
     }
+    this.toggle();
   }
 
-  private refreshOptions() {
-    const path = typeof this.animationPath === 'string'
-      ? this.animationPath
-      : this.animationPath[this.mood];
-
-    // Actualizar detección de tipo
-    const imageExtensions = ['.png', '.jpg', '.jpeg', '.gif', '.webp', '.svg'];
-    this.isStaticImage = imageExtensions.some(ext => path.toLowerCase().endsWith(ext));
-
-    if (this.isStaticImage) {
-      this.imagePath = path;
-    } else {
-      this.options = {
-        path: path,
-        loop: true,
-        autoplay: true
-      };
-    }
+  onFabKeyDown(event: KeyboardEvent): void {
+    if (event.key !== 'Enter' && event.key !== ' ') return;
+    event.preventDefault();
+    this.toggle();
   }
 
   toggle(): void {
-    this.open = !this.open;
-    if (this.open) {
-      if (this.messages.length === 0) {
+    const nextOpen = !this.open();
+    this.open.set(nextOpen);
+    this.clearTimer(this.moodResetTimer);
+
+    if (nextOpen) {
+      if (this.messages().length === 0) {
         this.pushAssistant('Pregúntame lo que quieras sobre tu empresa o el sistema. ¿En qué te ayudo?');
       }
-      this.setMood('talk');
-    } else {
-      this.setMood('idle');
+      this.setMood('talk', true);
+      return;
     }
+
+    this.setMood('idle', true);
   }
 
   send(): void {
-    const text = this.draft?.trim();
-    if (!text) return;
-    const userMsg: AssistantMessage = { role: 'user', content: text, ts: new Date().toISOString() };
-    this.messages.push(userMsg);
-    this.draft = '';
-    this.askServer();
+    const text = this.draftControl.value.trim();
+    if (!text || this.thinking()) return;
+
+    const userMessage: AssistantMessage = {
+      role: 'user',
+      content: text,
+      ts: new Date().toISOString()
+    };
+    this.messages.update((messages) => [...messages, userMessage]);
+    this.draftControl.reset('');
+    void this.askServer(text);
   }
 
-  async askServer(): Promise<void> {
+  async askServer(text: string): Promise<void> {
     try {
-      this.thinking = true;
-      this.setMood('think');
-      const res = await this.svc.chat(this.apiUrl, this.messages, this.context).toPromise();
-      if (res && res.messages) {
-        for (const m of res.messages) this.messages.push(m);
+      this.thinking.set(true);
+      this.setMood('think', true);
+
+      const cliente = this.resolveCliente();
+      const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+      const response = await firstValueFrom(
+        this.svc.chat(this.apiUrl, text, { sessionId: this.sessionId, cliente, timeZone })
+      );
+      if (response.session_id) this.sessionId = response.session_id;
+
+      if (response.respuesta) {
+        this.pushAssistant(response.respuesta);
+        this.setMood('talk', true);
+        if (!this.open()) {
+          this.clearTimer(this.moodResetTimer);
+          this.moodResetTimer = setTimeout(() => this.setMood('idle', true), 3000);
+        }
+      } else if (response.bloqueado) {
+        this.pushAssistantError(response.motivo ?? 'El asistente no está disponible.');
+        this.notifyMood();
       } else {
-        this.messages.push({ role: 'assistant', content: 'Sin respuesta del servidor.', ts: new Date().toISOString(), error: true });
+        this.pushAssistantError(response.error ?? 'Sin respuesta del servidor.');
+        this.notifyMood();
       }
-      // Tras responder, vuelve a talk unos segundos y luego idle si cierran el panel
-      this.setMood('talk');
-      setTimeout(() => { if (!this.open) this.setMood('idle'); }, 3000);
-    } catch (e: any) {
-      this.messages.push({ role: 'assistant', content: 'Su empresa deshabilito esta función.', ts: new Date().toISOString(), error: true });
-      this.setMood('notify');
-      setTimeout(() => this.setMood(this.open ? 'talk' : 'idle'), 2500);
+    } catch {
+      // Fallo de red o del servidor (no una respuesta de negocio).
+      this.pushAssistantError('No se pudo conectar con el asistente.');
+      this.notifyMood();
     } finally {
-      this.thinking = false;
+      this.thinking.set(false);
     }
+  }
+
+  private resolveCliente(): 'web' | 'desktop' | 'mobile' {
+    try {
+      return this.general.getClientPlatform?.() ?? 'web';
+    } catch {
+      return 'web';
+    }
+  }
+
+  private pushAssistantError(text: string): void {
+    this.messages.update((messages) => [
+      ...messages,
+      { role: 'assistant', content: text, ts: new Date().toISOString(), error: true }
+    ]);
+  }
+
+  private notifyMood(): void {
+    this.setMood('notify', true);
+    this.clearTimer(this.moodResetTimer);
+    this.moodResetTimer = setTimeout(() => this.setMood(this.open() ? 'talk' : 'idle', true), 2500);
   }
 
   pushAssistant(text: string): void {
-    this.messages.push({ role: 'assistant', content: text, ts: new Date().toISOString() });
+    this.messages.update((messages) => [...messages, { role: 'assistant', content: text, ts: new Date().toISOString() }]);
   }
 
-  onKeyDown(e: KeyboardEvent) {
-    if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+  onKeyDown(event: KeyboardEvent): void {
+    if ((event.ctrlKey || event.metaKey) && event.key === 'Enter') {
       this.send();
-      e.preventDefault();
+      event.preventDefault();
     }
   }
 
-  // Dispara la lógica de consejos por inactividad
-  pokeIdle() { this.idle$.next(); }
-
-  // ===== Drag and Drop =====
-  onDragStart(event: MouseEvent | TouchEvent): void {
-    event.stopPropagation();
-    this.isDragging = true;
-
-    const clientX = event instanceof MouseEvent ? event.clientX : event.touches[0].clientX;
-    const clientY = event instanceof MouseEvent ? event.clientY : event.touches[0].clientY;
-
-    this.dragStart = { x: clientX, y: clientY };
-    this.dragOffset = { x: this.fabPosition.x, y: this.fabPosition.y };
-
-    // Prevenir selección de texto mientras se arrastra
-    document.body.style.userSelect = 'none';
+  pokeIdle(): void {
+    this.idle$.next();
   }
 
-  onDragMove(event: MouseEvent | TouchEvent): void {
-    if (!this.isDragging) return;
+  onDragStart(event: PointerEvent): void {
+    if (event.button !== 0) return;
+
+    event.stopPropagation();
+    this.isDragging.set(true);
+    this.dragMoved = false;
+    this.dragStart = { x: event.clientX, y: event.clientY };
+    this.dragOffset = this.fabPosition();
+    document.body.style.userSelect = 'none';
+    this.addDragListeners();
+  }
+
+  onDragMove(event: PointerEvent): void {
+    if (!this.isDragging()) return;
 
     event.preventDefault();
-    event.stopPropagation();
+    const deltaX = this.dragStart.x - event.clientX;
+    const deltaY = this.dragStart.y - event.clientY;
+    if (Math.hypot(deltaX, deltaY) > 4) this.dragMoved = true;
 
-    const clientX = event instanceof MouseEvent ? event.clientX : event.touches[0].clientX;
-    const clientY = event instanceof MouseEvent ? event.clientY : event.touches[0].clientY;
-
-    const deltaX = this.dragStart.x - clientX;
-    const deltaY = this.dragStart.y - clientY;
-
-    // Calcular nueva posición
-    let newX = this.dragOffset.x + deltaX;
-    let newY = this.dragOffset.y + deltaY;
-
-    // Limitar dentro de la ventana (con margen de 10px)
     const margin = 10;
-    const fabSize = 84;
-    newX = Math.max(margin, Math.min(window.innerWidth - fabSize - margin, newX));
-    newY = Math.max(margin, Math.min(window.innerHeight - fabSize - margin, newY));
-
-    this.fabPosition = { x: newX, y: newY };
+    const fabSize = this.fabElement?.nativeElement.getBoundingClientRect().width ?? 94;
+    const x = Math.max(margin, Math.min(window.innerWidth - fabSize - margin, this.dragOffset.x + deltaX));
+    const y = Math.max(margin, Math.min(window.innerHeight - fabSize - margin, this.dragOffset.y + deltaY));
+    this.fabPosition.set({ x, y });
   }
 
-  onDragEnd(event: MouseEvent | TouchEvent): void {
-    if (!this.isDragging) return;
+  onDragEnd(event: PointerEvent): void {
+    if (!this.isDragging()) return;
 
     event.stopPropagation();
-    this.isDragging = false;
-
-    // Restaurar selección de texto
+    this.isDragging.set(false);
+    this.suppressNextClick = this.dragMoved;
+    if (this.suppressNextClick) {
+      this.clearTimer(this.dragClickResetTimer);
+      this.dragClickResetTimer = setTimeout(() => {
+        this.suppressNextClick = false;
+      }, 350);
+    }
     document.body.style.userSelect = '';
+    this.removeDragListeners();
   }
 
-  getFabStyle(): any {
-    return {
-      right: `${this.fabPosition.x}px`,
-      bottom: `${this.fabPosition.y}px`,
-      cursor: this.isDragging ? 'grabbing' : 'grab'
-    };
+  setMood(mood: AssistantExpression, force = false): void {
+    if (!force) {
+      if (this.isDragging()) return;
+      if (this.open() && mood !== 'talk' && mood !== 'think' && mood !== 'notify') return;
+    }
+    if (this.mood() === mood) return;
+
+    this.mood.set(mood);
+    if (this.useCustomAnimation()) this.refreshCustomAnimation();
   }
 
-  getPanelStyle(): any {
-    // El panel se posiciona cerca del botón
-    const panelOffset = 96; // Espacio entre el botón y el panel
-    return {
-      right: `${this.fabPosition.x}px`,
-      bottom: `${this.fabPosition.y + panelOffset}px`
-    };
-  }
+  private refreshCustomAnimation(): void {
+    if (!this.useCustomAnimation()) return;
 
-  // ===== SISTEMA AVANZADO DE DETECCIÓN DE EVENTOS =====
+    const mood = this.mood();
+    const animationMood: AssistantMood = mood === 'frightened' ? 'notify' : mood;
+    const path = typeof this._animationPath === 'string' ? this._animationPath : this._animationPath[animationMood];
+    if (!path) return;
 
-  /**
-   * Inicializa todo el sistema de detección de eventos del usuario
-   * RENDIMIENTO: Solo inicializa lo que está habilitado mediante @Input
-   */
-  private initializeAdvancedDetection(): void {
-    console.log('[AssistantWidget] Inicializando detección avanzada...');
+    const staticImage = IMAGE_EXTENSIONS.some((extension) => path.toLowerCase().endsWith(extension));
+    this.isStaticImage.set(staticImage);
 
-    // Bind de funciones para poder removerlas después
-    this.boundHandleUserActivity = this.handleUserActivity.bind(this);
-    this.boundHandleKeyPress = this.handleKeyPress.bind(this);
-    this.boundHandleCursorMove = this.throttle(this.handleCursorMove.bind(this), CURSOR_TRACKING_THROTTLE);
-
-    if (this.enableInactivityDetection) {
-      this.startInactivityDetection();
-      console.log('[AssistantWidget] ✓ Detección de inactividad habilitada');
+    if (staticImage) {
+      this.imagePath.set(path);
+      return;
     }
 
-    if (this.enableTypingDetection) {
-      // RENDIMIENTO: keydown/keyup pueden dispararse muchas veces
-      // Se usa throttling interno en handleKeyPress
-      document.addEventListener('keydown', this.boundHandleKeyPress);
-      document.addEventListener('keyup', this.boundHandleKeyPress);
-      console.log('[AssistantWidget] ✓ Detección de escritura habilitada');
-    }
-
-    if (this.enableSlowActionDetection) {
-      this.startSlowActionDetection();
-      console.log('[AssistantWidget] ✓ Detección de lentitud habilitada');
-    }
-
-    if (this.enableCursorTracking) {
-      // ADVERTENCIA: Alto costo de rendimiento
-      // mousemove puede dispararse 60+ veces por segundo
-      document.addEventListener('mousemove', this.boundHandleCursorMove);
-      console.warn('[AssistantWidget] ⚠ Tracking de cursor habilitado (alto costo de rendimiento)');
-    }
-
-    // Detectar actividad general del usuario
-    // RENDIMIENTO: Se usa throttling para limitar ejecuciones
-    const activityEvents = ['click', 'scroll', 'touchstart'];
-    activityEvents.forEach(event => {
-      document.addEventListener(event, this.boundHandleUserActivity, { passive: true });
+    this.animationOptions.set({
+      path,
+      loop: true,
+      autoplay: true
     });
   }
 
-  /**
-   * Limpia TODOS los listeners y timers
-   * CRÍTICO: Llamar en ngOnDestroy para prevenir memory leaks
-   */
-  private cleanupAdvancedDetection(): void {
-    console.log('[AssistantWidget] Limpiando detección avanzada...');
+  private initializeAdvancedDetection(): void {
+    if (this.enableInactivityDetection) this.resetInactivityTimer();
 
-    // Limpiar timers
-    if (this.inactivityTimer) clearTimeout(this.inactivityTimer);
-    if (this.slowActionTimer) clearTimeout(this.slowActionTimer);
-    if (this.cursorTrackingTimer) clearTimeout(this.cursorTrackingTimer);
-    if (this.eyeUpdateTimer) clearTimeout(this.eyeUpdateTimer);
-
-    // Remover listeners de escritura
-    if (this.boundHandleKeyPress) {
-      document.removeEventListener('keydown', this.boundHandleKeyPress);
-      document.removeEventListener('keyup', this.boundHandleKeyPress);
+    if (this.enableTypingDetection) {
+      document.addEventListener('keydown', this.boundHandleKeyPress);
     }
 
-    // Remover listener de cursor
-    if (this.boundHandleCursorMove) {
-      document.removeEventListener('mousemove', this.boundHandleCursorMove);
+    if (this.enableSlowActionDetection) this.resetSlowActionTimer();
+
+    if (this.enableCursorTracking) {
+      document.addEventListener('pointermove', this.boundHandleCursorMove, { passive: true });
     }
 
-    // Remover listeners de actividad general
-    if (this.boundHandleUserActivity) {
-      const activityEvents = ['click', 'scroll', 'touchstart'];
-      activityEvents.forEach(event => {
-        document.removeEventListener(event, this.boundHandleUserActivity);
-      });
-    }
-
-    console.log('[AssistantWidget] ✓ Limpieza completada');
+    document.addEventListener('click', this.boundHandleClick, { capture: true, passive: true });
+    this.activityEvents.forEach((eventName) => {
+      document.addEventListener(eventName, this.boundHandleUserActivity, { passive: true });
+    });
   }
 
-  // ===== DETECCIÓN DE INACTIVIDAD (1 HORA SIN ACTIVIDAD) =====
+  private addDragListeners(): void {
+    if (this.dragListenersActive) return;
 
-  /**
-   * Inicia el sistema de detección de inactividad
-   * CONSIDERACIÓN: 1 hora puede ser mucho o poco según el contexto
-   * - Aplicaciones de productividad: considera 15-30 minutos
-   * - Aplicaciones casuales: 1 hora está bien
-   * - Aplicaciones críticas: puede que no quieras mostrar bostezo
-   */
-  private startInactivityDetection(): void {
-    this.resetInactivityTimer();
+    document.addEventListener('pointermove', this.boundDragMove);
+    document.addEventListener('pointerup', this.boundDragEnd);
+    document.addEventListener('pointercancel', this.boundDragEnd);
+    this.dragListenersActive = true;
+  }
+
+  private removeDragListeners(): void {
+    if (!this.dragListenersActive) return;
+
+    document.removeEventListener('pointermove', this.boundDragMove);
+    document.removeEventListener('pointerup', this.boundDragEnd);
+    document.removeEventListener('pointercancel', this.boundDragEnd);
+    this.dragListenersActive = false;
+  }
+
+  private cleanupAdvancedDetection(): void {
+    this.clearTimer(this.inactivityTimer);
+    this.clearTimer(this.slowActionTimer);
+
+    document.removeEventListener('keydown', this.boundHandleKeyPress);
+    document.removeEventListener('pointermove', this.boundHandleCursorMove);
+    document.removeEventListener('click', this.boundHandleClick, true);
+    this.activityEvents.forEach((eventName) => {
+      document.removeEventListener(eventName, this.boundHandleUserActivity);
+    });
   }
 
   private resetInactivityTimer(): void {
-    if (this.inactivityTimer) clearTimeout(this.inactivityTimer);
-
-    this.isUserInactive = false;
-    this.lastActivityTime = Date.now();
-
-    this.inactivityTimer = setTimeout(() => {
-      this.onUserInactive();
-    }, INACTIVITY_TIMEOUT);
+    this.clearTimer(this.inactivityTimer);
+    this.inactivityTimer = setTimeout(() => this.onUserInactive(), INACTIVITY_TIMEOUT);
   }
 
   private onUserInactive(): void {
-    if (this.open) return; // No molestar si el usuario tiene el chat abierto
-
-    console.log('[AssistantWidget] Usuario inactivo por 1 hora - mostrando bostezo');
-    this.isUserInactive = true;
-    this.setMood('yawning');
-
-    // Opcional: Mostrar mensaje
-    // this.pushAssistant('¿Sigues ahí? Llevo esperando un buen rato...');
-
-    // Volver a idle después de 5 segundos
-    setTimeout(() => {
-      if (!this.open) this.setMood('idle');
-    }, 5000);
+    if (this.open()) return;
+    this.showTransientMood('yawning', 5000);
   }
 
-  // ===== DETECCIÓN DE ESCRITURA Y MOVIMIENTO DE OJOS =====
+  private resetSlowActionTimer(): void {
+    this.clearTimer(this.slowActionTimer);
+    this.slowActionTimer = setTimeout(() => this.onUserSlow(), SLOW_ACTION_THRESHOLD);
+  }
 
-  /**
-   * Detecta cuando el usuario está escribiendo
-   * RENDIMIENTO: Se usa throttling para evitar ejecuciones excesivas
-   * LIMITACIÓN: No puede detectar en iframes o elementos con shadow DOM
-   */
-  private handleKeyPress(event: KeyboardEvent): void {
+  private onUserSlow(): void {
+    if (this.open() || this.isDragging()) return;
+
+    const mood = this.nextSlowMood;
+    this.nextSlowMood = mood === 'waiting' ? 'confused' : 'waiting';
+    this.showTransientMood(mood, 3000);
+  }
+
+  private handleKeyPress(_event: KeyboardEvent): void {
     this.handleUserActivity();
-    this.isUserTyping = true;
-
-    // Detectar posición del elemento activo (input/textarea donde escribe)
-    const activeElement = document.activeElement as HTMLElement;
+    const activeElement = document.activeElement as HTMLElement | null;
     if (!activeElement || (activeElement.tagName !== 'INPUT' && activeElement.tagName !== 'TEXTAREA')) {
       this.isUserTyping = false;
       return;
     }
 
-    // CONSIDERACIÓN: Esta es una aproximación
-    // El cursor real del texto no se puede obtener con precisión
-    // Usamos la posición del elemento en su lugar
+    this.isUserTyping = true;
     const rect = activeElement.getBoundingClientRect();
-    const typingPosition = {
+    this.updateEyeDirection({
       x: rect.left + rect.width / 2,
       y: rect.top + rect.height / 2
-    };
+    });
 
-    this.updateEyeDirection(typingPosition);
-
-    // Resetear después de 1 segundo sin teclear
-    clearTimeout(this.eyeUpdateTimer);
-    this.eyeUpdateTimer = setTimeout(() => {
+    this.clearTimer(this.typingResetTimer);
+    this.typingResetTimer = setTimeout(() => {
       this.isUserTyping = false;
-      if (!this.open && !this.isDragging) {
-        this.setMood('idle');
+      if (!this.open() && !this.isDragging() && LOOK_MOODS.has(this.mood())) {
+        this.setMood('idle', true);
       }
     }, 1000);
   }
 
-  /**
-   * Actualiza la dirección de los ojos basándose en la posición del cursor o escritura
-   * RENDIMIENTO: Se usa debouncing para evitar cambios rápidos que causen parpadeo
-   * 
-   * ALGORITMO:
-   * 1. Calcula la posición del asistente en pantalla
-   * 2. Calcula la posición del punto de interés (cursor/input)
-   * 3. Determina la dirección basándose en ángulos y distancia
-   * 4. Solo actualiza si la dirección cambió (evita renders innecesarios)
-   */
+  private handleCursorMove(event: PointerEvent): void {
+    if (this.isDragging()) return;
+    this.lastPointerActivityAt = Date.now();
+    this.updateEyeDirection({ x: event.clientX, y: event.clientY });
+  }
+
   private updateEyeDirection(targetPosition: { x: number; y: number }): void {
-    if (this.open || this.isDragging) return; // No cambiar ojos durante interacciones
+    const fabRect = this.fabElement?.nativeElement.getBoundingClientRect();
+    if (!fabRect) return;
 
-    // Calcular posición central del asistente
-    const fabRect = {
-      x: window.innerWidth - this.fabPosition.x - 42, // 42 = mitad de 84px
-      y: window.innerHeight - this.fabPosition.y - 42
-    };
+    const deltaX = targetPosition.x - (fabRect.left + fabRect.width / 2);
+    const deltaY = targetPosition.y - (fabRect.top + fabRect.height / 2);
+    const distance = Math.hypot(deltaX, deltaY);
 
-    // Calcular diferencias
-    const deltaX = targetPosition.x - fabRect.x;
-    const deltaY = targetPosition.y - fabRect.y;
-
-    // Calcular ángulo (-180 a 180 grados)
-    const angle = Math.atan2(deltaY, deltaX) * (180 / Math.PI);
-
-    // IMPORTANTE: Zona muerta para evitar cambios cuando está muy cerca
-    const distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
-    if (distance < 100) {
-      // Muy cerca, no cambiar dirección
+    if (distance < 24) {
+      this.eyeOffset.set({ x: 0, y: 0 });
       return;
     }
 
-    // Determinar dirección basándose en ángulos
-    // AJUSTA estos valores según el diseño de tus imágenes
-    let newDirection: AssistantMood;
+    const movement = Math.min(3.8, distance / 85);
+    const nextOffset = {
+      x: Math.round((deltaX / distance) * movement * 10) / 10,
+      y: Math.round((deltaY / distance) * movement * 10) / 10
+    };
+    const currentOffset = this.eyeOffset();
+    if (Math.abs(currentOffset.x - nextOffset.x) >= 0.2 || Math.abs(currentOffset.y - nextOffset.y) >= 0.2) {
+      this.eyeOffset.set(nextOffset);
+    }
+
+    if (this.open() || EXPRESSION_MOODS.has(this.mood())) return;
+
+    const angle = Math.atan2(deltaY, deltaX) * (180 / Math.PI);
+    let direction: AssistantMood;
     if (angle >= -45 && angle < 45) {
-      newDirection = 'look-right';
+      direction = 'look-right';
     } else if (angle >= 45 && angle < 135) {
-      newDirection = 'look-down';
+      direction = 'look-down';
     } else if (angle >= 135 || angle < -135) {
-      newDirection = 'look-left';
+      direction = 'look-left';
     } else {
-      newDirection = 'look-up';
+      direction = 'look-up';
     }
-
-    // Solo actualizar si cambió (evita renders innecesarios)
-    if (newDirection !== this.currentEyeDirection) {
-      console.log(`[AssistantWidget] Moviendo ojos: ${newDirection} (ángulo: ${angle.toFixed(1)}°)`);
-      this.currentEyeDirection = newDirection;
-      this.setMood(newDirection);
-    }
+    this.setMood(direction);
   }
 
-  /**
-   * Maneja el movimiento del cursor
-   * ADVERTENCIA: Este método puede ejecutarse 60+ veces por segundo
-   * SOLO habilitar si realmente lo necesitas
-   */
-  private handleCursorMove(event: MouseEvent): void {
-    this.lastCursorPosition = { x: event.clientX, y: event.clientY };
-    this.updateEyeDirection(this.lastCursorPosition);
-  }
-
-  // ===== DETECCIÓN DE LENTITUD/CONFUSIÓN DEL USUARIO =====
-
-  /**
-   * Detecta cuando el usuario está tardando en realizar acciones
-   * CASOS DE USO:
-   * - Usuario está leyendo instrucciones largas
-   * - Usuario está confundido
-   * - Usuario se distrajo
-   * 
-   * CONSIDERACIÓN: Puede ser molesto si se activa demasiado
-   * Ajusta SLOW_ACTION_THRESHOLD según tu aplicación
-   */
-  private startSlowActionDetection(): void {
-    this.resetSlowActionTimer();
-  }
-
-  private resetSlowActionTimer(): void {
-    if (this.slowActionTimer) clearTimeout(this.slowActionTimer);
-
-    this.isUserSlow = false;
-
-    this.slowActionTimer = setTimeout(() => {
-      this.onUserSlow();
-    }, SLOW_ACTION_THRESHOLD);
-  }
-
-  private onUserSlow(): void {
-    if (this.open || this.isDragging) return;
-
-    console.log('[AssistantWidget] Usuario lento/confundido - mostrando estado de espera');
-    this.isUserSlow = true;
-
-    // Cambiar entre 'confused' y 'waiting' según el contexto
-    // 'confused': Si parece que no sabe qué hacer
-    // 'waiting': Si simplemente está tomándose su tiempo
-    const mood: AssistantMood = Math.random() > 0.5 ? 'confused' : 'waiting';
-    this.setMood(mood);
-
-    // Opcional: Ofrecer ayuda
-    // if (Math.random() > 0.7) {
-    //   this.pushAssistant('¿Necesitas ayuda con algo?');
-    // }
-
-    // Volver a idle después de 3 segundos
-    setTimeout(() => {
-      if (!this.open && !this.isUserTyping) this.setMood('idle');
-    }, 3000);
-  }
-
-  /**
-   * Se llama en cualquier actividad del usuario
-   * RENDIMIENTO: Esta función se ejecuta MUCHO, mantenerla ligera
-   */
   private handleUserActivity(): void {
-    // Resetear todos los timers de inactividad/lentitud
-    if (this.enableInactivityDetection) {
-      this.resetInactivityTimer();
+    const now = Date.now();
+    this.recentActivityTimes = this.recentActivityTimes.filter((activityTime) => now - activityTime <= RAPID_ACTION_WINDOW);
+    this.recentActivityTimes.push(now);
+
+    if (this.recentActivityTimes.length >= RAPID_ACTION_COUNT && !this.open() && !this.isDragging()) {
+      this.recentActivityTimes = [];
+      this.showTransientMood('speed', 1800);
+    } else if (!this.open() && (LOOK_MOODS.has(this.mood()) || this.mood() === 'waiting' || this.mood() === 'confused' || this.mood() === 'yawning')) {
+      this.setMood('idle', true);
     }
-    if (this.enableSlowActionDetection) {
-      this.resetSlowActionTimer();
-    }
+
+    if (now - this.lastTimerResetAt < 700) return;
+    this.lastTimerResetAt = now;
+    if (this.enableInactivityDetection) this.resetInactivityTimer();
+    if (this.enableSlowActionDetection) this.resetSlowActionTimer();
   }
 
-  // ===== UTILIDADES =====
+  private showTransientMood(mood: AssistantExpression, duration: number): void {
+    if (this.open()) return;
 
-  /**
-   * Throttle: Limita la frecuencia de ejecución de una función
-   * RENDIMIENTO: Esencial para eventos que se disparan frecuentemente
-   * 
-   * @param func Función a throttlear
-   * @param limit Tiempo mínimo entre ejecuciones (ms)
-   */
-  private throttle(func: Function, limit: number): any {
-    let inThrottle: boolean;
-    return function (this: any, ...args: any[]) {
-      if (!inThrottle) {
-        func.apply(this, args);
-        inThrottle = true;
-        setTimeout(() => inThrottle = false, limit);
+    this.clearTimer(this.moodResetTimer);
+    this.setMood(mood, true);
+    this.moodResetTimer = setTimeout(() => {
+      if (!this.open() && !this.isUserTyping) this.setMood('idle', true);
+    }, duration);
+  }
+
+  private handleDeleteIntent(event: MouseEvent): void {
+    const eventTarget = event.target;
+    if (!(eventTarget instanceof Element)) return;
+
+    const action = eventTarget.closest<HTMLElement>(DELETE_ACTION_SELECTOR);
+    if (!action || action.matches(':disabled') || action.getAttribute('aria-disabled') === 'true') return;
+
+    const descriptor = [action.getAttribute('aria-label'), action.getAttribute('title'), action.getAttribute('data-builder-action'), action.className, action.textContent].filter(Boolean).join(' ');
+    const isDeleteIntent = DELETE_INTENT_PATTERN.test(descriptor) || action.matches(DELETE_ICON_SELECTOR) || action.querySelector(DELETE_ICON_SELECTOR) !== null;
+    if (!isDeleteIntent) return;
+
+    this.clearTimer(this.moodResetTimer);
+    this.setMood('frightened', true);
+    this.moodResetTimer = setTimeout(() => {
+      const nextMood: AssistantExpression = this.thinking() ? 'think' : this.open() ? 'talk' : 'idle';
+      this.setMood(nextMood, true);
+    }, 2200);
+  }
+
+  private scheduleAmbientEyeMotion(): void {
+    this.ambientEyeTimer = setTimeout(() => {
+      const canMove = !this.open() && !this.isDragging() && Date.now() - this.lastPointerActivityAt > 1800 && !EXPRESSION_MOODS.has(this.mood());
+
+      if (canMove) {
+        this.ambientEyeIndex = (this.ambientEyeIndex + 1) % this.ambientEyePositions.length;
+        this.eyeOffset.set(this.ambientEyePositions[this.ambientEyeIndex]);
+        if (LOOK_MOODS.has(this.mood())) this.setMood('idle', true);
       }
+      this.scheduleAmbientEyeMotion();
+    }, 2600);
+  }
+
+  private throttle<TArguments extends unknown[]>(callback: (...args: TArguments) => void, limit: number): (...args: TArguments) => void {
+    let lastRun = Number.NEGATIVE_INFINITY;
+    return (...args: TArguments): void => {
+      const now = Date.now();
+      if (now - lastRun < limit) return;
+      lastRun = now;
+      callback(...args);
     };
   }
 
-  /**
-   * OVERRIDE del setMood original para considerar prioridades
-   * IMPORTANTE: Algunos estados tienen mayor prioridad que otros
-   */
-  setMood(mood: AssistantMood) {
-    // No cambiar mood durante drag o chat abierto
-    if (this.isDragging || this.open) return;
-
-    // Prioridad de estados:
-    // 1. think (respondiendo al usuario)
-    // 2. talk (chat abierto)
-    // 3. notify (alerta importante)
-    // 4. yawning, confused (estados emocionales)
-    // 5. look-* (movimiento de ojos)
-    // 6. idle (reposo)
-
-    const currentPriority = this.getMoodPriority(this.mood);
-    const newPriority = this.getMoodPriority(mood);
-
-    // Solo cambiar si la nueva prioridad es mayor o igual
-    if (newPriority >= currentPriority) {
-      this.mood = mood;
-      this.refreshOptions();
-    }
-  }
-
-  /**
-   * Define la prioridad de cada estado
-   * Mayor número = mayor prioridad
-   */
-  private getMoodPriority(mood: AssistantMood): number {
-    const priorities: Record<AssistantMood, number> = {
-      'think': 100,
-      'talk': 90,
-      'notify': 80,
-      'speed': 70,
-      'yawning': 60,
-      'confused': 50,
-      'waiting': 45,
-      'look-left': 30,
-      'look-right': 30,
-      'look-up': 30,
-      'look-down': 30,
-      'idle': 0
-    };
-    return priorities[mood] || 0;
+  private clearTimer(timer: ReturnType<typeof setTimeout> | null): void {
+    if (timer !== null) clearTimeout(timer);
   }
 }
-
+// ]]]FI

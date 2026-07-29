@@ -1516,10 +1516,11 @@ export class CRUD extends Vars implements OnChanges  /*implements OnInit*/ {
    * renombran a `object_<key>`). Si un mismo target aparece bajo varios padres,
    * `server` prevalece sobre `client`.
    *
-   * @returns Map<child_key_normalizada, { scope, edit }>.
+   * @returns Map<child_key_normalizada, { scope, edit }>. `edit` queda
+   * indefinido cuando el child lo omite para que el target lo herede del root.
    */
-  protected _collectChildScopeRegistry(root: any): Map<string, { scope: string; edit: boolean }> {
-    const registry = new Map<string, { scope: string; edit: boolean }>();
+  protected _collectChildScopeRegistry(root: any): Map<string, { scope: string; edit?: boolean }> {
+    const registry = new Map<string, { scope: string; edit?: boolean }>();
     const visited = new Set<any>();
 
     const walk = (node: any) => {
@@ -1537,7 +1538,9 @@ export class CRUD extends Vars implements OnChanges  /*implements OnInit*/ {
                 ? childKey.slice('object_'.length)
                 : childKey;
               const scope = String(childNode?.filter?.scope ?? 'client').toLowerCase();
-              const edit = (childNode?.edit ?? childNode?.default?.edit) === true;
+              const edit = Object.prototype.hasOwnProperty.call(childNode?.default || {}, 'edit')
+                ? childNode.default.edit !== false
+                : undefined;
               const prev = registry.get(normalized);
               // server prevalece; si no, conservar la primera (o promover a server).
               if (!prev || (scope === 'server' && prev.scope !== 'server')) {
@@ -1570,8 +1573,8 @@ export class CRUD extends Vars implements OnChanges  /*implements OnInit*/ {
    * PADRE vía `children.fields...filter.scope`, no el nodo del propio campo:
    *   - El padre declara el child con `scope='server'`  → el servidor lo resuelve
    *     e inicializa en el create; el cliente NO exige ni bloquea el submit.
-   *       · `edit=false` → render solo lectura (auto).
-   *       · `edit=true`  → editable opcional, pero tampoco obligatorio.
+   *       · `default.edit=false` → render solo lectura (auto).
+   *       · `default.edit=true`  → editable opcional, pero tampoco obligatorio.
    *   - Sin declaración server (scope cliente o no es child de nadie) → se respeta
    *     el `required` raíz del schema efectivo.
    *   - Sin schema efectivo para el prefijo → no se impone obligatoriedad local.
@@ -1583,7 +1586,7 @@ export class CRUD extends Vars implements OnChanges  /*implements OnInit*/ {
    */
   protected _childRequiredPolicy(opts: {
     childKey: string; schemaEntry: any; layoutNode: any; hasSchema: boolean;
-    scopeInfo?: { scope: string; edit: boolean } | null;
+    scopeInfo?: { scope: string; edit?: boolean } | null;
   }): { applyRequired: boolean; readOnly: boolean } {
     const { childKey, schemaEntry, layoutNode, hasSchema, scopeInfo } = opts;
 
@@ -1608,10 +1611,15 @@ export class CRUD extends Vars implements OnChanges  /*implements OnInit*/ {
     // Se evalúa ANTES del guard de schema: la decisión server proviene de la
     // declaración del padre (children.fields...filter.scope), no del schema del
     // propio campo. Así, aunque el form_fields_data_* no exista en el OPTIONS,
-    // un child server-side igual queda no-obligatorio y readOnly según `edit`.
+    // un child server-side igual queda no-obligatorio y readOnly según
+    // `default.edit`.
     if (scopeInfo && scopeInfo.scope === 'server') {
       // edit:true o false → nunca bloquea el submit; el servidor completa el valor.
-      return { applyRequired: false, readOnly: !scopeInfo.edit };
+      const effectiveEdit = scopeInfo.edit
+        ?? schemaEntry?.default?.edit
+        ?? layoutNode?.default?.edit
+        ?? true;
+      return { applyRequired: false, readOnly: effectiveEdit === false };
     }
 
     // Sin schema efectivo → no imponer obligatoriedad local.
@@ -1709,7 +1717,7 @@ export class CRUD extends Vars implements OnChanges  /*implements OnInit*/ {
     pos: string;
     schemaEntry: any;
     hasSchema: boolean;
-    scopeInfo: { scope: string; edit: boolean } | null;
+    scopeInfo: { scope: string; edit?: boolean } | null;
   }): void {
     const { formFields, node, fieldName, fieldPrefix, pos, schemaEntry, hasSchema, scopeInfo } = params;
     const fieldData = node;
@@ -3023,8 +3031,6 @@ export class CRUD extends Vars implements OnChanges  /*implements OnInit*/ {
              //});
              //elimino name porque se reemplaza por la relación, por ejemplo en lugar de
              //mostra el id de la relacion, muestro el nombre
-             //°°°aqui deberia implementar 'default_field': 'name', hay un ejemplo en
-             //additionalFieldsAppCols de producto
              //delete fieldObj.children?.name;
              const chil = this.additionalFieldsAppCols[pos][joinModelFields];
              // el campo del prefijo es el campo que trae el children
@@ -4265,7 +4271,34 @@ export class CRUD extends Vars implements OnChanges  /*implements OnInit*/ {
       // ]]]FI
       console.log('reset formmm,,,,,,,,,,,,,2', this.currentForm(pos).value);
     }
+    // [[[II ESC:030-06 Las tablas no_form_data vuelven a su estado de nacimiento:
+    // reset() de Angular anula valores pero CONSERVA las filas del FormArray, por
+    // lo que al reabrir el diálogo persistían las filas de la sesión anterior. ]]]FI
+    this._resetNoFormDataTables(pos);
     //console.log('fin resetFormDialog', this.currentForm());
+  }
+
+  /** Devuelve cada tabla no_form_data a su estado inicial (initial_rows vacías). */
+  private _resetNoFormDataTables(pos: any): void {
+    const form = this.currentForm(pos);
+    const draw = this._drawFormForDevice(pos);
+    if (!form || !draw) return;
+
+    for (const layout of this._collectDrawFormLayouts(draw)) {
+      for (const key of Object.keys(layout)) {
+        const node = layout[key];
+        if (node?.type !== 'table' || !this._isNoFormDataField(node?.field)) continue;
+        const control = form.get(node.field);
+        if (!(control instanceof FormArray)) continue;
+
+        control.clear({ emitEvent: false });
+        const initialRows = node.initial_rows || 0;
+        for (let i = 0; i < initialRows; i++) {
+          control.push(this._createNoFormDataTableRowFormGroup(node), { emitEvent: false });
+        }
+        control.updateValueAndValidity({ emitEvent: false });
+      }
+    }
   }
 
 
@@ -4310,12 +4343,23 @@ export class CRUD extends Vars implements OnChanges  /*implements OnInit*/ {
       c.markAsTouched({ onlySelf: true });
     };
 
+    // [[[II Un campo y su espejo `object_<campo>` comparten label: sin dedupe el
+    // toast repetía el mismo error dos veces (p.ej. "Tipo de gasto" x2). Se
+    // deduplica por ruta canónica + claves de error; ambos controles se siguen
+    // marcando en rojo. ]]]FI
+    const seenErrors = new Set<string>();
+
     // Recorrido que soporta FormGroup y FormArray
     const visit = (ctrl: AbstractControl, path: string[]) => {
       if (ctrl.errors) {
         const fieldPath = path.join('.');
         console.log('[FIELD ERROR]', fieldPath, ctrl.errors);
-        errors.local.push({ field: path.join('.'), errors: ctrl.errors });
+        const canonicalPath = fieldPath.replace(/(^|\.)object_/, '$1');
+        const dedupeKey = `${canonicalPath}|${Object.keys(ctrl.errors).sort().join(',')}`;
+        if (!seenErrors.has(dedupeKey)) {
+          seenErrors.add(dedupeKey);
+          errors.local.push({ field: fieldPath, errors: ctrl.errors });
+        }
         mark(ctrl);
       }
 
@@ -4993,12 +5037,21 @@ export class CRUD extends Vars implements OnChanges  /*implements OnInit*/ {
     const field = column?.field;
     if (!field) return '';
 
+    const value = rowData?.[field];
+    const isDropdown = column?.type === 'dropdown' || column?.type === 'dropdown-choice';
+    if (isDropdown) {
+      if (value && typeof value === 'object' && !Array.isArray(value)) {
+        return value[column?.option_value || (column?.type === 'dropdown-choice' ? 'value' : 'id')]
+          ?? value.id ?? value.value ?? this._tableColumnDefaultValueForCrud(column);
+      }
+      return value !== undefined ? value : this._tableColumnDefaultValueForCrud(column);
+    }
+
     const displayValue = rowData?.[`${field}__name`];
     if (displayValue !== undefined && displayValue !== null && displayValue !== '') {
       return displayValue;
     }
 
-    const value = rowData?.[field];
     if (value && typeof value === 'object' && !Array.isArray(value)) {
       return this.generalS.formatDynamicValue(value, column);
     }
@@ -5011,6 +5064,12 @@ export class CRUD extends Vars implements OnChanges  /*implements OnInit*/ {
 
     this.generalS.configuredTableColumns(tableConfig?.columns).forEach((column: any) => {
       rowGroup[column.field] = this.fb.control(this._tableCellValueForCrud(rowData, column));
+    });
+
+    // [[[II ESC:030-20 La relación viaja como control real de la fila. ]]]FI
+    this.generalS.configuredRelationshipFields(tableConfig?.columns).forEach((field: string) => {
+      if (rowGroup[field]) return;
+      rowGroup[field] = this.fb.control(rowData?.[field] ?? null);
     });
 
     const group = this.fb.group(rowGroup);
@@ -5056,7 +5115,7 @@ export class CRUD extends Vars implements OnChanges  /*implements OnInit*/ {
 
     // Proyecta la respuesta del detalle (ya aplanada por DJAtoObject) hacia las
     // columnas declaradas usando el contrato source→target (field/field_name/
-    // derived.field_name/children.fields.derived), conservando UUID canonico +
+    // field_name/children.fields.derived), conservando UUID canonico +
     // etiqueta visible. Esto completa columnas que antes quedaban vacias porque
     // su nombre destino difiere del nombre en la respuesta (p.ej. currency ->
     // currency__name, base_product_data_name -> name).
@@ -5064,6 +5123,36 @@ export class CRUD extends Vars implements OnChanges  /*implements OnInit*/ {
 
     const form = this.currentForm(pos);
     const draw = this._drawFormForDevice(pos);
+
+    // [[[II ESC:030-18 DOC:docs/documents/2026-07-14-030-child-runtime-overlay.md#escenario-18
+    // Alta desde el formulario: el servidor puede devolver sólo la clave de un
+    // dinámico. Se conserva esa clave como fuente de verdad y se reconstruye
+    // objeto/etiqueta únicamente si coincide con la opción ya seleccionada en el
+    // formulario; así no se sustituyen valores del servidor ni se muestran ids.
+    columns.forEach((column: any) => {
+      const field = column?.field;
+      if (typeof field !== 'string' || !field.startsWith('form_fields_data_')) return;
+
+      const option = form?.get(`object_${field}`)?.value;
+      const raw = form?.get(field)?.value;
+      const valueKey = column?.option_value || (column?.type === 'dropdown-choice' ? 'value' : 'id');
+      const value = option && typeof option === 'object' && !Array.isArray(option)
+        ? (option[valueKey] ?? option.id ?? option.value ?? raw)
+        : raw;
+      if (value === undefined || value === null || value === '') return;
+
+      if (row[field] === undefined || row[field] === null || row[field] === '') {
+        row[field] = value;
+      }
+      const matchesSelectedValue = String(row[field]) === String(value);
+      if (matchesSelectedValue && option && typeof option === 'object' && !Array.isArray(option)) {
+        row[`object_${field}`] = option;
+        if (row[`${field}__name`] === undefined || row[`${field}__name`] === null || row[`${field}__name`] === '') {
+          row[`${field}__name`] = this.generalS.formatDynamicValue(option, column);
+        }
+      }
+    });
+    // ]]]FI
 
     // Complemento: rellena huecos restantes con los objetos seleccionados en los
     // autocomplete del formulario (mismo comportamiento previo).
@@ -5077,6 +5166,98 @@ export class CRUD extends Vars implements OnChanges  /*implements OnInit*/ {
 
     return row;
   }
+
+  /**
+   * Aplana la respuesta usando las COLUMNAS de la tabla destino como config de
+   * campos (indexadas por `field`, que es como DJAtoObject las consulta). Con eso
+   * `<campo>__name`, los booleanos (`__text`) y los choices se resuelven con el
+   * contrato declarado por la columna. Devuelve null si no hay tabla/columnas.
+   */
+  private _flattenForLocalTable(
+    resp: any, node: boolean, additionalFieldsAppCols: any[], pos: any, tableField: string
+  ): any {
+    const tableConfig = this._findNoFormDataTableConfig(pos, tableField);
+    const columns = this.generalS.configuredTableColumns(tableConfig?.columns);
+    if (!columns.length) return null;
+
+    const fields: any = {};
+    const fieldsBool: any[] = [];
+    columns.forEach((column: any) => {
+      if (!column?.field) return;
+      fields[column.field] = column;
+      // [[[II ESC:030-06 Los campos dinámicos `form_fields_data_<X>` se aplanan
+      // como `form_data.<X>`; se indexa también por `<X>` para que DJAtoObject los
+      // resuelva con la config de la columna. ]]]FI
+      if (typeof column.field === 'string' && column.field.startsWith('form_fields_data_')) {
+        fields[column.field.slice('form_fields_data_'.length)] = column;
+      }
+      // Mismo contrato que fieldsBool del form: el bool se aplana a `__text`.
+      if (column.type === 'toggle-button' || column.type === 'checkbox') {
+        fieldsBool.push(column);
+      }
+    });
+
+    const flat = this.DJAtoObject({ resp, node, additionalFieldsAppCols, pos, fields, fieldsBool });
+
+    // [[[II ESC:030-14 DOC:docs/documents/2026-07-14-030-child-runtime-overlay.md#escenario-14
+    // Puente form_data.<X> / form_data.<form_fields_data_X> -> columna: el
+    // servidor puede conservar la clave completa o la abreviada. Conserva VALUE
+    // canónico + etiqueta para que los dinámicos del FORM y de la TABLA no caigan
+    // a ids después de la respuesta. ]]]FI
+    const bridge = (row: any) => {
+      if (!row || typeof row !== 'object') return;
+      columns.forEach((column: any) => {
+        const field = column?.field;
+        if (typeof field !== 'string' || !field.startsWith('form_fields_data_')) return;
+        const shortField = field.slice('form_fields_data_'.length);
+        const rawValue = row?.form_data?.[field] ?? row?.form_data?.[shortField];
+        const flattenedValue = row[`form_data.${field}`] ?? row[`form_data.${shortField}`];
+        const sourceValue = rawValue ?? flattenedValue;
+        if (sourceValue === undefined) return;
+
+        if (sourceValue && typeof sourceValue === 'object' && !Array.isArray(sourceValue)) {
+          const valueKey = column?.option_value || (column?.type === 'dropdown-choice' ? 'value' : 'id');
+          if (row[field] === undefined || row[field] === '') {
+            row[field] = sourceValue[valueKey] ?? sourceValue.id ?? sourceValue.value ?? '';
+          }
+          if (row[`${field}__name`] === undefined || row[`${field}__name`] === '') {
+            row[`${field}__name`] = this.generalS.formatDynamicValue(sourceValue, column);
+          }
+          if (row[`object_${field}`] === undefined) row[`object_${field}`] = sourceValue;
+        } else if (row[field] === undefined || row[field] === '') {
+          row[field] = sourceValue;
+        }
+      });
+    };
+    if (Array.isArray(flat)) flat.forEach(bridge); else bridge(flat);
+    return flat;
+  }
+
+  // [[[II ESC:030-12 DOC:docs/documents/2026-07-14-030-child-runtime-overlay.md#escenario-12
+  /**
+   * Resultado del último guardado de FILA de tabla derivada (`local_table.mode
+   * 'row'`). Es el canal de retorno motor -> tabla: sin él la tabla cerraba la
+   * fila con su propia validez y no se enteraba de que el guardado había
+   * abortado, dejando datos sin persistir con aspecto de guardados.
+   *
+   * `token` se incrementa siempre para que dos resultados iguales consecutivos
+   * (p.ej. dos fallos seguidos en la misma fila) sigan disparando `ngOnChanges`
+   * en el componente de tabla.
+   */
+  public tableRowSaveOutcome = signal<{ field: string; row_index: any; ok: boolean; token: number } | null>(null);
+  private _tableRowSaveToken = 0;
+
+  /** Publica el desenlace de un guardado de fila; no-op si no era de fila. */
+  protected _publishTableRowSaveOutcome(localTable: saveOptions['local_table'], ok: boolean): void {
+    if (!localTable?.field || localTable.mode !== 'row') return;
+    this.tableRowSaveOutcome.set({
+      field: localTable.field,
+      row_index: localTable.row_index,
+      ok,
+      token: ++this._tableRowSaveToken,
+    });
+  }
+  // ]]]FI
 
   private _applyCreatedItemToLocalTable(pos: any, localTable: saveOptions['local_table'], createdItem: any): void {
     if (!localTable?.field || !createdItem) return;
@@ -5096,7 +5277,59 @@ export class CRUD extends Vars implements OnChanges  /*implements OnInit*/ {
     // desde la propia tabla). No elimina borradores globales ni multiplica filas.
     if (localTable.mode === 'row') {
       const targetIndex = localTable.row_index;
-      const replacement = rowGroups[0];
+      const createdRow = createdRows[0];
+      const previousRow = targetIndex != null && targetIndex >= 0 && targetIndex < control.length
+        ? control.at(targetIndex) as FormGroup
+        : null;
+      const previousSource = (previousRow as any)?.[this.tableRowSourceFlag] || {};
+      // [[[II ESC:030-18 DOC:docs/documents/2026-07-14-030-child-runtime-overlay.md#escenario-18
+      // Si la respuesta conserva el mismo VALUE pero omite su objeto/etiqueta,
+      // reutiliza el metadato de la fila previa. También preserva una relación
+      // declarada cuando la respuesta no la incluye, para que una fila recién
+      // confirmada no se clasifique erróneamente como manual. ]]]FI
+      if (createdRow && previousRow) {
+        this.generalS.configuredTableColumns(tableConfig.columns).forEach((column: any) => {
+          const field = column?.field;
+          if (typeof field !== 'string') return;
+          const previousValue = previousSource[field] ?? previousRow.get(field)?.value;
+          const responseValue = createdRow[field];
+          const responseKeepsPreviousValue = responseValue !== undefined
+            && responseValue !== null
+            && responseValue !== ''
+            && previousValue !== undefined
+            && previousValue !== null
+            && previousValue !== ''
+            && String(responseValue) === String(previousValue);
+
+          if (field.startsWith('form_fields_data_')
+            && (responseValue === undefined || responseValue === null || responseValue === '')) {
+            createdRow[field] = previousValue;
+          }
+          if (field.startsWith('form_fields_data_')
+            && (responseKeepsPreviousValue || createdRow[field] === previousValue)
+            && (createdRow[`${field}__name`] === undefined || createdRow[`${field}__name`] === null || createdRow[`${field}__name`] === '')) {
+            createdRow[`${field}__name`] = previousSource[`${field}__name`];
+          }
+          if (field.startsWith('form_fields_data_')
+            && (responseKeepsPreviousValue || createdRow[field] === previousValue)
+            && createdRow[`object_${field}`] === undefined
+            && previousSource[`object_${field}`] !== undefined) {
+            createdRow[`object_${field}`] = previousSource[`object_${field}`];
+          }
+
+          const relationshipField = column?.relationship_field;
+          if (relationshipField
+            && (responseValue === undefined || responseValue === null || responseValue === '' || responseKeepsPreviousValue)
+            && (createdRow[relationshipField] === undefined || createdRow[relationshipField] === null || createdRow[relationshipField] === '')
+            && previousSource[relationshipField] !== undefined
+            && previousSource[relationshipField] !== null
+            && previousSource[relationshipField] !== '') {
+            createdRow[relationshipField] = previousSource[relationshipField];
+          }
+        });
+      }
+      // ]]]FI
+      const replacement = createdRow && this._createNoFormDataTableRowFormGroup(tableConfig, createdRow);
       if (replacement && targetIndex != null && targetIndex >= 0 && targetIndex < control.length) {
         control.setControl(targetIndex, replacement, { emitEvent: false });
       } else if (replacement) {
@@ -5242,7 +5475,7 @@ export class CRUD extends Vars implements OnChanges  /*implements OnInit*/ {
     //console.log('forrmmmmmmmmmmmmmmmmmm', formData);
     //revisar porque la primer seleccion del archivo se envia vacio de asset-document
     if (doCreate) {
-      this.crudS.saveObject({ formData, include, filter /*, files*/ }).subscribe({
+      this.crudS.saveObject({ formData, include, /*filter , files*/ }).subscribe({
         next: (resp: any) => {
           const temp = [...this.items()];
           const additionalFieldsAppCols = this.additionalFieldsAppCols[safePos] || [];
@@ -5262,8 +5495,18 @@ export class CRUD extends Vars implements OnChanges  /*implements OnInit*/ {
             // guardado (p.ej. guardado en "pos transitorio" pero la tabla está en
             // el form VISIBLE). local_table.pos indica ese destino.
             const tablePos = local_table.pos ?? safePos;
-            this._applyCreatedItemToLocalTable(tablePos, local_table, createdItem);
+            // [[[II ESC:030-06 Se re-aplana la MISMA respuesta con las COLUMNAS
+            // de la tabla como config: así `<campo>__name` sale del `option_label`
+            // declarado por la columna (p.ej. moneda -> short_name, soporta
+            // concatenación) y no del option_label del formulario. El aplanado
+            // del form (createdItem) se conserva intacto para items()/grid. ]]]FI
+            const tableItem = this._flattenForLocalTable(resp, node, additionalFieldsAppCols, tablePos, local_table.field)
+              ?? createdItem;
+            this._applyCreatedItemToLocalTable(tablePos, local_table, tableItem);
             this._syncRelationshipControlsFromCreatedItem(tablePos, createdItem);
+            // [[[II ESC:030-12 Fila realmente persistida: recién aquí la tabla
+            // puede cerrarla (la respuesta ya reemplazó el FormGroup). ]]]FI
+            this._publishTableRowSaveOutcome(local_table, true);
           }
           // ]]]FI
 
@@ -5282,6 +5525,9 @@ export class CRUD extends Vars implements OnChanges  /*implements OnInit*/ {
         error: (e: any) => {
           this.messageS.changeMessage(`No fue posible crear ${this.singularIndefiniteArticle[safePos] || this.singularIndefiniteArticle[0]}.`, e, this.customField()[safePos]);
           this.showBlocked(false);
+          // [[[II ESC:030-12 El servidor rechazó el alta: la fila NO está
+          // persistida y debe seguir editable. ]]]FI
+          this._publishTableRowSaveOutcome(local_table, false);
           // Va dentro de error para que se oculte hasta que responda el observable
         }
       });
@@ -5330,6 +5576,19 @@ export class CRUD extends Vars implements OnChanges  /*implements OnInit*/ {
           this.files64 = [];
 
           this.updateRecord(resp, id, safePos);
+          // [[[II ESC:030-18 DOC:docs/documents/2026-07-14-030-child-runtime-overlay.md#escenario-18
+          // PATCH de una fila usa la misma rehidratación que POST. Sin este
+          // camino la respuesta no restauraba object_/__name y los combos
+          // dinámicos quedaban reducidos a sus claves tras editar otra celda.
+          if (local_table) {
+            const tablePos = local_table.pos ?? safePos;
+            const additionalFieldsAppCols = this.additionalFieldsAppCols[safePos] || [];
+            const tableItem = this._flattenForLocalTable(resp, node, additionalFieldsAppCols, tablePos, local_table.field)
+              ?? this.DJAtoObject({ resp, node, additionalFieldsAppCols });
+            this._applyCreatedItemToLocalTable(tablePos, local_table, tableItem);
+            this._syncRelationshipControlsFromCreatedItem(tablePos, tableItem);
+          }
+          // ]]]FI
           if (hide) {
             this.hideFormDialog(safePos);
           } else {
@@ -5343,12 +5602,16 @@ export class CRUD extends Vars implements OnChanges  /*implements OnInit*/ {
           }
 
           this.showBlocked(false);
+          // [[[II ESC:030-12 Fila editada y aceptada por el servidor. ]]]FI
+          this._publishTableRowSaveOutcome(local_table, true);
           // Va dentro de next para que se oculte hasta que responda el observable
         },
         error: (e: any) => {
           this.showBlocked(false);
           // Va dentro de error para que se oculte hasta que responda el observable
           this.messageS.changeMessage(`No fue posible editar ${this.singularIndefiniteArticle[safePos] || this.singularIndefiniteArticle[0]}.`, e, this.customField()[safePos]);
+          // [[[II ESC:030-12 PATCH rechazado: la fila sigue sin persistir. ]]]FI
+          this._publishTableRowSaveOutcome(local_table, false);
         }
       });
     }
@@ -5455,7 +5718,17 @@ export class CRUD extends Vars implements OnChanges  /*implements OnInit*/ {
     this._syncAutoCompleteRelationshipControls(safePos);
     // ]]]FI
 
-    if (this.formErrors(safePos, is_file)) return;
+    // [[[II ESC:030-12 DOC:docs/documents/2026-07-14-030-child-runtime-overlay.md#escenario-12
+    // Un guardado de FILA (local_table.mode 'row') aborta aquí cuando el contexto
+    // transitorio no valida — típicamente por un campo del ENCABEZADO (p.ej.
+    // Sucursal), no de la fila. La tabla ya había cerrado la fila con la validez
+    // de la fila sola, así que quedaba con aspecto de guardada sin que saliera
+    // ninguna petición (pérdida silenciosa). Se publica el fallo para que la
+    // tabla la mantenga abierta. ]]]FI
+    if (this.formErrors(safePos, is_file)) {
+      this._publishTableRowSaveOutcome(local_table, false);
+      return;
+    }
     this.validateRelationships(safePos);
     this.showBlocked();
 
@@ -5487,23 +5760,20 @@ export class CRUD extends Vars implements OnChanges  /*implements OnInit*/ {
   //  4. La respuesta se proyecta e inyecta en la fila exacta de la tabla del form
   //     VISIBLE (local_table mode 'row').
   //
-  // NOTA: `name` local se resuelve por columna (local_editable) fuera de aquí; el
-  // nombre de campo del detalle (hoy 'name') NO se hardcodea: se toma del propio
-  // control del detalle y de la config de columna. Si a futuro un endpoint usa
-  // otro nombre para el "name local", basta la config de columna. ]]]FI
+  // NOTA: la editabilidad se resuelve por columna fuera de aquí; ningún nombre de
+  // campo del detalle se hardcodea. ]]]FI
   // Validators de una COLUMNA de tabla para el form transitorio: required sólo si
   // la columna es required y editable (misma editabilidad que resuelve la celda:
-  // local_editable fuerza edición; readonly la bloquea; si no, `default.edit`),
+  // readonly/edit/default.edit; local_editable está temporalmente deshabilitado),
   // más min/max length. No se hardcodean nombres de campo. ]]]FI
   private _transientColumnValidators(column: any): ValidatorFn | null {
     const validators: ValidatorFn[] = [];
-    const editable = column?.local_editable === true
-      ? true
-      : (column?.readonly === true ? false : column?.default?.edit !== false);
+    const editable = column?.readonly !== true && column?.edit !== false && column?.default?.edit !== false;
     if (column?.required && editable) validators.push(Validators.required);
     // Longitudes: `validation.{max,min}_length` o, para columnas de texto, los
     // campos naturales de input_text (`max_length`/`min_length` top-level). En
-    // auto-complete `min_length` significa "caracteres para buscar", NO validación.
+    // auto-complete el umbral de consulta es `min_search_length`, por lo que
+    // `min_length` no se interpreta aquí como regla de búsqueda.
     const isTextColumn = column?.type === 'input-text' || column?.type === 'textarea';
     const maxLength = column?.validation?.max_length ?? (isTextColumn ? column?.max_length : undefined);
     const minLength = column?.validation?.min_length ?? (isTextColumn ? column?.min_length : undefined);
@@ -5543,7 +5813,21 @@ export class CRUD extends Vars implements OnChanges  /*implements OnInit*/ {
     Object.keys(baseForm.controls).forEach((key) => {
       const ctrl = baseForm.get(key);
       if (ctrl instanceof FormControl) {
-        const column = columnByField.get(key);
+        // [[[II ESC:030-06 Un campo dropdown-like `form_fields_data_*` se valida en
+        // su ESPEJO `object_<campo>` (ahí vive el required). Ese espejo NO es una
+        // "columna" por nombre, así que sin esto conservaba el required del
+        // encabezado y la fila directa fallaba con "Componente/Síntoma/Tipo de
+        // gasto requerido" aunque la celda tuviera valor. Se mapea el espejo a la
+        // columna correspondiente para usar SU contrato (required por columna). ]]]FI
+        const mirroredField = key.startsWith('object_') ? key.slice('object_'.length) : null;
+        const column = columnByField.get(key) || (mirroredField ? columnByField.get(mirroredField) : null);
+
+        // [[[II ESC:030-10 `scope_edition` de la columna decide qué viaja al
+        // detalle: 'server' se envía; 'local' es SOLO vista (p.ej. banderas de
+        // comprobante) y NO debe formar parte del payload — se omite del form
+        // transitorio para que el serializador no la reciba. ]]]FI
+        if (column && column.scope_edition === 'local') return;
+
         const validator = column ? this._transientColumnValidators(column) : ctrl.validator;
         transientForm.addControl(
           key,
@@ -5562,20 +5846,52 @@ export class CRUD extends Vars implements OnChanges  /*implements OnInit*/ {
       if (!field) return;
 
       // Valor canónico: prioriza el UUID/valor persistido de la fila (source_row)
-      // y cae al valor visible de la celda.
-      const canonical = sourceRow[field] !== undefined ? sourceRow[field] : rowData[field];
+      // y cae al valor visible de la celda. false y 0 SÍ son valores válidos.
+      const canonical = (sourceRow[field] !== undefined && sourceRow[field] !== null && sourceRow[field] !== '')
+        ? sourceRow[field]
+        : rowData[field];
       const control = transientForm.get(field);
-      if (control && canonical !== undefined) {
+      if (control && canonical !== undefined && canonical !== null && canonical !== '') {
         control.setValue(canonical, { emitEvent: false });
+      // [[[II ESC:030-18 DOC:docs/documents/2026-07-14-030-child-runtime-overlay.md#escenario-18
+      // Opt-out declarativo: una columna puede prohibir explícitamente que una
+      // celda vacía herede el valor homónimo del formulario. No se presupone
+      // ningún campo; la configuración decide cuándo corresponde limpiar.
+      } else if (control && column?.inherit_from_form === false) {
+        control.setValue(null, { emitEvent: false });
+      // ]]]FI
       }
 
-      // UUID de relación en su campo canónico (p.ej. product).
+      // [[[II ESC:030-06 Espejo `object_<campo>` de los dropdown-like
+      // form_fields_data_*: se puebla con el OBJETO seleccionado guardado en la
+      // fila (`object_<campo>` de source_row). Así el required del espejo pasa y
+      // `_rebuildFormDataDicts` recompone form_data.<campo> en el payload. ]]]FI
+      const objectControl = transientForm.get('object_' + field);
+      if (objectControl) {
+        const selectedObject = sourceRow['object_' + field] ?? canonical;
+        if (selectedObject !== undefined && selectedObject !== null && selectedObject !== '') {
+          objectControl.setValue(selectedObject, { emitEvent: false });
+        // [[[II ESC:030-18 DOC:docs/documents/2026-07-14-030-child-runtime-overlay.md#escenario-18
+        } else if (column?.inherit_from_form === false) {
+          objectControl.setValue(null, { emitEvent: false });
+        // ]]]FI
+        }
+      }
+
+      // [[[II ESC:030-06 El buscador tiene DOS funciones y la fila decide cuál:
+      //   - Con opción SELECCIONADA: el UUID va a `relationship_field` y se envía
+      //     como relationship.
+      //   - Con TEXTO LIBRE: no hay relación; el texto ya viaja en el campo
+      //     (arriba) y se envía como atributo normal. Aquí se LIMPIA la relación
+      //     heredada del formulario visible; si no, una fila escrita a mano se
+      //     colgaba del producto que estuviera seleccionado en el encabezado. ]]]FI
       const relationshipField = column?.relationship_field;
       if (relationshipField) {
         const relId = sourceRow[relationshipField] ?? rowData[relationshipField];
         const relControl = transientForm.get(relationshipField);
-        if (relControl && relId !== undefined && relId !== null && relId !== '') {
-          relControl.setValue(relId, { emitEvent: false });
+        if (relControl) {
+          const hasRelation = relId !== undefined && relId !== null && relId !== '';
+          relControl.setValue(hasRelation ? relId : null, { emitEvent: false });
         }
       }
     });
@@ -5635,6 +5951,17 @@ export class CRUD extends Vars implements OnChanges  /*implements OnInit*/ {
     const draw = this.drawForm();
     if (draw && draw[basePos] !== undefined && draw[transientPos] === undefined) {
       this.drawForm.set({ ...draw, [transientPos]: draw[basePos] });
+    }
+    // customField también es señal por pos (computed sobre crudS.customField):
+    // sin este espejo, los mensajes de error del guardado transitorio salían sin
+    // el nombre del campo ("Este campo es requerido." a secas en vez de
+    // "Activo - ..."). Se actualiza la señal del servicio (fuente real).
+    const custom = this.customField();
+    if (custom && custom[basePos] !== undefined && custom[transientPos] === undefined) {
+      this.crudS.customField.update((current: any) => ({
+        ...current,
+        [transientPos]: current?.[basePos],
+      }));
     }
   }
 
@@ -7059,7 +7386,8 @@ export class CRUD extends Vars implements OnChanges  /*implements OnInit*/ {
     moreFields: moreFields = null,
     node: node = false,
     additionalFieldsAppCols: additionalFieldsAppCols = [],
-    pos = null
+    pos = null,
+    fields: fields = null
   }: getDJAtoObject) {
     const safePos: any = pos || this.pos();
 
@@ -7079,7 +7407,9 @@ export class CRUD extends Vars implements OnChanges  /*implements OnInit*/ {
       node: node,
       additionalFieldsAppCols: additionalFieldsAppCols,
       //los capos para las configuraciones
-      fields: this.crudS.fieldsForm(safePos)
+      // Por defecto la config del formulario; una tabla derivada pasa las suyas
+      // para resolver `<campo>__name` con SU option_label.
+      fields: fields === null ? this.crudS.fieldsForm(safePos) : fields
     });
   }
 }

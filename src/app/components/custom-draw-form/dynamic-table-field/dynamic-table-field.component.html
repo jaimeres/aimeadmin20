@@ -1,10 +1,16 @@
 <!-- [[[II ESC:015-01 DOC:docs/documents/2026-06-02_015_dynamic-table-field-component.md#escenario-01 ESC:030-01 DOC:docs/documents/2026-07-14-030-child-runtime-overlay.md#escenario-01 ESC:030-03 DOC:docs/documents/2026-07-14-030-child-runtime-overlay.md#escenario-03 -->
 <ng-container *ngIf="tableConfig as config">
-  <div *ngIf="config?.add_row " class="table-title-toolbar">
+  <!-- [[[II ESC:030-06 Con row_number, el botón + vive en el encabezado de la
+       columna # (ahorra el toolbar completo); sin row_number se conserva el
+       toolbar previo. ]]]FI -->
+  <!-- [[[II ESC:030-16 DOC:docs/documents/2026-07-14-030-child-runtime-overlay.md#escenario-16 -->
+  <div *ngIf="config?.add_row && !config?.row_number" class="table-title-toolbar"
+    [class.opacity-50]="isAnyRowEditing(config.field)" [class.pointer-events-none]="isAnyRowEditing(config.field)">
     <app-custom-button-crud [selected]="[]" (newAction)="addTableRow(config.field, config)" style="margin: 0px;">
     </app-custom-button-crud>
     <h5 *ngIf="config.label">{{ config.label }}</h5>
   </div>
+  <!-- ]]]FI -->
 
   <p-table [value]="getTableData(config.field)" [sortMode]="config?.sort ? 'multiple' : 'single'"
     [globalFilterFields]="controlColumnFields" [showGridlines]="config?.show_grid_lines !== false"
@@ -17,15 +23,27 @@
     <ng-template pTemplate="header">
       <tr>
         <th *ngIf="config?.row_number"
-          style="width: 35px; min-width: 35px; position: sticky; left: 0; z-index: 1; background: var(--surface-ground); padding: 0.5rem 0.3rem;"
-          class="border-right-1 border-300">#</th>
+          style="width: 35px; min-width: 35px; position: sticky; left: 0; z-index: 1; background: var(--surface-ground); padding: 0.2rem 0.1rem;"
+          class="border-right-1 border-300">
+          <!-- [[[II ESC:030-16 DOC:docs/documents/2026-07-14-030-child-runtime-overlay.md#escenario-16 -->
+          <p-button *ngIf="config?.add_row && !isTableReadonly(config.field)" icon="pi pi-plus" size="small"
+            severity="secondary" [text]="true" (onClick)="addTableRow(config.field, config)" pTooltip="Agregar fila"
+            [disabled]="isAnyRowEditing(config.field)"
+            [style]="{'height': '24px', 'width': '24px'}">
+          </p-button>
+          <!-- ]]]FI -->
+          <ng-container *ngIf="!config?.add_row">#</ng-container>
+        </th>
         <th *ngIf="config?.delete_row"
           style="width: 75px; min-width: 75px; position: sticky; left: 35px; z-index: 1; background: var(--surface-ground); padding: 0.2rem 0.2rem !important;"
           class="border-right-1 border-300">Acciones</th>
         <th *ngFor="let col of normalizedColumns; trackBy: trackByColumnField"
           [style]="{'width': col._width || getColumnWidth(col)}"
           [pSortableColumn]="col.sortable !== false ? 'value.' + col.field : undefined">
-          {{ col.header }}
+          <!-- [[[II ESC:030-06 Encabezado igual que en la tabla normal: header o,
+               en su defecto, cols.label / label (los campos dinámicos
+               form_fields_data_* declaran su etiqueta ahí). ]]]FI -->
+          {{ col.header || col.cols?.label || col.label }}
           <p-sortIcon *ngIf="col.sortable !== false" [field]="'value.' + col.field"></p-sortIcon>
         </th>
       </tr>
@@ -42,7 +60,7 @@
           <td *ngIf="config?.delete_row"
             style="position: sticky; left: 35px; z-index: 1; background: var(--surface-0); padding: 0.2rem 0.2rem !important;"
             class="border-right-1 border-300">
-            <div class="flex gap-1 justify-content-center">
+            <div class="flex gap-1 justify-content-center align-items-center">
               <p-button *ngIf="!rowEditState.isRowOrCellEditing && !isTableReadonly(config.field)" icon="pi pi-pencil" size="small" severity="secondary"
                 [text]="true" (onClick)="startRowEdit(config.field, rowIndex)" pTooltip="Editar fila"
                 [style]="{'height': '28px', 'width': '28px'}">
@@ -59,11 +77,16 @@
                 severity="danger" [text]="true" (onClick)="deleteTableRow(rowIndex, config.field)"
                 pTooltip="Eliminar fila" [style]="{'height': '28px', 'width': '28px'}">
               </p-button>
+              <!-- [[[II ESC:030-06 Marca discreta de registro MANUAL (texto libre,
+                   sin relación resuelta): en estas filas todo es editable. Va
+                   SIEMPRE al final para no desplazar los botones. ]]]FI -->
+              <i *ngIf="isManualRow(rowData)" class="pi pi-user-edit text-orange-400"
+                style="font-size: 0.6rem;" pTooltip="Registro manual (sin producto del sistema)"></i>
             </div>
           </td>
           <td *ngFor="let col of normalizedColumns; trackBy: trackByColumnField"
-            (dblclick)="!isTableReadonly(config.field) && !rowEditState.isRowEditing && !rowEditState.editingCells[col.field] && (col._editable !== undefined ? col._editable : isColumnEditable(col)) && startCellEdit(config.field, rowIndex, col.field)"
-            [class.cursor-pointer]="!isTableReadonly(config.field) && !rowEditState.isRowEditing && !rowEditState.editingCells[col.field] && (col._editable !== undefined ? col._editable : isColumnEditable(col))">
+            (dblclick)="!isTableReadonly(config.field) && !rowEditState.isRowEditing && !rowEditState.editingCells[col.field] && isCellEditableForRow(rowData, col) && startCellEdit(config.field, rowIndex, col.field)"
+            [class.cursor-pointer]="!isTableReadonly(config.field) && !rowEditState.isRowEditing && !rowEditState.editingCells[col.field] && isCellEditableForRow(rowData, col)">
             <div [ngSwitch]="col._type || getColumnType(col)">
               <div *ngSwitchCase="'input-text'">
                 <span *ngIf="!rowEditState.isRowEditing && !rowEditState.editingCells[col.field]"
@@ -77,7 +100,7 @@
                 </span>
 
                 <input
-                  *ngIf="rowEditState.isRowEditing && (col._editable !== undefined ? col._editable : isColumnEditable(col))"
+                  *ngIf="rowEditState.isRowEditing && isCellEditableForRow(rowData, col)"
                   type="text" pInputText [formControlName]="col.field"
                   [class]="'w-full ' + getCellClass(rowData.get(col.field)?.value, col, config.field, rowIndex)"
                   [placeholder]="col.header" [maxlength]="col.validation?.max_length"
@@ -91,13 +114,15 @@
               </div>
 
               <div *ngSwitchCase="'input-number'">
+                <!-- [[[II ESC:030-06 Mismo formato numérico que el input del form
+                     (mode/currency/locale + min/max fraction digits por config). ]]]FI -->
                 <span *ngIf="!rowEditState.isRowEditing && !rowEditState.editingCells[col.field]"
                   [class]="getCellClass(rowData.get(col.field)?.value, col, config.field, rowIndex)">
-                  {{ rowData.get(col.field)?.value ?? '-' }}
+                  {{ formatNumberCell(rowData.get(col.field)?.value, col) }}
                 </span>
 
                 <p-inputNumber
-                  *ngIf="rowEditState.isRowEditing && (col._editable !== undefined ? col._editable : isColumnEditable(col))"
+                  *ngIf="rowEditState.isRowEditing && isCellEditableForRow(rowData, col)"
                   [formControlName]="col.field" [mode]="col.mode || 'decimal'" [min]="col.min" [max]="col.max"
                   [minFractionDigits]="col.min_fraction_digits" [maxFractionDigits]="col.max_fraction_digits"
                   class="w-full" />
@@ -119,27 +144,42 @@
                 </span>
 
                 <p-autoComplete
-                  *ngIf="(rowEditState.isRowEditing && (col._editable !== undefined ? col._editable : isColumnEditable(col))) || rowEditState.editingCells[col.field]"
+                  *ngIf="(rowEditState.isRowEditing && isCellEditableForRow(rowData, col)) || rowEditState.editingCells[col.field]"
                   [formControlName]="col.field" [suggestions]="cellSuggestions()"
-                  (completeMethod)="onCellComplete($event, col)"
+                  (completeMethod)="onCellComplete($event, config.field, rowIndex, col)"
                   (onSelect)="onCellAutoCompleteSelect($event, config.field, rowIndex, col)"
                   (keydown)="onCellAutoCompleteKeydown($event, config.field, rowIndex, col)"
-                  [optionLabel]="col.option_label || 'name'" [minLength]="col.min_length || 1"
-                  [delay]="col.delay || 300" [forceSelection]="col.force_selection === true"
-                  [showEmptyMessage]="col.show_empty_message !== false"
+                  [optionLabel]="col.option_label | joinOrSelf" [minLength]="cellMinLength(col)"
+                  [dropdown]="col.dropdown === true && col.search_mode !== 'exact'"
+                  [delay]="col.delay || 300"
+                  [forceSelection]="col.force_selection === true && col.free_or_relationship !== true"
+                  [showEmptyMessage]="col.show_empty_message !== false && !cellPanelSuppressed()"
                   [emptyMessage]="col.empty_message || 'No hay resultados'"
                   [pAutoFocus]="rowEditState.editingCells[col.field]" appendTo="body"
+                  [panelStyle]="{ 'min-width': '26rem' }"
                   styleClass="w-full" class="w-full">
+                  <!-- Mismo encabezado de panel que el autocomplete del form. -->
+                  <ng-template #header>
+                    <div *ngIf="col.search_mode !== 'exact' && col.panel?.active !== false && col.panel?.fields" class="grid grid-cols-12 gap-2 items-center border-bottom-1 pb-1 mb-2">
+                      <div *ngFor="let pf of (col.panel.fields | keyvalue); trackBy: trackByKey"
+                        [ngClass]="[$any(pf.value).class || 'col-span-6', $any(pf.value).class_md || 'md:col-span-3']">
+                        <div class="text-xs font-semibold text-gray-600">{{ $any(pf.value).header }}</div>
+                      </div>
+                    </div>
+                  </ng-template>
                   <ng-template let-option #item>
-                    <div class="grid grid-cols-12 gap-2 items-center" *ngIf="col.panel?.fields; else acPlain">
+                    <div class="grid grid-cols-12 gap-2 items-center"
+                      *ngIf="col.search_mode !== 'exact' && col.panel?.active !== false && col.panel?.fields; else acPlain">
                       <span *ngFor="let pf of (col.panel.fields | keyvalue); trackBy: trackByKey"
                         [ngClass]="[$any(pf.value).class || 'col-span-6', $any(pf.value).class_md || 'md:col-span-3']"
                         class="text-sm">
-                        {{ $any(option)[$any(pf.value).field + '__name'] ?? $any(option)[$any(pf.value).field] }}
+                        {{ formatSuggestionValue($any(option)[$any(pf.value).field + '__name'] ?? $any(option)[$any(pf.value).field], $any(pf.value)) }}
                       </span>
                     </div>
+                    <!-- Sin panel declarado: etiqueta por option_label (soporta
+                         concatenación), sin nombres de campo hardcodeados. -->
                     <ng-template #acPlain>
-                      <span class="text-sm">{{ $any(option)[col.option_label] ?? option.name ?? option.code ?? option.display_name }}</span>
+                      <span class="text-sm">{{ optionLabelText(option, col) }}</span>
                     </ng-template>
                   </ng-template>
                 </p-autoComplete>
@@ -147,17 +187,19 @@
 
               <!-- Celda dropdown (combo) / dropdown-choice: opciones inline por config. -->
               <div *ngSwitchCase="'dropdown'">
+                <!-- Lectura: el control guarda el id; se muestra su etiqueta. -->
                 <span *ngIf="!rowEditState.isRowEditing && !rowEditState.editingCells[col.field]"
                   [class]="getCellClass(rowData.get(col.field)?.value, col, config.field, rowIndex)">
-                  {{ rowData.get(col.field)?.value || '-' }}
+                  {{ cellDropdownLabel(rowData.get(col.field)?.value, col, rowIndex) }}
                 </span>
 
                 <p-select
-                  *ngIf="(rowEditState.isRowEditing && (col._editable !== undefined ? col._editable : isColumnEditable(col))) || rowEditState.editingCells[col.field]"
+                  *ngIf="(rowEditState.isRowEditing && isCellEditableForRow(rowData, col)) || rowEditState.editingCells[col.field]"
                   [formControlName]="col.field"
-                  [options]="col.options?.length ? col.options : (cellDropdownOptions()[col.field] || [])"
+                  [options]="cellOptionsForRow(col, rowIndex)"
                   [optionLabel]="col.option_label || 'name'" [optionValue]="col.option_value || 'id'"
                   [filter]="col.filter_local !== false" [showClear]="true" appendTo="body"
+                  [disabled]="isChildCellDisabled(rowIndex, col)"
                   styleClass="w-full" class="w-full"
                   [pAutoFocus]="rowEditState.editingCells[col.field]"
                   (onChange)="onCellDropdownChange($event, config.field, rowIndex, col)" />
@@ -166,15 +208,16 @@
               <div *ngSwitchCase="'dropdown-choice'">
                 <span *ngIf="!rowEditState.isRowEditing && !rowEditState.editingCells[col.field]"
                   [class]="getCellClass(rowData.get(col.field)?.value, col, config.field, rowIndex)">
-                  {{ rowData.get(col.field)?.value || '-' }}
+                  {{ cellDropdownLabel(rowData.get(col.field)?.value, col, rowIndex) }}
                 </span>
 
                 <p-select
-                  *ngIf="(rowEditState.isRowEditing && (col._editable !== undefined ? col._editable : isColumnEditable(col))) || rowEditState.editingCells[col.field]"
+                  *ngIf="(rowEditState.isRowEditing && isCellEditableForRow(rowData, col)) || rowEditState.editingCells[col.field]"
                   [formControlName]="col.field"
-                  [options]="col.options?.length ? col.options : (cellDropdownOptions()[col.field] || [])"
+                  [options]="cellOptionsForRow(col, rowIndex)"
                   [optionLabel]="col.option_label || 'display_name'" [optionValue]="col.option_value || 'value'"
                   [filter]="col.filter_local === true" appendTo="body"
+                  [disabled]="isChildCellDisabled(rowIndex, col)"
                   styleClass="w-full" class="w-full"
                   [pAutoFocus]="rowEditState.editingCells[col.field]"
                   (onChange)="onCellDropdownChange($event, config.field, rowIndex, col)" />
@@ -190,7 +233,7 @@
                 </span>
 
                 <p-toggleButton
-                  *ngIf="(rowEditState.isRowEditing && (col._editable !== undefined ? col._editable : isColumnEditable(col))) || rowEditState.editingCells[col.field]"
+                  *ngIf="(rowEditState.isRowEditing && isCellEditableForRow(rowData, col)) || rowEditState.editingCells[col.field]"
                   [formControlName]="col.field" [onLabel]="col._labelTrue" [offLabel]="col._labelFalse"
                   [pAutoFocus]="rowEditState.editingCells[col.field]" styleClass="w-full"
                   (onChange)="advanceAfterCell(config.field, rowIndex, col.field)" />
@@ -205,7 +248,7 @@
                 </span>
 
                 <input
-                  *ngIf="rowEditState.isRowEditing && (col._editable !== undefined ? col._editable : isColumnEditable(col))"
+                  *ngIf="rowEditState.isRowEditing && isCellEditableForRow(rowData, col)"
                   type="text" pInputText [formControlName]="col.field"
                   [class]="'w-full ' + getCellClass(rowData.get(col.field)?.value, col, config.field, rowIndex)"
                   [placeholder]="col.header" />

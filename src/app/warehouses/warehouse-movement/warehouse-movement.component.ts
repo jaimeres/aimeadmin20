@@ -48,7 +48,7 @@ export class WarehouseMovementComponent extends CRUD implements OnInit {
     this.typeDefault = 'inventory-movement-detail';
     this.app[this.typeDefault] = 'inventories/inventory-movement-detail';
     //this.additionalFieldsAppCols[this.typeDefault as keyof typeof this.additionalFieldsAppCols] = {
-    //  'inventory_movement_data': { 'column_header_prefix': '', 'form_prefix': '', 'default_field': 'name' },
+    //  'inventory_movement_data': { 'column_header_prefix': '', 'form_prefix': '' },
     //};
     //this.module[this.typeDefault] = 'MA';
     //this.columns[this.typeDefault] = ['id', 'quantity']

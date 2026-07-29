@@ -18,6 +18,7 @@ import { MessageService } from '../../components/services/message.service';
 import { AssistantWidgetComponent } from '../../components/assistant-widget/assistant-widget.component';
 import { BlockedComponent } from '../../components/blocked/blocked.component';
 import { CookieService } from 'ngx-cookie-service';
+import { environment } from 'src/environments/environment';
 export function playerFactory() { return import('lottie-web'); }
 
 
@@ -52,7 +53,7 @@ export function playerFactory() { return import('lottie-web'); }
         <app-assistant-widget
         [welcomeTips]="['¿Necesitas ayuda?', 'Puedo guiarte en este módulo', 'Pregunta lo que quieras']"
 
-        apiUrl="/api/assistant/chat"
+        [apiUrl]="agentUrl"
       ></app-assistant-widget>
    
 
@@ -60,6 +61,9 @@ export function playerFactory() { return import('lottie-web'); }
   providers: [MessageServiceP],
 })
 export class AppLayout implements OnDestroy {
+  /** URL del agente jukai; el widget del asistente le envía los mensajes. */
+  readonly agentUrl = environment.agent_url;
+
   overlayMenuOpenSubscription: Subscription;
 
   menuOutsideClickListener: any;
