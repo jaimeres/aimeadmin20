@@ -4522,10 +4522,16 @@ export class CRUD extends Vars implements OnChanges  /*implements OnInit*/ {
     return this._autoCompleteSelectionMatchesText(objectSelected, currentValue, fieldCfg) ? objectSelected : null;
   }
 
+  // [[[II ESC:030-20 DOC:docs/documents/2026-07-14-030-child-runtime-overlay.md#escenario-20
   private _syncAutoCompleteRelationshipControls(pos: any): void {
     const form = this.currentForm(pos);
     if (!form) return;
     const draw = this._drawFormForDevice(pos);
+    const relationships = new Map<string, {
+      control: AbstractControl;
+      selected: any | null;
+    }>();
+
     this._walkAutoCompleteFields(draw, (fieldCfg: any) => {
       const fieldName = fieldCfg.field;
       if (!this._isFreeOrRelationshipAutoComplete(fieldCfg) || this._isDynamicPayloadField(fieldName)) return;
@@ -4535,9 +4541,19 @@ export class CRUD extends Vars implements OnChanges  /*implements OnInit*/ {
       if (!relationControl) return;
 
       const selected = this._autoCompleteSelectedObjectFromForm(form, fieldCfg);
-      relationControl.setValue(selected ? this._autoCompleteRelationId(selected) : null);
+      const relationship = relationships.get(relationField) || {
+        control: relationControl,
+        selected: null,
+      };
+      if (selected) relationship.selected = selected;
+      relationships.set(relationField, relationship);
+    });
+
+    relationships.forEach(({ control, selected }) => {
+      control.setValue(selected ? this._autoCompleteRelationId(selected) : null);
     });
   }
+  // ]]]FI
 
   private _normalizeAutoCompletePayload(pos: any, formData: any): void {
     if (!formData || typeof formData !== 'object') return;

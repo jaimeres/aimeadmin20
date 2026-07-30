@@ -675,6 +675,42 @@ sí se aplica), que es lo que valida el escenario del default efectivo sin fuent
 No se puede discriminar por "el padre tiene valor": en ambos casos lo tiene. El
 único discriminador válido es si `relationship_field` está resuelto.
 
+### Sincronización previa al guardado de buscadores hermanos
+
+La misma regla debe conservarse al preparar el payload. Antes,
+`_syncAutoCompleteRelationshipControls` escribía el control relacional durante
+cada iteración: el buscador que sí tenía objeto seleccionado establecía el UUID,
+pero el siguiente buscador hermano —con texto derivado y sin objeto seleccionado
+propio— lo sustituía por `null`. El POST llegaba sin `product`; el servidor
+respondía precio `0` y moneda vacía, y la tabla mostraba la fila como manual.
+
+La sincronización ahora agrupa por `relationship_field` y escribe cada relación
+una sola vez al terminar. Cualquier buscador hermano con selección válida conserva
+el UUID; la relación sólo se limpia cuando ninguno tiene una selección válida.
+No se agrega ninguna clave de configuración y se preserva la precedencia previa
+del último buscador cuando más de uno tiene una selección válida.
+
+### Búsqueda exacta: escribir no desvincula; Enter sin resultado sí
+
+En `search_mode: exact`, PrimeNG ejecuta `completeMethod` mientras se escribe
+aunque la consulta real esté reservada para Enter. La limpieza de selección se
+hacía antes de comprobar el modo y, por ello, modificar una tecla podía eliminar
+`product` y restablecer los derivados sin que el usuario hubiera buscado.
+
+Además, esa limpieza ocurría después del `valueChanges` de `code`: cambiar sólo
+`product` no volvía a identificar a `code` como padre modificado, por lo que
+`name`, `price` y `currency` conservaban los datos de la relación anterior hasta
+una segunda edición.
+
+El contrato queda:
+
+- escribir en un autocomplete exacto no consulta, no desvincula y no restablece;
+- Enter con una coincidencia única selecciona la nueva relación;
+- Enter con respuesta válida sin coincidencia limpia los objetos seleccionados
+  de todos los buscadores hermanos, elimina la relación y procesa inmediatamente
+  los derived del buscador, en el primer intento;
+- un error de transporte no se interpreta como “sin relación”.
+
 ### La relación es ESTADO DE LA FILA (fila manual marcada por error)
 
 `isManualRow()` decide si una fila es manual comprobando si alguna relación
@@ -752,6 +788,11 @@ señal visual.**
   `apps/utils/tests/test_child_runtime_overlay.py` usando el entorno compartido.
 - Specs agregados para condiciones, estados, tabla derivada acumulativa, merge
   configurable de filas y `scope_edition`.
+- Spec de regresión para dos autocompletes que comparten `relationship_field`:
+  una selección válida conserva el UUID aunque el buscador hermano sólo tenga
+  texto derivado; sin ninguna selección la relación vuelve a `null`.
+- Specs de búsqueda exacta para conservar relación/derivados durante escritura y
+  restablecerlos en el primer Enter confirmado sin coincidencia.
 - Los tres archivos de spec modificados compilan de forma aislada con TypeScript.
 - Escenario 16: `npx tsc --noEmit -p tsconfig.app.json` completó sin errores tras
   cubrir `smart_search`, `min_search_length`, Enter por defecto y restauración de

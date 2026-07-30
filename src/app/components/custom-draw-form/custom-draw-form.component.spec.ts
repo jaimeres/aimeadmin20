@@ -805,14 +805,120 @@ describe('CustomDrawFormComponent', () => {
   });
   // ]]]FI
 
-  // [[[II ESC:030-16 DOC:docs/documents/2026-07-14-030-child-runtime-overlay.md#escenario-16
+  // [[[II ESC:030-16 ESC:030-20 DOC:docs/documents/2026-07-14-030-child-runtime-overlay.md#escenario-16 DOC:docs/documents/2026-07-14-030-child-runtime-overlay.md#escenario-20
   it('no consulta ni abre panel al escribir en modo exacto', () => {
     const searchSpy = spyOn<any>(component, '_runAutoCompleteSearch');
-    component.completeMethod({ query: 'ABC' }, { field: 'codigo', search_mode: 'exact', panel: { active: true } });
+    const selected = { id: 'product-id', code: 'ABC' };
+    const form = new FormGroup({
+      codigo: new FormControl('ABCD'),
+      product: new FormControl('product-id'),
+      __autocomplete_object_codigo: new FormControl<any>(selected),
+    });
+    component.formGroupSignal.set(form);
+    const config = {
+      field: 'codigo',
+      type: 'auto-complete',
+      search_mode: 'exact',
+      free_or_relationship: true,
+      relationship_field: 'product',
+      option_label: 'code',
+      panel: { active: true },
+    };
+
+    component.completeMethod({ query: 'ABCD' }, config);
 
     expect(searchSpy).not.toHaveBeenCalled();
     expect(component.autoCompletePanelSuppressed()).toBeTrue();
     expect(component.suggestions()).toEqual([]);
+    expect(form.get('product')?.value).toBe('product-id');
+    expect(form.get('__autocomplete_object_codigo')?.value).toBe(selected);
+  });
+  // ]]]FI
+
+  // [[[II ESC:030-20 DOC:docs/documents/2026-07-14-030-child-runtime-overlay.md#escenario-20
+  it('restablece los derivados en el primer Enter exacto sin coincidencia', () => {
+    const product = {
+      id: 'product-id',
+      base_product_data_code: '6',
+      base_product_data_name: 'DIESEL',
+      purchase_price: 2122.76,
+      purchase_currency: 'currency-id',
+    };
+    const codeConfig: any = {
+      field: 'code',
+      type: 'auto-complete',
+      search_mode: 'exact',
+      free_or_relationship: true,
+      relationship_field: 'product',
+      option_label: 'base_product_data_code',
+      data_type: { type: 'product' },
+      children: {
+        active: true,
+        fields: {
+          derived: {
+            0: {
+              field: 'name',
+              field_name: 'base_product_data_name',
+              from: 'parent',
+              default: { active: true, value: '', edit: false },
+            },
+            1: {
+              field: 'price',
+              field_name: 'purchase_price',
+              from: 'parent',
+              default: { active: true, value: 0, edit: false },
+            },
+            2: {
+              field: 'currency',
+              field_name: 'purchase_currency',
+              from: 'parent',
+              default: { active: true, value: '', edit: false },
+            },
+          },
+        },
+      },
+    };
+    const nameConfig: any = {
+      field: 'name',
+      type: 'auto-complete',
+      free_or_relationship: true,
+      relationship_field: 'product',
+      option_label: 'base_product_data_name',
+    };
+    const form = new FormGroup({
+      code: new FormControl('SIN-RELACION'),
+      name: new FormControl('DIESEL'),
+      price: new FormControl(2122.76),
+      currency: new FormControl('currency-id'),
+      product: new FormControl('product-id'),
+      __autocomplete_object_code: new FormControl<any>(product),
+      __autocomplete_object_name: new FormControl<any>(product),
+    });
+    component.formGroupSignal.set(form);
+    component.drawFormSignal.set({
+      grid: {
+        0: codeConfig,
+        1: nameConfig,
+        2: { field: 'price', type: 'input-number' },
+        3: { field: 'currency', type: 'dropdown' },
+      },
+    });
+    (component as any).childRuntimePreviousValue = form.getRawValue();
+    spyOn<any>((component as any).crudS, 'getObject').and.returnValue(of({ data: [] }));
+    spyOn<any>((component as any).generalS, 'DJAtoObject').and.returnValue([]);
+
+    (component as any)._runAutoCompleteSearch(
+      codeConfig,
+      'SIN-RELACION',
+      { advanceOnNoMatch: true, autoApplyUnique: true },
+    );
+
+    expect(form.get('product')?.value).toBeNull();
+    expect(form.get('__autocomplete_object_code')?.value).toBeNull();
+    expect(form.get('__autocomplete_object_name')?.value).toBeNull();
+    expect(form.get('name')?.value).toBe('');
+    expect(form.get('price')?.value).toBe(0);
+    expect(form.get('currency')?.value).toBe('');
   });
   // ]]]FI
 

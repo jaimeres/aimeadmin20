@@ -1904,18 +1904,19 @@ export class CustomDrawFormComponent implements OnInit, OnDestroy {
   }
 
   completeMethod(event: any, entry: any) {
-    // [[[II ESC:001-16 DOC:docs/documents/2026-05-16_001_consolidacion_dropdown_types_y_fix_escenarios.md#escenario-16
-    this._clearAutoCompleteSelectionIfManual(entry, event?.query);
-    // ]]]FI
     const query = (event?.query ?? '').toString();
-    // [[[II ESC:030-16 DOC:docs/documents/2026-07-14-030-child-runtime-overlay.md#escenario-16
+    // [[[II ESC:030-16 ESC:030-20 DOC:docs/documents/2026-07-14-030-child-runtime-overlay.md#escenario-16 DOC:docs/documents/2026-07-14-030-child-runtime-overlay.md#escenario-20
     if (this._autoCompleteSearchMode(entry) === 'exact') {
       // Exacto sólo se consulta con Enter: ni al escribir ni con el botón
-      // dropdown se abre el panel de sugerencias.
+      // dropdown se abre el panel de sugerencias. Tampoco se desvincula la
+      // relación mientras se escribe: el resultado de Enter decide si cambia.
       this.autoCompletePanelSuppressed.set(true);
       this.suggestions.set([]);
       return;
     }
+    // ]]]FI
+    // [[[II ESC:001-16 DOC:docs/documents/2026-05-16_001_consolidacion_dropdown_types_y_fix_escenarios.md#escenario-16
+    this._clearAutoCompleteSelectionIfManual(entry, query);
     // ]]]FI
     // Petición del botón `dropdown` (query vacío): siempre permitida.
     const isDropdownRequest = query.trim() === '';
@@ -1980,8 +1981,13 @@ export class CustomDrawFormComponent implements OnInit, OnDestroy {
           return;
         }
 
-        // [[[II ESC:030-16 DOC:docs/documents/2026-07-14-030-child-runtime-overlay.md#escenario-16
+        // [[[II ESC:030-16 ESC:030-20 DOC:docs/documents/2026-07-14-030-child-runtime-overlay.md#escenario-16 DOC:docs/documents/2026-07-14-030-child-runtime-overlay.md#escenario-20
         if (this._autoCompleteSearchMode(entry) === 'exact') {
+          // Enter confirmó que el texto no identifica una relación. Se limpian
+          // todos los buscadores hermanos de esa relación y se restablecen los
+          // derivados AHORA; esperar otro valueChanges exigía un segundo intento.
+          this._clearAutoCompleteSelectionIfManual(entry, query, true);
+          this._processChildrenFields(entry.field, query, entry, null, 0, 'selection');
           // El modo exacto nunca publica opciones: la única coincidencia se
           // aplica arriba y las restantes se mantienen como texto libre.
           this.autoCompletePanelSuppressed.set(true);
@@ -2011,7 +2017,7 @@ export class CustomDrawFormComponent implements OnInit, OnDestroy {
   // se movió a GeneralService.enrichSuggestionRelationData (fuente única reutilizada
   // por el form dinámico y las celdas de tabla derivada). Ver general.service.ts. ]]]FI
 
-  // [[[II ESC:001-15 DOC:docs/documents/2026-05-16_001_consolidacion_dropdown_types_y_fix_escenarios.md#escenario-15
+  // [[[II ESC:001-15 ESC:030-20 DOC:docs/documents/2026-05-16_001_consolidacion_dropdown_types_y_fix_escenarios.md#escenario-15 DOC:docs/documents/2026-07-14-030-child-runtime-overlay.md#escenario-20
   private _isFreeOrRelationshipAutoComplete(config: any): boolean {
     return config?.type === 'auto-complete'
       && (config?.free_or_relationship === true || config?.save_mode === 'free_or_relationship')
@@ -2047,22 +2053,44 @@ export class CustomDrawFormComponent implements OnInit, OnDestroy {
     return this.generalS.formatDynamicValue(selectedValue, config);
   }
 
-  private _clearAutoCompleteSelectionIfManual(config: any, rawValue?: any): void {
-    if (!this._isFreeOrRelationshipAutoComplete(config)) return;
+  private _clearAutoCompleteSelectionIfManual(
+    config: any,
+    rawValue?: any,
+    confirmedNoMatch: boolean = false,
+  ): boolean {
+    if (!this._isFreeOrRelationshipAutoComplete(config)) return false;
 
+    const form = this.formGroupSignal();
     const fieldName = config.field;
-    const selectedControl = this.formGroupSignal()?.get(this._autoCompleteObjectFieldName(fieldName));
+    const relationField = config.relationship_field.trim();
+    const selectedControl = form?.get(this._autoCompleteObjectFieldName(fieldName));
     const selectedValue = selectedControl?.value;
-    if (!selectedValue || typeof selectedValue !== 'object' || Array.isArray(selectedValue)) return;
 
-    const currentValue = rawValue ?? this.formGroupSignal()?.get(fieldName)?.value;
-    if (typeof currentValue !== 'string') return;
+    // Un no-match confirmado por Enter invalida la relación completa, no sólo
+    // el buscador donde se escribió. Si otro autocomplete hermano conserva su
+    // objeto anterior, el guardado volvería a reconstruir la relación eliminada.
+    if (confirmedNoMatch) {
+      this.scanDrawFormFields(this.drawFormSignal(), (fieldConfig: any) => {
+        if (!this._isFreeOrRelationshipAutoComplete(fieldConfig)) return;
+        if (fieldConfig.relationship_field.trim() !== relationField) return;
+        form?.get(this._autoCompleteObjectFieldName(fieldConfig.field))
+          ?.setValue(null, { emitEvent: false });
+      });
+      form?.get(relationField)?.setValue(null);
+      return true;
+    }
+
+    if (!selectedValue || typeof selectedValue !== 'object' || Array.isArray(selectedValue)) return false;
+
+    const currentValue = rawValue ?? form?.get(fieldName)?.value;
+    if (typeof currentValue !== 'string') return false;
 
     const selectedDisplay = this._autoCompleteDisplayValue(selectedValue, config);
-    if (currentValue.trim() === selectedDisplay.trim()) return;
+    if (currentValue.trim() === selectedDisplay.trim()) return false;
 
     selectedControl?.setValue(null, { emitEvent: false });
-    this.formGroupSignal()?.get(config.relationship_field.trim())?.setValue(null);
+    form?.get(relationField)?.setValue(null);
+    return true;
   }
 
   private _syncAutoCompleteRelationshipField(config: any, selectedValue: any): void {
