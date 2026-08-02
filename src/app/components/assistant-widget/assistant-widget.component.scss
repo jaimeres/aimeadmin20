@@ -1,4 +1,4 @@
-/* [[[II ESC:032-01,032-03 DOC:docs/documents/2026-07-24-032-assistant-widget-mascota-natural.md#escenario-01 */
+/* [[[II ESC:032-01,032-03,032-04 DOC:docs/documents/2026-07-24-032-assistant-widget-mascota-natural.md#escenario-01 */
 .assistant-fab {
   position: fixed;
   right: var(--assistant-right);
@@ -21,6 +21,7 @@
 
 .assistant-mascot {
   position: relative;
+  isolation: isolate;
   width: 88px;
   height: 88px;
   filter: drop-shadow(0 8px 8px rgba(21, 35, 75, 0.22));
@@ -35,6 +36,7 @@
   display: block;
   object-fit: contain;
   pointer-events: none;
+  z-index: 1;
 }
 
 .assistant-eye {
@@ -47,6 +49,7 @@
   background: #f7fcff;
   transform-origin: center;
   animation: blink 5.8s infinite;
+  z-index: 2;
 }
 
 .assistant-eye-left {
@@ -83,6 +86,7 @@
   color: #15234b;
   font-size: 13px;
   font-weight: 800;
+  z-index: 4;
 }
 
 .assistant-fab[data-mood='think'] .assistant-pupil {

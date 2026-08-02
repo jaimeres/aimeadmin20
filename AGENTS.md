@@ -60,6 +60,74 @@ autorizan cambios: deben reportarse con evidencia y riesgo, y esperar confirmaci
 - Verificar create y update cuando el cambio toque serializers o estados.
 - Verificar el mismo evento y eventos posteriores: datos enviados en la misma peticion, datos ya guardados y defaults.
 
+## Regla de Referencias Verificables
+
+Codex no debe mencionar una referencia (documento, escenario, commit, seccion, simbolo, regla o resumen) solo por numero o nombre corto, por ejemplo "el resumen del 039" o "el escenario 4". Siempre debe indicar como llegar a ella.
+
+Toda referencia debe incluir:
+
+- Codigo: ruta de archivo y linea (archivo.ts:123 o archivo.ts:45-51).
+- Documentacion: ruta de archivo y ancla (docs/documents/YYYY-MM-DD-NNN-slug.md#escenario-NN).
+- Enlace markdown clicable cuando el canal lo soporte.
+
+Motivo: el proyecto tiene cientos o miles de lineas de codigo y de documentacion humana. Codex ya reviso y localizo la referencia; si no entrega la ruta exacta, el humano tiene que repetir esa busqueda y en la practica se pierde. Esto aplica en cualquier respuesta donde Codex este desarrollando, revisando o explicando el proyecto, no solo en documentos formales de trazabilidad.
+
+### Referencias de estado, concurrencia y reglas de flujo
+
+La regla anterior también aplica a cada punto de una lista de pendientes,
+hallazgos, correcciones, decisiones o garantías. Toda referencia a una parte
+concreta del código —variable, función, clase, campo, clave de configuración,
+endpoint, condición, estado, prueba o bloque— debe acompañarse de un enlace
+Markdown clicable a la ubicación exacta donde se declara o aplica.
+
+El enlace debe apuntar directamente a una ubicación real, existente y absoluta
+del archivo, incluida su línea. No usar plantillas, rutas de ejemplo, marcadores
+ni rutas relativas. Si un mismo punto involucra más de una ubicación o más de un
+proyecto, incluir un enlace absoluto independiente por cada ubicación relevante.
+
+### Auditoría obligatoria de referencias antes de responder
+
+Cuando la respuesta contenga referencias, el agente debe recorrer el resultado
+completo antes de enviarlo. Cada referencia concreta debe ser un enlace Markdown
+clicable a una ubicación real, existente y absoluta, incluida su línea; aplica
+también dentro de tablas, listas, paréntesis y texto en línea. No puede quedar el
+mismo identificador, ubicación o elemento de código como texto suelto porque otra
+referencia cercana tenga enlace. Si un dato no fue localizado, debe declararse
+pendiente de verificación, no afirmarse como hecho. Cargar y cumplir el skill
+`bos-reference-links` en respuestas con referencias.
+
+## Regla de dudas explícitas y alcance de los tres proyectos
+
+Cuando un agente tenga una duda, ambigüedad, conflicto entre instrucciones o
+necesite una decisión del usuario, debe plantearla de la forma más explícita
+posible, sin importar el medio por el que surja: diálogo, prompt, comentario,
+documentación, plan, herramienta o mensaje de otro agente.
+
+La pregunta debe indicar el dato o decisión exacta que falta; el contexto
+verificable que genera la duda (ruta, regla o comportamiento); las alternativas
+reales y el efecto de cada una; la alternativa recomendada si hay evidencia; y
+la acción bloqueada o el comportamiento que podría cambiar.
+
+No se permiten preguntas vagas como: “¿qué hago?”, “¿lo cambio?” o “¿puedes
+aclarar?”. Deben convertirse en preguntas accionables. Ejemplo:
+
+```text
+En src/app/purchases/request/request.component.ts:141 el formulario usa la
+configuración de request-detail. ¿Debo conservar ese contrato (recomendado,
+preserva la configuración actual) o sustituirlo por delivery-note? La segunda
+opción cambia qué campos se renderizan y puede romper solicitudes existentes.
+```
+
+La expresión “los tres proyectos” se refiere exclusivamente a estos
+repositorios bajo `/home/jaime/Escritorio/d/`:
+
+- `/home/jaime/Escritorio/d/aimeServidor2`
+- `/home/jaime/Escritorio/d/aimeAdmin20`
+- `/home/jaime/Escritorio/d/jukaiagen`
+
+Si se menciona un proyecto distinto o el alcance no coincide con esta lista,
+el agente debe solicitar una aclaración explícita antes de actuar.
+
 ## Cierre
 
 En la respuesta final, mencionar cualquier comportamiento previo preservado, cualquier regresion autorizada y las verificaciones ejecutadas.

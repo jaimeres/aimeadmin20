@@ -5,9 +5,11 @@ import { AnimationOptions, LottieComponent } from 'ngx-lottie';
 import { Subject, debounceTime, firstValueFrom, map, startWith, takeUntil } from 'rxjs';
 import { AssistantMessage, AssistantWidgetService } from '../services/assistant-widget.service';
 import { GeneralService } from '@/utils/services/general.service';
+import { AssistantMascotActionComponent } from './assistant-mascot-action/assistant-mascot-action.component';
 
 export type AssistantMood = 'idle' | 'talk' | 'think' | 'notify' | 'speed' | 'yawning' | 'look-left' | 'look-right' | 'look-up' | 'look-down' | 'confused' | 'waiting';
-export type AssistantExpression = AssistantMood | 'frightened';
+export type AssistantExpression = AssistantMood | 'frightened' | 'searching' | 'working';
+type AgentActivityMood = 'think' | 'searching' | 'working';
 
 const INACTIVITY_TIMEOUT = 60 * 60 * 1000;
 const SLOW_ACTION_THRESHOLD = 5000;
@@ -17,6 +19,8 @@ const ACTIVITY_DETECTION_THROTTLE = 120;
 const PANEL_OFFSET = 108;
 const RAPID_ACTION_WINDOW = 1800;
 const RAPID_ACTION_COUNT = 4;
+const AGENT_SEARCHING_DELAY = 900;
+const AGENT_WORKING_DELAY = 1500;
 const DELETE_ACTION_SELECTOR = 'button, [role="button"], a, .p-menuitem-link';
 const DELETE_ICON_SELECTOR = '.pi-trash, .fa-trash, .fa-trash-alt, .bi-trash';
 const DELETE_INTENT_PATTERN = /\b(eliminar|borrar|delete|trash|remove|quitar)\b/i;
@@ -49,17 +53,19 @@ const MOOD_PRESENTATION: Record<AssistantExpression, { label: string; symbol: st
   'look-down': { label: 'Mirando abajo', symbol: '' },
   confused: { label: '¿Necesitas ayuda?', symbol: '?' },
   waiting: { label: 'Esperando', symbol: '◷' },
-  frightened: { label: '¡Cuidado!', symbol: '!!' }
+  frightened: { label: '¡Cuidado!', symbol: '!!' },
+  searching: { label: 'Buscando', symbol: '' },
+  working: { label: 'Trabajando', symbol: '' }
 };
 
 const IMAGE_EXTENSIONS = ['.png', '.jpg', '.jpeg', '.gif', '.webp', '.svg'];
 const LOOK_MOODS: ReadonlySet<AssistantExpression> = new Set(['look-left', 'look-right', 'look-up', 'look-down']);
-const EXPRESSION_MOODS: ReadonlySet<AssistantExpression> = new Set(['talk', 'think', 'notify', 'speed', 'yawning', 'confused', 'waiting', 'frightened']);
+const EXPRESSION_MOODS: ReadonlySet<AssistantExpression> = new Set(['talk', 'think', 'notify', 'speed', 'yawning', 'confused', 'waiting', 'frightened', 'searching', 'working']);
 
-// [[[II ESC:032-01,032-03 DOC:docs/documents/2026-07-24-032-assistant-widget-mascota-natural.md#escenario-01
+// [[[II ESC:032-01,032-03,032-04 DOC:docs/documents/2026-07-24-032-assistant-widget-mascota-natural.md#escenario-01
 @Component({
   selector: 'app-assistant-widget',
-  imports: [ReactiveFormsModule, LottieComponent],
+  imports: [ReactiveFormsModule, LottieComponent, AssistantMascotActionComponent],
   templateUrl: './assistant-widget.component.html',
   styleUrl: './assistant-widget.component.scss',
   standalone: true,
@@ -148,6 +154,7 @@ export class AssistantWidgetComponent implements OnInit, OnDestroy {
   private welcomeTipTimer: ReturnType<typeof setTimeout> | null = null;
   private ambientEyeTimer: ReturnType<typeof setTimeout> | null = null;
   private dragClickResetTimer: ReturnType<typeof setTimeout> | null = null;
+  private agentActivityTimer: ReturnType<typeof setTimeout> | null = null;
 
   private isUserTyping = false;
   private lastTimerResetAt = 0;
@@ -155,6 +162,7 @@ export class AssistantWidgetComponent implements OnInit, OnDestroy {
   private ambientEyeIndex = 0;
   private recentActivityTimes: number[] = [];
   private nextSlowMood: AssistantMood = 'waiting';
+  private agentActivityMood: AgentActivityMood = 'think';
 
   private readonly destroy$ = new Subject<void>();
   private readonly idle$ = new Subject<void>();
@@ -219,6 +227,7 @@ export class AssistantWidgetComponent implements OnInit, OnDestroy {
     this.clearTimer(this.welcomeTipTimer);
     this.clearTimer(this.ambientEyeTimer);
     this.clearTimer(this.dragClickResetTimer);
+    this.clearTimer(this.agentActivityTimer);
   }
 
   onFabClick(): void {
@@ -269,7 +278,7 @@ export class AssistantWidgetComponent implements OnInit, OnDestroy {
   async askServer(text: string): Promise<void> {
     try {
       this.thinking.set(true);
-      this.setMood('think', true);
+      this.startAgentActivitySequence();
 
       const cliente = this.resolveCliente();
       const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
@@ -297,6 +306,8 @@ export class AssistantWidgetComponent implements OnInit, OnDestroy {
       this.pushAssistantError('No se pudo conectar con el asistente.');
       this.notifyMood();
     } finally {
+      this.clearTimer(this.agentActivityTimer);
+      this.agentActivityTimer = null;
       this.thinking.set(false);
     }
   }
@@ -395,7 +406,7 @@ export class AssistantWidgetComponent implements OnInit, OnDestroy {
     if (!this.useCustomAnimation()) return;
 
     const mood = this.mood();
-    const animationMood: AssistantMood = mood === 'frightened' ? 'notify' : mood;
+    const animationMood: AssistantMood = mood === 'frightened' ? 'notify' : mood === 'searching' ? 'think' : mood === 'working' ? 'speed' : mood;
     const path = typeof this._animationPath === 'string' ? this._animationPath : this._animationPath[animationMood];
     if (!path) return;
 
@@ -597,9 +608,28 @@ export class AssistantWidgetComponent implements OnInit, OnDestroy {
     this.clearTimer(this.moodResetTimer);
     this.setMood('frightened', true);
     this.moodResetTimer = setTimeout(() => {
-      const nextMood: AssistantExpression = this.thinking() ? 'think' : this.open() ? 'talk' : 'idle';
+      const nextMood: AssistantExpression = this.thinking() ? this.agentActivityMood : this.open() ? 'talk' : 'idle';
       this.setMood(nextMood, true);
     }, 2200);
+  }
+
+  private startAgentActivitySequence(): void {
+    this.clearTimer(this.agentActivityTimer);
+    this.agentActivityMood = 'think';
+    this.setMood(this.agentActivityMood, true);
+
+    this.agentActivityTimer = setTimeout(() => {
+      if (!this.thinking()) return;
+
+      this.agentActivityMood = 'searching';
+      this.setMood(this.agentActivityMood, true);
+      this.agentActivityTimer = setTimeout(() => {
+        if (!this.thinking()) return;
+
+        this.agentActivityMood = 'working';
+        this.setMood(this.agentActivityMood, true);
+      }, AGENT_WORKING_DELAY);
+    }, AGENT_SEARCHING_DELAY);
   }
 
   private scheduleAmbientEyeMotion(): void {

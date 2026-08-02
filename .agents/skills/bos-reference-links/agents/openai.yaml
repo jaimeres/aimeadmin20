@@ -1,0 +1,4 @@
+interface:
+  display_name: "Enlaces verificables"
+  short_description: "Audita enlaces absolutos en referencias"
+  default_prompt: "Revisa que toda referencia del resultado tenga un enlace real y absoluto."

@@ -79,6 +79,41 @@ Mostrar una expresión de espanto cuando el usuario vaya a eliminar un elemento,
 - Se comprueba que los trece estados visuales, incluida la nueva expresión, sean publicables.
 - Se simula un clic sobre un control con icono `pi-trash` y se valida `frightened` con la etiqueta `¡Cuidado!`.
 
+## Escenario 04: Acciones visibles durante el trabajo del agente
+
+### Solicitud
+
+Hacer perceptibles los cambios de estado con lentes al pensar, una lupa al buscar, un cuerpo al trabajar rápidamente y una postura cansada al acercarse el estado de sueño. Tras revisar la primera versión en video, se pidió sustituir el cuerpo de líneas por un robot reconocible, con algo colgante y una marcha simulada. La cabeza debe seguir siendo el botón y el coste de rendimiento debe mantenerse bajo.
+
+### Comportamiento previo
+
+- El `signal` de estado sí cambiaba, pero varios estados reutilizaban la misma cabeza y solo mostraban una insignia pequeña.
+- Durante una petición solo se veía `think` hasta recibir la respuesta; el contrato HTTP no informa herramientas o etapas internas del agente.
+- `speed` y `yawning` no tenían cuerpo ni accesorios propios.
+
+### Decisiones
+
+1. Se agregó un subcomponente standalone `OnPush` dedicado únicamente al dibujo SVG. Al estar en reposo no renderiza ningún SVG.
+2. Una petición pendiente inicia con lentes en `think`; a los 900 ms muestra la lupa en `searching` y, si continúa pendiente otros 1.5 segundos, muestra el cuerpo rápido en `working`.
+3. `speed` reutiliza el cuerpo rápido y `yawning` muestra el cuerpo con balanceo cansado. El cuerpo definitivo tiene torso sólido, panel frontal, hombros, manos, piernas, botas y un bolso lateral colgante.
+4. Las animaciones usan únicamente `transform` y `opacity`, respetan `prefers-reduced-motion` y no agregan imágenes, solicitudes de red, polling, listeners ni temporizadores recurrentes.
+5. `AssistantMood` conserva sus doce estados públicos. `searching` y `working` son expresiones locales; los mapas Lottie personalizados reutilizan `think` y `speed` como fallback.
+6. `searching` representa visualmente el tiempo de espera: no afirma que el agente haya invocado una herramienta de búsqueda, porque la respuesta actual no publica eventos de progreso.
+7. Un único `computed` selecciona el modo visual: lentes, lupa o cuerpo. Nunca se renderizan simultáneamente. Todos los SVG tienen `pointer-events: none`, por lo que la cabeza conserva la única zona interactiva.
+8. La marcha alterna brazos y piernas, desplaza ligeramente el torso y hace oscilar el bolso. El estado cansado conserva el cuerpo, pero desactiva la marcha y aplica un balanceo lento.
+
+### Rendimiento y validaciones
+
+- Solo existe un temporizador de etapa activo durante la petición y se limpia al responder o destruir el componente.
+- El SCSS principal queda en `3.89 kB`, debajo del límite de error de `4 kB`; el estilo del subcomponente queda en `2.58 kB`, debajo de su límite de error de `4 kB`.
+- `npx ng build --configuration production`: correcto.
+- Specs aislados del widget y del subcomponente: `9 SUCCESS`.
+- Se revisaron visualmente reposo, lentes, lupa, cuerpo robot caminando con bolso y cuerpo cansado con la imagen transparente vigente.
+
+### Caracterización remota analizada, no implementada
+
+Es viable recibir desde el servidor una caracterización por evento, pero no debe descargarse HTML, CSS, JavaScript, SVG o Lottie arbitrario. La alternativa segura es un manifiesto autenticado que entregue un identificador de tema, vigencia y referencias a recursos rasterizados previamente aprobados. El cliente debe aplicar allowlist de orígenes y tipos, límites de tamaño, HTTPS, fallback local, caché versionada y una prioridad determinista entre eventos como Día de Muertos, Independencia de México, Navidad y Año Nuevo.
+
 ## Comportamiento previo preservado
 
 - Contrato de `animationPath`.
@@ -96,6 +131,10 @@ Mostrar una expresión de espanto cuando el usuario vaya a eliminar un elemento,
 - `src/app/components/assistant-widget/assistant-widget.component.html`
 - `src/app/components/assistant-widget/assistant-widget.component.scss`
 - `src/app/components/assistant-widget/assistant-widget.component.spec.ts`
+- `src/app/components/assistant-widget/assistant-mascot-action/assistant-mascot-action.component.ts`
+- `src/app/components/assistant-widget/assistant-mascot-action/assistant-mascot-action.component.html`
+- `src/app/components/assistant-widget/assistant-mascot-action/assistant-mascot-action.component.scss`
+- `src/app/components/assistant-widget/assistant-mascot-action/assistant-mascot-action.component.spec.ts`
 - `docs/documents/2026-07-24-032-assistant-widget-mascota-natural.md`
 
 ## Respaldo
@@ -106,11 +145,11 @@ Las imágenes existentes se copiaron antes de cualquier sustitución a:
 
 ## Pruebas necesarias
 
-- Spec enfocado del componente: `6 SUCCESS`, incluida la expresión ante eliminación.
+- Specs enfocados del widget y sus acciones visuales: `9 SUCCESS`.
 - Compilación de producción: correcta.
-- Revisión visual de los doce estados y transparencia: correcta.
+- Revisión visual de los estados previos, transparencia y nuevas acciones: correcta.
 - La ejecución normal del runner completo sigue encontrando incidencias preexistentes ajenas al widget: rutas de fuentes globales no resueltas y referencias ausentes a `testing/crud-test.helpers`. El spec del widget se ejecutó de forma aislada sin modificar la configuración final del repositorio.
 
 ## Pendientes
 
-Ninguno identificado dentro del alcance.
+- La caracterización remota segura requiere definir y aprobar el contrato de manifiesto, almacenamiento, allowlist y precedencia de eventos antes de implementarla.

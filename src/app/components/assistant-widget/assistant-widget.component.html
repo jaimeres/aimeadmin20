@@ -1,4 +1,4 @@
-<!-- [[[II ESC:032-01 DOC:docs/documents/2026-07-24-032-assistant-widget-mascota-natural.md#escenario-01 -->
+<!-- [[[II ESC:032-01,032-04 DOC:docs/documents/2026-07-24-032-assistant-widget-mascota-natural.md#escenario-01 -->
 <div
   #assistantFab
   class="assistant-fab"
@@ -23,6 +23,7 @@
         <ng-lottie [options]="animationOptions()" />
       }
     } @else {
+      <app-assistant-mascot-action [mood]="mood()" />
       <img [src]="mascotImagePath" alt="" class="assistant-image assistant-base" draggable="false" />
       <span class="assistant-eye assistant-eye-left" aria-hidden="true">
         <span class="assistant-pupil"></span>

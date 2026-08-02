@@ -1,0 +1,59 @@
+<!-- [[[II ESC:032-04 DOC:docs/documents/2026-07-24-032-assistant-widget-mascota-natural.md#escenario-04 -->
+@if (visualMode(); as mode) {
+  @if (mode === 'glasses') {
+    <svg class="assistant-action assistant-glasses" viewBox="0 0 88 88" aria-hidden="true">
+      <rect x="19" y="47" width="24" height="19" rx="8" />
+      <rect x="46" y="47" width="24" height="19" rx="8" />
+      <path d="M43 55.5h3M19 51l-6-3M70 51l5-3" />
+      <path class="lens-shine" d="m24 51 5-2m27 2 5-2" />
+    </svg>
+  } @else if (mode === 'magnifier') {
+    <svg class="assistant-action assistant-magnifier" viewBox="0 0 88 88" aria-hidden="true">
+      <circle cx="62" cy="48" r="14" />
+      <path class="lens-shine" d="m54 43 4-3" />
+      <path class="magnifier-handle" d="m72 58 12 12" />
+    </svg>
+  } @else {
+    <svg class="assistant-action assistant-robot-body" [attr.data-mode]="mode" viewBox="0 0 100 126" aria-hidden="true">
+      <g class="body-frame">
+        <path class="neck" d="M45 68h10v13H45z" />
+
+        <g class="arm arm-left">
+          <path d="M37 81c-8 4-12 11-15 19" />
+          <circle cx="21" cy="102" r="3.5" />
+        </g>
+        <g class="arm arm-right">
+          <path d="M63 81c8 4 12 11 15 19" />
+          <circle cx="79" cy="102" r="3.5" />
+        </g>
+
+        <g class="leg leg-left">
+          <path d="M44 99c0 8-4 14-7 20" />
+          <path class="boot" d="M31 117h10l3 5H30z" />
+        </g>
+        <g class="leg leg-right">
+          <path d="M56 99c0 8 4 14 7 20" />
+          <path class="boot" d="M59 117h10l1 5H56z" />
+        </g>
+
+        <circle class="shoulder" cx="37" cy="82" r="5" />
+        <circle class="shoulder" cx="63" cy="82" r="5" />
+        <rect class="torso" x="35" y="73" width="30" height="31" rx="10" />
+        <path class="chest-panel" d="M42 82h16v11H42z" />
+        <circle class="status-light" cx="50" cy="87.5" r="2.2" />
+
+        <g class="hanging-bag">
+          <path class="bag-strap" d="m40 76 27 25" />
+          <rect class="bag" x="62" y="97" width="15" height="13" rx="3" />
+          <path class="bag-flap" d="M64 101h11" />
+        </g>
+      </g>
+
+      @if (mode === 'fast') {
+        <path class="speed-line speed-line-one" d="M18 91H5" />
+        <path class="speed-line speed-line-two" d="M95 99H82" />
+      }
+    </svg>
+  }
+}
+<!-- ]]]FI -->

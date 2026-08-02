@@ -4301,6 +4301,235 @@ export class CRUD extends Vars implements OnChanges  /*implements OnInit*/ {
     }
   }
 
+  // [[[II ESC:034-01 DOC:docs/documents/2026-07-31-034-tabla-derivada-padre-hijo.md#escenario-01
+  // Padre-hijo TRANSVERSAL: el papel se lee de `fields_prefixes`, el mismo
+  // contrato declarativo que ya usan las relaciones hijas con archivos. El
+  // servidor NO resuelve nada: sólo declara `kind`, `data_type` y `filter`.
+  // `app`/`type` se resuelven aquí con `getAppType`, que es el único punto
+  // autorizado. Ningún recurso se nombra en este archivo.
+  //
+  //   kind:'parent'  el prefijo trae los campos del PADRE embebidos, así que el
+  //                  formulario edita un HIJO. Su tabla derivada muestra
+  //                  HERMANOS al crear; al editar una partida se oculta y los
+  //                  campos del prefijo se bloquean, porque la unidad editada es
+  //                  esa fila y el padre ya existe.
+  //
+  //   kind:'child'   el prefijo describe a los HIJOS, así que el formulario ES
+  //                  el padre. Su tabla derivada trae los hijos: al editar se
+  //                  cargan todos con `filter[<filter>]=<id del padre>`.
+  //
+  // El flujo de creación y `save({ table_row })` no se modifican.
+
+  /** `hide` configurado de cada tabla, para restituirlo al salir de edición. */
+  private readonly parentChildConfiguredHide = new WeakMap<object, boolean>();
+
+  /** `add_row` configurado, por el mismo motivo que `hide`. */
+  private readonly parentChildConfiguredAddRow = new WeakMap<object, boolean>();
+
+  // [[[II ESC:034-02 DOC:docs/documents/2026-07-31-034-tabla-derivada-padre-hijo.md#escenario-02
+  /**
+   * Alta/edición de una fila de tabla derivada: se delega al MISMO motor del
+   * detalle mediante `save({ table_row })`, que deriva un "pos transitorio",
+   * valida y hace POST/PATCH reutilizando el flujo del formulario sin tocar el
+   * form visible. Vive aquí y no en cada pantalla: el nombre del campo viaja en
+   * la configuración, así que no hay nada específico por recurso.
+   */
+  handleTableRowSave(ctx: any): void {
+    if (!ctx?.field) return;
+    this.save({
+      pos: this.typeDefault,
+      table_row: {
+        base_pos: this.typeDefault,
+        field: ctx.field,
+        row_index: ctx.row_index,
+        row_data: ctx.row_data,
+        source_row: ctx.source_row,
+        columns: ctx.columns || [],
+        mode: ctx.mode === 'edit' ? 'edit' : 'create',
+      },
+    });
+  }
+  // ]]]FI
+
+  /**
+   * Papel de una tabla derivada, deducido de `fields_prefixes` del propio
+   * formulario. Devuelve `null` cuando el recurso no declara ningún prefijo que
+   * describa la relación: la tabla se comporta como hasta ahora.
+   */
+  protected _parentChildRole(pos: any, table: any): {
+    role: 'parent' | 'child'; prefix: string; filter: string; dataType: string;
+  } | null {
+    const prefixes = this._normalizeFieldsPrefixes(pos);
+    const tableDataType = table?.data_type?.type || '';
+
+    for (const { prefix, config } of prefixes) {
+      const kind = config?.kind;
+      const filter = config?.filter || config?.parent_field || '';
+      const dataType = typeof config?.data_type === 'string' ? config.data_type : '';
+      if (!filter) continue;
+
+      // El formulario ES el padre: el prefijo describe a los hijos y su
+      // `data_type` coincide con el de las filas de la tabla.
+      if (kind === 'child' && dataType && dataType === tableDataType) {
+        return { role: 'parent', prefix, filter, dataType };
+      }
+      // El formulario es un HIJO: el prefijo trae los campos del padre embebidos.
+      if (kind === 'parent') {
+        return { role: 'child', prefix, filter, dataType };
+      }
+    }
+    return null;
+  }
+
+  /** Tablas derivadas del formulario cuyo papel está declarado. */
+  private _parentChildTables(pos: any): { table: any; contract: any }[] {
+    const draw = this._drawFormForDevice(pos);
+    if (!draw) return [];
+
+    const tables: { table: any; contract: any }[] = [];
+    for (const layout of this._collectDrawFormLayouts(draw)) {
+      for (const key of Object.keys(layout)) {
+        const node = layout[key];
+        if (node?.type !== 'table' || !this._isNoFormDataField(node?.field)) continue;
+        const contract = this._parentChildRole(pos, node);
+        if (contract) tables.push({ table: node, contract });
+      }
+    }
+    return tables;
+  }
+
+  /** Oculta/restituye la tabla recordando el `hide` que trae la configuración. */
+  private _setParentChildTableHidden(table: any, hidden: boolean): void {
+    if (!table || typeof table !== 'object') return;
+    if (!this.parentChildConfiguredHide.has(table)) {
+      this.parentChildConfiguredHide.set(table, table.hide === true);
+    }
+    table.hide = hidden ? true : this.parentChildConfiguredHide.get(table) === true;
+  }
+
+  /** Habilita/apaga el alta recordando el `add_row` que trae la configuración. */
+  private _setParentChildTableAddRow(table: any, enabled: boolean): void {
+    if (!table || typeof table !== 'object') return;
+    if (!this.parentChildConfiguredAddRow.has(table)) {
+      this.parentChildConfiguredAddRow.set(table, table.add_row === true);
+    }
+    // Habilitar nunca puede ir más allá de lo que la configuración autoriza.
+    table.add_row = enabled ? this.parentChildConfiguredAddRow.get(table) === true : false;
+  }
+
+  /**
+   * Bloquea los campos del padre embebidos por prefijo.
+   * Solo deshabilita: la rehabilitación la hace `enableForm()`, que ya corre
+   * antes en `unifyRestoreForm` y respeta los readonly de configuración.
+   */
+  private _disableParentPrefixFields(pos: any, prefix: string): void {
+    const form = this.currentForm(pos);
+    if (!form || !prefix) return;
+
+    Object.keys(form.controls).forEach((name) => {
+      if (!name.startsWith(prefix)) return;
+      form.get(name)?.disable({ emitEvent: false });
+    });
+  }
+
+  /** Carga en la tabla todos los hijos del padre que se está editando. */
+  private _loadParentChildRows(pos: any, table: any, contract: any, parentId: any): void {
+    const control = this.currentForm(pos)?.get(table.field);
+    if (!(control instanceof FormArray) || !parentId) return;
+
+    // `getAppType` es el ÚNICO punto autorizado para resolver app/type desde el
+    // `data_type` declarado. El servidor no manda rutas.
+    const appTypeEntry = this.crudS.getAppType(contract?.dataType);
+    const app = appTypeEntry?.app;
+    const type = appTypeEntry?.type;
+    const filterField = contract?.filter;
+    if (!app || !type || !filterField) return;
+
+    // `response_include` es el mismo contrato que ya usa el alta de una fila, así
+    // que las celdas de relación muestran etiqueta y no UUID.
+    const include = table?.response_include || '';
+    const sort = table?.ordering || '';
+
+    // En `role='parent'` las filas son de OTRO recurso, así que el aplanado debe
+    // usar la configuración del hijo: `fields` resuelve el `option_label` de sus
+    // relaciones y `cols` sus etiquetas. Con la del padre, las celdas de relación
+    // quedarían sin `<campo>__name` y mostrarían UUID.
+    const childConfig = this.crudS.authS.config?.[type];
+
+    this.showBlocked();
+    this.crudS.getObject({ include, filter: `filter[${filterField}]=${parentId}`, sort, app, type })
+      .subscribe({
+        next: (resp: any) => {
+          this.showBlocked(false);
+          const rows = this.DJAtoObject({
+            resp,
+            pos: type,
+            customField: childConfig?.cols || {},
+            fields: childConfig?.fields || {},
+          });
+          control.clear({ emitEvent: false });
+          (Array.isArray(rows) ? rows : [rows]).forEach((row: any) => {
+            if (!row) return;
+            // Misma proyección respuesta→columnas que usa una fila recién creada.
+            const projected = this._completeCreatedLocalTableRow(pos, table, row);
+            control.push(this._createNoFormDataTableRowFormGroup(table, projected), { emitEvent: false });
+          });
+          control.updateValueAndValidity({ emitEvent: false });
+        },
+        error: (err: any) => {
+          this.showBlocked(false);
+          this.messageS.changeMessage(
+            `Hay un error al cargar los registros de ${type}.`, err, this.customField()[pos]);
+        }
+      });
+  }
+
+  /**
+   * Aplica el contrato padre-hijo al abrir el formulario.
+   * Debe correr DESPUÉS de `resetFormDialog` (que vacía las tablas) y de
+   * `enableForm()` (que restituye la habilitación configurada).
+   */
+  protected _applyParentChildTables(pos: any, data: any = null): void {
+    const tables = this._parentChildTables(pos);
+    if (!tables.length) return;
+
+    const isEdit = !this.isCreate();
+
+    tables.forEach(({ table, contract }) => {
+      // [[[II ESC:034-02 En `role='parent'` una partida se cuelga de la FK al
+      // padre, que sólo existe cuando el padre ya está guardado. Mientras se crea
+      // no hay a qué colgarla, así que el alta se apaga y se restituye al editar.
+      // En `role='child'` no aplica: ahí el padre se crea con la misma alta.
+      if (contract?.role === 'parent') {
+        this._setParentChildTableAddRow(table, isEdit);
+      }
+      // ]]]FI
+
+      // Creación: estado configurado y captura local de hermanos, como hasta ahora.
+      if (!isEdit) {
+        this._setParentChildTableHidden(table, false);
+        return;
+      }
+
+      // El formulario edita un HIJO: la unidad editada es esa fila, así que la
+      // tabla de hermanos estorba y los campos del padre embebido se bloquean.
+      if (contract.role === 'child') {
+        this._setParentChildTableHidden(table, true);
+        this._disableParentPrefixFields(pos, contract.prefix);
+        return;
+      }
+
+      // El formulario ES el padre: la tabla trae a sus hijos.
+      this._setParentChildTableHidden(table, false);
+      this._loadParentChildRows(pos, table, contract, data?.id);
+    });
+
+    // `hide` se mutó in place sobre el nodo del draw: hay que desfragmentar la
+    // señal para que la vista vuelva a dibujar (mismo patrón que replaceValDrawForm).
+    this.drawForm.set({ ...this.drawForm() });
+  }
+  // ]]]FI
+
 
   /**
    * Actualiza el registro en los arrays de items y itemsNew
@@ -5912,6 +6141,54 @@ export class CRUD extends Vars implements OnChanges  /*implements OnInit*/ {
       }
     });
 
+    // [[[II ESC:034-02 DOC:docs/documents/2026-07-31-034-tabla-derivada-padre-hijo.md#escenario-02
+    // En `role='parent'` el formulario visible es el del PADRE, así que sus
+    // controles no incluyen la ForeignKey que el hijo necesita para colgarse de
+    // él: esa clave no es una columna de la tabla. Sin inyectarla, el POST del
+    // detalle fallaría porque su relación obligatoria viaja vacía.
+    //
+    // En `role='child'` no se hace nada: el formulario ya ES el del hijo y su FK
+    // al padre viaja como un control más, que es el flujo actual de
+    // `request-detail`.
+    const tableConfig = this._findNoFormDataTableConfig(basePos, ctx.field);
+    const parentChild = tableConfig ? this._parentChildRole(basePos, tableConfig) : null;
+    if (parentChild?.role === 'parent') {
+      // El formulario visible es el del PADRE, así que NINGUNA columna del hijo
+      // existe como control: el bucle de arriba sólo asigna sobre controles ya
+      // clonados. Se crean aquí para que sus valores lleguen al payload. En
+      // `role='child'` esto no corre y el flujo actual queda intacto.
+      ctxColumns.forEach((column: any) => {
+        const field = column?.field;
+        if (!field || column?.scope_edition === 'local') return;
+        if (transientForm.get(field)) return;
+
+        const canonical = (sourceRow[field] !== undefined && sourceRow[field] !== null && sourceRow[field] !== '')
+          ? sourceRow[field]
+          : rowData[field];
+        transientForm.addControl(
+          field,
+          new FormControl(canonical ?? null, this._transientColumnValidators(column)),
+          { emitEvent: false }
+        );
+      });
+
+      const parentField = parentChild.filter;
+      const parentId = this.selected()?.[0]?.id;
+      if (parentField && parentId) {
+        const existing = transientForm.get(parentField);
+        if (existing) existing.setValue(parentId, { emitEvent: false });
+        else transientForm.addControl(parentField, new FormControl(parentId), { emitEvent: false });
+      } else {
+        // Sin padre guardado no hay a qué colgar la partida. Se aborta en vez de
+        // enviar un POST que el servidor rechazaría con un error poco claro.
+        this._publishTableRowSaveOutcome({ field: ctx.field, mode: 'row', pos: basePos, row_index: ctx.row_index }, false);
+        this.messageS.changeMessage(
+          'Guarde primero el documento para poder agregarle partidas.', null, {}, 'warn');
+        return;
+      }
+    }
+    // ]]]FI
+
     // Registra el form transitorio en la señal de forms para currentForm().
     this.form.set({ ...this.form(), [transientPos]: transientForm });
 
@@ -6440,6 +6717,13 @@ export class CRUD extends Vars implements OnChanges  /*implements OnInit*/ {
         this.disableForm();
       }
     }
+
+    // [[[II ESC:034-01 DOC:docs/documents/2026-07-31-034-tabla-derivada-padre-hijo.md#escenario-01
+    // Punto único de alta/edición: aquí las tablas ya están vacías (resetFormDialog)
+    // y la habilitación ya es la configurada (enableForm), así que es el lugar
+    // correcto para aplicar el contrato padre-hijo sin pelear con ninguno de los dos.
+    this._applyParentChildTables(this.pos(), data);
+    // ]]]FI
 
     //return;
     this.showFormDialog();

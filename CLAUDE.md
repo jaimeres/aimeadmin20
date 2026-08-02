@@ -60,6 +60,36 @@ autorizan cambios: deben reportarse con evidencia y riesgo, y esperar confirmaci
 - Verificar create y update cuando el cambio toque serializers o estados.
 - Verificar el mismo evento y eventos posteriores: datos enviados en la misma peticion, datos ya guardados y defaults.
 
+## Regla de Referencias Verificables
+
+Claude no debe mencionar una referencia (documento, escenario, commit, seccion, simbolo, regla o resumen) solo por numero o nombre corto, por ejemplo "el resumen del 039" o "el escenario 4". Siempre debe indicar como llegar a ella.
+
+Toda referencia debe incluir:
+
+- Codigo: ruta de archivo y linea (archivo.ts:123 o archivo.ts:45-51).
+- Documentacion: ruta de archivo y ancla (docs/documents/YYYY-MM-DD-NNN-slug.md#escenario-NN).
+- Enlace markdown clicable cuando el canal lo soporte.
+
+Motivo: el proyecto tiene cientos o miles de lineas de codigo y de documentacion humana. Claude ya reviso y localizo la referencia; si no entrega la ruta exacta, el humano tiene que repetir esa busqueda y en la practica se pierde. Esto aplica en cualquier respuesta donde Claude este desarrollando, revisando o explicando el proyecto, no solo en documentos formales de trazabilidad.
+
+### Referencias de estado, concurrencia y reglas de flujo
+
+La regla también cubre cada pendiente, hallazgo, decisión o garantía. Toda
+referencia a una parte concreta del código debe usar un enlace Markdown clicable
+que apunte directamente a una ubicación real, existente y absoluta del archivo,
+incluida su línea. No usar plantillas, rutas de ejemplo, marcadores ni rutas
+relativas. Si el punto involucra varias ubicaciones o proyectos, incluir un
+enlace absoluto por cada una; un símbolo sin enlace no es suficiente.
+
+### Auditoría obligatoria de referencias antes de responder
+
+Recorrer el resultado completo antes de enviarlo, incluidas tablas, listas,
+paréntesis y texto en línea. Cada referencia concreta debe ser un enlace Markdown
+clicable a una ubicación real, existente y absoluta, incluida su línea. No dejar
+un identificador o ubicación como texto suelto porque otra referencia cercana
+tenga enlace. Si no se verificó la ubicación, declararla pendiente en vez de
+afirmarla. Cargar `bos-reference-links` cuando haya referencias.
+
 ## Cierre
 
 En la respuesta final, mencionar cualquier comportamiento previo preservado, cualquier regresion autorizada y las verificaciones ejecutadas.

@@ -1,9 +1,9 @@
 import { provideHttpClient } from '@angular/common/http';
-import { provideHttpClientTesting } from '@angular/common/http/testing';
-import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
+import { ComponentFixture, fakeAsync, TestBed, tick } from '@angular/core/testing';
 import { AssistantExpression, AssistantWidgetComponent } from './assistant-widget.component';
 
-// [[[II ESC:032-02,032-03 DOC:docs/documents/2026-07-24-032-assistant-widget-mascota-natural.md#escenario-02
+// [[[II ESC:032-02,032-03,032-04 DOC:docs/documents/2026-07-24-032-assistant-widget-mascota-natural.md#escenario-02
 describe('AssistantWidgetComponent', () => {
   let component: AssistantWidgetComponent;
   let fixture: ComponentFixture<AssistantWidgetComponent>;
@@ -45,7 +45,7 @@ describe('AssistantWidgetComponent', () => {
   });
 
   it('should expose every supported visual state', () => {
-    const moods: AssistantExpression[] = ['idle', 'talk', 'think', 'notify', 'speed', 'yawning', 'look-left', 'look-right', 'look-up', 'look-down', 'confused', 'waiting', 'frightened'];
+    const moods: AssistantExpression[] = ['idle', 'talk', 'think', 'notify', 'speed', 'yawning', 'look-left', 'look-right', 'look-up', 'look-down', 'confused', 'waiting', 'frightened', 'searching', 'working'];
     const fab = fixture.nativeElement.querySelector('.assistant-fab') as HTMLElement;
 
     moods.forEach((mood) => {
@@ -68,6 +68,26 @@ describe('AssistantWidgetComponent', () => {
     expect(component.mood()).toBe('frightened');
     expect(component.moodLabel()).toBe('¡Cuidado!');
   });
+
+  it('should make pending agent work visibly progress', fakeAsync(() => {
+    const httpTesting = TestBed.inject(HttpTestingController);
+    component.draftControl.setValue('Busca el estado de mis activos');
+
+    component.send();
+    const request = httpTesting.expectOne('/api/assistant/chat');
+    expect(component.mood()).toBe('think');
+
+    tick(900);
+    expect(component.mood()).toBe('searching');
+
+    tick(1500);
+    expect(component.mood()).toBe('working');
+
+    request.flush({ respuesta: 'Búsqueda terminada.' });
+    tick();
+    expect(component.mood()).toBe('talk');
+    fixture.destroy();
+  }));
 
   it('should preserve custom static animation paths', () => {
     fixture.componentRef.setInput('animationPath', '/assets/assistant/icon-72.webp');

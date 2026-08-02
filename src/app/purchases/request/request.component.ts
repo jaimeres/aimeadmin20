@@ -1,10 +1,11 @@
-import { Component, ElementRef, EventEmitter, inject, Input, OnInit, Output, Renderer2, SimpleChanges, ViewChild } from '@angular/core';
+import { Component, ElementRef, EventEmitter, inject, Input, OnInit, Output, Renderer2, signal, SimpleChanges, ViewChild } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormGroup } from '@angular/forms';
 import { PurchaseService } from '../services/purchase.service';
 import { CRUD } from '../../utils/crud.class';
 import { ConfirmationService, PRIME_MODULES } from '../../shared/primeng.index';
 import { LOCAL_BASE } from '../../shared/components.index';
+import { MenuItem } from 'primeng/api';
 
 @Component({
   selector: 'app-request',
@@ -26,6 +27,36 @@ export class RequestComponent extends CRUD implements OnInit {
 
   public formSA: FormGroup = new FormGroup({});
 
+
+
+  public override openNewMenu = signal<MenuItem[]>([{
+    label: 'Solicitudes detalle',
+    command: () => this.openNew({ pos: 'request-detail' })
+  }, {
+    label: 'Solicitudes',
+    command: () => this.openNew({ pos: 'request' })
+  },
+  {
+    label: 'Remisiones',
+    command: () => this.openNew({ pos: 'delivery-note' })
+  },
+
+  ]);
+
+  // consultas
+  public override getMenu = signal<MenuItem[]>([{
+    label: 'Solicitudes detalle',
+    command: () => this.getAll({ pos: 'request-detail' })
+  }, {
+    label: 'Solicitudes',
+    command: () => this.getAll({ pos: 'request' })
+  },
+  {
+    label: 'Remisiones',
+    command: () => this.getAll({ pos: 'delivery-note' })
+  }
+  ]);
+
   /**
    * Muestra u oculta partes del componente
    */
@@ -46,6 +77,17 @@ export class RequestComponent extends CRUD implements OnInit {
     this.typeDefault = 'request-detail';
     this.app[this.typeDefault] = 'purchases/request-detail';
     this.module[this.typeDefault] = 'CO';
+
+
+    this.app['request'] = 'purchases/request';
+    this.module['request'] = 'CO';
+
+
+
+
+    this.app['delivery-note'] = 'purchases/delivery-note';
+    this.module['delivery-note'] = 'CO';
+
 
     // request-detail no siempre soporta is_active como filtro de listado.
     // Si viene activo por configuración global, provoca 400 en el backend.
@@ -108,26 +150,9 @@ export class RequestComponent extends CRUD implements OnInit {
     console.log('cancelRequestDetail');
   }
 
-  // [[[II Alta/edición de una fila de la tabla derivada de request-detail: se
-  // delega al MISMO motor del detalle mediante save({table_row}). save() deriva
-  // internamente el "pos transitorio" (pos + 'trans'), valida y hace POST/PATCH
-  // reutilizando el flujo del formulario, sin tocar el form visible. El nombre de
-  // campo del detalle NO se hardcodea: viaja en la config de columnas. ]]]FI
-  handleTableRowSave(ctx: any): void {
-    if (!ctx?.field) return;
-    this.save({
-      pos: this.typeDefault,
-      table_row: {
-        base_pos: this.typeDefault,
-        field: ctx.field,
-        row_index: ctx.row_index,
-        row_data: ctx.row_data,
-        source_row: ctx.source_row,
-        columns: ctx.columns || [],
-        mode: ctx.mode === 'edit' ? 'edit' : 'create',
-      },
-    });
-  }
+  // [[[II ESC:034-02 `handleTableRowSave` se movió a `CRUD`: el nombre del campo
+  // del detalle viaja en la configuración, así que no había nada específico de
+  // solicitudes en él y toda pantalla con tabla derivada lo necesita igual. ]]]FI
 
   private openTempDialogFor(status: string, label: string) {
     this.tempActionLabel = label;

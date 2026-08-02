@@ -589,7 +589,22 @@ export class GeneralService {
               let displayValue: string;
               if (lfRule) {
                 const temp: any = {};
-                this._applyLabelField(temp, lfRule, { id: inc.id, ...inc.attributes });
+                // [[[II ESC:035-01 DOC:docs/documents/2026-07-31-035-option-label-relacion-anidada.md#escenario-01
+                // `option_label` manda, también cuando nombra una clave
+                // `<relacion>_data_<atributo>` que vive UNA relación más adentro
+                // (p.ej. `base_product_data_name` sobre `product`).
+                //
+                // Antes se leían sólo `inc.attributes`, así que esa clave quedaba
+                // `undefined`, la etiqueta salía vacía y parecía que el fallback
+                // `username || name` era la única vía. `_applyRelationDataFields`
+                // ya resuelve ese contrato desde `included` y es el MISMO
+                // resolvedor que usan las sugerencias de autocomplete; sólo hacía
+                // falta conservar `relationships` del recurso incluido, que es de
+                // donde cuelga la relación anidada.
+                const source: any = { id: inc.id, ...inc.attributes, relationships: inc.relationships };
+                this._applyRelationDataFields(source, included as any[], lfRule.option_label_join || []);
+                this._applyLabelField(temp, lfRule, source);
+                // ]]]FI
                 displayValue = temp[lfRule.label_field_key] ?? '';
               } else {
                 displayValue = inc.attributes.username || inc.attributes.name || '';
