@@ -2,6 +2,26 @@
 
 Esta regla es global para Codex en este repositorio. No depende de skills.
 
+## Regla obligatoria de coherencia con la arquitectura actual
+
+Toda propuesta de modificación, creación, corrección, integración,
+configuración, documentación o cualquier otro tipo de cambio debe formularse
+dentro del marco de la arquitectura actual del proyecto.
+
+Antes de proponer o implementar, Codex debe localizar y verificar los
+componentes, capas, contratos, patrones y responsabilidades existentes. La
+ausencia de una implementación idéntica no autoriza a inventar una arquitectura
+paralela: primero debe intentar una extensión coherente con el diseño vigente y
+justificarla contra el código real.
+
+Si por una limitación técnica, incompatibilidad comprobada o inexistencia de un
+mecanismo aplicable la propuesta debe salir del diseño actual, Codex debe
+declarar antes de implementarla: el vacío arquitectónico y dónde se verificó;
+los motivos concretos; la propuesta exacta; su impacto, riesgos, compatibilidad
+y alternativas; y si reemplaza, amplía o crea una responsabilidad
+arquitectónica. Toda desviación material requiere confirmación explícita del
+usuario y no debe presentarse como una continuación ordinaria del proyecto.
+
 ## Regla Principal
 
 No introducir regresiones funcionales por interpretacion implicita.
