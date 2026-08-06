@@ -1,10 +1,14 @@
-/* [[[II ESC:032-04 DOC:docs/documents/2026-07-24-032-assistant-widget-mascota-natural.md#escenario-04 */
+/* [[[II ESC:032-04,032-05 DOC:docs/documents/2026-07-24-032-assistant-widget-mascota-natural.md#escenario-05 */
 :host {
   display: contents;
 }
 
-.assistant-action {
+.assistant-glasses {
   position: absolute;
+  inset: 0;
+  z-index: 3;
+  width: 88px;
+  height: 88px;
   overflow: visible;
   pointer-events: none;
   color: #15234b;
@@ -13,18 +17,10 @@
   stroke-width: 2.6;
   stroke-linecap: round;
   stroke-linejoin: round;
+  animation: thoughtful-glasses 1.8s ease-in-out infinite;
 }
 
-.assistant-glasses,
-.assistant-magnifier {
-  inset: 0;
-  z-index: 3;
-  width: 88px;
-  height: 88px;
-}
-
-.assistant-glasses rect,
-.assistant-magnifier circle {
+.assistant-glasses rect {
   fill: rgba(215, 246, 255, 0.38);
 }
 
@@ -34,163 +30,14 @@
   stroke-width: 1.8;
 }
 
-.assistant-glasses {
-  animation: thoughtful-glasses 1.8s ease-in-out infinite;
-}
-
-.assistant-magnifier {
-  transform-origin: 68px 55px;
-  animation: magnifier-search 1.15s ease-in-out infinite alternate;
-}
-
-.assistant-robot-body {
-  top: -2px;
-  left: -6px;
-  z-index: 0;
-  width: 100px;
-  height: 126px;
-}
-
-.neck,
-.torso,
-.shoulder {
-  fill: #1aa6c8;
-  stroke: #15234b;
-}
-
-.torso {
-  stroke-width: 3;
-}
-
-.chest-panel {
-  fill: #f7fcff;
-}
-
-.status-light {
-  fill: #f2b84b;
-  stroke-width: 1.4;
-}
-
-.arm path,
-.leg > path:first-child {
-  stroke-width: 6;
-}
-
-.arm circle,
-.boot {
-  fill: #15234b;
-}
-
-.arm,
-.leg,
-.hanging-bag {
-  transform-box: fill-box;
-  transform-origin: center top;
-}
-
-.bag {
-  fill: #f2b84b;
-  stroke: #15234b;
-}
-
-.bag-strap,
-.bag-flap {
-  stroke-width: 2;
-}
-
-.assistant-robot-body[data-mode='fast'] .body-frame {
-  animation: body-step 0.34s ease-in-out infinite alternate;
-}
-
-.assistant-robot-body[data-mode='fast'] .arm-left,
-.assistant-robot-body[data-mode='fast'] .leg-right {
-  animation: walk-forward 0.34s ease-in-out infinite alternate;
-}
-
-.assistant-robot-body[data-mode='fast'] .arm-right,
-.assistant-robot-body[data-mode='fast'] .leg-left {
-  animation: walk-back 0.34s ease-in-out infinite alternate;
-}
-
-.assistant-robot-body[data-mode='fast'] .hanging-bag {
-  animation: bag-swing 0.42s ease-in-out infinite alternate;
-}
-
-.assistant-robot-body[data-mode='fast'] .speed-line {
-  animation: speed-line 0.48s linear infinite;
-}
-
-.assistant-robot-body[data-mode='sleepy'] .body-frame {
-  transform-origin: 50px 74px;
-  animation: tired-body 2.2s ease-in-out infinite;
-}
-
-.assistant-robot-body[data-mode='sleepy'] .arm-left {
-  transform: rotate(10deg);
-}
-
-.assistant-robot-body[data-mode='sleepy'] .arm-right {
-  transform: rotate(-10deg);
-}
-
 @keyframes thoughtful-glasses {
   50% {
     transform: translateY(-1px) rotate(-1deg);
   }
 }
 
-@keyframes magnifier-search {
-  to {
-    transform: translate(-9px, 5px) rotate(-12deg);
-  }
-}
-
-@keyframes body-step {
-  to {
-    transform: translateY(-2px);
-  }
-}
-
-@keyframes walk-forward {
-  from {
-    transform: rotate(-18deg);
-  }
-  to {
-    transform: rotate(23deg);
-  }
-}
-
-@keyframes walk-back {
-  from {
-    transform: rotate(18deg);
-  }
-  to {
-    transform: rotate(-23deg);
-  }
-}
-
-@keyframes bag-swing {
-  to {
-    transform: rotate(12deg) translateX(2px);
-  }
-}
-
-@keyframes speed-line {
-  50% {
-    opacity: 0.2;
-    transform: translateX(5px);
-  }
-}
-
-@keyframes tired-body {
-  50% {
-    transform: rotate(5deg) translateY(3px);
-  }
-}
-
 @media (prefers-reduced-motion: reduce) {
-  .assistant-action,
-  .assistant-action * {
+  .assistant-glasses {
     animation: none !important;
   }
 }

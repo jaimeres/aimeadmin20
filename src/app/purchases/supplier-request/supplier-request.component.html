@@ -50,9 +50,18 @@
       <p-tabpanels>
 
         <p-tabpanel value="0">
+          <!-- [[[II ESC:036-08 DOC:docs/documents/2026-08-04-036-meta-sources-tabla-derivada.md#escenario-08
+               Faltaban las tres salidas del formulario dinámico: sin ellas el
+               componente EMITE y nadie escucha, así que el botón «Jalar partidas»
+               se veía, registraba el clic y no hacía nada, y una fila de la tabla
+               derivada tampoco podía guardarse. -->
           <app-custom-draw-form *ngIf="form()[$any(typeDefault)] && drawForm()[typeDefault]"
             [drawForm]="drawForm()[typeDefault]['general']" [formGroup]="form()[$any(typeDefault)]"
+            [delegateTableSave]="true" (onTableRowSave)="handleTableRowSave($event)"
+            [tableRowSaveOutcome]="tableRowSaveOutcome()"
+            (onButtonClickAction)="handleButtonClick($event)"
             [isCreate]="isCreate()" />
+          <!-- ]]]FI -->
         </p-tabpanel>
 
         <p-tabpanel header="Clasificadores" value="1">

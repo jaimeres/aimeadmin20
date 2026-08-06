@@ -100,4 +100,50 @@ describe('GeneralService', () => {
     });
   });
   // ]]]FI
+
+  // [[[II ESC:036-01 DOC:docs/documents/2026-08-04-036-meta-sources-tabla-derivada.md#escenario-01
+  describe('baseDJA: meta del resource object', () => {
+    it('publica data.meta cuando la conversión lo pide', () => {
+      const payload: any = service.baseDJA({
+        attributes: { folio: 'F-1' },
+        type: 'delivery-note',
+        meta: {
+          idempotency_key: 'e4f8c45f-7e32-4a1e-8b6c-b3fb1e87d17b',
+          sources: [{
+            type: 'supplier-request-detail',
+            id: 'src-1',
+            meta: { source_version: '2026-08-02T10:30:00Z', quantity: '50' },
+          }],
+        },
+      });
+
+      // El meta va en el RESOURCE OBJECT, no en la raíz: es donde lo lee el
+      // parser del BOS (`_data_meta`). En la raíz el servidor no lo vería.
+      expect(payload.data.meta.sources[0].id).toBe('src-1');
+      expect(payload.data.meta.sources[0].meta.quantity).toBe('50');
+      expect(payload.data.attributes.folio).toBe('F-1');
+      expect(payload.meta).toBeUndefined();
+    });
+
+    it('sin meta el payload es el de siempre', () => {
+      const payload: any = service.baseDJA({
+        attributes: { folio: 'F-1' },
+        type: 'delivery-note',
+      });
+
+      expect('meta' in payload.data).toBeFalse();
+    });
+
+    it('un meta vacío tampoco se publica', () => {
+      const payload: any = service.baseDJA({
+        attributes: { folio: 'F-1' },
+        type: 'delivery-note',
+        meta: {},
+      });
+
+      // Un `meta` vacío convertiría el POST en una conversión sin fuentes.
+      expect('meta' in payload.data).toBeFalse();
+    });
+  });
+  // ]]]FI
 });

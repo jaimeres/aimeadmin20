@@ -1,7 +1,11 @@
 import { Component, OnInit, signal } from '@angular/core';
 import { ConfirmationService, MenuItem } from 'primeng/api';
 import { CrudPageShellComponent } from '../../shared/crud-page-shell.component';
-import { CRUD } from '../../utils/crud.class';
+// [[[II ESC:054-02 DOC:docs/documents/2026-08-05-054-configuracion-por-documento.md#escenario-02
+// Documento con documento INFERIOR: hereda el motor de conversión, que no
+// carga el resto del sistema.
+import { ConversionCRUD } from '../../utils/conversion-crud.class';
+// ]]]FI
 import { PurchaseService } from '../services/purchase.service';
 
 @Component({
@@ -12,7 +16,7 @@ import { PurchaseService } from '../services/purchase.service';
   standalone: true,
   providers: [ConfirmationService]
 })
-export class DeliveryNotesComponent extends CRUD implements OnInit {
+export class DeliveryNotesComponent extends ConversionCRUD implements OnInit {
 
   // [[[II ESC:026-01 DOC:docs/documents/2026-07-01-026-compras-punto-partida.md#escenario-01
   public override openNewMenu = signal<MenuItem[]>([{

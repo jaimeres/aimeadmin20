@@ -58,7 +58,7 @@ export class GeneralService {
    *                 ejemplo, id: formData.country, field: 'country', type: 'country'.
    * @param {string} id - Para editar.
    */
-  baseDJA({ attributes, type, relationships = [], id }: { attributes: any; type: string; relationships?: any[]; id?: string }) {
+  baseDJA({ attributes, type, relationships = [], id, meta }: { attributes: any; type: string; relationships?: any[]; id?: string; meta?: any }) {
     // [[[II ESC:001-06 DOC:docs/documents/2026-05-16_001_consolidacion_dropdown_types_y_fix_escenarios.md#escenario-06
     attributes = this._stripNullsFromPayload(attributes) || {};
     // ]]]FI
@@ -161,6 +161,17 @@ export class GeneralService {
     if (id) {
       dataResp['data']['id'] = id;
     }
+
+    // [[[II ESC:036-01 DOC:docs/documents/2026-08-04-036-meta-sources-tabla-derivada.md#escenario-01
+    // `meta` del RESOURCE OBJECT (no el de la raíz). JSON:API lo admite y es el
+    // canal del contrato de conversiones del servidor: `sources`,
+    // `idempotency_key` y `options`. No se saneia con `_stripNullsFromPayload`
+    // porque no son atributos del modelo: son instrucciones de la petición.
+    // Sin `meta` el payload queda byte por byte como siempre.
+    if (meta && typeof meta === 'object' && Object.keys(meta).length) {
+      dataResp['data']['meta'] = meta;
+    }
+    // ]]]FI
 
     return dataResp;
   }

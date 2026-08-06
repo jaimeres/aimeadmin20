@@ -14,7 +14,7 @@ import { TooltipModule } from 'primeng/tooltip';
 import { catchError, filter as rxFilter, map, Observable, of, Subscription } from 'rxjs';
 import { CustomButtonCrudComponent } from '../../custom-button-crud/custom-button-crud.component';
 import { JoinOrSelfPipe } from '../join-or-self.pipe';
-import { DERIVED_TABLE_DRAFT_FLAG, TABLE_ROW_SOURCE_FLAG } from '../../../utils/table-row-flags.const';
+import { DERIVED_TABLE_DRAFT_FLAG, RAW_ATTRIBUTE_PREFIX, TABLE_ROW_SOURCE_FLAG, TABLE_ROW_SOURCE_VERSION_SUFFIX } from '../../../utils/table-row-flags.const';
 import { CRUDService } from '../../../utils/services/crud.service';
 import { GeneralService } from '../../../utils/services/general.service';
 
@@ -1209,7 +1209,10 @@ export class DynamicTableFieldComponent implements OnChanges, OnDestroy {
         if (this._cellSearchToken[field] !== token) return null;
         const rows = this.generalS.DJAtoObject({ respDJA: resp, fields: { [column.field]: column } }) || [];
         // Mismo enriquecimiento `<rel>_data_<attr>` que el form dinámico.
-        return this.generalS.enrichSuggestionRelationData(rows, resp, column);
+        const enriched = this.generalS.enrichSuggestionRelationData(rows, resp, column);
+        // [[[II ESC:036-07 DOC:docs/documents/2026-08-04-036-meta-sources-tabla-derivada.md#escenario-07
+        return this._retainRawVersionAttributes(enriched, resp);
+        // ]]]FI
       }),
       // Se ignora la emisión nula de una respuesta obsoleta.
       rxFilter((rows: any[] | null): rows is any[] => rows !== null),
@@ -1402,6 +1405,20 @@ export class DynamicTableFieldComponent implements OnChanges, OnDestroy {
       const relTarget = column?.relationship_field || column?.field;
       if (relTarget && uuid != null && uuid !== '') source[relTarget] = uuid;
 
+      // [[[II ESC:036-02 DOC:docs/documents/2026-08-04-036-meta-sources-tabla-derivada.md#escenario-02
+      // Conversión: cuando la columna elegida ES la columna ORIGEN declarada por
+      // la tabla, la fila retiene además la VERSIÓN del registro origen. El
+      // servidor la exige en `meta.source_version` para rechazar una partida que
+      // cambió después de haber sido seleccionada (`source_version_conflict`).
+      //
+      // No se hace spread del objeto seleccionado — el comentario de arriba
+      // explica por qué sería un error —, así que se copian SÓLO los atributos
+      // declarados en `sources.version`, en orden: gana el primero con valor
+      // (el servidor usa `modified_at or created_at`). La clave sigue la misma
+      // convención que `<campo>__name`.
+      this._retainSourceVersion(source, column, selected);
+      // ]]]FI
+
       // 1. children/derived declarados por la columna: relleno cross-column por
       //    config (p.ej. al elegir producto: name, price, currency, comprobantes).
       this._applyDerivedChildren(rowGroup, column, selected, source);
@@ -1454,6 +1471,78 @@ export class DynamicTableFieldComponent implements OnChanges, OnDestroy {
     this._finishCellAndAdvance(tableField, rowIndex, column.field, column);
     this.cdr.markForCheck();
   }
+
+  // [[[II ESC:036-02 DOC:docs/documents/2026-08-04-036-meta-sources-tabla-derivada.md#escenario-02
+  /**
+   * Contrato `sources` declarado por ESTA tabla, ya normalizado.
+   *
+   * Devuelve `null` cuando la tabla no lo declara, y entonces nada de la
+   * conversión corre: la tabla se comporta exactamente como hasta ahora. Es la
+   * única llave que distingue una tabla de captura manual de una que además
+   * puede jalar partidas de un documento origen.
+   */
+  private _tableSourcesContract(): { column: string; quantity: string; amount: string; version: string[] } | null {
+    const raw = this.tableConfig?.sources;
+    const column = typeof raw?.column === 'string' ? raw.column.trim() : '';
+    if (!column) return null;
+    return {
+      column,
+      quantity: typeof raw?.quantity === 'string' ? raw.quantity.trim() : '',
+      amount: typeof raw?.amount === 'string' ? raw.amount.trim() : '',
+      version: String(raw?.version || '')
+        .split(',')
+        .map((key: string) => key.trim())
+        .filter((key: string) => !!key),
+    };
+  }
+
+  /**
+   * Conserva el valor CRUDO de los atributos de versión antes de que el aplanado
+   * los convierta en texto de pantalla.
+   *
+   * No-op si la tabla no declara `sources`: ninguna otra búsqueda de celda
+   * necesita esto.
+   */
+  private _retainRawVersionAttributes(rows: any[], resp: any): any[] {
+    const contract = this._tableSourcesContract();
+    if (!contract?.version.length || !Array.isArray(resp?.data)) return rows;
+
+    const attributesById = new Map<string, any>();
+    resp.data.forEach((entry: any) => {
+      if (entry?.id != null) attributesById.set(String(entry.id), entry.attributes || {});
+    });
+
+    rows.forEach((row: any) => {
+      const attributes = attributesById.get(String(row?.id));
+      if (!attributes) return;
+      contract.version.forEach((key: string) => {
+        if (attributes[key] !== undefined) row[`${RAW_ATTRIBUTE_PREFIX}${key}`] = attributes[key];
+      });
+    });
+    return rows;
+  }
+
+  /**
+   * Copia a la fila la versión del registro origen recién elegido.
+   *
+   * Sólo actúa sobre la columna declarada como origen; cualquier otra columna
+   * buscadora de la misma tabla (p.ej. el producto) queda intacta. Gana el valor
+   * crudo: el aplanado convierte las fechas en texto local y el servidor no
+   * puede parsearlo.
+   */
+  private _retainSourceVersion(source: any, column: any, selected: any): void {
+    const contract = this._tableSourcesContract();
+    if (!contract || contract.column !== column?.field) return;
+
+    for (const key of contract.version) {
+      const value = selected?.[`${RAW_ATTRIBUTE_PREFIX}${key}`] ?? selected?.[key];
+      if (value !== undefined && value !== null && value !== '') {
+        source[`${column.field}${TABLE_ROW_SOURCE_VERSION_SUFFIX}`] = value;
+        return;
+      }
+    }
+  }
+  // ]]]FI
 
   /**
    * Rellena las columnas derivadas declaradas por `column.children.fields.derived`

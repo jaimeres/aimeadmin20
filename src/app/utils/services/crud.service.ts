@@ -270,6 +270,42 @@ export class CRUDService {
       "name": "Detalle de Solicitud",
       "icon": "pi pi-file-edit"
     },
+    // [[[II ESC:036-06 DOC:docs/documents/2026-08-04-036-meta-sources-tabla-derivada.md#escenario-06
+    // Faltaban los demás documentos de compra. `getAppType` es el ÚNICO punto que
+    // resuelve app/type, así que sin estas entradas la tabla derivada de Pedido y
+    // Remisión no cargaba sus partidas y el buscador de documento origen no podía
+    // consultar nada: ambos abandonan en silencio cuando la clave no resuelve.
+    "request": {
+      "app": "purchases/request",
+      "type": "request",
+      "name": "Solicitud",
+      "icon": "pi pi-file-edit"
+    },
+    "supplier-request": {
+      "app": "purchases/supplier-request",
+      "type": "supplier-request",
+      "name": "Pedido a Proveedor",
+      "icon": "pi pi-shopping-cart"
+    },
+    "supplier-request-detail": {
+      "app": "purchases/supplier-request-detail",
+      "type": "supplier-request-detail",
+      "name": "Detalle de Pedido a Proveedor",
+      "icon": "pi pi-shopping-cart"
+    },
+    "delivery-note": {
+      "app": "purchases/delivery-note",
+      "type": "delivery-note",
+      "name": "Nota de Remisión",
+      "icon": "pi pi-truck"
+    },
+    "delivery-note-detail": {
+      "app": "purchases/delivery-note-detail",
+      "type": "delivery-note-detail",
+      "name": "Detalle de Nota de Remisión",
+      "icon": "pi pi-truck"
+    },
+    // ]]]FI
     "maintenance-responsible-person": {
       "app": "assets/maintenance-responsible-person",
       "type": "maintenance-responsible-person",
@@ -371,7 +407,12 @@ export class CRUDService {
   buildConfiguredSearchFilter(
     filterConfig: Record<string, any> | undefined,
     query: string,
-    fallbackFilter = ''
+    fallbackFilter = '',
+    // [[[II ESC:055-01 DOC:docs/documents/2026-08-05-055-buscadores-y-sources-reducido.md#escenario-01
+    // Formulario vivo, para resolver las entradas que declaran `from_field`.
+    // Opcional: sin él, el comportamiento es exactamente el anterior.
+    formValues?: Record<string, any> | null,
+    // ]]]FI
   ): string {
     if (!filterConfig || typeof filterConfig !== 'object') return fallbackFilter;
 
@@ -383,6 +424,25 @@ export class CRUDService {
         continue;
       }
       if (!entry || typeof entry !== 'object' || Array.isArray(entry)) continue;
+
+      // [[[II ESC:055-01 DOC:docs/documents/2026-08-05-055-buscadores-y-sources-reducido.md#escenario-01
+      // `from_field`: el valor de la restricción se toma de OTRO campo del
+      // formulario, no de una constante. Es lo que permite que un buscador se
+      // acote solo con lo que el encabezado ya capturó —proveedor, moneda—, en
+      // vez de listar todo el tenant.
+      //
+      // El nodo existente sólo sabía de valor estático (`default_value`) o del
+      // texto tecleado; un valor tomado de otro control no tenía forma de
+      // declararse. Una entrada con `from_field` cuyo campo aún está vacío se
+      // OMITE: al empezar la captura no hay nada que restringir.
+      if (typeof entry.from_field === 'string' && entry.from_field.trim() !== '') {
+        const raw = formValues?.[entry.from_field.trim()];
+        const value = (raw && typeof raw === 'object') ? (raw.id ?? raw.value) : raw;
+        if (value === undefined || value === null || value === '') continue;
+        resolvedConfig[fieldName] = { ...entry, default_value: value };
+        continue;
+      }
+      // ]]]FI
 
       const isQueryBinding = entry.active === true
         && entry.forced !== true
@@ -754,11 +814,15 @@ export class CRUDService {
    * @param files Opcional, archivos a subir, si viene un archivo se envia como multipart/form-data
    * @returns retorna el objeto creado
    */
-  saveObject({ formData, include = '', fields = '', filter = '' }: {
+  saveObject({ formData, include = '', fields = '', filter = '', meta = null }: {
     formData: any;
     include?: string;
     fields?: string;
     filter?: string;
+    // [[[II ESC:036-01 DOC:docs/documents/2026-08-04-036-meta-sources-tabla-derivada.md#escenario-01
+    // `data.meta` del contrato de conversiones. Opcional: sin él el POST es el
+    // CRUD de siempre. ]]]FI
+    meta?: any;
   }) {
     //°°°DEL FILTER NO ESTOY SEGURO
     const query = this.query(include, filter, '', fields);
@@ -780,7 +844,8 @@ export class CRUDService {
     const r = this.generalS.baseDJA({
       attributes: sanitizedFormData,
       type: this.type,
-      relationships: this.relationships
+      relationships: this.relationships,
+      meta
     });
 
     return this.http.post(`${this.baseUrl()}${query}`, r).pipe(

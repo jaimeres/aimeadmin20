@@ -1888,10 +1888,17 @@ export class CustomDrawFormComponent implements OnInit, OnDestroy {
     // [[[II ESC:030-17 DOC:docs/documents/2026-07-14-030-child-runtime-overlay.md#escenario-17
     // `data_type.filter` decide el atributo remoto sin acoplar el control a
     // una relación concreta. Sin binding declarativo conserva el perfil previo.
-    return this.crudS.buildConfiguredSearchFilter(config?.data_type?.filter, query, fallbackFilter);
+    // [[[II ESC:055-01 DOC:docs/documents/2026-08-05-055-buscadores-y-sources-reducido.md#escenario-01
+    // El formulario vivo viaja al resolvedor para que una entrada `from_field`
+    // tome el valor de otro control —proveedor, moneda— y el buscador quede
+    // acotado a lo que el encabezado ya declaró. Antes esto se resolvía aquí con
+    // una llave propia (`sources.match`); ahora lo declara `data_type.filter`,
+    // que es donde ya vivían las restricciones remotas.
+    return this.crudS.buildConfiguredSearchFilter(
+      config?.data_type?.filter, query, fallbackFilter, this.formGroup?.getRawValue?.() ?? null,
+    );
     // ]]]FI
   }
-  // ]]]FI
 
   /** Panel suprimido mientras no haya una búsqueda real (evita "No hay resultados"). */
   public autoCompletePanelSuppressed = signal<boolean>(false);

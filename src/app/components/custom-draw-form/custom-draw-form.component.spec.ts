@@ -980,4 +980,49 @@ describe('CustomDrawFormComponent', () => {
     });
   });
   // ]]]FI
+  // [[[II ESC:055-01 DOC:docs/documents/2026-08-05-055-buscadores-y-sources-reducido.md#escenario-01
+  describe('data_type.filter con from_field', () => {
+    it('toma el valor de otro campo del formulario', () => {
+      const filtro = component['crudS'].buildConfiguredSearchFilter(
+        {
+          logic: 'and',
+          code: { active: true, default: 'iexact' },
+          supplier: { active: true, default: 'exact', from_field: 'supplier' },
+        },
+        '10295',
+        '',
+        { supplier: 'prov-1' },
+      );
+
+      expect(filtro).toContain('filter[supplier]=prov-1');
+      expect(filtro).toContain('10295');
+    });
+
+    it('omite la entrada cuyo campo del formulario aún está vacío', () => {
+      const filtro = component['crudS'].buildConfiguredSearchFilter(
+        {
+          logic: 'and',
+          code: { active: true, default: 'iexact' },
+          currency: { active: true, default: 'exact', from_field: 'currency' },
+        },
+        '10295',
+        '',
+        { currency: '' },
+      );
+
+      // Restringir por un campo vacío no devolvería nada.
+      expect(filtro).not.toContain('currency');
+    });
+
+    it('sin formulario se comporta como antes', () => {
+      const filtro = component['crudS'].buildConfiguredSearchFilter(
+        { logic: 'and', supplier: { active: true, default: 'exact', from_field: 'supplier' } },
+        'texto',
+        'filter[search]=texto',
+      );
+
+      expect(filtro).toBe('filter[search]=texto');
+    });
+  });
+  // ]]]FI
 });

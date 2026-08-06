@@ -83,7 +83,7 @@ Mostrar una expresión de espanto cuando el usuario vaya a eliminar un elemento,
 
 ### Solicitud
 
-Hacer perceptibles los cambios de estado con lentes al pensar, una lupa al buscar, un cuerpo al trabajar rápidamente y una postura cansada al acercarse el estado de sueño. Tras revisar la primera versión en video, se pidió sustituir el cuerpo de líneas por un robot reconocible, con algo colgante y una marcha simulada. La cabeza debe seguir siendo el botón y el coste de rendimiento debe mantenerse bajo.
+Hacer perceptibles los cambios de estado con lentes al pensar, una lupa al buscar, un cuerpo al trabajar rápidamente y una postura cansada al acercarse el estado de sueño. Tras revisar dos versiones en video, se pidió sustituir el cuerpo de líneas por un robot articulado, hacer que tome la lupa con una mano y separar las escenas por consulta: una consulta con lentes, otra con lupa y otra con caminata. La cabeza debe seguir siendo el botón y el coste de rendimiento debe mantenerse bajo.
 
 ### Comportamiento previo
 
@@ -94,25 +94,56 @@ Hacer perceptibles los cambios de estado con lentes al pensar, una lupa al busca
 ### Decisiones
 
 1. Se agregó un subcomponente standalone `OnPush` dedicado únicamente al dibujo SVG. Al estar en reposo no renderiza ningún SVG.
-2. Una petición pendiente inicia con lentes en `think`; a los 900 ms muestra la lupa en `searching` y, si continúa pendiente otros 1.5 segundos, muestra el cuerpo rápido en `working`.
-3. `speed` reutiliza el cuerpo rápido y `yawning` muestra el cuerpo con balanceo cansado. El cuerpo definitivo tiene torso sólido, panel frontal, hombros, manos, piernas, botas y un bolso lateral colgante.
+2. Cada petición elige una sola escena y la conserva hasta la respuesta. Las consultas rotan de forma determinista entre `think`, `searching` y `working`; la cuarta vuelve a `think`.
+3. `speed` reutiliza el cuerpo rápido y `yawning` muestra el cuerpo con balanceo cansado. El cuerpo definitivo tiene torso sólido, panel frontal, hombros, brazos segmentados, manos, piernas con rodillas, botas y un bolso lateral colgante.
 4. Las animaciones usan únicamente `transform` y `opacity`, respetan `prefers-reduced-motion` y no agregan imágenes, solicitudes de red, polling, listeners ni temporizadores recurrentes.
 5. `AssistantMood` conserva sus doce estados públicos. `searching` y `working` son expresiones locales; los mapas Lottie personalizados reutilizan `think` y `speed` como fallback.
 6. `searching` representa visualmente el tiempo de espera: no afirma que el agente haya invocado una herramienta de búsqueda, porque la respuesta actual no publica eventos de progreso.
-7. Un único `computed` selecciona el modo visual: lentes, lupa o cuerpo. Nunca se renderizan simultáneamente. Todos los SVG tienen `pointer-events: none`, por lo que la cabeza conserva la única zona interactiva.
-8. La marcha alterna brazos y piernas, desplaza ligeramente el torso y hace oscilar el bolso. El estado cansado conserva el cuerpo, pero desactiva la marcha y aplica un balanceo lento.
+7. Un único `computed` selecciona el modo visual. La escena de lentes no incluye cuerpo; la de búsqueda incluye únicamente el cuerpo necesario para sostener la lupa, sin lentes ni marcha; la de trabajo incluye el cuerpo caminando, sin lentes ni lupa. Todos los SVG tienen `pointer-events: none`, por lo que la cabeza conserva la única zona interactiva.
+8. En búsqueda, el brazo derecho llega hasta una mano unida al mango de la lupa y ambos oscilan desde el hombro. En caminata, la marcha alterna brazos, muslos y pantorrillas, levanta los pies, desplaza el torso y hace oscilar el bolso.
+
+### Cambio de comportamiento autorizado
+
+La secuencia anterior cambiaba `think → searching → working` dentro de la misma consulta mediante dos temporizadores. El usuario rechazó explícitamente ese comportamiento y pidió una sola escena por consulta. Se eliminaron ambos temporizadores y su limpieza; ahora la rotación ocurre únicamente al comenzar una nueva petición.
 
 ### Rendimiento y validaciones
 
-- Solo existe un temporizador de etapa activo durante la petición y se limpia al responder o destruir el componente.
-- El SCSS principal queda en `3.89 kB`, debajo del límite de error de `4 kB`; el estilo del subcomponente queda en `2.58 kB`, debajo de su límite de error de `4 kB`.
+- La selección de escena no usa temporizadores, listeners, polling ni solicitudes adicionales.
+- El SCSS principal queda en `3.89 kB`, debajo del límite de error de `4 kB`; el estilo del subcomponente queda en `3.61 kB`, debajo de su límite de error de `4 kB`.
 - `npx ng build --configuration production`: correcto.
 - Specs aislados del widget y del subcomponente: `9 SUCCESS`.
-- Se revisaron visualmente reposo, lentes, lupa, cuerpo robot caminando con bolso y cuerpo cansado con la imagen transparente vigente.
+- Se revisaron visualmente las tres consultas independientes con la cabeza y los ojos vigentes: lentes; mano sosteniendo la lupa; cuerpo articulado caminando con bolso.
 
 ### Caracterización remota analizada, no implementada
 
 Es viable recibir desde el servidor una caracterización por evento, pero no debe descargarse HTML, CSS, JavaScript, SVG o Lottie arbitrario. La alternativa segura es un manifiesto autenticado que entregue un identificador de tema, vigencia y referencias a recursos rasterizados previamente aprobados. El cliente debe aplicar allowlist de orígenes y tipos, límites de tamaño, HTTPS, fallback local, caché versionada y una prioridad determinista entre eventos como Día de Muertos, Independencia de México, Navidad y Año Nuevo.
+
+## Escenario 05: Retirar cuerpo y lupa
+
+### Solicitud
+
+Quitar por completo el cuerpo y la lupa, y conservar únicamente los lentes como accesorio del asistente.
+
+### Comportamiento previo
+
+Cada nueva petición rotaba entre tres escenas independientes: lentes, cuerpo sosteniendo una lupa y cuerpo articulado caminando. Los estados `speed` y `yawning` también podían renderizar el cuerpo.
+
+### Decisión y regresión autorizada
+
+1. Toda petición pendiente fija el estado `think`, por lo que los lentes permanecen visibles hasta recibir la respuesta.
+2. Se eliminaron el SVG del cuerpo, la lupa, el bolso y todas sus animaciones de búsqueda, caminata y cansancio.
+3. Se retiró la rotación por consulta y su estado interno. Esta regresión fue solicitada explícitamente por el usuario al pedir que solo queden los lentes.
+4. Las expresiones `searching` y `working` y sus fallbacks Lottie se conservan para no romper consumidores existentes, aunque el flujo de petición ya no las produce.
+5. Los estados de rapidez, sueño, borrado, seguimiento ocular y conversación se preservan, pero ninguno agrega cuerpo o lupa.
+
+### Rendimiento y validaciones
+
+- El subcomponente conserva un único `computed` y solo crea un SVG liviano durante `think`.
+- Se eliminaron los nodos SVG y keyframes del cuerpo y de la lupa; no se agregaron temporizadores, listeners ni solicitudes.
+- El archivo SCSS del subcomponente bajó de `3.61 kB` a `824 bytes`; el SCSS principal compilado se mantiene en `3.89 kB`.
+- `npx tsc -p tsconfig.app.json --noEmit`: correcto.
+- `npx ng build --configuration production`: correcto.
+- Specs aislados del widget y del subcomponente: `9 SUCCESS`.
 
 ## Comportamiento previo preservado
 

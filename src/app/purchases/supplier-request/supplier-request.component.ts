@@ -1,6 +1,10 @@
 import { Component, OnInit, signal } from '@angular/core';
 import { ConfirmationService, MenuItem } from 'primeng/api';
-import { CRUD } from '../../utils/crud.class';
+// [[[II ESC:054-02 DOC:docs/documents/2026-08-05-054-configuracion-por-documento.md#escenario-02
+// Documento con documento INFERIOR: hereda el motor de conversión, que no
+// carga el resto del sistema.
+import { ConversionCRUD } from '../../utils/conversion-crud.class';
+// ]]]FI
 import { PurchaseService } from '../services/purchase.service';
 import { LOCAL_BASE } from '../../shared/components.index';
 import { PRIME_MODULES } from '../../shared/primeng.index';
@@ -26,7 +30,7 @@ import { InputTextModule } from 'primeng/inputtext';
   standalone: true,
   providers: [ConfirmationService]
 })
-export class SupplierRequestComponent extends CRUD implements OnInit {
+export class SupplierRequestComponent extends ConversionCRUD implements OnInit {
 
   public override openNewMenu = signal<MenuItem[]>([{
     label: 'Pedido',

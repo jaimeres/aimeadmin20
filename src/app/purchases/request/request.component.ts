@@ -2,7 +2,11 @@ import { Component, ElementRef, EventEmitter, inject, Input, OnInit, Output, Ren
 import { CommonModule } from '@angular/common';
 import { FormGroup } from '@angular/forms';
 import { PurchaseService } from '../services/purchase.service';
-import { CRUD } from '../../utils/crud.class';
+// [[[II ESC:054-02 DOC:docs/documents/2026-08-05-054-configuracion-por-documento.md#escenario-02
+// Documento con documento INFERIOR: hereda el motor de conversión, que no
+// carga el resto del sistema.
+import { ConversionCRUD } from '../../utils/conversion-crud.class';
+// ]]]FI
 import { ConfirmationService, PRIME_MODULES } from '../../shared/primeng.index';
 import { LOCAL_BASE } from '../../shared/components.index';
 import { MenuItem } from 'primeng/api';
@@ -19,7 +23,7 @@ import { MenuItem } from 'primeng/api';
   standalone: true,
   providers: [ConfirmationService]
 })
-export class RequestComponent extends CRUD implements OnInit {
+export class RequestComponent extends ConversionCRUD implements OnInit {
 
   @ViewChild('canvas') canvasRef!: ElementRef<HTMLCanvasElement>;
   private ctx!: CanvasRenderingContext2D;
@@ -35,12 +39,7 @@ export class RequestComponent extends CRUD implements OnInit {
   }, {
     label: 'Solicitudes',
     command: () => this.openNew({ pos: 'request' })
-  },
-  {
-    label: 'Remisiones',
-    command: () => this.openNew({ pos: 'delivery-note' })
-  },
-
+  }
   ]);
 
   // consultas
@@ -50,10 +49,6 @@ export class RequestComponent extends CRUD implements OnInit {
   }, {
     label: 'Solicitudes',
     command: () => this.getAll({ pos: 'request' })
-  },
-  {
-    label: 'Remisiones',
-    command: () => this.getAll({ pos: 'delivery-note' })
   }
   ]);
 
@@ -81,12 +76,6 @@ export class RequestComponent extends CRUD implements OnInit {
 
     this.app['request'] = 'purchases/request';
     this.module['request'] = 'CO';
-
-
-
-
-    this.app['delivery-note'] = 'purchases/delivery-note';
-    this.module['delivery-note'] = 'CO';
 
 
     // request-detail no siempre soporta is_active como filtro de listado.

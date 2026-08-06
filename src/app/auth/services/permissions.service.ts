@@ -1,6 +1,6 @@
 import { computed, inject, Injectable, Signal, signal } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
-import { Observable, of, tap, catchError, map } from 'rxjs';
+import { Observable, forkJoin, of, tap, catchError, map } from 'rxjs';
 import { environment } from '../../../environments/environment';
 
 /* ════════════════════════════════════════════════════════════════════════════
@@ -143,6 +143,7 @@ export class PermissionsService {
   }
 
   /** Permisos de un usuario específico (admin) */
+  // [[[II ESC:022-07 DOC:../aimeServidor2/docs/documents/2026-06-19-022-status-edit-records.md#escenario-07
   loadForUser(userId: string, app?: string): Observable<{ strings: PermissionStrings; tree: PermissionTree }> {
     const stringsUrl = app
       ? `${this._baseUrl}/permissions/${userId}/strings/${app}/`
@@ -151,21 +152,18 @@ export class PermissionsService {
       ? `${this._baseUrl}/permissions/${userId}/tree/${app}/`
       : `${this._baseUrl}/permissions/${userId}/tree/`;
 
-    return this.http.get<any>(stringsUrl).pipe(
-      map((respStr) => ({
-        strings: this._extractStrings(respStr),
-        tree: {} as PermissionTree
-      })),
-      tap((acc) => {
-        this.http.get<any>(treeUrl).pipe(
-          map((resp) => this._extractTree(resp)),
-          tap((t) => { acc.tree = t; }),
-          catchError(() => of({}))
-        ).subscribe();
-      }),
-      catchError(() => of({ strings: {}, tree: {} as PermissionTree }))
-    );
+    return forkJoin({
+      strings: this.http.get<any>(stringsUrl).pipe(
+        map((response) => this._extractStrings(response)),
+        catchError(() => of({} as PermissionStrings)),
+      ),
+      tree: this.http.get<any>(treeUrl).pipe(
+        map((response) => this._extractTree(response)),
+        catchError(() => of({} as PermissionTree)),
+      ),
+    });
   }
+  // ]]]FI
 
   /** Convierte tree → strings o viceversa usando endpoint backend */
   convert(payload: any): Observable<any> {
@@ -208,10 +206,13 @@ export class PermissionsService {
       return this._bitAt(key, idx);
     }
 
-    // Formato app.module.action
+    // Formato app.module.action; la acción puede ser granular y contener puntos.
     const parts = s.split('.');
     if (parts.length >= 3) {
-      const [app, mod, action] = parts;
+      const [app, mod] = parts;
+      // [[[II ESC:022-07 DOC:../aimeServidor2/docs/documents/2026-06-19-022-status-edit-records.md#escenario-07
+      const action = parts.slice(2).join('.');
+      // ]]]FI
       const leaf = this._tree()?.[app]?.[mod]?.[action];
       if (!leaf) return false;
       // value directo del backend

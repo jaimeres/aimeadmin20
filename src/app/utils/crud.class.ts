@@ -13,7 +13,7 @@ import {
 } from './types/crud.types';
 import { Vars } from './vars.class';
 import { DROPDOWN_TYPES_PAYLOAD } from './dropdown-types.const';
-import { DERIVED_TABLE_DRAFT_FLAG, TABLE_ROW_SOURCE_FLAG } from './table-row-flags.const';
+import { DERIVED_TABLE_DRAFT_FLAG, RAW_ATTRIBUTE_PREFIX, TABLE_ROW_SOURCE_FLAG, TABLE_ROW_SOURCE_VERSION_SUFFIX } from './table-row-flags.const';
 
 @Directive()
 export class CRUD extends Vars implements OnChanges  /*implements OnInit*/ {
@@ -38,8 +38,8 @@ export class CRUD extends Vars implements OnChanges  /*implements OnInit*/ {
   // [[[II ESC:001-17 DOC:docs/documents/2026-05-16_001_consolidacion_dropdown_types_y_fix_escenarios.md#escenario-17
   private readonly noFormDataPrefix = 'no_form_data_';
   // [[[II ESC:030-01 Fuente única compartida en utils/table-row-flags.const.ts ]]]FI
-  private readonly derivedTableDraftFlag = DERIVED_TABLE_DRAFT_FLAG;
-  private readonly tableRowSourceFlag = TABLE_ROW_SOURCE_FLAG;
+  protected readonly derivedTableDraftFlag = DERIVED_TABLE_DRAFT_FLAG;
+  protected readonly tableRowSourceFlag = TABLE_ROW_SOURCE_FLAG;
   // ]]]FI
   // [[[II ESC:005-10 DOC:docs/documents/2026-05-31_005_columnas-form-data-y-tree-select-nombres.md#escenario-10
   private readonly deviceDateDefaultFields: { [key: string]: Set<string> } = {};
@@ -244,7 +244,7 @@ export class CRUD extends Vars implements OnChanges  /*implements OnInit*/ {
     this.mobileTypeAppliedDrawForms.add(drawForm);
   }
 
-  private _collectDrawFormLayouts(drawForm: any): any[] {
+  protected _collectDrawFormLayouts(drawForm: any): any[] {
     if (!drawForm || typeof drawForm !== 'object') return [];
 
     const layoutsToProcess: any[] = [];
@@ -4336,10 +4336,37 @@ export class CRUD extends Vars implements OnChanges  /*implements OnInit*/ {
    */
   handleTableRowSave(ctx: any): void {
     if (!ctx?.field) return;
+
+    // [[[II ESC:036-03 DOC:docs/documents/2026-08-04-036-meta-sources-tabla-derivada.md#escenario-03
+    // Fila ORIGEN mientras se crea el documento: NO se persiste por su cuenta.
+    // La partida la materializa el servidor al ejecutar la conversión del POST
+    // del documento, junto con su asignación y el control de saldo. Un POST
+    // suelto del detalle crearía una partida sin asignación y sin tope. La fila
+    // sólo tiene que quedarse en la tabla, así que se publica el desenlace en
+    // positivo para que la tabla la cierre.
+    if (this._isLocalConversionRow(ctx)) {
+      this._publishTableRowSaveOutcome(
+        { field: ctx.field, mode: 'row', pos: this.pos(), row_index: ctx.row_index },
+        true,
+      );
+      return;
+    }
+    // ]]]FI
+
+    // [[[II ESC:036-05 DOC:docs/documents/2026-08-04-036-meta-sources-tabla-derivada.md#escenario-05
+    // El pos es el del formulario ABIERTO, no el `typeDefault` del componente.
+    // Un componente puede alojar varios formularios y conectarlos todos a este
+    // mismo manejador; con `typeDefault` la fila viajaba siempre al recurso por
+    // omisión, así que una partida capturada en otro documento se guardaba
+    // contra el equivocado. `typeDefault` queda de respaldo por si el diálogo se
+    // abre sin haber fijado el pos activo.
+    const rowPos = this.pos() || this.typeDefault;
+    // ]]]FI
+
     this.save({
-      pos: this.typeDefault,
+      pos: rowPos,
       table_row: {
-        base_pos: this.typeDefault,
+        base_pos: rowPos,
         field: ctx.field,
         row_index: ctx.row_index,
         row_data: ctx.row_data,
@@ -4501,7 +4528,13 @@ export class CRUD extends Vars implements OnChanges  /*implements OnInit*/ {
       // no hay a qué colgarla, así que el alta se apaga y se restituye al editar.
       // En `role='child'` no aplica: ahí el padre se crea con la misma alta.
       if (contract?.role === 'parent') {
-        this._setParentChildTableAddRow(table, isEdit);
+        // [[[II ESC:036-03 DOC:docs/documents/2026-08-04-036-meta-sources-tabla-derivada.md#escenario-03
+        // Excepción: con `sources` declarado las filas del alta NO se cuelgan de
+        // ninguna ForeignKey; viajan en `data.meta.sources` del mismo POST que
+        // crea el documento, y el servidor materializa las partidas. Por eso ahí
+        // el alta sí está disponible al crear. Sin `sources` la regla anterior no
+        // cambia. ]]]FI
+        this._setParentChildTableAddRow(table, isEdit || !!this._tableSourcesContract(table));
       }
       // ]]]FI
 
@@ -4528,6 +4561,45 @@ export class CRUD extends Vars implements OnChanges  /*implements OnInit*/ {
     // señal para que la vista vuelva a dibujar (mismo patrón que replaceValDrawForm).
     this.drawForm.set({ ...this.drawForm() });
   }
+  // ]]]FI
+
+  // [[[II ESC:054-02 DOC:docs/documents/2026-08-05-054-configuracion-por-documento.md#escenario-02
+  // PUNTOS DE EXTENSIÓN de la conversión por `data.meta.sources`.
+  //
+  // El motor completo vive en `ConversionCRUD`, que hereda de esta clase. Aquí
+  // sólo quedan estos cinco no-ops porque `CRUD` lo carga TODO el sistema y la
+  // conversión sólo la usan los documentos con documento inferior. Sin ellos, el
+  // flujo de creación tendría que conocer un caso que la mayoría de los módulos
+  // nunca ejecuta.
+  //
+  // Con las implementaciones base, el comportamiento es idéntico al que había
+  // antes de que la conversión existiera.
+
+  /** `data.meta` del POST; `abort` corta el guardado. Base: nunca convierte. */
+  protected _conversionMetaForCreate(_pos: any): { meta: any | null; abort: boolean } {
+    return { meta: null, abort: false };
+  }
+
+  /** Consume una respuesta de conversión. Base: no la reconoce. */
+  protected _finishConversionResponse(_pos: any, _resp: any, _options: saveOptions): boolean {
+    return false;
+  }
+
+  /** Renueva el estado de conversión al reabrir el formulario. Base: no-op. */
+  protected _resetConversionState(_pos: any): void { }
+
+  /** ¿La fila viaja en `meta.sources` en vez de persistirse sola? Base: no. */
+  protected _isLocalConversionRow(_ctx: any): boolean {
+    return false;
+  }
+
+  /** Contrato `sources` de una tabla derivada. Base: ninguna lo declara. */
+  protected _tableSourcesContract(_table: any): any | null {
+    return null;
+  }
+
+  /** Acción `pull_sources` del botón declarado en configuración. Base: no-op. */
+  protected handlePullSources(_pos: any): void { }
   // ]]]FI
 
 
@@ -5250,7 +5322,7 @@ export class CRUD extends Vars implements OnChanges  /*implements OnInit*/ {
   }
 
   // [[[II ESC:001-17 DOC:docs/documents/2026-05-16_001_consolidacion_dropdown_types_y_fix_escenarios.md#escenario-17 ESC:030-02 DOC:docs/documents/2026-07-14-030-child-runtime-overlay.md#escenario-02
-  private _findNoFormDataTableConfig(pos: any, targetField: string = ''): any | null {
+  protected _findNoFormDataTableConfig(pos: any, targetField: string = ''): any | null {
     const draw = this._drawFormForDevice(pos);
     if (!draw) return null;
 
@@ -5304,7 +5376,7 @@ export class CRUD extends Vars implements OnChanges  /*implements OnInit*/ {
     return value !== undefined ? value : this._tableColumnDefaultValueForCrud(column);
   }
 
-  private _createNoFormDataTableRowFormGroup(tableConfig: any, rowData: any = {}): FormGroup {
+  protected _createNoFormDataTableRowFormGroup(tableConfig: any, rowData: any = {}): FormGroup {
     const rowGroup: any = {};
 
     this.generalS.configuredTableColumns(tableConfig?.columns).forEach((column: any) => {
@@ -5352,7 +5424,7 @@ export class CRUD extends Vars implements OnChanges  /*implements OnInit*/ {
     };
   }
 
-  private _completeCreatedLocalTableRow(pos: any, tableConfig: any, createdRow: any): any {
+  protected _completeCreatedLocalTableRow(pos: any, tableConfig: any, createdRow: any): any {
     let row = createdRow && typeof createdRow === 'object' && !Array.isArray(createdRow)
       ? { ...createdRow }
       : {};
@@ -5717,11 +5789,41 @@ export class CRUD extends Vars implements OnChanges  /*implements OnInit*/ {
       if (Array.isArray(v) && v.length === 0) delete formData[k];
     }
 
+    // [[[II ESC:036-03 DOC:docs/documents/2026-08-04-036-meta-sources-tabla-derivada.md#escenario-03
+    // Conversión: si la tabla derivada trae partidas ORIGEN, el MISMO POST del
+    // documento destino las manda en `data.meta.sources`; el servidor deduce la
+    // transición del par (destino, origen). Sin filas origen `meta` queda null y
+    // el payload es byte por byte el de siempre.
+    //
+    // No aplica al guardado de una FILA (`local_table`): ahí el recurso que se
+    // crea es el detalle, no el documento, y su form transitorio ni siquiera
+    // clona el FormArray de la tabla.
+    let conversionMeta: any = null;
+    if (doCreate && !local_table) {
+      const conversion = this._conversionMetaForCreate(safePos);
+      if (conversion.abort) {
+        this.showBlocked(false);
+        return;
+      }
+      conversionMeta = conversion.meta;
+    }
+    // ]]]FI
+
     //console.log('forrmmmmmmmmmmmmmmmmmm', formData);
     //revisar porque la primer seleccion del archivo se envia vacio de asset-document
     if (doCreate) {
-      this.crudS.saveObject({ formData, include, /*filter , files*/ }).subscribe({
+      this.crudS.saveObject({ formData, include, meta: conversionMeta /*filter , files*/ }).subscribe({
         next: (resp: any) => {
+          // [[[II ESC:036-04 DOC:docs/documents/2026-08-04-036-meta-sources-tabla-derivada.md#escenario-04
+          // La respuesta de una conversión NO es un resource object: es
+          // `{meta:{conversion_run_id, replayed, result}}`. Aplanarla con
+          // DJAtoObject metería un item basura en el listado. Además el servidor
+          // agrupa, así que pudo crear VARIOS documentos y ninguno viaja como
+          // recurso.
+          if (conversionMeta && this._finishConversionResponse(safePos, resp, options)) {
+            return;
+          }
+          // ]]]FI
           const temp = [...this.items()];
           const additionalFieldsAppCols = this.additionalFieldsAppCols[safePos] || [];
           const createdItem = this.DJAtoObject({ resp, node, additionalFieldsAppCols });
@@ -6725,6 +6827,13 @@ export class CRUD extends Vars implements OnChanges  /*implements OnInit*/ {
     this._applyParentChildTables(this.pos(), data);
     // ]]]FI
 
+    // [[[II ESC:036-03 DOC:docs/documents/2026-08-04-036-meta-sources-tabla-derivada.md#escenario-03
+    // Formulario nuevo = conversión nueva. Reusar la llave anterior con otro
+    // payload el servidor lo rechaza, y reusarla con el mismo devolvería el
+    // documento anterior en vez de crear uno.
+    this._resetConversionState(this.pos());
+    // ]]]FI
+
     //return;
     this.showFormDialog();
     //console.log('fin unifyRestoreForm');
@@ -7648,6 +7757,21 @@ export class CRUD extends Vars implements OnChanges  /*implements OnInit*/ {
       // Ejemplo: llamar servicio con filtros del formulario
       // this.crudS.search(this.app, formValues).subscribe(...)
     }
+
+    // [[[II ESC:036-06 DOC:docs/documents/2026-08-04-036-meta-sources-tabla-derivada.md#escenario-06
+    // JALAR PARTIDAS del documento origen elegido. Es una acción declarada en la
+    // configuración, no un botón cableado a un recurso: el campo que trae el
+    // documento viaja en el contrato `sources.document` de la tabla.
+    if (action === 'pull_sources') {
+      // La acción la implementa `ConversionCRUD`; aquí sólo se reconoce para que
+      // un componente que no herede de ella no caiga en el `search` de arriba.
+      // No lleva parámetros: qué campo trae el documento ya lo dice
+      // `sources.document.field` de la tabla, y declararlo dos veces permitiría
+      // que divergieran.
+      this.handlePullSources(currentPos);
+      return;
+    }
+    // ]]]FI
   }
 
   /**

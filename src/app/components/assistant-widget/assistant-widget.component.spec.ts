@@ -3,7 +3,7 @@ import { HttpTestingController, provideHttpClientTesting } from '@angular/common
 import { ComponentFixture, fakeAsync, TestBed, tick } from '@angular/core/testing';
 import { AssistantExpression, AssistantWidgetComponent } from './assistant-widget.component';
 
-// [[[II ESC:032-02,032-03,032-04 DOC:docs/documents/2026-07-24-032-assistant-widget-mascota-natural.md#escenario-02
+// [[[II ESC:032-02,032-03,032-04,032-05 DOC:docs/documents/2026-07-24-032-assistant-widget-mascota-natural.md#escenario-05
 describe('AssistantWidgetComponent', () => {
   let component: AssistantWidgetComponent;
   let fixture: ComponentFixture<AssistantWidgetComponent>;
@@ -69,23 +69,22 @@ describe('AssistantWidgetComponent', () => {
     expect(component.moodLabel()).toBe('¡Cuidado!');
   });
 
-  it('should make pending agent work visibly progress', fakeAsync(() => {
+  it('should keep glasses while the agent response is pending', fakeAsync(() => {
     const httpTesting = TestBed.inject(HttpTestingController);
-    component.draftControl.setValue('Busca el estado de mis activos');
+    component.toggle();
 
+    component.draftControl.setValue('Consulta');
     component.send();
     const request = httpTesting.expectOne('/api/assistant/chat');
     expect(component.mood()).toBe('think');
 
-    tick(900);
-    expect(component.mood()).toBe('searching');
+    tick(6000);
+    expect(component.mood()).toBe('think');
 
-    tick(1500);
-    expect(component.mood()).toBe('working');
-
-    request.flush({ respuesta: 'Búsqueda terminada.' });
+    request.flush({ respuesta: 'Respuesta' });
     tick();
     expect(component.mood()).toBe('talk');
+
     fixture.destroy();
   }));
 

@@ -239,4 +239,320 @@ describe('RequestComponent', () => {
     });
   });
   // ]]]FI
+
+  // [[[II ESC:036-03 DOC:docs/documents/2026-08-04-036-meta-sources-tabla-derivada.md#escenario-03
+  // La conversión es el POST del documento destino con `data.meta.sources`. Aquí
+  // se comprueba que el motor arma ese bloque desde las filas de la tabla sin
+  // nombrar ningún recurso por dentro, y que sin filas origen no cambia nada.
+  describe('conversión por data.meta.sources', () => {
+    const POS = 'delivery-note';
+    const SOURCE_FLAG = '__bosTableRowSource';
+
+    /** Tabla derivada con contrato `sources`, tal como la publica el servidor. */
+    const setUp = (rows: FormGroup[] = [], sources: any = {
+      column: 'supplier_request_detail',
+      quantity: 'requested',
+      version: 'modified_at,created_at',
+    }) => {
+      const table: any = {
+        field: 'no_form_data_table_derived',
+        type: 'table',
+        hide: false,
+        add_row: true,
+        data_type: { type: 'delivery-note-detail' },
+        sources,
+        columns: {
+          0: {
+            field: 'supplier_request_detail',
+            type: 'auto-complete',
+            data_type: { type: 'supplier-request-detail' },
+          },
+          1: { field: 'requested' },
+          2: { field: 'price' },
+        },
+      };
+      const form = new FormGroup({
+        no_form_data_table_derived: new FormArray<FormGroup>(rows),
+      });
+      (component as any).pos.set(POS);
+      component.form.set({ [POS]: form } as any);
+      component.drawForm.set({
+        [POS]: {
+          fields_prefixes: [{
+            delivery_note_detail_data_: {
+              data_type: 'delivery-note-detail', kind: 'child', filter: 'delivery_note',
+            },
+          }],
+          general: {
+            grid: {
+              // El buscador se reconoce por su `data_type`, no por declararse.
+              0: {
+                field: 'no_form_data_source_code',
+                type: 'auto-complete',
+                data_type: { type: 'supplier-request' },
+              },
+              1: table,
+            },
+          },
+        },
+      } as any);
+      return { table, form };
+    };
+
+    /** Fila ya resuelta por el buscador de la celda origen. */
+    const sourceRow = (id: string, quantity: string, version: string) => {
+      const row = new FormGroup({
+        supplier_request_detail: new FormControl('PEDIDO-1 / DIESEL'),
+        requested: new FormControl(quantity),
+        price: new FormControl('10'),
+      });
+      (row as any)[SOURCE_FLAG] = {
+        supplier_request_detail: id,
+        supplier_request_detail__source_version: version,
+      };
+      return row;
+    };
+
+    it('arma sources con id, tipo, versión y cantidad de cada fila', () => {
+      setUp([
+        sourceRow('src-1', '4', '2026-08-02T10:30:00Z'),
+        sourceRow('src-2', '6.000000001', '2026-08-02T11:00:00Z'),
+      ]);
+
+      const { sources, manualRows } = (component as any)._collectConversionSources(POS);
+
+      expect(manualRows).toBe(0);
+      expect(sources.length).toBe(2);
+      // El `type` sale del `data_type` de la columna origen, no de una llave nueva.
+      expect(sources[0]).toEqual({
+        type: 'supplier-request-detail',
+        id: 'src-1',
+        meta: { source_version: '2026-08-02T10:30:00Z', quantity: '4' },
+      });
+      // La cantidad viaja como TEXTO: el float de JavaScript perdería el noveno
+      // decimal que el servidor sí admite.
+      expect(sources[1].meta.quantity).toBe('6.000000001');
+    });
+
+    it('la llave de idempotencia se conserva entre reintentos y se renueva al reiniciar', () => {
+      setUp([sourceRow('src-1', '4', '2026-08-02T10:30:00Z')]);
+
+      const first = (component as any)._conversionMetaForCreate(POS).meta;
+      const retry = (component as any)._conversionMetaForCreate(POS).meta;
+      // Mismo intento = misma llave, o el reintento crearía un segundo documento.
+      expect(retry.idempotency_key).toBe(first.idempotency_key);
+
+      (component as any)._clearConversionIdempotencyKey(POS);
+      const nueva = (component as any)._conversionMetaForCreate(POS).meta;
+      expect(nueva.idempotency_key).not.toBe(first.idempotency_key);
+    });
+
+    it('corta el guardado si se mezclan filas de origen con filas manuales', () => {
+      const manual = new FormGroup({
+        supplier_request_detail: new FormControl(''),
+        requested: new FormControl('2'),
+        price: new FormControl('10'),
+      });
+      setUp([sourceRow('src-1', '4', '2026-08-02T10:30:00Z'), manual]);
+
+      const resultado = (component as any)._conversionMetaForCreate(POS);
+
+      // No se degrada a un POST normal: eso crearía el documento con la fila
+      // manual y perdería la de origen sin avisar.
+      expect(resultado.abort).toBeTrue();
+      expect(resultado.meta).toBeNull();
+    });
+
+    it('sin filas origen no hay meta: el POST sigue siendo el CRUD de siempre', () => {
+      const manual = new FormGroup({
+        supplier_request_detail: new FormControl(''),
+        requested: new FormControl('2'),
+        price: new FormControl('10'),
+      });
+      setUp([manual]);
+
+      const resultado = (component as any)._conversionMetaForCreate(POS);
+
+      expect(resultado.meta).toBeNull();
+      expect(resultado.abort).toBeFalse();
+    });
+
+    it('una tabla sin contrato sources nunca entra al flujo de conversión', () => {
+      // `null` y no `undefined`: el default del parámetro repondría el contrato.
+      setUp([sourceRow('src-1', '4', '2026-08-02T10:30:00Z')], null);
+
+      const { sources } = (component as any)._collectConversionSources(POS);
+
+      expect(sources.length).toBe(0);
+      expect((component as any)._conversionMetaForCreate(POS).meta).toBeNull();
+    });
+
+    it('con sources el alta queda disponible al CREAR, sin padre guardado', () => {
+      const { table } = setUp([]);
+
+      component.isCreate.set(true);
+      (component as any)._applyParentChildTables(POS, null);
+
+      // Sin `sources` esto sería false: una partida normal necesita la FK al
+      // padre. Las filas origen no se cuelgan de ninguna FK.
+      expect(table.add_row).toBeTrue();
+    });
+
+    it('la fila origen no se persiste sola mientras se crea el documento', () => {
+      setUp([]);
+      component.isCreate.set(true);
+      const saveSpy = spyOn(component, 'save');
+
+      component.handleTableRowSave({
+        field: 'no_form_data_table_derived',
+        row_index: 0,
+        row_data: { requested: '4' },
+        source_row: { supplier_request_detail: 'src-1' },
+        columns: [{ field: 'requested' }],
+        mode: 'create',
+      });
+
+      // Un POST suelto del detalle crearía una partida sin asignación ni tope.
+      expect(saveSpy).not.toHaveBeenCalled();
+      // La fila se cierra en la tabla: queda local hasta el POST del documento.
+      expect(component.tableRowSaveOutcome()?.ok).toBeTrue();
+      TestBed.inject(HttpTestingController).verify();
+    });
+
+    // [[[II ESC:036-05 DOC:docs/documents/2026-08-04-036-meta-sources-tabla-derivada.md#escenario-05
+    it('la fila se guarda contra el formulario ABIERTO, no contra typeDefault', () => {
+      setUp([]);
+      component.isCreate.set(true);
+      const saveSpy = spyOn(component, 'save');
+
+      component.handleTableRowSave({
+        field: 'no_form_data_table_derived',
+        row_index: 0,
+        row_data: { requested: '4' },
+        source_row: {},
+        columns: [{ field: 'requested' }],
+        mode: 'create',
+      });
+
+      // `typeDefault` de este componente es 'request-detail'; el formulario
+      // abierto es 'delivery-note'. Con typeDefault la partida se guardaba
+      // contra el recurso equivocado.
+      const args: any = saveSpy.calls.mostRecent().args[0];
+      expect(args.pos).toBe(POS);
+      expect(args.table_row.base_pos).toBe(POS);
+    });
+    // ]]]FI
+
+    // [[[II ESC:036-06 DOC:docs/documents/2026-08-04-036-meta-sources-tabla-derivada.md#escenario-06
+    describe('jalar el documento origen completo', () => {
+      const withDocument = (rows: FormGroup[] = []) => {
+        // Contrato reducido: cinco llaves planas, sin `document` ni `match`.
+        const built = setUp(rows, {
+          column: 'supplier_request_detail',
+          quantity: 'requested',
+          version: 'modified_at,created_at',
+          filter: 'supplier_request',
+          pending: 'requested,delivered',
+        });
+        // `addControl` sobre un FormGroup tipado exige el literal declarado; el
+        // motor trabaja con controles dinámicos, así que aquí se usa la forma no
+        // tipada, igual que en tiempo de ejecución.
+        const form = built.form as any;
+        form.addControl('no_form_data_source_code', new FormControl('pedido-1'));
+        form.addControl('supplier', new FormControl('prov-1'));
+        form.addControl('currency', new FormControl(''));
+        return { ...built, form };
+      };
+
+      it('trae las partidas del documento y las deja como filas ORIGEN', () => {
+        const { form } = withDocument();
+
+        (component as any).pullSourceDocument({ pos: POS });
+
+        const http = TestBed.inject(HttpTestingController);
+        const req = http.expectOne((r) => r.url.includes('purchases/supplier-request-detail'));
+        expect(req.request.urlWithParams).toContain('filter[supplier_request]=pedido-1');
+        req.flush({
+          data: [
+            { id: 'src-1', type: 'supplier-request-detail',
+              attributes: { requested: 10, delivered: 4, modified_at: '2026-08-02T10:30:00Z' } },
+            { id: 'src-2', type: 'supplier-request-detail',
+              attributes: { requested: 5, delivered: 5, created_at: '2026-08-01T09:00:00Z' } },
+          ],
+        });
+
+        const filas = form.get('no_form_data_table_derived') as FormArray;
+        // La segunda partida ya no tiene saldo: no se ofrece.
+        expect(filas.length).toBe(1);
+        // La cantidad propuesta es el PENDIENTE, no lo pedido.
+        expect(filas.at(0).get('requested')?.value).toBe(6);
+
+        const { sources } = (component as any)._collectConversionSources(POS);
+        expect(sources.length).toBe(1);
+        expect(sources[0].id).toBe('src-1');
+        expect(sources[0].meta.source_version).toBe('2026-08-02T10:30:00Z');
+        http.verify();
+      });
+
+      it('jalar dos veces no duplica una partida ya presente', () => {
+        const { form } = withDocument();
+        const http = TestBed.inject(HttpTestingController);
+        const respuesta = () => ({
+          data: [{ id: 'src-1', type: 'supplier-request-detail',
+                   attributes: { requested: 10, delivered: 0, modified_at: '2026-08-02T10:30:00Z' } }],
+        });
+
+        (component as any).pullSourceDocument({ pos: POS });
+        http.expectOne((r) => r.url.includes('purchases/supplier-request-detail')).flush(respuesta());
+        (component as any).pullSourceDocument({ pos: POS });
+        http.expectOne((r) => r.url.includes('purchases/supplier-request-detail')).flush(respuesta());
+
+        const filas = form.get('no_form_data_table_derived') as FormArray;
+        expect(filas.length).toBe(1);
+        http.verify();
+      });
+
+      it('sin documento elegido no sale petición', () => {
+        const { form } = withDocument();
+        (form.get('no_form_data_source_code') as any)?.setValue('');
+
+        (component as any).pullSourceDocument({ pos: POS });
+
+        TestBed.inject(HttpTestingController).verify();
+      });
+
+      // [[[II ESC:055-03 DOC:docs/documents/2026-08-05-055-buscadores-y-sources-reducido.md#escenario-03
+      it('reconoce los buscadores por su data_type, sin declararlos', () => {
+        withDocument();
+
+        const campos = (component as any)._sourceDocumentFields(POS, {
+          filter: 'supplier_request',
+        });
+
+        // El campo no se declara en `sources`: se reconoce porque su `data_type`
+        // resuelve al mismo recurso que la ForeignKey.
+        expect(campos).toContain('no_form_data_source_code');
+      });
+      // ]]]FI
+    });
+    // ]]]FI
+
+    it('una fila manual sigue delegando el guardado normal', () => {
+      setUp([]);
+      component.isCreate.set(true);
+      const saveSpy = spyOn(component, 'save');
+
+      component.handleTableRowSave({
+        field: 'no_form_data_table_derived',
+        row_index: 0,
+        row_data: { requested: '4' },
+        source_row: {},
+        columns: [{ field: 'requested' }],
+        mode: 'create',
+      });
+
+      expect(saveSpy).toHaveBeenCalled();
+    });
+  });
+  // ]]]FI
 });
