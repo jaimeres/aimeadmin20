@@ -78,6 +78,14 @@ export const appRoutes: Routes = [
         canActivate: [appCanActivateGuardChild],
         loadChildren: () => import('@/pages/usermanagement/usermanagement.routes')
       },*/
+      // [[[II ESC:037-01 DOC:docs/documents/2026-08-06-037-sistema-visual-permisos-dependencias.md#escenario-01
+      {
+        path: 'profile',
+        data: { breadcrumb: 'Administración' },
+        canActivate: [appCanActivateGuardChild],
+        loadChildren: () => import('@/pages/usermanagement/usermanagement.routes')
+      },
+      // ]]]FI
       /*{
         path: 'tasks',
         data: { breadcrumb: 'Gestión de Tareas' },

@@ -1,24 +1,141 @@
-.permissions-tree-dialog {
-  width: 900px;
-  max-width: 95vw;
-  min-height: 550px;
+// [[[II ESC:037-01 DOC:docs/documents/2026-08-06-037-sistema-visual-permisos-dependencias.md#escenario-01
+:host {
+  display: block;
 }
 
-.perm-tree {
-  ::ng-deep .p-tree {
-    border: none;
-    padding: 0;
-  }
+:host ::ng-deep .permissions-tree-dialog {
+  width: min(1040px, 96vw);
+  min-height: 580px;
 }
 
-.perm-node {
+.permission-toolbar,
+.permission-bulk-actions,
+.permission-summary-counts,
+.permission-user {
+  display: flex;
+  align-items: center;
+  gap: .75rem;
+  flex-wrap: wrap;
+}
+
+.permission-toolbar {
+  padding-bottom: 1rem;
+}
+
+.permission-toolbar-spacer {
+  flex: 1 1 auto;
+}
+
+.permission-search {
+  flex: 1 1 320px;
+  max-width: 520px;
+}
+
+:host ::ng-deep .permission-spinner {
+  width: 2rem;
+  height: 2rem;
+}
+
+.permission-user {
+  padding: .75rem 1rem;
+  margin-bottom: .75rem;
+  border-radius: .5rem;
+  background: var(--p-surface-100);
+}
+
+.permission-bulk-actions {
+  justify-content: flex-end;
+  padding-bottom: .75rem;
+}
+
+:host ::ng-deep .permission-tree {
+  border: 0;
+  padding: 0;
+}
+
+.permission-node {
+  display: flex;
+  align-items: center;
+  gap: .625rem;
   width: 100%;
+  min-width: 0;
+  padding: .2rem 0;
 }
 
-.perm-toggle {
-  ::ng-deep .p-togglebutton {
-    height: 1.75rem;
-    min-width: 3.5rem;
-    font-size: 0.75rem;
+.permission-node-label {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.permission-node-label small,
+.permission-summary small {
+  color: var(--p-text-muted-color);
+  overflow-wrap: anywhere;
+}
+
+:host ::ng-deep .permission-toggle .p-togglebutton {
+  min-width: 4rem;
+  height: 2rem;
+  font-size: .8rem;
+}
+
+.permission-empty {
+  display: grid;
+  place-items: center;
+  gap: .5rem;
+  padding: 3rem 1rem;
+  color: var(--p-text-muted-color);
+  text-align: center;
+}
+
+.permission-empty.compact {
+  padding: 1.5rem;
+}
+
+.permission-empty i {
+  font-size: 2rem;
+}
+
+.permission-summary {
+  max-height: 55vh;
+  overflow: auto;
+}
+
+.permission-summary section {
+  margin-top: 1.25rem;
+}
+
+.permission-summary ul {
+  display: grid;
+  gap: .5rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.permission-summary li {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  column-gap: .625rem;
+  padding: .625rem;
+  border: 1px solid var(--p-content-border-color);
+  border-radius: .5rem;
+}
+
+.permission-summary li small {
+  grid-column: 2;
+}
+
+@media (max-width: 640px) {
+  .permission-toolbar > p-button,
+  .permission-bulk-actions > p-button {
+    flex: 1 1 auto;
+  }
+
+  .permission-node-label small {
+    display: none;
   }
 }
+// ]]]FI

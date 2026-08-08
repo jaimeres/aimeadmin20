@@ -1,0 +1,31 @@
+// [[[II ESC:037-03 DOC:docs/documents/2026-08-06-037-sistema-visual-permisos-dependencias.md#escenario-03
+.user-crud-actions {
+  position: absolute;
+  z-index: 2;
+}
+
+.permission-tab-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1rem;
+  padding: 0.25rem 0;
+}
+
+.permission-tab-header h3,
+.permission-tab-header p {
+  margin: 0;
+}
+
+.permission-tab-header p {
+  margin-top: 0.35rem;
+  color: var(--p-text-muted-color);
+}
+
+@media (max-width: 768px) {
+  .permission-tab-header {
+    flex-direction: column;
+  }
+}
+// ]]]FI

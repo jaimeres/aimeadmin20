@@ -2,33 +2,20 @@ import { computed, inject, Injectable, Signal, signal } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Observable, forkJoin, of, tap, catchError, map } from 'rxjs';
 import { environment } from '../../../environments/environment';
+import {
+  PermissionSpec,
+  PermissionStrings,
+  PermissionTree,
+  parsePermissionStringsResponse,
+  parsePermissionTreeResponse,
+  projectPermissionTree,
+} from '../schemas/permissions.schema';
+
+export type { PermissionLeaf, PermissionSpec, PermissionStrings, PermissionTree } from '../schemas/permissions.schema';
 
 /* ════════════════════════════════════════════════════════════════════════════
  * Tipos
  * ════════════════════════════════════════════════════════════════════════════ */
-
-/** Nodo del árbol de permisos: por acción individual */
-export interface PermissionLeaf {
-  value: boolean;
-  label: string;
-  field_permissions: string; // clave del bit-string
-  position: number;          // índice 0-based dentro del bit-string
-  description?: string;
-}
-
-/** Estructura jerárquica `app.module.action` */
-export type PermissionTree = Record<string, Record<string, Record<string, PermissionLeaf>>>;
-
-/** Mapa `field_permissions_key → cadena de '0' / '1'` */
-export type PermissionStrings = Record<string, string>;
-
-/**
- * Especificación a evaluar:
- *   - number               → posición global dentro del string default ('default' o 'permissions')
- *   - 'app.module.action'  → ruta jerárquica dentro del árbol (preferido)
- *   - 'fp_key:position'    → field_permissions explícito + posición
- */
-export type PermissionSpec = number | string;
 
 /* ════════════════════════════════════════════════════════════════════════════
  * Servicio
@@ -53,6 +40,7 @@ export class PermissionsService {
   readonly tree = this._tree.asReadonly();
   readonly loading = this._loading.asReadonly();
   readonly hasData = computed(() => Object.keys(this._strings()).length > 0 || Object.keys(this._tree()).length > 0);
+  readonly hasTreeData = computed(() => Object.keys(this._tree()).length > 0);
 
   /** Cache de signals computadas por path para evitar recomputar */
   private readonly _hasCache = new Map<string, Signal<boolean>>();
@@ -82,7 +70,7 @@ export class PermissionsService {
         this._strings.set({ ...perms });
       }
       if (perms.tree && typeof perms.tree === 'object') {
-        this._tree.set(perms.tree as PermissionTree);
+        this._tree.set(parsePermissionTreeResponse(perms.tree));
       }
     }
     this._lastLoaded.set(Date.now());
@@ -102,37 +90,36 @@ export class PermissionsService {
    * ──────────────────────────────────────────────────────────────────────── */
 
   /** Refresca strings + tree completos */
+  // [[[II ESC:037-01 DOC:docs/documents/2026-08-06-037-sistema-visual-permisos-dependencias.md#escenario-01
   refresh(): Observable<{ strings: PermissionStrings; tree: PermissionTree }> {
     this._loading.set(true);
-    return this.http.get<any>(`${this._baseUrl}/permissions/me/strings/`).pipe(
-      map((resp) => this._extractStrings(resp)),
-      tap((s) => this._strings.set(s)),
-      // segunda llamada: tree
-      map((s) => s),
-      tap(() => {
-        this.http.get<any>(`${this._baseUrl}/permissions/me/tree/`).pipe(
-          map((resp) => this._extractTree(resp)),
-          tap((t) => this._tree.set(t)),
-          catchError(() => of({}))
-        ).subscribe();
-      }),
-      map((s) => ({ strings: s, tree: this._tree() })),
-      tap(() => {
+    return forkJoin({
+      strings: this.http.get<unknown>(`${this._baseUrl}/permissions/me/strings/`).pipe(
+        map(parsePermissionStringsResponse),
+      ),
+      tree: this.http.get<unknown>(`${this._baseUrl}/permissions/me/tree/`).pipe(
+        map(parsePermissionTreeResponse),
+      ),
+    }).pipe(
+      tap(({ strings, tree }) => {
+        this._strings.set(strings);
+        this._tree.set(tree);
         this._lastLoaded.set(Date.now());
         this._hasCache.clear();
         this._loading.set(false);
       }),
-      catchError((err) => {
+      catchError(() => {
         this._loading.set(false);
         return of({ strings: this._strings(), tree: this._tree() });
       })
     );
   }
+  // ]]]FI
 
   /** Refresca permisos para una app concreta (solo me) */
   refreshForApp(app: string): Observable<PermissionTree> {
     return this.http.get<any>(`${this._baseUrl}/permissions/me/tree/${app}/`).pipe(
-      map((resp) => this._extractTree(resp)),
+      map(parsePermissionTreeResponse),
       tap((t) => {
         // mezcla la rama de la app sin pisar otras
         this._tree.update((cur) => ({ ...cur, ...t }));
@@ -154,11 +141,11 @@ export class PermissionsService {
 
     return forkJoin({
       strings: this.http.get<any>(stringsUrl).pipe(
-        map((response) => this._extractStrings(response)),
+        map(parsePermissionStringsResponse),
         catchError(() => of({} as PermissionStrings)),
       ),
       tree: this.http.get<any>(treeUrl).pipe(
-        map((response) => this._extractTree(response)),
+        map(parsePermissionTreeResponse),
         catchError(() => of({} as PermissionTree)),
       ),
     });
@@ -173,13 +160,20 @@ export class PermissionsService {
   }
 
   /** Persiste cambios al backend (admin: para otro usuario) */
-  saveForUser(userId: string, tree: PermissionTree, app?: string): Observable<any> {
+  // [[[II ESC:037-01 DOC:docs/documents/2026-08-06-037-sistema-visual-permisos-dependencias.md#escenario-01
+  saveForUser(userId: string, tree: PermissionTree, declaredTree: PermissionTree, app?: string): Observable<any> {
     const url = app
       ? `${this._baseUrl}/permissions/${userId}/tree/${app}/`
       : `${this._baseUrl}/permissions/${userId}/tree/`;
-    const payload = { data: { type: 'permission', attributes: tree } };
+    const payload = {
+      data: {
+        type: 'permission',
+        attributes: projectPermissionTree(declaredTree, tree),
+      },
+    };
     return this.http.put<any>(url, payload);
   }
+  // ]]]FI
 
   /* ────────────────────────────────────────────────────────────────────────
    * Evaluación de permisos
@@ -296,22 +290,4 @@ export class PermissionsService {
     return str.charAt(position) === '1';
   }
 
-  private _extractStrings(resp: any): PermissionStrings {
-    if (!resp) return {};
-    // {data: {attributes: {strings: {...}}}} | {strings:{...}} | {...}
-    const a = resp?.data?.attributes ?? resp?.attributes ?? resp;
-    if (a?.strings && typeof a.strings === 'object') return { ...a.strings };
-    if (typeof a === 'object' && Object.values(a).every(v => typeof v === 'string')) {
-      return { ...a } as PermissionStrings;
-    }
-    return {};
-  }
-
-  private _extractTree(resp: any): PermissionTree {
-    if (!resp) return {};
-    const a = resp?.data?.attributes ?? resp?.attributes ?? resp;
-    // Excluir 'strings' por si viene combinado
-    const { strings, ...rest } = a ?? {};
-    return rest as PermissionTree;
-  }
 }

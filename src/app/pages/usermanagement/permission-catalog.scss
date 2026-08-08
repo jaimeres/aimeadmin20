@@ -1,0 +1,17 @@
+.catalog-page { display: grid; gap: 1rem; }
+.catalog-header { display: flex; align-items: center; justify-content: space-between; gap: 1rem; }
+.catalog-header h2 { margin: .35rem 0; }
+.catalog-header p { margin: 0; color: var(--text-color-secondary); }
+.catalog-metrics { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1rem; }
+.metric { display: flex; flex-direction: column; gap: .5rem; }
+.metric span { color: var(--text-color-secondary); }
+.metric strong { font-size: 1.75rem; }
+.catalog-filters { display: grid; grid-template-columns: minmax(18rem, 1fr) minmax(14rem, 22rem); gap: 1rem; }
+.catalog-loading, .empty { display: grid; place-items: center; min-height: 10rem; text-align: center; }
+td small { display: block; margin-top: .3rem; color: var(--text-color-secondary); }
+.warning-icon { color: var(--orange-500); margin-left: .5rem; cursor: help; }
+
+@media (max-width: 768px) {
+  .catalog-header { align-items: flex-start; flex-direction: column; }
+  .catalog-metrics, .catalog-filters { grid-template-columns: 1fr; }
+}

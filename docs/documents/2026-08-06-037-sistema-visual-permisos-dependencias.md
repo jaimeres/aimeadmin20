@@ -4,9 +4,184 @@
 
 - Fecha: 2026-08-06.
 - Consecutivo: 037.
-- Tipo: propuesta técnica, todavía no implementada.
+- Tipo: propuesta técnica con fases 1 y 2 implementadas e integración CRUD de usuarios.
 - Proyecto principal: cliente `aimeAdmin20`.
 - Proyecto relacionado: servidor `aimeServidor2`.
+
+## Escenario 01: base operativa del editor estricto de permisos
+
+<!-- [[[II ESC:037-01 DOC:docs/documents/2026-08-06-037-sistema-visual-permisos-dependencias.md#escenario-01 -->
+
+Se implementó la primera fase en administración de usuarios. La interfaz usa
+exclusivamente componentes PrimeNG 20. El editor de permisos usa composición de
+servicios porque no administra por sí mismo un recurso CRUD; la pantalla que lo
+contiene se integró posteriormente al CRUD estándar en el escenario 03.
+
+La fuente de verdad continúa siendo
+[`PermissionsMixin.mixin_permissions`](/home/jaime/Escritorio/d/aimeServidor2/apps/utils/mixin/permissionmixin.py:133).
+El cliente construye su schema en tiempo de ejecución únicamente con las hojas
+recibidas y validadas por
+[`parsePermissionTreeResponse()`](/home/jaime/Escritorio/d/aimeAdmin20/src/app/auth/schemas/permissions.schema.ts:54).
+Cada hoja debe contener exactamente un valor booleano, una etiqueta, el campo
+de almacenamiento y una posición válida. Una ruta adicional o una rama que
+pretenda introducir otro nivel se rechaza; al guardar,
+[`projectPermissionTree()`](/home/jaime/Escritorio/d/aimeAdmin20/src/app/auth/schemas/permissions.schema.ts:108)
+proyecta los valores editados sobre el árbol originalmente declarado. Por ello,
+el cliente no puede crear una ruta no publicada por el mixin.
+
+La carga propia de cadenas y árbol ahora es atómica mediante
+[`PermissionsService.refresh()`](/home/jaime/Escritorio/d/aimeAdmin20/src/app/auth/services/permissions.service.ts:94),
+y la persistencia de otro usuario aplica nuevamente la proyección estricta en
+[`PermissionsService.saveForUser()`](/home/jaime/Escritorio/d/aimeAdmin20/src/app/auth/services/permissions.service.ts:164).
+El guard reintenta cargar el árbol antes de negar una ruta semántica cuando aún
+no existe información local, en
+[`evaluateAfterLoad()`](/home/jaime/Escritorio/d/aimeAdmin20/src/app/auth/guards/permission.guard.ts:28).
+
+La interfaz usa búsqueda, pestañas, árbol, toggles, confirmación de operaciones
+masivas y revisión previa al guardado en
+[`PermissionsTreeComponent`](/home/jaime/Escritorio/d/aimeAdmin20/src/app/components/permissions-tree/permissions-tree.component.ts:73).
+Las acciones granulares se muestran bajo su acción padre; otorgar una granular
+activa el padre y retirar el padre desactiva sus granulares. Las etiquetas se
+muestran tal como llegan del servidor, por lo que se conservan los nombres en
+español. En esta fase se eligió selección directa en vez de arrastrar y soltar:
+para un árbol disperso es más rápido, funciona en teclado y móvil y reduce
+asignaciones accidentales.
+
+La integración está en la administración real de usuarios de
+[`UserList`](/home/jaime/Escritorio/d/aimeAdmin20/src/app/pages/usermanagement/userlist.ts:21).
+Consultar requiere los permisos de listado declarados por la ruta y editar
+requiere `users.user-permissions.update`; el servidor continúa siendo quien
+autoriza definitivamente cada lectura o escritura.
+
+No se agregó ni modificó configuración. Se revisaron los builders
+`app-custom-local-settings` y `app-child-form-fields-builder` como referencias
+de interacción PrimeNG, pero la fase 1 consume solamente el contrato de permisos.
+El catálogo de dependencias de dropdowns, choices y campos hijos permanece para
+las fases 2 y 3, pues requiere resolver la configuración efectiva del usuario
+objetivo y no debe inferirse desde la configuración del administrador.
+
+Validación realizada:
+
+- 7 pruebas focalizadas exitosas: schema estricto, carga atómica, proyección al
+  guardar, agrupación granular y dependencia padre-hijo.
+- `npm run build` exitoso.
+- La suite completa ejecutó 218 pruebas: 163 exitosas y 55 fallidas por fixtures
+  preexistentes sin proveedores Angular o mocks antiguos de `CRUD`; ninguna falla
+  pertenece a los archivos de esta fase. Esos hallazgos no se corrigieron por ser
+  unidades funcionales distintas.
+
+<!-- ]]]FI -->
+
+## Escenario 02: catálogo derivado por usuario
+
+<!-- [[[II ESC:037-02 DOC:docs/documents/2026-08-06-037-sistema-visual-permisos-dependencias.md#escenario-02 -->
+
+Se implementó el catálogo de solo lectura para el usuario objetivo. El endpoint
+es `GET /v1/permissions/<user_id>/catalog/`, exige el mismo permiso administrativo
+de listado que la consulta del árbol, rechaza usuarios de otro tenant salvo un
+superusuario real y responde como `permission-catalog`.
+
+El generador del servidor combina sin persistir:
+
+1. El árbol enriquecido derivado exclusivamente de `mixin_permissions`.
+2. Los recursos y campos de la configuración del tenant.
+3. Una personalización del usuario solamente cuando está acotada de forma
+   inequívoca a aplicación/recurso y el contrato vigente permite anularla.
+4. Campos raíz y `children.fields.static|dynamic|derived`.
+5. Fuentes locales, acceso completo, `ref_select` explícito y compatibilidad
+   implícita legado.
+6. El índice inverso permiso → formularios/campos consumidores.
+
+Las configuraciones de sucursal, empresa y grupo dependen del registro concreto
+que se esté editando. El catálogo general no elige una sucursal arbitraria: informa
+el número de contextos disponibles y muestra una advertencia. Esta limitación es
+expresa y evita presentar como efectiva una configuración contextual incorrecta.
+
+Cuando `option_label` necesita varios atributos y `mixin_ref_label` no los declara,
+el catálogo prefiere `list`; si el recurso no tiene `list` asignable, muestra una
+advertencia. Choices y opciones locales quedan clasificadas como locales, sin
+permisos remotos falsos.
+
+En el cliente se agregó `PermissionCatalogService`, un schema estricto y una
+pantalla PrimeNG 20 de inspección con búsqueda, filtro por aplicación, dependencias
+por campo e impacto inverso por permiso. Vive bajo usuarios en:
+
+```text
+/profile/user/<uuid>/permission-catalog
+```
+
+La pestaña de permisos del diálogo de edición ofrece **Ver catálogo y dependencias**
+para abrirla. La pantalla es de consulta; la planificación y asignación automática
+por formulario permanecen para la fase 3.
+
+Validación de la fase:
+
+- 3 pruebas de servidor exitosas: descubrimiento, configuración real, ruta,
+  contrato de respuesta y reutilización del control administrativo de listado;
+- schema y servicio cliente cubiertos junto con las pruebas de fase 1: 10 pruebas
+  focalizadas exitosas;
+- `manage.py check` sin incidencias;
+- build de producción del cliente exitoso.
+
+<!-- ]]]FI -->
+
+## Escenario 03: CRUD estándar de usuarios con permisos en edición
+
+<!-- [[[II ESC:037-03 DOC:docs/documents/2026-08-06-037-sistema-visual-permisos-dependencias.md#escenario-03 -->
+
+La administración de usuarios usa ahora el estándar del cliente: la página
+[`UserList`](/home/jaime/Escritorio/d/aimeAdmin20/src/app/pages/usermanagement/userlist.ts:21)
+hereda de [`CRUD`](/home/jaime/Escritorio/d/aimeAdmin20/src/app/utils/crud.class.ts:18),
+configura el recurso `users/local-user`, el tipo `user` y el módulo `U`, y conserva
+la tabla, botonera, selección, alta, edición, eliminación, importación y ajustes
+locales del sistema. El servicio específico
+[`UserManagementService`](/home/jaime/Escritorio/d/aimeAdmin20/src/app/pages/usermanagement/user.service.ts:8)
+solo delimita el recurso; no duplica responsabilidades de `CRUDService`.
+
+El formulario vive en un diálogo PrimeNG 20 y mantiene **General** como pestaña
+de alta y edición. Cuando se edita un usuario y el administrador posee
+`users.user-permissions.list`, se agrega **Permisos** dentro del mismo diálogo en
+[`userlist.html`](/home/jaime/Escritorio/d/aimeAdmin20/src/app/pages/usermanagement/userlist.html:80).
+La pestaña no aparece en creación porque todavía no existe un identificador al
+cual asignar bits. Modificar permisos exige además
+`users.user-permissions.update`; sin ese permiso el árbol queda en consulta.
+
+El guardado general y el guardado de permisos permanecen separados. El pie del
+CRUD solo aparece en **General** y el editor exige revisar sus cambios antes de
+persistirlos. Esto evita que «Guardar usuario» sugiera que también confirmó los
+cambios de permisos o viceversa. El catálogo detallado continúa accesible desde
+la propia pestaña.
+
+La ruta de listado exige únicamente `users.user.list`, porque el CRUD de usuarios
+no debe desaparecer para un administrador que carezca del permiso adicional de
+consultar permisos. La ruta histórica `/profile/create` redirige al listado, donde
+el alta se abre con el botón estándar **Nuevo**.
+
+El componente embebido invalida su clave de carga al cerrar el diálogo en
+[`PermissionsTreeComponent`](/home/jaime/Escritorio/d/aimeAdmin20/src/app/components/permissions-tree/permissions-tree.component.ts:150),
+de modo que una reapertura consulta el estado actual y no conserva un árbol
+obsoleto de la apertura anterior.
+
+No se modificó `crud.class`, ni se introdujo otra jerarquía de permisos. La fuente
+de verdad de rutas y posiciones continúa siendo `mixin_permissions`, validada por
+el schema estricto del cliente antes de mostrarse o guardarse.
+
+La auditoría extremo a extremo detectó y corrigió en el servidor la limitación
+previa del formulario general: `users.user` ya declara layout, columnas y campos,
+y el metadata publica los controles requeridos por alta y edición. Las
+configuraciones de tenants previamente persistidas todavía deben recibir el nodo
+`users.user` actualizado mediante el procedimiento operativo de configuración;
+no se aplica una migración automática sobre sus personalizaciones.
+
+Validación realizada:
+
+- compilación Angular y generación completa de bundles exitosas;
+- 2 pruebas focalizadas del árbol de permisos exitosas;
+- solo permanecen advertencias preexistentes de presupuesto, dependencias CommonJS
+  y una hoja de estilos no localizada;
+- el contrato servidor se cubrió en el escenario 04 del documento de usuario local.
+
+<!-- ]]]FI -->
 
 ## Resumen
 
@@ -21,14 +196,16 @@ de verdad
 [`PermissionsMixin.mixin_permissions`](/home/jaime/Escritorio/d/aimeServidor2/apps/utils/mixin/permissionmixin.py:133).
 El cliente no podrá inventar permisos, acciones ni posiciones.
 
-## Decisión: no heredar de CRUD
+## Decisión: composición del editor dentro del CRUD de usuarios
 
-La implementación propuesta **no debe heredar de**
-[`CRUD`](/home/jaime/Escritorio/d/aimeAdmin20/src/app/utils/crud.class.ts:18).
+El componente reutilizable del árbol de permisos **no debe heredar de**
+[`CRUD`](/home/jaime/Escritorio/d/aimeAdmin20/src/app/utils/crud.class.ts:18),
+pero la administración del recurso usuario sí hereda de esa clase.
 
 Esa clase administra navegación, posición activa, formularios, selección,
-guardado, archivos y estado de páginas CRUD. El editor de permisos no necesita
-esas responsabilidades. Heredar introduciría estado y efectos laterales ajenos.
+guardado, archivos y estado de páginas CRUD. Son responsabilidades correctas para
+[`UserList`](/home/jaime/Escritorio/d/aimeAdmin20/src/app/pages/usermanagement/userlist.ts:21),
+pero ajenas a [`PermissionsTreeComponent`](/home/jaime/Escritorio/d/aimeAdmin20/src/app/components/permissions-tree/permissions-tree.component.ts:73).
 
 Se usará composición:
 
@@ -40,10 +217,8 @@ Se usará composición:
   para reutilizar la resolución vigente de `data_type.type`.
 - Un servicio nuevo, acotado, para catálogo y dependencias.
 
-La herencia solo podría reconsiderarse si se demuestra que un dato indispensable
-existe únicamente como estado protegido de `CRUD`, no hay servicio reutilizable
-y extraer el resolvedor cambiaría el comportamiento actual. Eso requerirá revisión
-arquitectónica explícita. Con el código revisado no existe esa necesidad.
+Por ello se usa herencia únicamente en la página dueña del CRUD y composición para
+el editor embebido. No fue necesario modificar ni extraer lógica de `crud.class`.
 
 ## Estado actual verificado
 
@@ -67,20 +242,23 @@ y la escritura exige permiso administrativo en
 ### Cliente existente
 
 Ya existe
-[`PermissionsTreeComponent`](/home/jaime/Escritorio/d/aimeAdmin20/src/app/components/permissions-tree/permissions-tree.component.ts:55)
+[`PermissionsTreeComponent`](/home/jaime/Escritorio/d/aimeAdmin20/src/app/components/permissions-tree/permissions-tree.component.ts:73)
 con búsqueda, pestañas, activación individual y operaciones masivas.
 Su plantilla permite otorgar o retirar una aplicación completa en
-[`permissions-tree.component.html`](/home/jaime/Escritorio/d/aimeAdmin20/src/app/components/permissions-tree/permissions-tree.component.html:34),
+[`permissions-tree.component.html`](/home/jaime/Escritorio/d/aimeAdmin20/src/app/components/permissions-tree/permissions-tree.component.html:71),
 pero no representa formularios, campos consumidores ni dependencias.
 
-No se localizó un consumidor del selector `app-permissions-tree` fuera de la
-declaración del componente. Su integración operativa queda pendiente.
+El selector `app-permissions-tree` está integrado como pestaña de edición en
+[`UserList`](/home/jaime/Escritorio/d/aimeAdmin20/src/app/pages/usermanagement/userlist.ts:21).
+El catálogo de formularios, campos consumidores y dependencias quedó disponible
+en la fase 2; la planificación y asignación por formulario continúa pendiente
+para la fase 3.
 
 La carga de otro usuario espera conjuntamente cadenas y árbol en
 [`PermissionsService.loadForUser()`](/home/jaime/Escritorio/d/aimeAdmin20/src/app/auth/services/permissions.service.ts:147).
-La carga propia todavía inicia el árbol con una suscripción interna en
-[`PermissionsService.refresh()`](/home/jaime/Escritorio/d/aimeAdmin20/src/app/auth/services/permissions.service.ts:104);
-puede finalizar antes de tener el árbol y debe corregirse en la primera fase.
+La carga propia espera conjuntamente ambas respuestas en
+[`PermissionsService.refresh()`](/home/jaime/Escritorio/d/aimeAdmin20/src/app/auth/services/permissions.service.ts:94);
+no publica un estado parcial de permisos.
 
 ### Dropdowns y acceso mínimo
 
@@ -313,7 +491,6 @@ Reutilizará y extenderá `PermissionsTreeComponent`:
 ```text
 Modificar mantenimiento
 ├── Modificar fecha de inicio
-└── Modificar fecha de fin
 ```
 
 Categorías:
@@ -455,27 +632,33 @@ las rutas al aplicarlas. Quedan fuera de la primera entrega.
 | `children.fields.*` | Configuración/overrides | Cliente y servidor | Activa | Recorrer los tres modos |
 | `mixin_ref_label` | Servidor | Respuesta reducida | Activa con fallback | Auditar etiquetas |
 | Árbol enriquecido | Servidor | `PermissionsService` | Activa | Reutilizar |
-| Catálogo formulario–dependencia | No existe | No existe | Ausente | Crear contrato derivado |
-| Editor visual | Cliente | Sin integración localizada | Parcial | Integrar como modo técnico |
+| Catálogo formulario–dependencia | Servidor | `PermissionCatalogService` | Activa | Contrato derivado de solo lectura |
+| Editor visual | Cliente | Usuarios | Activa fase 1 | Mantener modo técnico |
 
 ## Fases
 
 ### Fase 1: base operativa
 
-1. Integrar el componente existente en usuarios.
-2. Corregir la carga concurrente propia.
-3. Agrupar granulares debajo del padre.
-4. Agregar resumen de diferencias.
-5. Mantener “otorgar todo” en modo avanzado y con confirmación.
+Implementada en el [escenario 01](#escenario-01):
+
+1. Componente integrado en usuarios.
+2. Carga concurrente propia corregida.
+3. Granulares agrupados debajo del padre.
+4. Resumen de diferencias previo al guardado.
+5. Operaciones masivas conservadas con confirmación.
+6. Schema estricto y proyección de rutas declaradas agregados.
 
 ### Fase 2: catálogo
 
-1. Crear endpoint para el usuario objetivo.
-2. Reutilizar configuración efectiva del servidor.
-3. Recorrer raíz, hijos, dinámicos y tablas.
-4. Clasificar fuentes locales, reducidas y completas.
-5. Crear `PermissionCatalogService` por composición.
-6. Construir el índice inverso.
+Implementada en el [escenario 02](#escenario-02):
+
+1. Endpoint creado para el usuario objetivo.
+2. Configuración tenant/usuario resuelta sin mezclar contextos de registro.
+3. Campos raíz e hijos static, dynamic y derived recorridos.
+4. Fuentes locales, reducidas, completas y legado clasificadas.
+5. `PermissionCatalogService` creado por composición.
+6. Índice inverso construido.
+7. URL de inspección agregada bajo usuarios.
 
 ### Fase 3: experiencia por formulario
 
@@ -554,7 +737,8 @@ interfaz inicial.
 6. Arrastre y botón producen el mismo resultado.
 7. Nunca se calculan posiciones desde el cliente.
 8. Los granulares requieren su padre.
-9. La solución usa composición y no hereda de `CRUD`.
+9. El editor usa composición; únicamente la página dueña del CRUD de usuarios
+   hereda de `CRUD`.
 10. No cambia el comportamiento actual del servidor.
 
 ## Riesgos y mitigaciones
@@ -592,22 +776,25 @@ todos los consumidores como razones visibles.
 - El servidor decide la autorización.
 - Una edición parcial conserva lo no enviado.
 
-## Archivos previstos
+## Archivos de fase 1 y previstos
 
 La lista es orientativa y se confirmará por fase:
 
-- [`permissions-tree.component.ts`](/home/jaime/Escritorio/d/aimeAdmin20/src/app/components/permissions-tree/permissions-tree.component.ts:55).
+- [`permissions-tree.component.ts`](/home/jaime/Escritorio/d/aimeAdmin20/src/app/components/permissions-tree/permissions-tree.component.ts:73).
 - [`permissions-tree.component.html`](/home/jaime/Escritorio/d/aimeAdmin20/src/app/components/permissions-tree/permissions-tree.component.html:1).
-- [`permissions.service.ts`](/home/jaime/Escritorio/d/aimeAdmin20/src/app/auth/services/permissions.service.ts:104).
+- [`permissions.service.ts`](/home/jaime/Escritorio/d/aimeAdmin20/src/app/auth/services/permissions.service.ts:94).
+- [`permissions.schema.ts`](/home/jaime/Escritorio/d/aimeAdmin20/src/app/auth/schemas/permissions.schema.ts:1).
+- [`userlist.ts`](/home/jaime/Escritorio/d/aimeAdmin20/src/app/pages/usermanagement/userlist.ts:24).
 - Servicio y componentes nuevos acotados para catálogo, plan e impacto.
 - Endpoint/serializer junto a
   [`UserPermissionsView`](/home/jaime/Escritorio/d/aimeServidor2/apps/utils/views/__init__.py:236).
 - Metadatos derivados de
   [`PermissionsMixin.mixin_permissions`](/home/jaime/Escritorio/d/aimeServidor2/apps/utils/mixin/permissionmixin.py:133).
 
-No se prevé modificar `crud.class.ts` ni crear una subclase de `CRUD`.
+No se modifica `crud.class.ts`. La página de usuarios es la única subclase de
+`CRUD`; los componentes y servicios de permisos continúan por composición.
 
-## Validación de esta propuesta
+## Validación
 
 - Se recorrió el contrato desde `mixin_permissions` hasta codec, endpoint,
   servicio y componente.
@@ -615,12 +802,12 @@ No se prevé modificar `crud.class.ts` ni crear una subclase de `CRUD`.
 - Se verificaron fuentes remotas y locales.
 - Se verificó el resolvedor de tipos.
 - Se verificó el soporte de drag-and-drop instalado.
-- No se modificó código funcional.
+- La fase 1 cuenta con 7 pruebas focalizadas exitosas y build de producción
+  exitoso. La suite global conserva 55 fallos preexistentes ajenos a esta unidad.
 
-## Pendientes antes de implementar
+## Pendientes para fases posteriores
 
-1. Localizar el punto exacto de integración en administración de usuarios.
-2. Definir el resolvedor del servidor para configuración efectiva del objetivo.
-3. Inventariar recursos remotos sin `ref_select` expreso.
-4. Auditar `option_label`, filtros, includes y children ampliados.
-5. Dejar perfiles reutilizables para una unidad posterior al catálogo.
+1. Definir el resolvedor del servidor para configuración efectiva del objetivo.
+2. Inventariar recursos remotos sin `ref_select` expreso.
+3. Auditar `option_label`, filtros, includes y children ampliados.
+4. Dejar perfiles reutilizables para una unidad posterior al catálogo.

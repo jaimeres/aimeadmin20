@@ -1,0 +1,150 @@
+<!-- [[[II ESC:037-03 DOC:docs/documents/2026-08-06-037-sistema-visual-permisos-dependencias.md#escenario-03 -->
+<p-confirmdialog />
+
+<div class="user-crud-actions">
+  <app-custom-button-crud
+    (deleteAction)="delete()"
+    (editAction)="edit()"
+    (refreshAction)="getAll({ force: true, pos: pos() })"
+    (newAction)="openNew({ pos: pos() })"
+    [moreOptions]="moreOptions()"
+    [getMenu]="getMenu()"
+    [openNewMenu]="openNewMenu()"
+    [selected]="selected()"
+    [startMenu]="startMenu()"
+    (startAction)="setStatus($event)"
+  />
+</div>
+
+<div class="table-fit-Custom">
+  <app-custom-table
+    class="table-fit-Custom"
+    [value]="items()"
+    [columns]="selectedColumns()"
+    [selected]="selected()"
+    (selectionAction)="onSelection($event)"
+    (rowDoubleClick)="onRowDoubleClick($event)"
+    [exportDialogVisible]="exportDialogVisible"
+    [field]="fieldExport()"
+    (exportDialogVisibleAction)="onExportDialogVisible($event)"
+    (exportServerAction)="onExportServer($event)"
+    (lazyLoadAction)="onLazyLoad({ event: $event })"
+    [rows]="limit()[pos()]"
+    [totalRecords]="totalRecords()[pos()]"
+    [filterDelayTable]="filterDelayTable()"
+  />
+</div>
+
+<app-custom-local-settings
+  [visible]="localSettingsDialogVisible"
+  [field]="fieldConfig()"
+  [formGroup]="configForm"
+  (saveAction)="saveConfig()"
+  (visibleAction)="onLocalSettingsDialogVisible($event)"
+/>
+
+<app-custom-import
+  [visible]="importDialogVisible"
+  (visibleAction)="onImportDialogVisible($event)"
+  (saveAction)="onImportSave($event)"
+/>
+
+<app-custom-actions-selection
+  [visible]="actionsSelectionDialogVisible"
+  (visibleChange)="onVisibleChange($event)"
+/>
+
+<p-dialog
+  [(visible)]="formDialogVisible[$any(typeDefault)]"
+  (onHide)="onHide($any(typeDefault))"
+  (onShow)="onShow($any(typeDefault), $any(userDialogRef))"
+  [styleClass]="styleClassDialog()"
+  [modal]="true"
+  [maximizable]="true"
+  [style]="{ contain: 'layout style paint' }"
+  #userDialogRef
+>
+  <ng-template #header>
+    <div class="p-dialog-title">
+      <span class="p-dialog-title-text">{{ headerDialog() }}</span>
+      <button type="button" class="p-dialog-titlebar-icon p-link" (click)="configDialog()">
+        <i class="pi pi-spin pi-cog p-dialog-icon"></i>
+      </button>
+    </div>
+  </ng-template>
+
+  @if (form()[$any(typeDefault)]) {
+    <p-tabs [scrollable]="true" [value]="userDialogTab()" (valueChange)="onTabChange($event)">
+      <p-tablist>
+        <p-tab value="general">General</p-tab>
+        @if (!isCreate() && canViewPermissions()) {
+          <p-tab value="permissions">Permisos</p-tab>
+        }
+      </p-tablist>
+
+      <p-tabpanels>
+        <p-tabpanel value="general">
+          <form [formGroup]="form()[$any(typeDefault)]">
+            <app-custom-draw-form
+              *ngIf="drawForm()[typeDefault]?.['general']"
+              [drawForm]="drawForm()[typeDefault]['general']"
+              [formGroup]="form()[$any(typeDefault)]"
+              [isCreate]="isCreate()"
+              (onSelectAutoCompleteAction)="onSelectAutoComplete($event)"
+              (onChangeDropdownAction)="onChangeDropdown($event)"
+              (onNewIconDropdownAction)="onNewIconDropdown($event)"
+              (onReloadIconDropdownAction)="onReloadIconDropdown($event)"
+              (onChangeToggleAction)="onChangeToggle($event)"
+              (onKeydownEnterAction)="onKeydownEnter($event)"
+              (onClosableIconDropdownAction)="onClosableIconDropdown($event)"
+              (files64Action)="onFiles64($event)"
+              (filesAction)="onFiles($event)"
+            />
+          </form>
+        </p-tabpanel>
+
+        @if (!isCreate() && canViewPermissions()) {
+          <p-tabpanel value="permissions">
+            <section class="permission-tab-header">
+              <div>
+                <h3>Permisos efectivos</h3>
+                <p>Activa solamente las rutas declaradas por el servidor y revisa los cambios antes de guardarlos.</p>
+              </div>
+              <p-button
+                icon="pi pi-sitemap"
+                label="Ver catálogo y dependencias"
+                severity="secondary"
+                [outlined]="true"
+                (onClick)="openPermissionCatalog()"
+              />
+            </section>
+
+            <app-permissions-tree
+              mode="user"
+              [userId]="selectedUserId()"
+              [userLabel]="selectedUsername()"
+              [editable]="canEditPermissions()"
+              [inDialog]="false"
+              [visible]="formDialogVisible[$any(typeDefault)]"
+              header="Permisos del usuario"
+            />
+          </p-tabpanel>
+        }
+      </p-tabpanels>
+    </p-tabs>
+  }
+
+  <ng-template #footer>
+    @if (userDialogTab() === 'general') {
+      <div class="p-dialog-footer">
+        <app-custom-button-footer
+          [config]="configGeneral()[$any(typeDefault)]"
+          (saveAction)="save({ pos: typeDefault })"
+          (saveNotHideAction)="save({ pos: typeDefault, hide: false })"
+          (resetFormAction)="resetFormDialog()"
+        />
+      </div>
+    }
+  </ng-template>
+</p-dialog>
+<!-- ]]]FI -->

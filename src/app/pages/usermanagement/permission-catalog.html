@@ -1,0 +1,91 @@
+<!-- [[[II ESC:037-02 DOC:docs/documents/2026-08-06-037-sistema-visual-permisos-dependencias.md#escenario-02 -->
+<div class="catalog-page">
+  <div class="catalog-header card">
+    <div>
+      <p-button icon="pi pi-arrow-left" label="Usuarios" severity="secondary" [text]="true" (onClick)="back()" />
+      <h2>Catálogo de permisos y dependencias</h2>
+      <p>Usuario: <strong>{{ username }}</strong></p>
+    </div>
+    <p-button icon="pi pi-refresh" label="Actualizar catálogo" [outlined]="true" [loading]="loading()" (onClick)="reload()" />
+  </div>
+
+  @if (loading()) {
+    <div class="card catalog-loading"><p-progressSpinner ariaLabel="Cargando catálogo" /></div>
+  } @else if (catalog(); as current) {
+    <div class="catalog-metrics">
+      <div class="card metric"><span>Acciones configuradas</span><strong>{{ totals().forms }}</strong></div>
+      <div class="card metric"><span>Dependencias de campos</span><strong>{{ totals().fields }}</strong></div>
+      <div class="card metric"><span>Permisos declarados</span><strong>{{ totals().permissions }}</strong></div>
+    </div>
+
+    @if (current.configuration_context.warning) {
+      <p-message severity="warn" [text]="current.configuration_context.warning" styleClass="w-full" />
+    }
+
+    <div class="card catalog-filters">
+      <input pInputText type="search" [ngModel]="search()" (ngModelChange)="setSearch($event)"
+        placeholder="Buscar formulario, campo, recurso o permiso" aria-label="Buscar en catálogo" />
+      <p-select [options]="apps()" optionLabel="label" optionValue="value" [ngModel]="selectedApp()"
+        (ngModelChange)="setApp($event)" placeholder="Todas las aplicaciones" [showClear]="true" />
+    </div>
+
+    <div class="card">
+      <p-tabs value="dependencies">
+        <p-tablist>
+          <p-tab value="dependencies">Dependencias por campo</p-tab>
+          <p-tab value="impact">Impacto por permiso</p-tab>
+        </p-tablist>
+        <p-tabpanels>
+          <p-tabpanel value="dependencies">
+            <p-table [value]="dependencyRows()" [paginator]="true" [rows]="25" [rowsPerPageOptions]="[25, 50, 100]"
+              responsiveLayout="scroll" currentPageReportTemplate="Mostrando {first} a {last} de {totalRecords} dependencias"
+              [showCurrentPageReport]="true">
+              <ng-template #header>
+                <tr>
+                  <th pSortableColumn="formLabel">Acción <p-sortIcon field="formLabel" /></th>
+                  <th pSortableColumn="label">Campo <p-sortIcon field="label" /></th>
+                  <th>Fuente</th>
+                  <th>Acceso mínimo</th>
+                  <th>Estado</th>
+                  <th>Configuración</th>
+                </tr>
+              </ng-template>
+              <ng-template #body let-row>
+                <tr>
+                  <td><strong>{{ row.formLabel }}</strong><small>{{ row.formPath }}</small></td>
+                  <td>{{ row.label }}<small>{{ row.path }} · {{ row.control_type }}</small></td>
+                  <td>{{ row.local ? 'Opciones locales' : (row.source_app ? row.source_app + '.' + row.source_resource : row.source_resource) }}</td>
+                  <td>
+                    <p-tag [value]="row.access.mode" [severity]="modeSeverity(row.access.mode)" />
+                    <small>{{ row.access.preferred || 'Sin bit adicional' }}</small>
+                  </td>
+                  <td>
+                    <p-tag [value]="row.access.granted ? 'Disponible' : 'Falta permiso'"
+                      [severity]="row.access.granted ? 'success' : 'danger'" />
+                    @if (row.access.warning) {
+                      <i class="pi pi-exclamation-triangle warning-icon" [pTooltip]="row.access.warning"></i>
+                    }
+                  </td>
+                  <td><p-tag [value]="row.configurationSource" severity="secondary" /></td>
+                </tr>
+              </ng-template>
+              <ng-template #emptymessage><tr><td colspan="6" class="empty">No hay dependencias con este filtro.</td></tr></ng-template>
+            </p-table>
+          </p-tabpanel>
+          <p-tabpanel value="impact">
+            <p-table [value]="impactRows()" [paginator]="true" [rows]="25" responsiveLayout="scroll">
+              <ng-template #header><tr><th>Permiso</th><th>Formularios</th><th>Consumidores</th><th>Ejemplos</th></tr></ng-template>
+              <ng-template #body let-row>
+                <tr><td><strong>{{ row.permission }}</strong></td><td>{{ row.forms }}</td><td>{{ row.consumers }}</td><td>{{ row.examples || '—' }}</td></tr>
+              </ng-template>
+              <ng-template #emptymessage><tr><td colspan="4" class="empty">No hay impactos con este filtro.</td></tr></ng-template>
+            </p-table>
+          </p-tabpanel>
+        </p-tabpanels>
+      </p-tabs>
+    </div>
+  } @else {
+    <div class="card empty">No se recibió un catálogo válido.</div>
+  }
+</div>
+<!-- ]]]FI -->

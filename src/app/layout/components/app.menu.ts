@@ -220,6 +220,19 @@ export class AppMenu {
           ]
         }]
     },
+    // [[[II ESC:037-01 DOC:docs/documents/2026-08-06-037-sistema-visual-permisos-dependencias.md#escenario-01
+    {
+      label: 'Administración',
+      items: [
+        {
+          label: 'Administración',
+          items: [
+            { label: 'Usuarios y permisos', icon: 'pi pi-users', routerLink: ['/profile/list'] },
+          ],
+        },
+      ],
+    },
+    // ]]]FI
     /*
         {
           label: 'Academia',
