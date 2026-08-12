@@ -24,6 +24,9 @@ import { UpdateManagerService } from './app/utils/services/update-manager.servic
 import { UpdateCheckResult } from './app/utils/services/update.service';
 import { App } from '@capacitor/app';
 import { Preferences } from '@capacitor/preferences';
+// [[[II ESC:027-06 DOC:docs/documents/2026-07-01-027-autenticacion-segura-dispositivo-movil.md#escenario-06
+import { NetworkStatusService } from './app/utils/services/network-status.service';
+// ]]]FI
 
 @Component({
   selector: 'app-root',
@@ -63,7 +66,10 @@ export class AppComponent implements OnInit, OnDestroy {
 
   constructor(
     private updateManager: UpdateManagerService,
-    private router: Router
+    private router: Router,
+    // [[[II ESC:027-06 DOC:docs/documents/2026-07-01-027-autenticacion-segura-dispositivo-movil.md#escenario-06
+    private networkStatus: NetworkStatusService,
+    // ]]]FI
   ) {
     // [[[II ESC:031-01 DOC:docs/documents/2026-07-18-031-optimizacion-navegacion-activos.md#escenario-01
     this._setupNavigationPerfTrace();
@@ -109,6 +115,10 @@ export class AppComponent implements OnInit, OnDestroy {
   // ]]]FI
 
   async ngOnInit() {
+    // [[[II ESC:027-06 DOC:docs/documents/2026-07-01-027-autenticacion-segura-dispositivo-movil.md#escenario-06
+    await this.networkStatus.initialize();
+    // ]]]FI
+
     // Inicializar el sistema de actualizaciones
     await this.updateManager.initialize();
 
@@ -136,6 +146,9 @@ export class AppComponent implements OnInit, OnDestroy {
   ngOnDestroy() {
     // Limpiar recursos
     this.updateManager.destroy();
+    // [[[II ESC:027-06 DOC:docs/documents/2026-07-01-027-autenticacion-segura-dispositivo-movil.md#escenario-06
+    void this.networkStatus.destroy();
+    // ]]]FI
   }
 
   // ─── DETECCIÓN DE REINICIO DEL WEBVIEW POR ANDROID ───

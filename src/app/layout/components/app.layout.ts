@@ -1,4 +1,4 @@
-import { Component, computed, OnDestroy, Renderer2, ViewChild } from '@angular/core';
+import { Component, computed, effect, OnDestroy, Renderer2, ViewChild } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { NavigationEnd, Router, RouterModule } from '@angular/router';
 import { filter, Subscription } from 'rxjs';
@@ -19,6 +19,10 @@ import { AssistantWidgetComponent } from '../../components/assistant-widget/assi
 import { BlockedComponent } from '../../components/blocked/blocked.component';
 import { CookieService } from 'ngx-cookie-service';
 import { environment } from 'src/environments/environment';
+// [[[II ESC:027-06 DOC:docs/documents/2026-07-01-027-autenticacion-segura-dispositivo-movil.md#escenario-06
+import { AuthService } from '../../auth/services/auth.service';
+import { NetworkStatusService } from '../../utils/services/network-status.service';
+// ]]]FI
 export function playerFactory() { return import('lottie-web'); }
 
 
@@ -70,6 +74,11 @@ export class AppLayout implements OnDestroy {
 
   menuScrollListener: any;
 
+  // [[[II ESC:027-06 DOC:docs/documents/2026-07-01-027-autenticacion-segura-dispositivo-movil.md#escenario-06
+  private offlineNoticeShown = false;
+  private offlineNoticeTimer: ReturnType<typeof setTimeout> | null = null;
+  // ]]]FI
+
   @ViewChild(AppSidebar) appSidebar!: AppSidebar;
 
   @ViewChild(AppTopbar) appTopbar!: AppTopbar;
@@ -80,7 +89,44 @@ export class AppLayout implements OnDestroy {
     public router: Router,
     private messageS: MessageService,
     private cookieS: CookieService,
+    // [[[II ESC:027-06 DOC:docs/documents/2026-07-01-027-autenticacion-segura-dispositivo-movil.md#escenario-06
+    private authS: AuthService,
+    private networkStatusS: NetworkStatusService,
+    // ]]]FI
   ) {
+    // [[[II ESC:027-06 DOC:docs/documents/2026-07-01-027-autenticacion-segura-dispositivo-movil.md#escenario-06
+    effect(() => {
+      const loggedIn = this.authS.loggedin();
+      const connected = this.networkStatusS.connected();
+
+      if (!loggedIn || connected) {
+        this.offlineNoticeShown = false;
+        if (this.offlineNoticeTimer) {
+          clearTimeout(this.offlineNoticeTimer);
+          this.offlineNoticeTimer = null;
+        }
+        return;
+      }
+
+      if (this.offlineNoticeShown) return;
+      this.offlineNoticeShown = true;
+      this.offlineNoticeTimer = setTimeout(() => {
+        this.offlineNoticeTimer = null;
+        if (!this.authS.loggedin() || this.networkStatusS.connected()) return;
+
+        this.messageS.changeMessage(
+          'Te quedaste sin conexión a Internet. Algunas funciones no estarán disponibles hasta que recuperes la conexión.',
+          null,
+          {},
+          'warn',
+          'Sin conexión',
+          false,
+          20000,
+        );
+      });
+    });
+    // ]]]FI
+
     this.overlayMenuOpenSubscription = this.layoutService.overlayOpen$.subscribe(() => {
       if (!this.menuOutsideClickListener) {
         this.menuOutsideClickListener = this.renderer.listen('document', 'click', (event) => {
@@ -173,6 +219,13 @@ export class AppLayout implements OnDestroy {
   });
 
   ngOnDestroy() {
+    // [[[II ESC:027-06 DOC:docs/documents/2026-07-01-027-autenticacion-segura-dispositivo-movil.md#escenario-06
+    if (this.offlineNoticeTimer) {
+      clearTimeout(this.offlineNoticeTimer);
+      this.offlineNoticeTimer = null;
+    }
+    // ]]]FI
+
     if (this.overlayMenuOpenSubscription) {
       this.overlayMenuOpenSubscription.unsubscribe();
     }
@@ -196,4 +249,3 @@ export class AppLayout implements OnDestroy {
 
 
 }
-

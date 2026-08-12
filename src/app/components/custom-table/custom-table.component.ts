@@ -13,6 +13,7 @@ import { InputIconModule } from 'primeng/inputicon';
 import { MultiSelectModule } from 'primeng/multiselect';
 import { ContextMenuModule } from 'primeng/contextmenu';
 import { TooltipModule } from 'primeng/tooltip';
+import { GeneralService } from '../../utils/services/general.service';
 
 @Component({
   selector: 'app-custom-table',
@@ -28,6 +29,7 @@ export class CustomTableComponent implements OnChanges {
   optionsExport = signal<any[]>([{ id: 'excel', name: 'Excel' }, { id: 'pdf', name: 'PDF' }, { id: 'csv', name: 'CSV' }]);
   form = signal<FormGroup | null>(null);
   protected fb: FormBuilder = inject(FormBuilder);
+  private generalS: GeneralService = inject(GeneralService); // funciones generales
   items!: MenuItem[];
 
   //https://www.npmjs.com/package/ngx-export-as
@@ -176,6 +178,41 @@ export class CustomTableComponent implements OnChanges {
 
     this.onExportDialogVisible(false);
   }
+
+  // [[[II ESC:005-16 DOC:docs/documents/2026-05-31_005_columnas-form-data-y-tree-select-nombres.md#escenario-16
+  /**
+   * Formatea cada celda del export de `p-table`.
+   *
+   * Las columnas dinamicas se generan con `field = 'form_data.<campo>'`
+   * (`generateJSONColumns`) y la fila trae ESE punto como clave plana ya formateada
+   * (`DJAtoObject`), por eso la celda visible (`rowData[col.field]`) muestra el
+   * `option_label`. En cambio `exportCSV()` resuelve el valor con
+   * `ObjectUtils.resolveFieldData`, que interpreta el punto como ruta anidada y llega
+   * al objeto crudo (`form_data.<campo>` sin formatear) -> `String(objeto)` lo
+   * exportaba como `[object Object]`.
+   *
+   * Aqui se reusa `formatDynamicValue` con la misma config (`fields[<campo>]`) que uso
+   * el aplanado, por lo que el texto exportado queda identico al de la tabla. Las
+   * columnas sin punto conservan el comportamiento previo de PrimeNG (`String(valor)`).
+   *
+   * El escape de comillas se replica porque PrimeNG solo lo aplica cuando NO hay
+   * `exportFunction`.
+   */
+  exportCellFormatter = (e: { data: any; field: string }): string => {
+    const field: string = e?.field ?? '';
+    const dotIndex = field.indexOf('.');
+
+    if (dotIndex === -1) return this.escapeExportCell(String(e?.data));
+
+    const childKey = field.slice(dotIndex + 1);
+    const fieldCfg = this.field?.fields?.[childKey];
+    return this.escapeExportCell(this.generalS.formatDynamicValue(e?.data, fieldCfg));
+  };
+
+  private escapeExportCell(value: string): string {
+    return value.replace(/"/g, '""');
+  }
+  // ]]]FI
 
   /**
    * Toggle entre búsqueda local (página visible) y remota (servidor completo)

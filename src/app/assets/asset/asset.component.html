@@ -14,9 +14,10 @@
     [filterDelayTable]="filterDelayTable()" />
 </div>
 
-<!-- [[[II ESC:031-03 DOC:docs/documents/2026-07-18-031-optimizacion-navegacion-activos.md#escenario-03 -->
+<!-- [[[II ESC:031-03 DOC:docs/documents/2026-07-18-031-optimizacion-navegacion-activos.md#escenario-03 ESC:031-06 DOC:docs/documents/2026-07-18-031-optimizacion-navegacion-activos.md#escenario-06 -->
 @defer (when localSettingsDialogVisible) {
-  <app-custom-local-settings [visible]="localSettingsDialogVisible" [field]="fieldConfig()" [formGroup]="configForm"
+  <app-custom-local-settings *ngIf="showLocalSettingsComponent()" [sectionConfiguration]="localSettingsConfiguration()" [visible]="localSettingsDialogVisible"
+    [field]="fieldConfig()" [formGroup]="configForm"
     (saveAction)="saveConfig()" (visibleAction)="onLocalSettingsDialogVisible($event)" />
 }
 

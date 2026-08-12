@@ -14,6 +14,7 @@ import {
 import { Vars } from './vars.class';
 import { DROPDOWN_TYPES_PAYLOAD } from './dropdown-types.const';
 import { DERIVED_TABLE_DRAFT_FLAG, RAW_ATTRIBUTE_PREFIX, TABLE_ROW_SOURCE_FLAG, TABLE_ROW_SOURCE_VERSION_SUFFIX } from './table-row-flags.const';
+import { resolveLocalSettingsConfiguration } from './local-settings-configuration';
 
 @Directive()
 export class CRUD extends Vars implements OnChanges  /*implements OnInit*/ {
@@ -21,6 +22,25 @@ export class CRUD extends Vars implements OnChanges  /*implements OnInit*/ {
 
   // cada vez que cambian los customField se actualiza
   public customField = computed(() => this.crudS.customField());
+  // [[[II ESC:031-06 DOC:docs/documents/2026-07-18-031-optimizacion-navegacion-activos.md#escenario-06
+  /**
+   * Evita crear el editor de configuración local cuando la configuración general
+   * del recurso lo deshabilita para la plataforma actual. Los fallbacks conservan el
+   * comportamiento previo en configuraciones persistidas que aún no traen el nodo.
+   */
+  public readonly localSettingsConfiguration = computed(() => {
+    const currentPos: any = this.pos();
+    const configuration = this.configGeneral()[currentPos]?.configuration;
+    return resolveLocalSettingsConfiguration(
+      configuration,
+      this.generalS.getClientPlatform(),
+    );
+  });
+
+  public readonly showLocalSettingsComponent = computed(
+    () => this.localSettingsConfiguration().active,
+  );
+  // ]]]FI
   // calcula el estilo del dialogo, cada vez que hay un cambio de aplicacion
 
   // Inyección directa del Router
@@ -168,8 +188,18 @@ export class CRUD extends Vars implements OnChanges  /*implements OnInit*/ {
       cols: this.cols(),
       fields: this.crudS.fieldsForm(pos),
       app: safePos,
+      // [[[II ESC:005-17 DOC:docs/documents/2026-05-31_005_columnas-form-data-y-tree-select-nombres.md#escenario-17
+      // Clave de modulo declarada por cada componente (`this.module[typeDefault]`, p.ej.
+      // 'MA' en maintenance). Los estados son por modulo, igual que ya lo resuelve
+      // `dependentStatus`, asi que el filtro de la config solo debe ofrecer los suyos.
+      module: this.module[safePos],
+      // ]]]FI
     }));
-    this.fieldExport.update(exp => ({ ...exp, cols: this.cols() }));
+    // [[[II ESC:005-16 DOC:docs/documents/2026-05-31_005_columnas-form-data-y-tree-select-nombres.md#escenario-16
+    // `fields` viaja tambien al export para que la tabla pueda formatear las columnas
+    // aplanadas `form_data.<campo>` con la MISMA config que uso el aplanado de DJAtoObject.
+    this.fieldExport.update(exp => ({ ...exp, cols: this.cols(), fields: this.crudS.fieldsForm(pos) }));
+    // ]]]FI
   }
 
   // [[[II ESC:017-04 DOC:docs/documents/2026-06-02_017_custom-draw-form-device-drawform.md#escenario-04
@@ -6200,13 +6230,13 @@ export class CRUD extends Vars implements OnChanges  /*implements OnInit*/ {
       const control = transientForm.get(field);
       if (control && canonical !== undefined && canonical !== null && canonical !== '') {
         control.setValue(canonical, { emitEvent: false });
-      // [[[II ESC:030-18 DOC:docs/documents/2026-07-14-030-child-runtime-overlay.md#escenario-18
-      // Opt-out declarativo: una columna puede prohibir explícitamente que una
-      // celda vacía herede el valor homónimo del formulario. No se presupone
-      // ningún campo; la configuración decide cuándo corresponde limpiar.
+        // [[[II ESC:030-18 DOC:docs/documents/2026-07-14-030-child-runtime-overlay.md#escenario-18
+        // Opt-out declarativo: una columna puede prohibir explícitamente que una
+        // celda vacía herede el valor homónimo del formulario. No se presupone
+        // ningún campo; la configuración decide cuándo corresponde limpiar.
       } else if (control && column?.inherit_from_form === false) {
         control.setValue(null, { emitEvent: false });
-      // ]]]FI
+        // ]]]FI
       }
 
       // [[[II ESC:030-06 Espejo `object_<campo>` de los dropdown-like
@@ -6218,10 +6248,10 @@ export class CRUD extends Vars implements OnChanges  /*implements OnInit*/ {
         const selectedObject = sourceRow['object_' + field] ?? canonical;
         if (selectedObject !== undefined && selectedObject !== null && selectedObject !== '') {
           objectControl.setValue(selectedObject, { emitEvent: false });
-        // [[[II ESC:030-18 DOC:docs/documents/2026-07-14-030-child-runtime-overlay.md#escenario-18
+          // [[[II ESC:030-18 DOC:docs/documents/2026-07-14-030-child-runtime-overlay.md#escenario-18
         } else if (column?.inherit_from_form === false) {
           objectControl.setValue(null, { emitEvent: false });
-        // ]]]FI
+          // ]]]FI
         }
       }
 
@@ -6699,7 +6729,29 @@ export class CRUD extends Vars implements OnChanges  /*implements OnInit*/ {
    * Activa la bandera para mostrar el dialogo de configuración local
    */
   localSettings() {
+    // [[[II ESC:031-06 DOC:docs/documents/2026-07-18-031-optimizacion-navegacion-activos.md#escenario-06
+    if (!this.localSettingsConfiguration().active) {
+      this.localSettingsDialogVisible = false;
+      this.messageS.changeMessage('La configuración esta deshabilitada.');
+      return;
+    }
     this.localSettingsDialogVisible = true;
+    // ]]]FI
+
+
+    // [[[II ESC:005-17 DOC:docs/documents/2026-05-31_005_columnas-form-data-y-tree-select-nombres.md#escenario-17 ESC:031-06 DOC:docs/documents/2026-07-18-031-optimizacion-navegacion-activos.md#escenario-06
+    // Al abrir se refrescan módulo y configuración completa. CustomLocalSettings
+    // reconstruye `draw` y `general` al guardar; entregarlos aquí conserva el árbol
+    // `general.configuration` y evita que un PATCH persistente lo omita.
+    const modulePos: any = this.pos() ?? 0;
+    const moduleKey = this.module[modulePos];
+    this.fieldConfig.update(cfg => ({
+      ...cfg,
+      ...(moduleKey !== undefined ? { module: moduleKey } : {}),
+      general: this.configGeneral()[modulePos] ?? cfg.general ?? {},
+      draw: this.drawForm()[modulePos] ?? cfg.draw ?? {},
+    }));
+    // ]]]FI
     //inicializa el select de las columnas visibles de cada app cuando se abre la configuración local,
     //tambien puedo poner una funcion que se ejecute cuando se dispare el evento de mostrar la pantalla de configuracion local
     //this.configForm.controls['columns'].setValue(this.selected Columns().map(column => column.field));
@@ -7102,11 +7154,16 @@ export class CRUD extends Vars implements OnChanges  /*implements OnInit*/ {
 
     for (let i = 0; i < data.length; i++) {
       if (data[i].module === module) {
-        //buscar en el array dependsOn si existe id
-        //dejo shared porque status siempre se consulta con todos los campos y se comparte  en todos los lugares
-        const exists = (this.sharedS as any).data['status'][i].depends_on.find((ele: any) => ele === id);
+        // [[[II ESC:005-17 DOC:docs/documents/2026-05-31_005_columnas-form-data-y-tree-select-nombres.md#escenario-17
+        // Se lee del arreglo recibido y no del bag compartido por clave fija: ahora el
+        // catalogo esta acotado por modulo y vive en su propia clave, asi que indexar
+        // otro arreglo con el mismo `i` apuntaria a un estado distinto.
+        // El cribado por `depends_on` se conserva igual: del modulo solo se ofrecen los
+        // estados que dependen del estado actual del registro.
+        const sta = data[i];
+        const exists = sta.depends_on.find((ele: any) => ele === id);
+        // ]]]FI
         if (exists) {
-          const sta = (this.sharedS as any).data['status'][i];
           status.push({
             label: sta.name,
             command: () => this.setStatus(sta.id)
@@ -7127,19 +7184,28 @@ export class CRUD extends Vars implements OnChanges  /*implements OnInit*/ {
   getStatus(options: getStatusOptions = {}) {
     const { module = '', id = '', ids_task, force } = options;
 
+    // [[[II ESC:005-17 DOC:docs/documents/2026-05-31_005_columnas-form-data-y-tree-select-nombres.md#escenario-17
+    // El catalogo de estados supera el tope de 1000 del servidor, asi que se pide acotado
+    // por modulo y se guarda en su propia clave compartida (`status_<MODULO>`), la misma
+    // que usa el filtro de la configuracion del modulo: una sola consulta por app para
+    // los dos consumidores. Sin modulo se conserva la clave y la consulta previas.
+    const cacheKey = this.crudS.sharedModuleScopedKey('status', module);
+    const filter = module ? `filter[module]=${encodeURIComponent(module)}` : '';
+    // ]]]FI
+
     // dejo shared porque status siempre se consulta con todos los campos y se comparte  en todos los lugares
-    if ((this.sharedS as any).data['status'] && !force) {
-      this.dependentStatus((this.sharedS as any).data['status'], module, id);
+    if ((this.sharedS as any).data[cacheKey] && !force) {
+      this.dependentStatus((this.sharedS as any).data[cacheKey], module, id);
       this.getTask({ module, ids_task });
       return;
     }
 
     // dejo shared porque status siempre se consulta con todos los campos y se comparte  en todos los lugares
     this.showBlocked();
-    this.crudS.getObject({ app: 'status/status' }).subscribe({
+    this.crudS.getObject({ app: 'status/status', filter }).subscribe({
       next: (resp: any) => {
-        (this.sharedS as any).data['status'] = this.DJAtoObject({ resp });
-        this.dependentStatus((this.sharedS as any).data['status'], module, id);
+        (this.sharedS as any).data[cacheKey] = this.DJAtoObject({ resp });
+        this.dependentStatus((this.sharedS as any).data[cacheKey], module, id);
         this.getTask({ module, ids_task });
         this.showBlocked(false);
       },

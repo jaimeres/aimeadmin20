@@ -105,6 +105,75 @@ El boton de acceso seguro llama el mismo flujo de `loginWithBiometrics()` que el
 login principal, pero en la ventana secundaria solo autentica y cierra el dialogo,
 sin cambiar la navegacion previa de ese login.
 
+<!-- [[[II ESC:027-06 DOC:docs/documents/2026-07-01-027-autenticacion-segura-dispositivo-movil.md#escenario-06 -->
+## Escenario 06: Monitoreo de conectividad durante una sesion
+
+Se instala `@capacitor/network` 8, compatible con Capacitor 8, y se sincroniza el
+plugin Android. `NetworkStatusService` mantiene un `signal` de solo lectura con el
+estado informado por el plugin; si el plugin no puede inicializarse, conserva un
+fallback a los eventos `online` y `offline` del navegador.
+
+El monitor inicia una sola vez desde el componente raiz. Mientras `AuthService.loggedin()`
+sea verdadero, el layout muestra una advertencia al pasar a estado desconectado:
+`Te quedaste sin conexion a Internet. Algunas funciones no estaran disponibles hasta
+que recuperes la conexion.` El aviso se emite una sola vez por periodo offline y se
+habilita nuevamente al recuperar la red. No cierra la sesion ni altera tokens, datos,
+permisos o navegacion.
+
+## Escenario 07: Mensajes explicitos en errores de inicio de sesion
+
+Los dos consumidores activos del login tradicional usan un clasificador comun:
+
+- estado HTTP `0` y red desconectada: informa falta de Internet;
+- estado HTTP `0` y red conectada: informa que el servidor no es accesible, sin
+  afirmar incorrectamente que el navegador demostro un error CORS;
+- `401`, `403`, `404`, `408`, `429`, `5xx` y `504`: muestran mensajes especificos;
+- otros errores conservan el `detail` del contrato JSON:API cuando esta disponible.
+
+La clasificacion es exclusivamente de presentacion en el cliente. Se conserva sin
+cambios el endpoint, el payload, el contrato JSON:API, CORS del servidor, la carga de
+configuracion posterior al login y los flujos biometricos.
+
+## Decisiones de los escenarios 06 y 07
+
+- El estado `connected` indica disponibilidad de una interfaz de red, no garantiza
+  que exista salida real a Internet. Por eso un estado HTTP `0` con red conectada se
+  presenta como servidor inaccesible y no como CORS confirmado.
+- No se agrega un timeout nuevo al login para no abortar solicitudes lentas que antes
+  podian completarse.
+- No se modifica `GeneralService.networkStatus()` porque el nuevo monitor cubre web y
+  nativo mediante el plugin oficial y cambiar el helper legado ampliaria el alcance.
+- No se muestra aviso de conexion recuperada porque no fue solicitado; el estado se
+  restablece silenciosamente y permite un nuevo aviso ante otra perdida.
+
+## Archivos de los escenarios 06 y 07
+
+- `package.json`
+- `package-lock.json`
+- `android/app/capacitor.build.gradle`
+- `android/capacitor.settings.gradle`
+- `src/app.component.ts`
+- `src/app/utils/services/network-status.service.ts`
+- `src/app/utils/services/network-status.service.spec.ts`
+- `src/app/auth/utils/login-error.util.ts`
+- `src/app/auth/utils/login-error.util.spec.ts`
+- `src/app/auth/services/auth.service.ts`
+- `src/app/pages/auth/login.ts`
+- `src/app/layout/components/app.layout.ts`
+
+## Validaciones de los escenarios 06 y 07
+
+- `npx tsc -p tsconfig.app.json --noEmit`: aprobado.
+- `npx tsc -p tsconfig.spec.json --noEmit`: aprobado.
+- Pruebas unitarias del clasificador y monitor: `6 SUCCESS`.
+- `npm run build:prod`: aprobado con advertencias de presupuesto y dependencias
+  CommonJS preexistentes.
+- `npm run cap:sync`: aprobado; detecta `@capacitor/network@8.0.1` entre 11 plugins.
+- `npm run android:debug`: `BUILD SUCCESSFUL`; compila y empaqueta el plugin nativo.
+<!-- ]]]FI -->
+
 ## Pendientes
 
 - Probar en dispositivo fisico con huella, rostro y PIN/patron segun soporte.
+- Probar en dispositivo fisico la perdida y recuperacion de Wi-Fi/datos durante una
+  sesion autenticada.

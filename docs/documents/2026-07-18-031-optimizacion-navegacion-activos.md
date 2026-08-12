@@ -15,7 +15,7 @@ El usuario pidió optimizar la navegación inicial hacia los componentes y entre
 - Instrumentación de diagnóstico desactivada por defecto (`src/app/utils/perf-trace.ts` y puntos de medición).
 - `@capacitor/barcode-scanner` deja de importarse estáticamente en CustomDrawForm.
 - `AssetComponent` deja de importar `LOCAL_BASE`/`PRIME_MODULES` completos; los dialogs pesados se difieren con `@defer`.
-- No cambia ningún contrato: permisos, menús, tipos, autoload, filtros, CRUD, auditoría, documentos, timeline, cámara/archivos, orden create/update ni configuración.
+- Los escenarios 01-05 no cambian contratos. El escenario 06 agrega el contrato aditivo `general.configuration` para evitar crear el editor local cuando el servidor lo deshabilita por plataforma; no cambia permisos, autoload, filtros, CRUD, auditoría, documentos, timeline, cámara/archivos ni el orden create/update.
 
 <a id="escenario-01"></a>
 ## Escenario 01: Instrumentación de diagnóstico activable
@@ -82,16 +82,64 @@ Decisión: `CRUDService.options()` (singleton root) guarda en memoria de sesión
 - Sin TTL: vive lo que la sesión de página, igual que la retención por instancia previa. Cambios de permisos hechos en el servidor a mitad de sesión se reflejan al recargar la app (antes se reflejaban al recrear el componente; tradeoff aceptado por el objetivo de velocidad).
 - No agrega llamadas al servidor: las elimina.
 
+<a id="escenario-06"></a>
+## Escenario 06: Creación condicional de CustomLocalSettings
+
+2026-08-12. Para comprobar y reducir el costo que `app-custom-local-settings` agrega a los CRUD, todos sus puntos de montaje quedan protegidos por `*ngIf`. La fuente única es la configuración general del recurso activo (`configGeneral()[pos]`) con este contrato:
+
+```json
+{
+  "configuration": {
+    "mobile": {
+      "active": true,
+      "dialog": false,
+      "layout": false,
+      "behavior": false,
+      "filters": true
+    },
+    "web": {
+      "active": true,
+      "dialog": true,
+      "layout": true,
+      "behavior": true,
+      "filters": true
+    },
+    "desktop": {
+      "active": true,
+      "dialog": true,
+      "layout": true,
+      "behavior": true,
+      "filters": true
+    }
+  }
+}
+```
+
+- `CRUD.localSettingsConfiguration` resuelve `mobile`, `web` o `desktop` mediante `GeneralService.getClientPlatform()`. `CRUD.showLocalSettingsComponent` deriva exclusivamente de `active` y se comparte con los componentes heredados y `CrudPageShellComponent`.
+- `CRUD.localSettings()` también respeta `active`: si está deshabilitado, mantiene cerrado el diálogo, muestra el aviso existente y detiene su inicialización.
+- `dialog`, `layout`, `behavior` y `filters` muestran u ocultan las pestañas correspondientes. Si la pestaña seleccionada queda oculta, `CustomLocalSettingsComponent` selecciona la primera permitida; con el default móvil abre `filters`.
+- Antes de abrir, `CRUD.localSettings()` refresca `general` y `draw` en `fieldConfig`; así el payload persistente reconstruye los valores efectivos y conserva `general.configuration`.
+- El `*ngIf` impide instanciar el editor cuando `active` es falso, pero no modifica el menú «Configuración del módulo», el flujo de guardado ni las configuraciones existentes.
+- `placeholder-crud-config.ts` replica el contrato completo y mezcla cada plataforma para que los módulos con configuración provisional no pierdan overrides parciales.
+- El cliente mantiene lectura temporal de `configuration`/`configuration_mobile` como contrato anterior de `active`; las cuatro secciones faltantes toman el default de la plataforma.
+- En `AssetComponent` se conserva el `@defer` anterior: la condición nueva actúa dentro del bloque diferido. En Maintenance se sustituye la desactivación manual usada para la prueba de rendimiento por la condición configurable.
+- El servidor define una sola variable base (`local_settings_configuration`) y cada configuración CRUD con nodo `general` la importa mediante el patrón existente `from .base import *`.
+
 ## Decisiones tomadas
 
 - La instrumentación se hace con funciones sueltas, sin servicio ni DI, para no agregar peso al arranque.
 - El gate del flag se cachea una vez por sesión de página; `setPerfTraceForTesting()` existe solo para specs.
 - No se aplicó `prefetch on idle` en los `@defer`: en gama baja el objetivo es no hacer trabajo hasta que el usuario lo pida. Queda como mejora opcional.
 - No se extrajeron los dialogs a componentes standalone: `@defer` inline fue suficiente para separar los chunks (verificado con stats.json), y así no se duplican formularios ni estados.
-- El patrón de este documento debe replicarse después en `crud-page-shell.component.ts` (usado por ~14 componentes) y en los demás componentes que importan `LOCAL_BASE`; queda fuera de esta entrega.
+- El patrón de imports exactos + `@defer` del escenario 03 aún debe evaluarse en `crud-page-shell.component.ts` y en los demás componentes que importan `LOCAL_BASE`; el escenario 06 solo agrega allí la creación condicional del editor.
 
 ## Validaciones aplicadas
 
+- Escenario 06 (2026-08-12): build de producción Angular exitoso. Conserva únicamente los warnings preexistentes de budgets, dependencias CommonJS y stylesheet global no localizado.
+- Escenario 06: 20 pruebas Angular dirigidas aprobadas para resolución de plataforma, compatibilidad anterior, `CRUD.localSettings()`, preservación del PATCH, secciones visibles y filtros existentes de CustomLocalSettings.
+- Escenario 06: auditoría estática de los 21 puntos de montaje de `app-custom-local-settings`; los 21 contienen `*ngIf` enlazado a la señal compartida.
+- Escenario 06: `manage.py check` del servidor sin errores; 160/160 recursos de `D_CONFIGURATION()` publican las cinco claves en las tres plataformas y los 16 defaults JSON modificados pasan sus validadores. La validación global de todos los defaults sigue encontrando el incumplimiento preexistente de CFDI (`Serie`, `Folio`, `Fecha`, etc.) fuera del alcance de este escenario.
+- Escenario 06: 3 pruebas dirigidas del servidor pasan; cubren los 160 recursos, los defaults de las tres plataformas y la herencia en las personalizaciones CEB.
 - Build de producción con `--stats-json` antes y después: exitoso, mismos warnings preexistentes (budgets, CommonJS, stylesheet no localizado). Métricas en Notas.
 - Specs dirigidos ejecutados (ChromeHeadless): 31 en total, 27 pasan — perf-trace (8), guard nuevo (4), client-cache-storage, auth.service, asset.component (`should create`), custom-draw-form incluyendo los 3 nuevos del escáner diferido.
 - Los 4 specs que fallan son de la tabla derivada (ESC:030, doc 2026-07-14-030): se verificó en un worktree limpio de `HEAD` (7fac73a, sin estos cambios) que fallan idéntico — son preexistentes del trabajo de tabla derivada incompleto ("tabla mejorada pero incompleta"), no de esta optimización.
@@ -111,6 +159,9 @@ Decisión: `CRUDService.options()` (singleton root) guarda en memoria de sesión
 
 ## Archivos modificados
 
+- Escenario 06: `src/app/utils/crud.class.ts`, `src/app/utils/placeholder-crud-config.ts` y `src/app/shared/crud-page-shell.component.ts`.
+- Escenario 06: los 20 templates que montan directamente `app-custom-local-settings`, incluida la restauración condicionada de Maintenance.
+- Escenario 06 (servidor): `apps/utils/configurations/base.py`, 17 módulos de defaults, `configuration_functions.py` y `docs/documents/2026-08-12-067-visibilidad-configuracion-local.md`.
 - `src/app/utils/perf-trace.ts` (nuevo) y `src/app/utils/perf-trace.spec.ts` (nuevo)
 - `src/app.component.ts`
 - `src/app/auth/services/auth.service.ts`

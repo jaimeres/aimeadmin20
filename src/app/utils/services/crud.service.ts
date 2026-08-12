@@ -345,6 +345,22 @@ export class CRUDService {
       ?? dict[key.replace(/-/g, '_')];
   }
 
+  // [[[II ESC:005-17 DOC:docs/documents/2026-05-31_005_columnas-form-data-y-tree-select-nombres.md#escenario-17
+  /**
+   * Clave de `SharedDynamicDataService.data` para un recurso acotado por modulo.
+   * Punto unico para que los dos consumidores del catalogo de estados —el menu de
+   * estados dependientes (`getStatus`) y el filtro de la configuracion del modulo—
+   * compartan la MISMA carga y solo se consulte una vez por app.
+   *
+   * Sin modulo devuelve el `type` tal cual, que es la clave generica previa
+   * (`data['status']`) y la que leen los dropdowns de formulario: asi el
+   * comportamiento anterior queda intacto cuando no hay modulo.
+   */
+  public sharedModuleScopedKey(type: string, module?: any): string {
+    return module ? `${type}_${module}` : type;
+  }
+  // ]]]FI
+
   configCols(module: string) {
     return this.authS.config[module]['config_cols'];
   }

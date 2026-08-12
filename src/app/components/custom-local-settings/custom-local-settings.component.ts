@@ -30,6 +30,12 @@ import { ToggleButtonModule } from 'primeng/togglebutton';
 
 import { CRUDService } from '../../utils/services/crud.service';
 import { GeneralService } from '../../utils/services/general.service';
+import { SharedDynamicDataService } from '../../utils/services/shared-dynamic-data.service';
+import {
+  DEFAULT_LOCAL_SETTINGS_CONFIGURATION,
+  LocalSettingsPlatformConfiguration,
+  LocalSettingsSection,
+} from '../../utils/local-settings-configuration';
 import { MessageService } from '../services/message.service';
 
 import {
@@ -56,6 +62,15 @@ interface FilterableCol {
   data_type: any;
   filter_by: string;
   filter: any;
+  // [[[II ESC:005-17 DOC:docs/documents/2026-05-31_005_columnas-form-data-y-tree-select-nombres.md#escenario-17
+  /**
+   * Recurso del servidor del que salen las opciones del filtro. Se resuelve del
+   * `data_type.type` de la propia entrada y, si no lo declara, del campo contenedor
+   * (misma autoridad que ya define la relacion real del filtro explicito: `status__code`).
+   * Se guarda aparte de `data_type` para no alterar el autocomplete FK existente.
+   */
+  option_data_type: string;
+  // ]]]FI
 }
 // ]]]FI
 
@@ -104,6 +119,17 @@ interface BehaviorCfg {
 
 const SKIP_TYPES = new Set(['table', 'button', 'document', 'signature', 'selfie', 'signature-pad']);
 const FK_MIN_CHARS = 5;
+
+// [[[II ESC:005-17 DOC:docs/documents/2026-05-31_005_columnas-form-data-y-tree-select-nombres.md#escenario-17
+/**
+ * Recursos cuyas opciones pertenecen al modulo actual y no al catalogo completo.
+ * `status` lo es por diseño: el modelo guarda `module` y el resto del cliente ya lo
+ * respeta (`dependentStatus` compara `status.module` contra `this.module[pos]`), de modo
+ * que sin este filtro la configuracion ofreceria estados de otros modulos.
+ * La clave de modulo NO se escribe aqui: llega en `field.module` desde el componente.
+ */
+const MODULE_SCOPED_OPTION_TYPES = new Set(['status']);
+// ]]]FI
 
 function colTypeToFilterType(colType: string): FilterFieldType {
   switch (colType) {
@@ -186,12 +212,20 @@ export class CustomLocalSettingsComponent implements OnChanges, OnDestroy {
   private crudS = inject(CRUDService);
   private generalS = inject(GeneralService);
   private messageS = inject(MessageService);
+  // [[[II ESC:005-17 DOC:docs/documents/2026-05-31_005_columnas-form-data-y-tree-select-nombres.md#escenario-17
+  private sharedS = inject(SharedDynamicDataService);
+  // ]]]FI
 
   // ─── Inputs / Outputs ─────────────────────────────────────────────────────
 
   @Input() visible = false;
   @Input() field: any = {};
   @Input() formGroup: FormGroup | undefined;
+  // [[[II ESC:031-06 DOC:docs/documents/2026-07-18-031-optimizacion-navegacion-activos.md#escenario-06
+  @Input() sectionConfiguration: LocalSettingsPlatformConfiguration = {
+    ...DEFAULT_LOCAL_SETTINGS_CONFIGURATION.web,
+  };
+  // ]]]FI
   @Output() visibleAction = new EventEmitter<boolean>();
   @Output() saveAction = new EventEmitter<void>();
 
@@ -215,6 +249,17 @@ export class CustomLocalSettingsComponent implements OnChanges, OnDestroy {
 
   /** Pestaña activa en el TabView principal */
   activeMainTab = signal<string>('layout');
+
+  // [[[II ESC:031-06 DOC:docs/documents/2026-07-18-031-optimizacion-navegacion-activos.md#escenario-06
+  readonly localSettingsSections = signal<LocalSettingsPlatformConfiguration>({
+    ...DEFAULT_LOCAL_SETTINGS_CONFIGURATION.web,
+  });
+  readonly availableMainTabs = computed<LocalSettingsSection[]>(() => {
+    const configuration = this.localSettingsSections();
+    return (['dialog', 'layout', 'behavior', 'filters'] as LocalSettingsSection[])
+      .filter(section => configuration[section]);
+  });
+  // ]]]FI
 
   dialogCfg = signal<DialogCfg>({ ...DEFAULT_DIALOG_CFG });
   behaviorCfg = signal<BehaviorCfg>({ ...DEFAULT_BEHAVIOR_CFG });
@@ -338,6 +383,7 @@ export class CustomLocalSettingsComponent implements OnChanges, OnDestroy {
         data_type: cfg?.data_type?.type ?? '',
         filter_by: cfg?.cols?.filter?.by ?? cfg?.filter_by ?? '',
         filter,
+        option_data_type: '',
       });
     }
 
@@ -352,6 +398,9 @@ export class CustomLocalSettingsComponent implements OnChanges, OnDestroy {
         data_type: entry?.data_type?.type ?? entry?.data_type ?? '',
         filter_by: entry?.by ?? entry?.filter_by ?? '',
         filter: entry,
+        // [[[II ESC:005-17 DOC:docs/documents/2026-05-31_005_columnas-form-data-y-tree-select-nombres.md#escenario-17
+        option_data_type: entry?.data_type?.type ?? entry?.data_type ?? cfg?.data_type?.type ?? '',
+        // ]]]FI
       });
     }
 
@@ -386,6 +435,18 @@ export class CustomLocalSettingsComponent implements OnChanges, OnDestroy {
 
   ngOnChanges(changes: SimpleChanges): void {
     if (changes['visible']) this.visibleSignal.set(changes['visible'].currentValue);
+    // [[[II ESC:031-06 DOC:docs/documents/2026-07-18-031-optimizacion-navegacion-activos.md#escenario-06
+    if (changes['sectionConfiguration']) {
+      this.localSettingsSections.set({
+        ...DEFAULT_LOCAL_SETTINGS_CONFIGURATION.web,
+        ...(changes['sectionConfiguration'].currentValue ?? {}),
+      });
+      const availableTabs = this.availableMainTabs();
+      if (!availableTabs.includes(this.activeMainTab() as LocalSettingsSection)) {
+        this.activeMainTab.set(availableTabs[0] ?? 'layout');
+      }
+    }
+    // ]]]FI
     if (changes['field']) {
       this.fieldSignal.set(changes['field'].currentValue);
       this._initFromField();
@@ -468,6 +529,32 @@ export class CustomLocalSettingsComponent implements OnChanges, OnDestroy {
     const ol = col?.filter?.option_label ?? col?.option_label ?? 'name';
     return Array.isArray(ol) ? ol[0] : ol;
   }
+
+  // [[[II ESC:005-17 DOC:docs/documents/2026-05-31_005_columnas-form-data-y-tree-select-nombres.md#escenario-17
+  /**
+   * `true` cuando el filtro puede ofrecer una lista de opciones del servidor en vez de
+   * que el usuario escriba la clave. Se decide por configuracion (`option_data_type`
+   * resoluble en `getAppType`), no por si las opciones ya llegaron: asi la fila nunca
+   * llega a mostrar las claves crudas mientras se carga.
+   */
+  hasOptionList(filterKey: string): boolean {
+    const col = this.filterableColMap()[filterKey];
+    if (!col || col.filterMode !== 'explicit') return false;
+    return !!this.crudS.getAppType(col.option_data_type);
+  }
+
+  optionsFor(filterKey: string): any[] {
+    return this.dropdownOptionsSignal()[filterKey] ?? [];
+  }
+
+  /**
+   * Clave que se guarda en `default_value`. Por defecto el propio campo del filtro
+   * (`status.filter.code` -> `code`), que es el que viaja en `filter[status__code.in]`.
+   */
+  getOptionValue(col: any): string {
+    return col?.filter?.option_value ?? col?.filterField ?? 'id';
+  }
+  // ]]]FI
 
   isRangeOp(op: string): boolean { return op === 'range'; }
   isNullOp(op: string): boolean { return op === 'isnull'; }
@@ -580,6 +667,16 @@ export class CustomLocalSettingsComponent implements OnChanges, OnDestroy {
 
   /** Mapa por pestaña: tab → grid (key→cfg) construido en runtime */
   private _drawTabsBuffer: Record<string, Record<string, any>> = {};
+
+  // [[[II ESC:005-17 DOC:docs/documents/2026-05-31_005_columnas-form-data-y-tree-select-nombres.md#escenario-17
+  /**
+   * Modulo con el que se cargaron las opciones de cada filtro (`filterKey` -> modulo).
+   * Es lo que garantiza una sola consulta por app: mientras la clave no cambie, reabrir
+   * el dialogo o recibir otra vez la config no vuelve a consultar; si cambia la app, ese
+   * filtro se recarga acotado a la nueva.
+   */
+  private _optionsLoadedFor: Record<string, any> = {};
+  // ]]]FI
 
   // ─── Editor avanzado por tipo ─────────────────────────────────────────────
 
@@ -1000,6 +1097,12 @@ export class CustomLocalSettingsComponent implements OnChanges, OnDestroy {
 
   private _loadAllDropdownOptions(cols: any[]): void {
     for (const col of cols) {
+      // [[[II ESC:005-17 DOC:docs/documents/2026-05-31_005_columnas-form-data-y-tree-select-nombres.md#escenario-17
+      if (this.hasOptionList(col.filterKey)) {
+        this._loadExplicitFilterOptions(col);
+        continue;
+      }
+      // ]]]FI
       const ft = colTypeToFilterType(col.type ?? '');
       if (ft !== 'fk') continue;
       if (col.type === 'dropdown-choice' && !col.data_type?.type) {
@@ -1011,6 +1114,75 @@ export class CustomLocalSettingsComponent implements OnChanges, OnDestroy {
       }
     }
   }
+
+  // [[[II ESC:005-17 DOC:docs/documents/2026-05-31_005_columnas-form-data-y-tree-select-nombres.md#escenario-17
+  /**
+   * Trae del servidor la lista de opciones de un filtro explicito, con el mismo patron
+   * que ya usa `completeFkMethod`: `getAppType` resuelve app/type y `DJAtoObject` aplana
+   * la respuesta. Ni la etiqueta ni la clave se escriben aqui: salen de
+   * `option_label` / `option_value` de la configuracion.
+   *
+   * Una consulta por app: la cache se lleva por `filterKey` + modulo con el que se cargo
+   * (`_optionsLoadedFor`), asi reabrir el dialogo o recibir otra vez la config no repite
+   * la peticion, y cambiar de app si la rehace acotada a la nueva.
+   */
+  private _loadExplicitFilterOptions(col: FilterableCol): void {
+    const moduleKey = this._moduleKeyFor(col);
+
+    // Un recurso acotado por modulo sin clave traeria el catalogo completo, que en
+    // `status` supera el tope de 1000 del servidor y llegaria truncado y mezclado entre
+    // modulos. Se prefiere no ofrecer opciones a ofrecer una lista incorrecta.
+    if (moduleKey === null) return;
+
+    if (this._optionsLoadedFor[col.filterKey] === moduleKey) return;
+
+    const appTypeEntry = this.crudS.getAppType(col.option_data_type);
+    const app = appTypeEntry?.app;
+    const type = appTypeEntry?.type;
+    if (!app || !type) return;
+
+    // Misma fuente que el menu de estados dependientes: si esa app ya cargo el catalogo
+    // acotado, se reutiliza y no se vuelve a consultar.
+    const sharedKey = this.crudS.sharedModuleScopedKey(col.option_data_type, moduleKey);
+    const shared = moduleKey ? this.sharedS.data[sharedKey] : null;
+    if (Array.isArray(shared)) {
+      this._optionsLoadedFor[col.filterKey] = moduleKey;
+      this.dropdownOptionsSignal.update(s => ({ ...s, [col.filterKey]: shared }));
+      return;
+    }
+
+    this._optionsLoadedFor[col.filterKey] = moduleKey;
+    const filter = moduleKey ? `filter[module]=${encodeURIComponent(moduleKey)}` : '';
+
+    this.crudS.getObject({ app, type, filter }).subscribe({
+      next: (data: any) => {
+        const options = this.generalS.DJAtoObject({
+          respDJA: data,
+          fields: { [col.field]: {} },
+        });
+        if (moduleKey) this.sharedS.data[sharedKey] = options;
+        this.dropdownOptionsSignal.update(s => ({ ...s, [col.filterKey]: options }));
+      },
+      error: () => {
+        delete this._optionsLoadedFor[col.filterKey];
+        this.dropdownOptionsSignal.update(s => ({ ...s, [col.filterKey]: [] }));
+      },
+    });
+  }
+
+  /**
+   * Clave de módulo con la que se debe consultar el recurso:
+   * - `''` → el recurso no se acota por modulo, se consulta completo (comportamiento previo).
+   * - `null` → se acota por modulo pero el componente aun no declaro `this.module[pos]`;
+   *   no se consulta para no traer el catalogo completo.
+   * - cualquier otro valor → se consulta con `filter[module]=<clave>`.
+   */
+  private _moduleKeyFor(col: FilterableCol): string | null {
+    if (!MODULE_SCOPED_OPTION_TYPES.has(col.option_data_type)) return '';
+    const module = this.fieldSignal()?.module;
+    return module ? String(module) : null;
+  }
+  // ]]]FI
 
   private _startOf(unit: 'day' | 'week' | 'month' | 'year', d: Date): Date {
     const r = new Date(d);

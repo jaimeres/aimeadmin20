@@ -156,4 +156,19 @@ describe('CRUDService', () => {
     });
   });
   // ]]]FI
+
+  // [[[II ESC:005-17 DOC:docs/documents/2026-05-31_005_columnas-form-data-y-tree-select-nombres.md#escenario-17
+  describe('sharedModuleScopedKey', () => {
+
+    it('separa el catalogo por modulo para que dos apps no compartan la misma carga', () => {
+      expect(service.sharedModuleScopedKey('status', 'MA')).toBe('status_MA');
+      expect(service.sharedModuleScopedKey('status', 'AC')).toBe('status_AC');
+    });
+
+    it('sin modulo conserva la clave generica previa que leen los dropdowns', () => {
+      expect(service.sharedModuleScopedKey('status')).toBe('status');
+      expect(service.sharedModuleScopedKey('status', '')).toBe('status');
+    });
+  });
+  // ]]]FI
 });

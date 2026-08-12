@@ -76,6 +76,7 @@ export function createGeneralServiceMock() {
   return {
     isMobile: () => false,
     isMobileScreen: () => false,
+    getClientPlatform: () => 'web' as const,
     baseDJA: (value: unknown) => value,
     DJAtoObject: ({ respDJA }: { respDJA: unknown }) => respDJA,
     getDeviceId: async () => null,

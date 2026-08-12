@@ -17,8 +17,11 @@
     [filterDelayTable]="filterDelayTable()" />
 </div>
 
-<app-custom-local-settings [visible]="localSettingsDialogVisible" [field]="fieldConfig()" [formGroup]="configForm"
+<!-- [[[II ESC:031-06 DOC:docs/documents/2026-07-18-031-optimizacion-navegacion-activos.md#escenario-06 -->
+<app-custom-local-settings *ngIf="showLocalSettingsComponent()" [sectionConfiguration]="localSettingsConfiguration()" [visible]="localSettingsDialogVisible"
+  [field]="fieldConfig()" [formGroup]="configForm"
   (saveAction)="saveConfig()" (visibleAction)="onLocalSettingsDialogVisible($event)" />
+<!-- ]]]FI -->
 
 <app-custom-import [visible]="importDialogVisible" (visibleAction)="onImportDialogVisible($event)"
   (saveAction)="onImportSave($event)" />

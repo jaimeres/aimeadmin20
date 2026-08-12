@@ -1,3 +1,8 @@
+import {
+  LocalSettingsConfiguration,
+  normalizeLocalSettingsConfiguration,
+} from './local-settings-configuration';
+
 type PlaceholderCrudConfig = {
   cols: Record<string, unknown>;
   config_cols: Record<string, unknown>;
@@ -9,6 +14,9 @@ type PlaceholderCrudConfig = {
     general: Record<string, unknown>;
   };
   general: {
+    // [[[II ESC:031-06 DOC:docs/documents/2026-07-18-031-optimizacion-navegacion-activos.md#escenario-06
+    configuration: LocalSettingsConfiguration;
+    // ]]]FI
     load: {
       load_on_start: boolean;
       load_on_start_mobile: boolean;
@@ -34,6 +42,9 @@ function buildPlaceholderCrudConfig(): PlaceholderCrudConfig {
       general: {}
     },
     general: {
+      // [[[II ESC:031-06 DOC:docs/documents/2026-07-18-031-optimizacion-navegacion-activos.md#escenario-06
+      configuration: normalizeLocalSettingsConfiguration(undefined),
+      // ]]]FI
       load: {
         load_on_start: false,
         load_on_start_mobile: false,
@@ -62,6 +73,9 @@ export function ensurePlaceholderCrudConfigs(config: Record<string, any>, module
       general: {
         ...defaults.general,
         ...(current.general ?? {}),
+        // [[[II ESC:031-06 DOC:docs/documents/2026-07-18-031-optimizacion-navegacion-activos.md#escenario-06
+        configuration: normalizeLocalSettingsConfiguration(current.general?.configuration),
+        // ]]]FI
         load: {
           ...defaults.general.load,
           ...(current.general?.load ?? {})

@@ -183,6 +183,30 @@ Validación realizada:
 
 <!-- ]]]FI -->
 
+## Escenario 04: Los permisos secundarios no son includes del CRUD
+
+<!-- [[[II ESC:037-04 DOC:docs/documents/2026-08-06-037-sistema-visual-permisos-dependencias.md#escenario-04 -->
+
+Los bloques `secondary_permissions`, `secondary_permissions_data` y
+`permissions_tree` no son columnas ni rutas JSON:API del CRUD general. También
+`person_data` y `employee_data` son contratos anidados del formulario, no los
+nombres de las relaciones incluibles. `UserList` los excluye expresamente de la
+generación de columnas, incluidos los aliases legacy que puedan permanecer en
+metadata o configuración almacenada.
+
+La exclusión corrige la solicitud inválida `include=secondary_permissions` sin
+ocultar los permisos al administrador. La pestaña **Permisos** no consume el
+detalle JSON:API de usuario: consulta los endpoints dedicados de `strings` y
+`tree`, que mantienen las cadenas raíz y secundarias bajo el control granular de
+`user-permissions.list` y `user-permissions.update`.
+
+El servidor dejó de publicar los contratos de escritura de permisos en el
+metadata de General y registró sus campos ocultos de usuario en `cols`. Con ello,
+la configuración nueva y los aliases legacy quedan cubiertos sin agregar una
+segunda fuente de verdad para rutas o posiciones.
+
+<!-- ]]]FI -->
+
 ## Resumen
 
 Diseñar un editor de permisos intuitivo que permita asignar por formulario o

@@ -33,6 +33,19 @@ export class UserList extends CRUD implements OnInit {
     this.typeDefault = 'user';
     this.app[this.typeDefault] = 'users/local-user';
     this.module[this.typeDefault] = 'U';
+    // [[[II ESC:037-04 DOC:docs/documents/2026-08-06-037-sistema-visual-permisos-dependencias.md#escenario-04
+    // Son contratos anidados/de escritura del formulario, no columnas ni rutas
+    // JSON:API incluibles. Se conservan aliases legacy para invalidar cualquier
+    // metadata/configuración almacenada antes de separar General y Permisos.
+    this.excludeFieldsCols[this.typeDefault] = [
+      'name',
+      'person_data',
+      'employee_data',
+      'secondary_permissions',
+      'secondary_permissions_data',
+      'permissions_tree',
+    ].map((field) => ({ field }));
+    // ]]]FI
     this.initCRUD();
   }
 

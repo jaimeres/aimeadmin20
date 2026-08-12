@@ -18,6 +18,10 @@ import { Preferences } from '@capacitor/preferences';
 import { App } from '@capacitor/app';
 import { PermissionsService } from './permissions.service';
 import { ClientCacheStorageService } from '../../utils/services/client-cache-storage.service';
+// [[[II ESC:027-07 DOC:docs/documents/2026-07-01-027-autenticacion-segura-dispositivo-movil.md#escenario-07
+import { NetworkStatusService } from '../../utils/services/network-status.service';
+import { resolveLoginErrorMessage } from '../utils/login-error.util';
+// ]]]FI
 // [[[II ESC:025-01 DOC:docs/documents/2026-06-28-025-push-notifications-fcm-capacitor.md#escenario-01
 import { PushDeviceService } from '../../communications/services/push-device.service';
 // ]]]FI
@@ -105,6 +109,9 @@ export class AuthService {
   // [[[II ESC:001-07 DOC:docs/documents/2026-06-04-001-token-config-cache.md#escenario-07
   private clientCacheS = inject(ClientCacheStorageService);
   // ]]]FI
+  // [[[II ESC:027-07 DOC:docs/documents/2026-07-01-027-autenticacion-segura-dispositivo-movil.md#escenario-07
+  private networkStatusS = inject(NetworkStatusService);
+  // ]]]FI
 
   constructor(private http: HttpClient, private cookieS: CookieService, private messageS: MessageService, private router: Router, private generalS: GeneralService, public biometricAuthS: BiometricAuthService, private formCacheS: FormCacheService) {
     // Servicio de permisos (inject para evitar romper la firma del constructor existente)
@@ -165,7 +172,9 @@ export class AuthService {
             this.messageS.showLoginDialog(false)
           },
           error: (e: any) => {
-            this.messageS.changeMessage('', e)
+            // [[[II ESC:027-07 DOC:docs/documents/2026-07-01-027-autenticacion-segura-dispositivo-movil.md#escenario-07
+            this.messageS.changeMessage(resolveLoginErrorMessage(e, this.networkStatusS.connected()))
+            // ]]]FI
           }
         })
       })

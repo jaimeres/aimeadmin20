@@ -14,6 +14,7 @@ describe('permissions schema', () => {
           maintenance: {
             update: { value: true, label: 'Modificar mantenimiento', field_permissions: 'permissions2', position: 49 },
             'update.start_date': { value: false, label: 'Modificar fecha inicio', field_permissions: 'assets_per', position: 17 },
+            'update.status.code.T': { value: false, label: 'Cambiar estado a Terminado', field_permissions: 'assets_per', position: 31 },
           },
         },
       },
@@ -23,6 +24,7 @@ describe('permissions schema', () => {
   it('accepts the exact granular path published by the server', () => {
     const tree = parsePermissionTreeResponse(response);
     expect(hasDeclaredPermissionPath(tree, 'assets.maintenance.update.start_date')).toBeTrue();
+    expect(hasDeclaredPermissionPath(tree, 'assets.maintenance.update.status.code.T')).toBeTrue();
     expect(hasDeclaredPermissionPath(tree, 'assets.maintenance.update.other_date')).toBeFalse();
   });
 

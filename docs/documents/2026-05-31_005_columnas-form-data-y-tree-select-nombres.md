@@ -271,6 +271,140 @@ La versión se avanzó nuevamente a `bos_config_module_v3` al completar el contr
 children de `request-detail`. Esto evita que una sesión que ya almacenó la versión
 anterior siga publicando únicamente la tabla sin los hijos `code` y `price`.
 
+<a id="escenario-16"></a>
+## Escenario 16: Exportar columnas `form_data.*` con su `option_label`, no `[object Object]`
+
+Reportado desde `Más opciones → Exportar`: en el archivo generado, las columnas de
+combos dinámicos (`Tipo de falla`, `Componente`, `Cluster`, `Región`) salían como
+`[object Object]`, mientras que las columnas `__name` / `__text` (`Plaza`, `Estado`,
+`Prioridad`) salían correctas.
+
+Causa: el punto de `form_data.<campo>` significa cosas distintas en cada capa.
+
+- La celda visible lee la clave **plana literal** con corchetes
+  (`rowData[col.field]` en `custom-table.component.html`), y esa clave la escribe
+  `DJAtoObject` **ya formateada** con `formatDynamicValue` (escenario 03).
+- `exportCSV()` de PrimeNG resuelve el valor con `ObjectUtils.resolveFieldData`, que
+  interpreta el punto como **ruta anidada** y baja a `record['form_data'][<campo>]`,
+  es decir al objeto crudo sin formatear. Sin `exportFunction` declarada, PrimeNG hace
+  `String(objeto)` → `[object Object]`.
+
+Corrección: se declara `[exportFunction]` en el `p-table` compartido y se formatea la
+celda con el helper existente `formatDynamicValue`, usando **la misma config**
+(`fields[<campo>]` de `crudS.fieldsForm(pos)`) que usó el aplanado. Para que esa config
+llegue al componente compartido se agrega `fields` a `fieldExport` en
+`syncColumnsState()`, junto al `cols` que ya viajaba; el input `[field]="fieldExport()"`
+ya estaba enlazado en los 19 módulos que usan `app-custom-table`, así que no se tocó
+ningún template de módulo.
+
+No se modificó la convención `form_data.<campo>` ni la generación de columnas: el punto
+en el `field` se conserva porque también lo consumen el dedupe de columnas, el registro
+de `timeZone` y la configuración local.
+
+Alcance acotado: solo se reformatean las columnas cuyo `field` tiene punto (las
+dinámicas). Las columnas sin punto conservan el `String(valor)` previo de PrimeNG. Se
+replica el escape de comillas dobles porque PrimeNG solo lo aplica cuando **no** hay
+`exportFunction`.
+
+<a id="escenario-17"></a>
+## Escenario 17: Filtros explícitos con lista de opciones del servidor (nombre, no clave)
+
+Pedido: en `Configuración del módulo → Filtros`, el filtro de `Estado` mostraba las
+claves crudas como chips escritos a mano (`P`, `PR`, `A`, `N`, `I`, `ER`, `LLR`, `SR`,
+`EOR`, `FR`, `PA`, `R`, `RE`). Se pidió que muestre el **nombre** y que se elija desde
+una lista desplegable con chips, sin hardcodear ningún nombre: todo debe salir de la
+configuración, de OPTIONS o de otra fuente del servidor.
+
+Causa: `status` declara un filtro explícito sobre `code`
+(`base.py:1888-1911`, `cols.filter.code`). `_buildFilterableCols` resolvía el tipo de
+esas entradas con `_resolveExplicitFilterType`, que sin `type` declarado devuelve
+`input-text`; con el operador `in` eso caía en el `p-autoComplete` libre de chips, donde
+el usuario escribe la clave.
+
+Corrección: la entrada explícita hereda el **recurso** del campo contenedor. Se agrega
+`option_data_type` a `FilterableCol`, resuelto como
+`entry.data_type.type ?? entry.data_type ?? cfg.data_type.type` (para `status` →
+`'status'`). Cuando ese recurso se resuelve en `getAppType`, la fila deja de ser texto
+libre y se dibuja:
+
+- operador `in` → `p-multiSelect` con `display="chip"`,
+- operador simple → `p-select`,
+
+en ambos casos con `optionLabel` y `optionValue` tomados de la configuración
+(`option_label` / `option_value` de la entrada; por defecto `name` y el propio campo del
+filtro, `code`). Las opciones se traen del servidor con el mismo patrón que ya usaba
+`completeFkMethod`: `getAppType` resuelve `app`/`type` y `DJAtoObject` aplana la
+respuesta. En el código no se escribe ningún nombre ni ninguna clave de estado.
+
+Coherencia con el escenario 11: allí ya se decidió que en `cols.filter` el campo
+contenedor participa porque representa la relación real de la columna
+(`status` + `code` → `status__code`). Por eso el contenedor es también la autoridad de
+dónde salen las opciones. `option_data_type` se guarda **aparte** de `data_type` para no
+alterar el autocompletado FK que ya usaba esa propiedad.
+
+Contrato guardado sin cambios: `_buildModifiedField` sigue escribiendo
+`default_value` como el arreglo de claves (`['P','PR', ...]`), que es lo que
+`buildFilterString` convierte en `filter[status__code.in]=...`. Cambia cómo se elige el
+valor, no lo que se persiste ni lo que se consulta.
+
+`hasOptionList()` decide por configuración y no por si las opciones ya llegaron, para
+que la fila nunca alcance a mostrar las claves crudas mientras carga la lista.
+
+### Caso especial `status`: opciones acotadas al módulo
+
+Los estados no son un catálogo global: el modelo guarda `module`
+(`apps/status/models/status.py:27`) y el resto del cliente ya lo respeta —
+`dependentStatus` compara `status.module` contra el módulo del componente
+(`crud.class.ts:7110`). Sin acotar, la configuración ofrecería estados de otros módulos.
+
+La clave de módulo la declara cada componente como `this.module[typeDefault]`
+(`maintenance.component.ts:91` → `'MA'`) y ahora viaja en `fieldConfig`
+(`crud.class.ts:175`), junto a `cols`, `fields` y `app` que ya viajaban. El cargador
+añade `filter[module]=<clave>` cuando el recurso está en `MODULE_SCOPED_OPTION_TYPES`;
+si el componente no declara módulo, no se acota y la consulta queda como antes.
+
+El endpoint lo soporta: `module: ('exact',)` en `filterset_fields`
+(`apps/status/views/status.py:27`).
+
+Reglas de consulta (corregidas tras la primera prueba en pantalla):
+
+- **Una consulta por app.** La caché se lleva por `filterKey` + módulo con el que se cargó
+  (`_optionsLoadedFor`). Reabrir el diálogo o recibir otra vez la config no repite la
+  petición; cambiar de app sí la rehace, acotada a la nueva clave.
+- **Nunca el catálogo completo.** Si el recurso se acota por módulo y todavía no hay clave,
+  no se consulta. `status` supera los 1000 registros y el servidor corta ahí, así que la
+  consulta sin acotar llegaría truncada y mezclada entre módulos; se prefiere no ofrecer
+  opciones antes que ofrecer una lista incorrecta. Los recursos que no se acotan por módulo
+  conservan su consulta completa.
+- **La clave se reresuelve al abrir el diálogo** (`localSettings`). `syncColumnsState` solo
+  corre cuando cambia la posición (`crud.class.ts:610`, guardia `posBefore != pos`), así que
+  si el componente declara `this.module[pos]` después de esa sincronización el diálogo se
+  quedaría sin clave. Solo se actualiza cuando difiere, para no reiniciar el estado del
+  diálogo cuando ya era correcta.
+
+### Mismo criterio para el menú de estados dependientes
+
+El menú del botón de estados (`getStatus` → `dependentStatus`) traía el catálogo completo
+con `getObject({ app: 'status/status' })`, sin acotar. Con más de 1000 estados ese listado
+llega truncado por el tope del servidor, así que un módulo podía quedarse sin sus estados
+por un recorte que no se ve en pantalla.
+
+Ahora `getStatus` (`crud.class.ts:7154`) pide `filter[module]=<clave>` con el mismo
+`this.module[pos]` que ya recibía por parámetro, y guarda el resultado en su propia clave
+compartida `status_<MÓDULO>`, construida por `sharedModuleScopedKey`
+(`crud.service.ts:359`). El filtro de la configuración lee y escribe **esa misma clave**
+(`custom-local-settings.component.ts:1113`), así que los dos consumidores comparten una
+sola carga por app: el segundo en abrirse ya no consulta.
+
+El cribado por `depends_on` se conserva sin cambios: del módulo solo se ofrecen los estados
+que dependen del estado actual del registro. Lo único que cambió en `dependentStatus`
+(`crud.class.ts:7122`) es que lee el elemento del arreglo recibido (`data[i]`) en vez de
+indexar por posición el bag compartido con clave fija; con el catálogo ya separado por
+módulo, indexar otro arreglo con el mismo `i` apuntaría a un estado distinto.
+
+Sin módulo, `sharedModuleScopedKey` devuelve la clave genérica `status` y la consulta sin
+filtro: el comportamiento previo queda intacto en cualquier llamada que no traiga módulo.
+
 ## Decisiones tomadas
 
 - No se agregan columnas para campos de `form_data` que no existan en la
@@ -321,6 +455,39 @@ anterior siga publicando únicamente la tabla sin los hijos `code` y `price`.
 - La versión de caché invalida automáticamente módulos procesados con la prioridad
   anterior de labels. Un cambio futuro del contrato de procesamiento debe incrementar
   de nuevo esa versión; no debe resolverse agregando fuentes alternativas en las tablas.
+- El export no reimplementa un escritor propio de xlsx/CSV: se extiende el
+  `exportCSV()` de PrimeNG por su punto de extensión declarado (`exportFunction`).
+- El export no reimplementa la resolución del texto visible: reutiliza
+  `formatDynamicValue` con la misma config que el aplanado, de modo que "lo exportado"
+  y "lo que se ve en la tabla" no puedan divergir por dos criterios paralelos.
+- La config viaja por `fieldExport` (canal ya existente hacia `app-custom-table`), no
+  colgando `option_label` de cada columna: así no se engorda el objeto de columnas, que
+  además es el que edita y persiste la configuración local del módulo.
+- La lista de opciones de un filtro explícito se resuelve por el `data_type` del campo
+  contenedor y no por un mapa de campos conocidos: cualquier filtro explícito sobre una
+  relación queda cubierto sin tocar el código.
+- `option_data_type` se agrega como propiedad nueva en vez de reutilizar `data_type`,
+  porque `completeFkMethod` ya decide con esa propiedad si busca contra el servidor;
+  reutilizarla habría cambiado el comportamiento del autocompletado FK existente.
+- El nuevo control cambia solo la captura del valor. El contrato persistido
+  (`default_value` como arreglo de claves) y la query resultante quedan idénticos.
+- El acotamiento por módulo se declara por recurso (`MODULE_SCOPED_OPTION_TYPES`) y no
+  por campo: `status` es el único recurso del que el cliente ya sabe que es por módulo.
+  La clave nunca se escribe en el componente; llega desde `this.module[pos]`.
+- Ante la falta de clave se decidió **no consultar** en vez de consultar sin acotar. Con
+  más de 1000 estados y el tope de 1000 del servidor, la lista completa llega truncada:
+  ofrecerla sería peor que no ofrecer nada, porque el usuario no puede notar el recorte.
+- El catálogo acotado se comparte por `SharedDynamicDataService` bajo `status_<MÓDULO>`,
+  no bajo la clave genérica `status`. Esa clave genérica la leen los dropdowns de
+  formulario (`getSharedOptions` en `dynamic-dropdown-data.service.ts:216-219`), así que
+  escribir ahí una lista de un solo módulo habría dejado a otros módulos leyendo estados
+  ajenos. Con sufijo no hay colisión: `lookupBySuffix` solo empata claves terminadas en
+  `:<campo>` (`dynamic-dropdown-data.service.ts:282-289`).
+- `sharedModuleScopedKey` vive en `CRUDService` para que la convención de clave tenga un
+  solo dueño y los dos consumidores no puedan divergir.
+- Si en el futuro otro recurso necesita acotarse por algo que sí conoce el servidor, la
+  vía existente es `data_type.filter` (`buildDropdownFilterString`), no ampliar esta
+  constante.
 
 ## Validaciones aplicadas
 
@@ -360,6 +527,35 @@ anterior siga publicando únicamente la tabla sin los hijos `code` y `price`.
   - un campo sin configuracion cae a la clave sin inventar `sortable/hide/order`.
   - `form_fields_data_*` declarado solo en `draw` queda registrado en
     `customField[app].cols` sin pisar labels ya configurados en columnas.
+- Para el escenario 16 se agregaron specs de `CustomTableComponent.exportCellFormatter`
+  que validan:
+  - una columna dinámica con `option_label` exporta el label (`'USD'`), no
+    `[object Object]`.
+  - `option_label` con varias claves separadas por coma se une igual que en la celda.
+  - sin configuración del campo se aplica el mismo fallback (`name`) de la celda.
+  - una columna sin punto conserva el `String(valor)` previo.
+  - el escape de comillas dobles se aplica en ambas ramas.
+- `npm run build` (configuración development) compila sin errores tras el cambio.
+- Para el escenario 17 se agregaron specs de `CustomLocalSettingsComponent` que validan:
+  - el recurso de opciones se resuelve desde el `data_type` del campo contenedor.
+  - el servidor se consulta una sola vez por filtro y las opciones quedan expuestas.
+  - `option_label` / `option_value` salen de la configuración, con defaults `name` y el
+    propio campo del filtro.
+  - lo guardado sigue siendo el arreglo de claves (`['P','PR']`) con su `default` y
+    `active`.
+  - un filtro sin recurso resoluble no adopta la lista de opciones.
+  - los estados se consultan con `filter[module]=MA` y con `filter[module]=AC` al cambiar
+    el módulo declarado por el componente.
+  - recibir la config varias veces no repite la consulta (una por app).
+  - el catálogo acotado se publica en la fuente compartida (`status_MA`).
+  - si esa fuente ya tiene el catálogo de la app, no se consulta al servidor.
+  - sin `module` declarado no se consulta, en lugar de traer el catálogo completo.
+- Se agregaron specs de `CRUDService.sharedModuleScopedKey` que validan que dos apps no
+  comparten carga (`status_MA` / `status_AC`) y que sin módulo se conserva la clave
+  genérica previa.
+- El `TestBed` de ese spec pasó a inyectar mocks de `CRUDService`, `GeneralService` y
+  `MessageService`. Antes fallaba por proveedores faltantes (`ConfigService`/`HttpClient`)
+  y sus 2 pruebas no llegaban a ejecutarse.
 
 ## Archivos modificados
 
@@ -371,9 +567,16 @@ anterior siga publicando únicamente la tabla sin los hijos `code` y `price`.
 - `src/app/utils/services/crud.service.spec.ts`
 - `src/app/components/custom-local-settings/custom-local-settings.component.ts`
 - `src/app/components/custom-local-settings/custom-local-settings.component.html`
+- `src/app/components/custom-local-settings/custom-local-settings.component.spec.ts`
+- `src/app/components/custom-table/custom-table.component.ts`
+- `src/app/components/custom-table/custom-table.component.html`
+- `src/app/components/custom-table/custom-table.component.spec.ts`
 - `src/app/tasks/task-detail/task-detail.component.ts`
 - `src/app/tasks/task-detail/task-detail.component.html`
 - `docs/documents/2026-05-31_005_columnas-form-data-y-tree-select-nombres.md`
+
+`SharedDynamicDataService` se reutiliza como fuente compartida pero no se modificó: solo
+se guarda en él una clave nueva (`status_<MÓDULO>`).
 
 ## Pruebas sugeridas
 
@@ -390,3 +593,42 @@ anterior siga publicando únicamente la tabla sin los hijos `code` y `price`.
 - Verificar una carga inicial con `load_on_start` activo y un `cols.filter`
   persistido para confirmar que la primera peticion ya incluye el query param
   `filter[...]`.
+- Exportar desde `/assets/maintenance?pos=maintenance` y confirmar que las columnas
+  de combos dinámicos traen el mismo texto que la tabla en pantalla.
+- Exportar un módulo con columnas `parent_form_data.*` (flujo hijo).
+- Exportar un campo dinámico `multiple` para confirmar que se une con su separador.
+- Abrir `Configuración del módulo → Filtros` en un módulo con `status` y confirmar que
+  `Estado / code` ofrece los nombres de estado y que al guardar la consulta sigue
+  llevando las claves.
+- Confirmar en un módulo con otro filtro explícito sobre relación (no `status`) que
+  también recibe su lista sin tocar código.
+- Abrir la configuración en dos módulos distintos (p.ej. `maintenance` y otro con
+  estados propios) y confirmar que cada uno ofrece solo los estados de su módulo.
+- Confirmar en un componente que aún no declare `this.module[pos]` que el filtro no
+  consulta el catálogo completo.
+- Abrir el menú de estados (botón de estados) y confirmar que sigue ofreciendo solo los
+  estados que dependen del estado actual del registro (`depends_on`), ahora sobre el
+  catálogo acotado.
+- Confirmar en la pestaña Red que `status/status` se consulta **una sola vez por app**
+  aunque se abra el menú de estados y la configuración del módulo en la misma sesión.
+
+## Pendientes / observaciones
+
+- El encabezado de la fila sigue siendo `Estado / code`: `_buildFilterableCols` ya lee
+  `entry.label ?? entry.header` para ese texto, pero la configuración del servidor no
+  declara `label` en `cols.filter.code` (`base.py:1901-1908`). Nombrarlo es un cambio de
+  configuración del servidor, no de este cliente; no se tocó porque el repositorio de la
+  API es de solo lectura en esta tarea.
+
+## Nota verificada sobre booleanos y fechas en el export (escenario 16)
+
+Se revisó si el escenario 16 dejaba fuera booleanos y fechas: **no los deja fuera y no
+había nada que corregir**. Los campos `Boolean`, `Choice` y `DateTime` del OPTIONS no
+generan columna con punto, sino columna `<campo>__text`
+(`crud.class.ts:3067`, `crud.class.ts:3080`, `crud.class.ts:3090`), es decir una clave
+plana sin punto: `resolveFieldData` la lee directo y el export ya coincide con la
+pantalla. Comprobado en el archivo exportado: `Situación` sale `Activo` y
+`Fecha programada` sale `30/07/2026 10:38:56 a.m.`, el mismo texto de la tabla.
+
+El único caso con punto es el de los combos dinámicos `form_data.*`, que es exactamente
+lo que corrige el escenario 16.

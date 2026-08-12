@@ -1,4 +1,4 @@
-import { Component, OnInit } from '@angular/core';
+import { Component, inject, OnInit } from '@angular/core';
 import { FormBuilder, FormsModule, ReactiveFormsModule, Validators } from '@angular/forms';
 import { CommonModule } from '@angular/common';
 import { Router, RouterModule } from '@angular/router';
@@ -17,6 +17,10 @@ import { MessageComponent } from '../../components/message/message.component';
 import { MessageService as MessagePrimeS } from 'primeng/api';
 import { BlockUIModule } from 'primeng/blockui';
 import { SkeletonModule } from 'primeng/skeleton';
+// [[[II ESC:027-07 DOC:docs/documents/2026-07-01-027-autenticacion-segura-dispositivo-movil.md#escenario-07
+import { NetworkStatusService } from '../../utils/services/network-status.service';
+import { resolveLoginErrorMessage } from '../../auth/utils/login-error.util';
+// ]]]FI
 
 @Component({
   selector: 'app-login',
@@ -128,6 +132,9 @@ export class Login implements OnInit {
   public showBiometricSetupOption = false;
   public setupBiometricAfterLogin = false;
   // ]]]FI
+  // [[[II ESC:027-07 DOC:docs/documents/2026-07-01-027-autenticacion-segura-dispositivo-movil.md#escenario-07
+  private networkStatusS = inject(NetworkStatusService);
+  // ]]]FI
 
   constructor(private fb: FormBuilder, private authS: AuthService, private router: Router, private messageS: MessageService,
     private cookieS: CookieService) {
@@ -228,7 +235,9 @@ export class Login implements OnInit {
       },
       error: (e: any) => {
         this.blockedDocument = false;
-        this.messageS.changeMessage('', e);
+        // [[[II ESC:027-07 DOC:docs/documents/2026-07-01-027-autenticacion-segura-dispositivo-movil.md#escenario-07
+        this.messageS.changeMessage(resolveLoginErrorMessage(e, this.networkStatusS.connected()));
+        // ]]]FI
       }
     });
   }

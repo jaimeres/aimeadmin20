@@ -20,7 +20,7 @@ export const environment = {
   // [[[II ESC:028-01 DOC:docs/documents/2026-07-07-028-version-headers-update-policy.md#escenario-01 CONFIG
   /** Versión de la app. Cambiar aqui invalida todos los cachés automáticamente. */
   appBuild: 5,
-  appVersion: '1.0.9',
+  appVersion: '1.0.10',
   // ]]]FI
   // [[[II ESC:004-01 DOC:docs/documents/2026-05-30_004_sistema-avisos-socket.md#escenario-01
   /**

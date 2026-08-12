@@ -11,7 +11,8 @@
   [showCurrentPageReport]="showCurrentPageReportSignal()" [scrollable]="scrollableSignal()"
   [paginator]="paginatorSignal()" [rows]="rowsSignal()" [totalRecords]="totalRecordsSignal()" [lazy]="true"
   (onLazyLoad)="onLazyLoadInternal($event);" [rowsPerPageOptions]="getRowsPerPageOptions()"
-  [filterDelay]="filterDelayTableSignal()">
+  [filterDelay]="filterDelayTableSignal()"
+  [exportFunction]="exportCellFormatter">
 
   <!-- pongo esto [globalFilterFields]="columns" para que solo busque en las columnas visibles, cuando se busca y luego se oculta sigue 
     mostrandose hasta que se haga una neva busqueda con el campo oculto -->

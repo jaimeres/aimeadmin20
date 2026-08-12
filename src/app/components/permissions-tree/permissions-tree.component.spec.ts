@@ -13,6 +13,7 @@ describe('PermissionsTreeComponent', () => {
       maintenance: {
         update: { value: false, label: 'Modificar mantenimiento', field_permissions: 'permissions2', position: 49 },
         'update.start_date': { value: false, label: 'Modificar fecha inicio', field_permissions: 'assets_per', position: 17 },
+        'update.status.code.T': { value: false, label: 'Cambiar estado a Terminado', field_permissions: 'assets_per', position: 31 },
       },
     },
   };
@@ -48,6 +49,11 @@ describe('PermissionsTreeComponent', () => {
 
     expect(update?.label).toBe('Modificar mantenimiento');
     expect(startDate?.label).toBe('Modificar fecha inicio');
+
+    const status = update?.children?.find((node) => node.key === 'assets.maintenance.update.status');
+    const code = status?.children?.find((node) => node.key === 'assets.maintenance.update.status.code');
+    const finished = code?.children?.find((node) => node.key === 'assets.maintenance.update.status.code.T');
+    expect(finished?.label).toBe('Cambiar estado a Terminado');
   });
 
   it('enables the parent when granting a granular permission and disables children with the parent', () => {
