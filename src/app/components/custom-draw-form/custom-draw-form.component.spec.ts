@@ -1025,4 +1025,49 @@ describe('CustomDrawFormComponent', () => {
     });
   });
   // ]]]FI
+
+  // [[[II ESC:001-18 DOC:docs/documents/2026-05-16_001_consolidacion_dropdown_types_y_fix_escenarios.md#escenario-18
+  it('incorpora y selecciona en el combo original el resultado de la búsqueda adicional', async () => {
+    const fieldConfig = {
+      field: 'asset',
+      type: 'dropdown',
+      option_value: 'id',
+      option_label: 'name',
+      additional_search: { active: true },
+    };
+    const form = new FormGroup({ asset: new FormControl<any>(null) });
+    component.formGroupSignal.set(form);
+    component.additionalSearchField.set(fieldConfig);
+    component.additionalSearchVisible.set(true);
+    spyOn(component, 'onChangeDropdown');
+
+    await component.selectAdditionalSearch({ value: { id: 'asset-2', name: 'BP0696' } });
+
+    expect(form.get('asset')?.value).toBe('asset-2');
+    expect(component.dropdownOptionsSignal().asset).toEqual([
+      jasmine.objectContaining({ id: 'asset-2', name: 'BP0696' }),
+    ]);
+    expect(component.onChangeDropdown).toHaveBeenCalledWith({ value: 'asset-2' }, fieldConfig);
+    expect(component.additionalSearchVisible()).toBeFalse();
+  });
+
+  it('rechaza la configuración booleana anterior y explica el contrato esperado', () => {
+    const messageSpy = spyOn((component as any).messageS, 'changeMessage');
+
+    component.openAdditionalSearch({
+      field: 'asset',
+      type: 'dropdown',
+      additional_search: { active: true, subsidiaries: true },
+    });
+
+    expect(component.additionalSearchVisible()).toBeFalse();
+    expect(messageSpy).toHaveBeenCalledWith(
+      'La búsqueda adicional requiere subsidiaries como {"filter": {}}.',
+      null,
+      {},
+      'warn',
+      'Configuración de búsqueda inválida',
+    );
+  });
+  // ]]]FI
 });

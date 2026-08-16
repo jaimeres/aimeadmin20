@@ -1,4 +1,4 @@
-<!-- [[[II ESC:007-07 DOC:docs/documents/2026-06-01_007_custom-draw-form-listbox.md#escenario-07 ESC:020-01 DOC:docs/documents/2026-06-04_020_custom-draw-form-virtual-scroll-dropdowns.md#escenario-01 ESC:020-04 DOC:docs/documents/2026-06-04_020_custom-draw-form-virtual-scroll-dropdowns.md#escenario-04 ESC:020-05 DOC:docs/documents/2026-06-04_020_custom-draw-form-virtual-scroll-dropdowns.md#escenario-05 ESC:001-09 DOC:docs/documents/2026-05-16_001_consolidacion_dropdown_types_y_fix_escenarios.md#escenario-09 ESC:030-01 DOC:docs/documents/2026-07-14-030-child-runtime-overlay.md#escenario-01 -->
+<!-- [[[II ESC:007-07 DOC:docs/documents/2026-06-01_007_custom-draw-form-listbox.md#escenario-07 ESC:007-09 DOC:docs/documents/2026-06-01_007_custom-draw-form-listbox.md#escenario-09 ESC:020-01 DOC:docs/documents/2026-06-04_020_custom-draw-form-virtual-scroll-dropdowns.md#escenario-01 ESC:020-04 DOC:docs/documents/2026-06-04_020_custom-draw-form-virtual-scroll-dropdowns.md#escenario-04 ESC:020-05 DOC:docs/documents/2026-06-04_020_custom-draw-form-virtual-scroll-dropdowns.md#escenario-05 ESC:001-09 DOC:docs/documents/2026-05-16_001_consolidacion_dropdown_types_y_fix_escenarios.md#escenario-09 ESC:030-01 DOC:docs/documents/2026-07-14-030-child-runtime-overlay.md#escenario-01 -->
 <!-- TEMPLATE REUTILIZABLE PARA DROPDOWN -->
 <!-- DEBO PONER TEMPLETE EN ESLO 3 PRIMEROS COMBOS -->
 <ng-template #dropdownTemplate let-fieldConfig="fieldConfig">
@@ -13,7 +13,8 @@
         [filter]="fieldConfig.filter_local !== undefined ? fieldConfig.filter_local : false"
         [filterBy]="fieldConfig.filter_by ? fieldConfig.filter_by : null"
         [virtualScroll]="fieldConfig.virtual_scrolling?.active === true && virtualOptionsReadySignal()[fieldConfig.field] === true"
-        [virtualScrollItemSize]="60" (onChange)="onChangeDropdown($event, fieldConfig)" [appendTo]="'body'"
+        [virtualScrollItemSize]="60" (onChange)="onChangeDropdown($event, fieldConfig)"
+        (onFilter)="assetDropdownFilterEvent.set({ event: $event, fieldConfig: fieldConfig })" [appendTo]="'body'"
         styleClass="height-input-custom" [scrollHeight]="fieldConfig.scroll_height || '120px'" />
       <!-- DEJO virtualScrollItemSize EN 60 PORQUE CON VALORES MAS GRANDE EMPIEZA A COMPORTARSE EXTRAÑO,
          NO CARGA TODOLOS LOS COMPONENTE EN LA LISTA O EL ALTA ES MUY GRANDE -->
@@ -24,6 +25,13 @@
       <button *ngIf="fieldConfig.reload_icon !== undefined ? fieldConfig.reload_icon : false"
         style="width: 40px !important;" type="button" pButton icon="pi pi-replay" class="height-icon-custom"
         (click)="dataDropdown(fieldConfig, true)"></button>
+
+      <!-- [[[II ESC:001-18 DOC:docs/documents/2026-05-16_001_consolidacion_dropdown_types_y_fix_escenarios.md#escenario-18 -->
+      <button *ngIf="fieldConfig.additional_search?.active === true" type="button" pButton
+        icon="pi pi-search" class="height-icon-custom" style="width: 40px !important;"
+        pTooltip="Buscar en el servidor" [disabled]="fieldConfig.readonly === true"
+        (click)="openAdditionalSearch(fieldConfig)"></button>
+      <!-- ]]]FI -->
 
       <button *ngIf="fieldConfig.closable_icon !== undefined ? fieldConfig.closable_icon : false" type="button" pButton
         icon="pi pi-times" class="height-icon-custom"
@@ -56,6 +64,11 @@
 
     <button *ngIf="fieldConfig.reload_icon" type="button" pButton icon="pi pi-replay" class="height-icon-custom"
       (click)="dataDropdown(fieldConfig, true); onReloadIconDropdownAction.emit(fieldConfig.field)"></button>
+    <!-- [[[II ESC:001-18 DOC:docs/documents/2026-05-16_001_consolidacion_dropdown_types_y_fix_escenarios.md#escenario-18 -->
+    <button *ngIf="fieldConfig.additional_search?.active === true" type="button" pButton icon="pi pi-search"
+      class="height-icon-custom" pTooltip="Buscar en el servidor" [disabled]="fieldConfig.readonly === true"
+      (click)="openAdditionalSearch(fieldConfig)"></button>
+    <!-- ]]]FI -->
     <button *ngIf="fieldConfig.new_icon" type="button" pButton icon="pi pi-plus" class="height-icon-custom"
       (click)="onNewIconDropdownAction.emit(fieldConfig.field)"></button>
     <button *ngIf="fieldConfig.closable_icon" type="button" pButton icon="pi pi-times" class="height-icon-custom"
@@ -76,7 +89,8 @@
     [virtualReady]="virtualOptionsReadySignal()[fieldConfig.field] === true" [panelStyle]="treeSelectPanelStyleSignal()"
     (clearAction)="clearTreeSelect(fieldConfig.field)" (nodeChangeAction)="onTreeSelectNodeChange($event, fieldConfig)"
     (nodeExpandAction)="onTreeNodeExpand($event, fieldConfig)"
-    (reloadAction)="dataDropdown(fieldConfig, true); onReloadIconDropdownAction.emit(fieldConfig.field)" />
+    (reloadAction)="dataDropdown(fieldConfig, true); onReloadIconDropdownAction.emit(fieldConfig.field)"
+    (searchAction)="openAdditionalSearch(fieldConfig)" />
   }
   <!-- ]]]FI -->
 </ng-template>
@@ -93,11 +107,34 @@
     [virtualReady]="virtualOptionsReadySignal()[fieldConfig.field] === true"
     [virtualScrollOptions]="listboxVirtualScrollOptions" (changeAction)="onChangeDropdown($event, fieldConfig)"
     (reloadAction)="dataDropdown(fieldConfig, true); onReloadIconDropdownAction.emit(fieldConfig.field)"
+    (searchAction)="openAdditionalSearch(fieldConfig)"
     (newAction)="onNewIconDropdownAction.emit(fieldConfig.field)"
     (closableAction)="onClosableIconDropdownAction.emit(fieldConfig.field)" />
   }
   <!-- ]]]FI -->
 </ng-template>
+<!-- ]]]FI -->
+
+<!-- [[[II ESC:001-18 DOC:docs/documents/2026-05-16_001_consolidacion_dropdown_types_y_fix_escenarios.md#escenario-18 -->
+<p-dialog [visible]="additionalSearchVisible()" (visibleChange)="$event ? null : closeAdditionalSearch()"
+  [modal]="true" [header]="additionalSearchHeader()" [style]="{ width: 'min(92vw, 36rem)' }"
+  [draggable]="false" [resizable]="false" appendTo="body">
+  <p-autoComplete [formControl]="additionalSearchControl" [suggestions]="additionalSearchSuggestions()"
+    (completeMethod)="completeAdditionalSearch($event)" (onSelect)="selectAdditionalSearch($event)"
+    [minLength]="additionalSearchMinLength()" [delay]="additionalSearchField()?.additional_search?.autocomplete?.delay || 300"
+    [optionLabel]="additionalSearchField()?.option_label | joinOrSelf"
+    [placeholder]="additionalSearchField()?.additional_search?.autocomplete?.placeholder || 'Buscar en el servidor'"
+    [emptyMessage]="additionalSearchField()?.additional_search?.autocomplete?.empty_message || 'No hay resultados'"
+    [showEmptyMessage]="true" [forceSelection]="true"
+    [appendTo]="'body'" styleClass="w-full" inputStyleClass="w-full">
+    <ng-template let-row #item>
+      <span>{{ optionLabelText(row, additionalSearchField()) }}</span>
+    </ng-template>
+  </p-autoComplete>
+  <small *ngIf="additionalSearchLoading()" class="block mt-2 text-color-secondary">
+    <i class="pi pi-spin pi-spinner mr-1"></i>Buscando…
+  </small>
+</p-dialog>
 <!-- ]]]FI -->
 
 
@@ -156,6 +193,12 @@
 
     <button *ngIf="fieldConfig?.icon2" type="button" pButton [icon]="fieldConfig.icon2.icon"
       style="width: 40px !important;" class="height-icon-custom"></button>
+
+    <!-- [[[II ESC:001-18 DOC:docs/documents/2026-05-16_001_consolidacion_dropdown_types_y_fix_escenarios.md#escenario-18 -->
+    <button *ngIf="fieldConfig.additional_search?.active === true" type="button" pButton icon="pi pi-search"
+      style="width: 40px !important;" class="height-icon-custom" pTooltip="Buscar en el servidor"
+      [disabled]="fieldConfig.readonly === true" (click)="openAdditionalSearch(fieldConfig)"></button>
+    <!-- ]]]FI -->
 
     <label [for]="fieldConfig.field">
       {{ fieldConfig?.label }}

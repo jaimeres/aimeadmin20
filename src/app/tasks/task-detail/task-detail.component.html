@@ -73,8 +73,10 @@
 
 </p-dialog>
 
-<!-- [[[II ESC:005-11 DOC:docs/documents/2026-05-31_005_columnas-form-data-y-tree-select-nombres.md#escenario-11 ESC:031-06 DOC:docs/documents/2026-07-18-031-optimizacion-navegacion-activos.md#escenario-06 -->
-<app-custom-local-settings *ngIf="showLocalSettingsComponent()" [sectionConfiguration]="localSettingsConfiguration()" [visible]="localSettingsDialogVisible"
-  [field]="fieldConfig()" [formGroup]="configForm"
-  (saveAction)="saveConfig()" (visibleAction)="onLocalSettingsDialogVisible($event)" />
+<!-- [[[II ESC:005-11 DOC:docs/documents/2026-05-31_005_columnas-form-data-y-tree-select-nombres.md#escenario-11 ESC:031-06 DOC:docs/documents/2026-07-18-031-optimizacion-navegacion-activos.md#escenario-06 ESC:031-07 DOC:docs/documents/2026-07-18-031-optimizacion-navegacion-activos.md#escenario-07 -->
+@defer (when localSettingsDialogVisible) {
+  <app-custom-local-settings *ngIf="showLocalSettingsComponent() && localSettingsDialogVisible" [sectionConfiguration]="localSettingsConfiguration()" [visible]="localSettingsDialogVisible"
+    [field]="fieldConfig()" [formGroup]="configForm"
+    (saveAction)="saveConfig()" (visibleAction)="onLocalSettingsDialogVisible($event)" />
+}
 <!-- ]]]FI -->

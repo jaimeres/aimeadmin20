@@ -64,6 +64,93 @@ describe('DynamicDropdownDataService', () => {
     expect(service).toBeTruthy();
   });
 
+  it('should log cache metadata and every option only for the asset search', () => {
+    const info = spyOn(console, 'info');
+    (service as any).assetCacheDebug.set({ source: 'shared-data', requestVersion: 3, optionCount: 2 });
+    const options = [
+      { id: 1, name: 'BP0696' },
+      { id: 2, name: 'BP0700' },
+    ];
+
+    service.logAssetSearch(
+      { field: 'asset', filter_by: 'name', option_label: 'name', option_value: 'id' },
+      { filter: 'BP0696' },
+      options,
+    );
+
+    expect(info).toHaveBeenCalledWith('[AssetComboDebug][search]', jasmine.objectContaining({
+      field: 'asset',
+      search: 'BP0696',
+      filterBy: 'name',
+      cache: jasmine.objectContaining({ source: 'shared-data', requestVersion: 3 }),
+      optionCount: 2,
+      values: [1, 2],
+      options,
+    }));
+
+    info.calls.reset();
+    service.logAssetSearch({ field: 'responsible' }, { filter: 'Ada' }, options);
+    expect(info).not.toHaveBeenCalled();
+  });
+
+  // [[[II ESC:001-18 DOC:docs/documents/2026-05-16_001_consolidacion_dropdown_types_y_fix_escenarios.md#escenario-18
+  it('should keep real filters and place the validated reference context in the route', async () => {
+    crudS.getAppType.and.callFake((type: any) => type === 'inventory-movement-detail'
+      ? { app: 'inventories/inventory-movement-detail', type }
+      : { app: 'assets/asset', type: 'asset' });
+    (crudS as any).type = 'inventory-movement-detail';
+    (crudS as any).app = 'inventories/inventory-movement-detail';
+    crudS.buildDropdownFilterString.and.returnValue('filter[is_active.exact]=true');
+    crudS.getObject.and.returnValue(of({ data: [] }) as any);
+    generalS.DJAtoObject = () => [{ id: 'asset-2', name: 'BP0696' }];
+
+    const rows = await service.searchAdditionalOptions({
+      field: 'asset',
+      type: 'dropdown',
+      option_label: 'name',
+      option_value: 'id',
+      data_type: { type: 'asset', filter: { is_active: true } },
+      additional_search: {
+        active: true,
+        subsidiaries: { filter: {} },
+        autocomplete: { by: 'search', min_search_length: 5, limit: 25 },
+      },
+    }, 'BP0696');
+
+    expect(rows).toEqual([jasmine.objectContaining({ id: 'asset-2', name: 'BP0696' })]);
+    expect(crudS.getObject).toHaveBeenCalledWith(jasmine.objectContaining({
+      app: 'assets/asset/reference-search/inventories/inventory-movement-detail/asset',
+      type: 'asset',
+      limit: 25,
+      filter: 'filter[is_active.exact]=true&filter[search]=BP0696',
+    }));
+  });
+
+  it('should not issue additional searches for choice or dynamic fields', async () => {
+    crudS.getAppType.and.returnValue({ app: 'assets/asset', type: 'asset' });
+    const config = {
+      field: 'asset',
+      type: 'dropdown-choice',
+      data_type: { type: 'asset' },
+      additional_search: { active: true },
+    };
+
+    expect(await service.searchAdditionalOptions(config, 'BP0696')).toEqual([]);
+    expect(await service.searchAdditionalOptions({
+      ...config,
+      type: 'dropdown',
+      field: 'parent_form_data_ASSET',
+    }, 'BP0696')).toEqual([]);
+    expect(await service.searchAdditionalOptions({
+      ...config,
+      type: 'dropdown',
+      subsidiaries: undefined,
+      additional_search: { active: true, subsidiaries: true },
+    }, 'BP0696')).toEqual([]);
+    expect(crudS.getObject).not.toHaveBeenCalled();
+  });
+  // ]]]FI
+
   // [[[II ESC:016-03 DOC:docs/documents/2026-06-02_016_dynamic-dropdown-data-service.md#escenario-03
   it('should normalize local option label and value aliases', async () => {
     const element = {
@@ -208,6 +295,11 @@ describe('DynamicDropdownDataService', () => {
 
     expect((options as any[])[0]).toEqual(jasmine.objectContaining({ id: 1, name: 'Memoria' }));
     expect(preferencesGet).not.toHaveBeenCalled();
+    expect(service.assetCacheDebug()).toEqual(jasmine.objectContaining({
+      source: 'shared-data',
+      requestVersion: 0,
+      optionCount: 1,
+    }));
   });
   // ]]]FI
 

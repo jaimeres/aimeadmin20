@@ -27,7 +27,11 @@ export interface AdvancedFieldDef {
   max?: number;
   /** Solo se muestra si esta función devuelve true (recibe el snapshot completo) */
   showIf?: (cfg: any) => boolean;
+  /** El control solo pertenece al esquema cuando la configuración contiene este contrato. */
+  includeIf?: (cfg: any) => boolean;
   hint?: string;
+  booleanOnLabel?: string;
+  booleanOffLabel?: string;
 }
 
 export interface AdvancedSection {
@@ -38,21 +42,130 @@ export interface AdvancedSection {
 
 // ─── Bloques reutilizables ────────────────────────────────────────────────────
 
+export const GRID_SPAN_OPTIONS = Array.from({ length: 12 }, (_, index) => ({
+  label: `${index + 1} ${index === 0 ? 'columna' : 'columnas'}`,
+  value: `col-span-${index + 1}`,
+}));
+
+export const GRID_SPAN_MD_OPTIONS = Array.from({ length: 12 }, (_, index) => ({
+  label: `${index + 1} ${index === 0 ? 'columna' : 'columnas'}`,
+  value: `md:col-span-${index + 1}`,
+}));
+
+export const PRIME_ICON_OPTIONS = [
+  { label: 'Agregar', value: 'pi pi-plus' },
+  { label: 'Aceptar', value: 'pi pi-check' },
+  { label: 'Buscar', value: 'pi pi-search' },
+  { label: 'Cámara', value: 'pi pi-camera' },
+  { label: 'Código QR', value: 'pi pi-qrcode' },
+  { label: 'Editar', value: 'pi pi-pencil' },
+  { label: 'Eliminar', value: 'pi pi-trash' },
+  { label: 'Enviar', value: 'pi pi-send' },
+  { label: 'Guardar', value: 'pi pi-save' },
+  { label: 'Limpiar', value: 'pi pi-times' },
+  { label: 'Pregunta', value: 'pi pi-question-circle' },
+  { label: 'Recargar', value: 'pi pi-replay' },
+  { label: 'Ver', value: 'pi pi-eye' },
+  { label: 'YouTube', value: 'pi pi-youtube' },
+];
+
+export const CODE_SCOPE_OPTIONS = [
+  { label: 'Global', value: 'global' },
+  { label: 'Prefijo', value: 'prefix' },
+  { label: 'Sufijo', value: 'suffix' },
+  { label: 'Año fiscal', value: 'fiscal_year' },
+  { label: 'Global + prefijo', value: 'global_prefix' },
+  { label: 'Global + sufijo', value: 'global_suffix' },
+  { label: 'Global + año fiscal', value: 'global_fiscal_year' },
+  { label: 'Global + prefijo + sufijo', value: 'global_prefix_suffix' },
+  { label: 'Global + prefijo + año fiscal', value: 'global_prefix_fiscal_year' },
+  { label: 'Global + sufijo + año fiscal', value: 'global_suffix_fiscal_year' },
+  { label: 'Prefijo + sufijo', value: 'prefix_suffix' },
+  { label: 'Prefijo + año fiscal', value: 'prefix_fiscal_year' },
+  { label: 'Sufijo + año fiscal', value: 'suffix_fiscal_year' },
+  { label: 'Prefijo + sufijo + año fiscal', value: 'prefix_suffix_fiscal_year' },
+  { label: 'Todos los segmentos', value: 'all' },
+];
+
+export const CHILD_FILTER_SCOPE_OPTIONS = [
+  { label: 'Cliente', value: 'client' },
+  { label: 'Servidor', value: 'server' },
+  { label: 'Automático', value: 'auto' },
+];
+
+export const SCOPE_EDITION_OPTIONS = [
+  { label: 'Guardar en servidor', value: 'server' },
+  { label: 'Solo edición local', value: 'local' },
+];
+
+export const FIELD_TYPE_OPTIONS = [
+  { label: 'Texto', value: 'input-text' },
+  { label: 'Contraseña', value: 'input-password' },
+  { label: 'Correo', value: 'email' },
+  { label: 'Texto largo', value: 'textarea' },
+  { label: 'Número', value: 'input-number' },
+  { label: 'Sí/No', value: 'toggle-button' },
+  { label: 'Fecha', value: 'date' },
+  { label: 'Hora', value: 'time' },
+  { label: 'Lista remota', value: 'dropdown' },
+  { label: 'Opciones locales', value: 'dropdown-choice' },
+  { label: 'Botones de selección', value: 'select-button' },
+  { label: 'Selección múltiple', value: 'multi-select' },
+  { label: 'Selección múltiple local', value: 'multi-choice' },
+  { label: 'Árbol', value: 'tree-select' },
+  { label: 'Lista', value: 'listbox' },
+  { label: 'Autocompletar', value: 'auto-complete' },
+  { label: 'JSON', value: 'json' },
+  { label: 'Archivos', value: 'files' },
+  { label: 'Documento', value: 'document' },
+  { label: 'Imagen', value: 'image-uploader' },
+  { label: 'Botón', value: 'button' },
+  { label: 'Correos', value: 'emails-chips' },
+  { label: 'Tabla', value: 'table' },
+  { label: 'Firma', value: 'signature' },
+  { label: 'Firma manuscrita', value: 'signature-pad' },
+  { label: 'Acceso', value: 'login' },
+  { label: 'Selfie', value: 'selfie' },
+];
+
+// [[[II ESC:031-08 DOC:docs/documents/2026-07-18-031-optimizacion-navegacion-activos.md#escenario-08
 const COMMON_BASE: AdvancedFieldDef[] = [
   { path: 'label', label: 'Etiqueta', kind: 'text' },
   { path: 'field', label: 'Campo (API)', kind: 'text', hint: 'Nombre del campo enviado al servidor' },
-  { path: 'class', label: 'Clase escritorio (col-span)', kind: 'text', /* placeholder: 'col-span-3' */ },
-  { path: 'class_md', label: 'Clase móvil (md:col-span)', kind: 'text', /* placeholder: 'md:col-span-6' */ },
-  { path: 'required', label: 'Requerido', kind: 'boolean' },
-  { path: 'hide', label: 'Oculto', kind: 'boolean' },
-  { path: 'readonly', label: 'Solo lectura', kind: 'boolean' },
-  { path: 'autofocus', label: 'Auto-foco', kind: 'boolean' },
+  {
+    path: 'class', label: 'Ancho móvil', kind: 'select', options: GRID_SPAN_OPTIONS,
+    hint: 'Clase base existente en el grid de app-custom-draw-form.',
+  },
+  {
+    path: 'class_md', label: 'Ancho escritorio', kind: 'select', options: GRID_SPAN_MD_OPTIONS,
+    hint: 'Clase md existente en el grid de app-custom-draw-form.',
+  },
+  {
+    path: 'type_mobile', label: 'Control en móvil', kind: 'select', options: FIELD_TYPE_OPTIONS,
+    includeIf: c => Object.prototype.hasOwnProperty.call(c ?? {}, 'type_mobile'),
+  },
+  {
+    path: 'scope_edition', label: 'Alcance de edición', kind: 'select', options: SCOPE_EDITION_OPTIONS,
+    includeIf: c => Object.prototype.hasOwnProperty.call(c ?? {}, 'scope_edition'),
+    hint: 'Servidor persiste el valor; local lo conserva únicamente en la fila editada.',
+  },
+  { path: 'required', label: 'Requerido', kind: 'boolean', booleanOnLabel: 'Requerido', booleanOffLabel: 'Opcional' },
+  { path: 'hide', label: 'Visibilidad', kind: 'boolean', booleanOnLabel: 'Oculto', booleanOffLabel: 'Visible' },
+  { path: 'readonly', label: 'Edición', kind: 'boolean', booleanOnLabel: 'Solo lectura', booleanOffLabel: 'Editable' },
+  { path: 'autofocus', label: 'Enfoque inicial', kind: 'boolean', booleanOnLabel: 'Con auto-foco', booleanOffLabel: 'Sin auto-foco' },
 ];
+// ]]]FI
 
 const DEFAULT_BLOCK: AdvancedFieldDef[] = [
-  { path: 'default.active', label: 'Aplicar valor por defecto', kind: 'boolean' },
+  { path: 'default.active', label: 'Valor por defecto', kind: 'boolean', booleanOnLabel: 'Aplicar valor', booleanOffLabel: 'Sin valor' },
   { path: 'default.value', label: 'Valor por defecto', kind: 'text', showIf: c => c?.default?.active },
-  { path: 'default.edit', label: 'Permitir editar el campo', kind: 'boolean' },
+  { path: 'default.edit', label: 'Edición del valor', kind: 'boolean', booleanOnLabel: 'Valor editable', booleanOffLabel: 'Valor bloqueado' },
+];
+
+const DEFAULT_JSON_BLOCK: AdvancedFieldDef[] = [
+  { path: 'default.active', label: 'Valor por defecto', kind: 'boolean', booleanOnLabel: 'Aplicar valor', booleanOffLabel: 'Sin valor' },
+  { path: 'default.value', label: 'Valor por defecto (JSON)', kind: 'json', showIf: c => c?.default?.active },
+  { path: 'default.edit', label: 'Edición del valor', kind: 'boolean', booleanOnLabel: 'Valor editable', booleanOffLabel: 'Valor bloqueado' },
 ];
 
 const DESCRIPTION_BLOCK: AdvancedFieldDef[] = [
@@ -64,18 +177,55 @@ const DESCRIPTION_BLOCK: AdvancedFieldDef[] = [
 ];
 
 const SCANNER_BLOCK: AdvancedFieldDef[] = [
-  { path: 'scanner.active', label: 'Habilitar escáner', kind: 'boolean' },
-  { path: 'scanner.icon', label: 'Icono', kind: 'text', /* placeholder: 'pi pi-qrcode' */ showIf: c => c?.scanner?.active },
+  { path: 'scanner.active', label: 'Escáner', kind: 'boolean', booleanOnLabel: 'Escáner habilitado', booleanOffLabel: 'Escáner deshabilitado' },
+  { path: 'scanner.icon', label: 'Icono', kind: 'select', options: PRIME_ICON_OPTIONS, showIf: c => c?.scanner?.active },
   { path: 'scanner.tooltip', label: 'Tooltip', kind: 'text', showIf: c => c?.scanner?.active },
-  { path: 'scanner.hint', label: 'Hint (chars mínimos)', kind: 'number', min: 0, max: 99, showIf: c => c?.scanner?.active },
+  {
+    path: 'scanner.hint', label: 'Máscara de formatos', kind: 'number', min: 1, max: 8191,
+    showIf: c => c?.scanner?.active,
+    hint: 'Suma de formatos habilitados: QR=1, AZTEC=2, DATA_MATRIX=4 … CODABAR=4096.',
+  },
 ];
 
 const COLS_BLOCK: AdvancedFieldDef[] = [
   { path: 'cols.label', label: 'Encabezado columna', kind: 'text' },
-  { path: 'cols.hide', label: 'Ocultar en tabla', kind: 'boolean' },
-  { path: 'cols.hide_mobile', label: 'Ocultar en móvil', kind: 'boolean' },
-  { path: 'cols.sortable', label: 'Ordenable', kind: 'boolean' },
-  { path: 'cols.locked', label: 'Bloqueada', kind: 'boolean' },
+  { path: 'cols.hide', label: 'Visibilidad en tabla', kind: 'boolean', booleanOnLabel: 'Oculta en tabla', booleanOffLabel: 'Visible en tabla' },
+  { path: 'cols.hide_mobile', label: 'Visibilidad móvil', kind: 'boolean', booleanOnLabel: 'Oculta en móvil', booleanOffLabel: 'Visible en móvil' },
+  { path: 'cols.sortable', label: 'Orden de columna', kind: 'boolean', booleanOnLabel: 'Ordenable', booleanOffLabel: 'No ordenable' },
+  { path: 'cols.locked', label: 'Bloqueo de columna', kind: 'boolean', booleanOnLabel: 'Bloqueada', booleanOffLabel: 'Libre' },
+];
+
+const CHILD_RUNTIME_BLOCK: AdvancedFieldDef[] = [
+  {
+    path: 'filter.scope', label: 'Resolución del hijo', kind: 'select', options: CHILD_FILTER_SCOPE_OPTIONS,
+    includeIf: c => Object.prototype.hasOwnProperty.call(c?.filter ?? {}, 'scope'),
+    hint: 'Única fuente de verdad para decidir si la cascada se resuelve en cliente o servidor.',
+  },
+  {
+    path: 'filter.logic', label: 'Lógica del filtro', kind: 'select',
+    options: [{ label: 'Todas (AND)', value: 'AND' }, { label: 'Cualquiera (OR)', value: 'OR' }],
+    includeIf: c => Object.prototype.hasOwnProperty.call(c?.filter ?? {}, 'logic'),
+  },
+  {
+    path: 'activate.action', label: 'Acción al cumplir', kind: 'select',
+    options: [{ label: 'Desactivar', value: 'inactive' }, { label: 'Activar', value: 'active' }],
+    includeIf: c => Object.prototype.hasOwnProperty.call(c?.activate ?? {}, 'action'),
+  },
+  {
+    path: 'activate.default_state', label: 'Estado inicial', kind: 'select',
+    options: [
+      { label: 'Activo', value: 'active' },
+      { label: 'Inactivo', value: 'inactive' },
+      { label: 'Oculto', value: 'hidden' },
+      { label: 'Solo lectura', value: 'readonly' },
+    ],
+    includeIf: c => Object.prototype.hasOwnProperty.call(c?.activate ?? {}, 'default_state'),
+  },
+  {
+    path: 'requested.action', label: 'Obligatoriedad al cumplir', kind: 'select',
+    options: [{ label: 'Requerido', value: 'required' }, { label: 'No requerido', value: 'not_required' }],
+    includeIf: c => Object.prototype.hasOwnProperty.call(c?.requested ?? {}, 'action'),
+  },
 ];
 
 // ─── Schemas por type ─────────────────────────────────────────────────────────
@@ -185,6 +335,62 @@ const DATE_SCHEMA: AdvancedSection[] = [
   { title: 'Columna en tabla', icon: 'pi pi-table', defs: COLS_BLOCK },
 ];
 
+// [[[II ESC:001-18 DOC:docs/documents/2026-05-16_001_consolidacion_dropdown_types_y_fix_escenarios.md#escenario-18
+const ADDITIONAL_SEARCH_SUPPORTED = (cfg: any): boolean => {
+  const field = String(cfg?.field || '');
+  const excludedPrefixes = [
+    'form_fields_data_', 'parent_form_data_', 'child_form_fields',
+    'no_form_data_', 'object_form_fields_data_',
+  ];
+  return !['dropdown-choice', 'multi-choice', 'select-button'].includes(String(cfg?.type || ''))
+    && !excludedPrefixes.some(prefix => field.startsWith(prefix));
+};
+
+const ADDITIONAL_SEARCH_BLOCK: AdvancedSection = {
+  title: 'Búsqueda adicional', icon: 'pi pi-search', defs: [
+    {
+      path: 'additional_search.active', label: 'Buscar en el servidor', kind: 'boolean',
+      includeIf: ADDITIONAL_SEARCH_SUPPORTED,
+      hint: 'Agrega un buscador independiente sin cambiar la precarga normal del combo.',
+    },
+    {
+      path: 'additional_search.subsidiaries', label: 'Sucursales permitidas (JSON)', kind: 'json',
+      includeIf: ADDITIONAL_SEARCH_SUPPORTED, showIf: c => c?.additional_search?.active === true,
+      hint: 'Formato BOS: {"filter":{}}. Vacío significa todas; use entradas active/default/default_value para limitar.',
+    },
+    {
+      path: 'additional_search.autocomplete.by', label: 'Campo remoto / search', kind: 'text',
+      includeIf: ADDITIONAL_SEARCH_SUPPORTED, showIf: c => c?.additional_search?.active === true,
+      hint: 'Use search para el buscador global o el nombre del atributo remoto.',
+    },
+    {
+      path: 'additional_search.autocomplete.search_mode', label: 'Coincidencia', kind: 'select',
+      options: [
+        { label: 'Parcial', value: 'partial' },
+        { label: 'Exacta', value: 'exact' },
+      ],
+      includeIf: ADDITIONAL_SEARCH_SUPPORTED, showIf: c => c?.additional_search?.active === true,
+    },
+    {
+      path: 'additional_search.autocomplete.min_search_length', label: 'Largo mínimo', kind: 'number', min: 1,
+      includeIf: ADDITIONAL_SEARCH_SUPPORTED, showIf: c => c?.additional_search?.active === true,
+    },
+    {
+      path: 'additional_search.autocomplete.limit', label: 'Máximo de resultados', kind: 'number', min: 1,
+      includeIf: ADDITIONAL_SEARCH_SUPPORTED, showIf: c => c?.additional_search?.active === true,
+    },
+    {
+      path: 'additional_search.autocomplete.placeholder', label: 'Placeholder', kind: 'text',
+      includeIf: ADDITIONAL_SEARCH_SUPPORTED, showIf: c => c?.additional_search?.active === true,
+    },
+    {
+      path: 'additional_search.autocomplete.empty_message', label: 'Mensaje sin resultados', kind: 'text',
+      includeIf: ADDITIONAL_SEARCH_SUPPORTED, showIf: c => c?.additional_search?.active === true,
+    },
+  ],
+};
+// ]]]FI
+
 const FK_LIKE_SCHEMA: AdvancedSection[] = [
   { title: 'General', icon: 'pi pi-cog', defs: COMMON_BASE },
   {
@@ -201,6 +407,8 @@ const FK_LIKE_SCHEMA: AdvancedSection[] = [
     ],
   },
   { title: 'Valor por defecto', icon: 'pi pi-bolt', defs: DEFAULT_BLOCK },
+  { title: 'Resolución dependiente', icon: 'pi pi-sitemap', defs: CHILD_RUNTIME_BLOCK },
+  ADDITIONAL_SEARCH_BLOCK,
   { title: 'Columna en tabla', icon: 'pi pi-table', defs: COLS_BLOCK },
 ];
 
@@ -247,7 +455,7 @@ const BUTTON_SCHEMA: AdvancedSection[] = [
   {
     title: 'General', icon: 'pi pi-cog', defs: [
       ...COMMON_BASE.filter(d => d.path !== 'required' && d.path !== 'readonly'),
-      { path: 'icon', label: 'Icono', kind: 'text', /* placeholder: 'pi pi-plus' */ },
+      { path: 'icon', label: 'Icono', kind: 'select', options: PRIME_ICON_OPTIONS },
       {
         path: 'icon_position', label: 'Posición icono', kind: 'select',
         options: [
@@ -260,14 +468,14 @@ const BUTTON_SCHEMA: AdvancedSection[] = [
       {
         path: 'severity', label: 'Severidad', kind: 'select',
         options: [
-          { label: 'Primary', value: 'primary' },
-          { label: 'Secondary', value: 'secondary' },
-          { label: 'Success', value: 'success' },
-          { label: 'Info', value: 'info' },
-          { label: 'Warning', value: 'warning' },
-          { label: 'Danger', value: 'danger' },
-          { label: 'Help', value: 'help' },
-          { label: 'Contrast', value: 'contrast' },
+          { label: 'Principal', value: 'primary' },
+          { label: 'Secundario', value: 'secondary' },
+          { label: 'Éxito', value: 'success' },
+          { label: 'Información', value: 'info' },
+          { label: 'Advertencia', value: 'warning' },
+          { label: 'Peligro', value: 'danger' },
+          { label: 'Ayuda', value: 'help' },
+          { label: 'Contraste', value: 'contrast' },
         ],
       },
       { path: 'rounded', label: 'Redondeado', kind: 'boolean' },
@@ -295,10 +503,10 @@ const FILES_SCHEMA: AdvancedSection[] = [
   },
   {
     title: 'Subida servidor', icon: 'pi pi-cloud-upload', defs: [
-      { path: 'server_upload.active', label: 'Activo', kind: 'boolean' },
-      { path: 'server_upload.required', label: 'Requerido', kind: 'boolean' },
-      { path: 'server_upload.max_files', label: 'Máx. archivos', kind: 'number', min: 1 },
-      { path: 'server_upload.max_size', label: 'Tamaño máx (bytes)', kind: 'number', min: 0 },
+      { path: 'server_upload.active', label: 'Activo', kind: 'boolean', includeIf: c => c?.server_upload != null },
+      { path: 'server_upload.required', label: 'Requerido', kind: 'boolean', includeIf: c => c?.server_upload != null },
+      { path: 'server_upload.max_files', label: 'Máx. archivos', kind: 'number', min: 1, includeIf: c => c?.server_upload != null },
+      { path: 'server_upload.max_size', label: 'Tamaño máx (bytes)', kind: 'number', min: 0, includeIf: c => c?.server_upload != null },
     ],
   },
   { title: 'Columna en tabla', icon: 'pi pi-table', defs: COLS_BLOCK },
@@ -309,23 +517,65 @@ const CODE_SCHEMA: AdvancedSection[] = [
   {
     title: 'Generación', icon: 'pi pi-cog', defs: [
       { path: 'initial', label: 'Inicial', kind: 'number', min: 0 },
-      { path: 'default.active', label: 'Aplicar default', kind: 'boolean' },
+      { path: 'default.active', label: 'Numeración automática', kind: 'boolean', booleanOnLabel: 'Numeración activa', booleanOffLabel: 'Numeración inactiva' },
+      { path: 'default.edit', label: 'Edición del código', kind: 'boolean', booleanOnLabel: 'Código editable', booleanOffLabel: 'Código bloqueado' },
       {
-        path: 'default.scope', label: 'Scope', kind: 'select',
-        options: [
-          { label: 'Todo', value: 'all' },
-          { label: 'Crear', value: 'create' },
-        ], showIf: c => c?.default?.active
+        path: 'default.scope', label: 'Alcance de la numeración', kind: 'select',
+        options: CODE_SCOPE_OPTIONS, showIf: c => c?.default?.active,
+        hint: 'Segmentos que separan los consecutivos del código en el servidor.',
       },
       { path: 'default.fixed.active', label: 'Prefijo fijo', kind: 'boolean', showIf: c => c?.default?.active },
+      { path: 'default.fixed.order', label: 'Orden del valor fijo', kind: 'number', min: 1, showIf: c => c?.default?.fixed?.active },
       { path: 'default.fixed.value', label: 'Valor fijo', kind: 'text', showIf: c => c?.default?.fixed?.active },
+      {
+        path: 'default.fixed.position', label: 'Posición del valor fijo', kind: 'select',
+        options: [{ label: 'Prefijo', value: 'prefix' }, { label: 'Sufijo', value: 'suffix' }],
+        showIf: c => c?.default?.fixed?.active,
+      },
+      { path: 'default.fixed.separator', label: 'Separador del valor fijo', kind: 'text', showIf: c => c?.default?.fixed?.active },
       { path: 'default.date.active', label: 'Incluir fecha', kind: 'boolean', showIf: c => c?.default?.active },
       {
-        path: 'default.date.format', label: 'Formato fecha', kind: 'text', /*placeholder: 'DDMMYY',*/ showIf: c => c?.default?.date?.active
+        path: 'default.date.date_type', label: 'Origen de fecha', kind: 'select',
+        options: [
+          { label: 'Fecha actual', value: 'current' },
+          { label: 'Fecha de caducidad', value: 'expiration_date' },
+          { label: 'Fecha de lote', value: 'batch_date' },
+          { label: 'Capturada por usuario', value: 'user_input' },
+          { label: 'Fecha del documento', value: 'document_date' },
+        ],
+        showIf: c => c?.default?.date?.active,
       },
+      {
+        path: 'default.date.format', label: 'Formato de fecha', kind: 'select',
+        options: [
+          'YY', 'YYYY', 'MM', 'DD', 'HH', 'MI', 'SS',
+          'YYMMDD', 'YYYYMMDD', 'DDMMYY', 'DDMMYYYY', 'MMDD', 'DDMM',
+          'HHMI', 'HHMISS', 'YY-MM-DD', 'YYYY-MM-DD', 'DD-MM-YY',
+          'DD-MM-YYYY', 'MM-DD', 'DD-MM', 'HH:MI', 'HH:MI:SS',
+          'YYMMDDHHMMSSmicro', 'YYMMDDHHMMSS', 'YYMMDDHHMM', 'YYMMDDHH',
+        ].map(value => ({ label: value, value })),
+        showIf: c => c?.default?.date?.active,
+      },
+      {
+        path: 'default.date.position', label: 'Posición de fecha', kind: 'select',
+        options: [{ label: 'Prefijo', value: 'prefix' }, { label: 'Sufijo', value: 'suffix' }],
+        showIf: c => c?.default?.date?.active,
+      },
+      { path: 'default.date.separator', label: 'Separador de fecha', kind: 'text', showIf: c => c?.default?.date?.active },
+      { path: 'default.date.time_zone', label: 'Zona horaria IANA', kind: 'text', showIf: c => c?.default?.date?.active, hint: 'Ejemplo: America/Mexico_City o UTC.' },
       { path: 'default.fill.active', label: 'Relleno', kind: 'boolean', showIf: c => c?.default?.active },
       { path: 'default.fill.length', label: 'Largo total', kind: 'number', min: 1, showIf: c => c?.default?.fill?.active },
-      { path: 'default.fill.char', label: 'Carácter de relleno', kind: 'text', showIf: c => c?.default?.fill?.active },
+      {
+        path: 'default.fill.char', label: 'Carácter de relleno', kind: 'text',
+        showIf: c => c?.default?.fill?.active,
+        hint: 'Acepta un carácter ASCII o random-numeric, random-alphanumeric y random-alpha.',
+      },
+      {
+        path: 'default.fill.position', label: 'Posición del relleno', kind: 'select',
+        options: [{ label: 'Prefijo', value: 'prefix' }, { label: 'Sufijo', value: 'suffix' }],
+        showIf: c => c?.default?.fill?.active,
+      },
+      { path: 'default.fill.separator', label: 'Separador del relleno', kind: 'text', showIf: c => c?.default?.fill?.active },
     ]
   },
   { title: 'Escáner', icon: 'pi pi-qrcode', defs: SCANNER_BLOCK },
@@ -346,6 +596,100 @@ const SELECT_BUTTON_SCHEMA: AdvancedSection[] = [
     ]
   },
   { title: 'Valor por defecto', icon: 'pi pi-bolt', defs: DEFAULT_BLOCK },
+  { title: 'Columna en tabla', icon: 'pi pi-table', defs: COLS_BLOCK },
+];
+
+const DOCUMENT_SCHEMA: AdvancedSection[] = [
+  { title: 'General', icon: 'pi pi-cog', defs: COMMON_BASE },
+  {
+    title: 'Captura del documento', icon: 'pi pi-camera', defs: [
+      {
+        path: 'content_type', label: 'Tratamiento del archivo', kind: 'select',
+        options: [
+          { label: 'Base64', value: 'base64' },
+          { label: 'Ruta', value: 'path' },
+          { label: 'Formulario multipart', value: 'form-data' },
+        ],
+      },
+      {
+        path: 'source', label: 'Origen permitido', kind: 'select',
+        options: [
+          { label: 'Cámara', value: 'camera' },
+          { label: 'Galería', value: 'gallery' },
+          { label: 'Cámara y galería', value: 'both' },
+        ],
+      },
+      { path: 'quality', label: 'Calidad de imagen (%)', kind: 'number', min: 1, max: 100 },
+      { path: 'max_width', label: 'Ancho máximo (px)', kind: 'number', min: 1 },
+      { path: 'max_height', label: 'Alto máximo (px)', kind: 'number', min: 1 },
+      { path: 'name_file_user', label: 'Nombre enviado por usuario', kind: 'text' },
+    ],
+  },
+  ...FILES_SCHEMA.slice(1),
+];
+
+const EMAILS_CHIPS_SCHEMA: AdvancedSection[] = [
+  { title: 'General', icon: 'pi pi-cog', defs: COMMON_BASE },
+  { title: 'Valor por defecto', icon: 'pi pi-bolt', defs: DEFAULT_JSON_BLOCK },
+  {
+    title: 'Validación de correos', icon: 'pi pi-envelope', defs: [
+      { path: 'validation.max_emails', label: 'Máximo de correos', kind: 'number', min: 1, max: 100 },
+      { path: 'validation.min_emails', label: 'Mínimo de correos', kind: 'number', min: 0, max: 100 },
+      { path: 'validation.allow_duplicates', label: 'Correos duplicados', kind: 'boolean', booleanOnLabel: 'Permitir duplicados', booleanOffLabel: 'Sin duplicados' },
+      { path: 'validation.domain_whitelist', label: 'Dominios permitidos (JSON)', kind: 'json' },
+      { path: 'validation.domain_blacklist', label: 'Dominios bloqueados (JSON)', kind: 'json' },
+      { path: 'validation.max_length_per_email', label: 'Longitud máxima por correo', kind: 'number', min: 1, max: 254 },
+    ],
+  },
+  {
+    title: 'Sugerencias', icon: 'pi pi-search', defs: [
+      { path: 'suggestions.enabled', label: 'Autocompletado', kind: 'boolean', booleanOnLabel: 'Sugerencias habilitadas', booleanOffLabel: 'Sin sugerencias' },
+      {
+        path: 'suggestions.data_source', label: 'Origen de sugerencias', kind: 'select',
+        options: [
+          { label: 'Ninguno', value: 'none' },
+          { label: 'API', value: 'api' },
+          { label: 'Lista local', value: 'local' },
+          { label: 'Usuarios', value: 'users' },
+        ],
+        showIf: c => c?.suggestions?.enabled,
+      },
+      { path: 'suggestions.min_chars', label: 'Caracteres mínimos', kind: 'number', min: 0, showIf: c => c?.suggestions?.enabled },
+      { path: 'suggestions.max_suggestions', label: 'Máximo de sugerencias', kind: 'number', min: 1, showIf: c => c?.suggestions?.enabled },
+    ],
+  },
+  {
+    title: 'Envío', icon: 'pi pi-send', defs: [
+      { path: 'email_sending.enabled', label: 'Uso para envíos', kind: 'boolean', booleanOnLabel: 'Envío habilitado', booleanOffLabel: 'Solo captura' },
+      {
+        path: 'email_sending.send_mode', label: 'Modo de envío', kind: 'select',
+        options: [
+          { label: 'Individual', value: 'individual' },
+          { label: 'Múltiple', value: 'multiple' },
+          { label: 'Copia (CC)', value: 'cc' },
+          { label: 'Copia oculta (BCC)', value: 'bcc' },
+        ],
+        showIf: c => c?.email_sending?.enabled,
+      },
+      {
+        path: 'email_sending.priority', label: 'Prioridad', kind: 'select',
+        options: [
+          { label: 'Baja', value: 'low' },
+          { label: 'Normal', value: 'normal' },
+          { label: 'Alta', value: 'high' },
+        ],
+        showIf: c => c?.email_sending?.enabled,
+      },
+    ],
+  },
+  { title: 'Descripción', icon: 'pi pi-info-circle', defs: DESCRIPTION_BLOCK },
+  { title: 'Columna en tabla', icon: 'pi pi-table', defs: COLS_BLOCK },
+];
+
+const JSON_SCHEMA: AdvancedSection[] = [
+  { title: 'General', icon: 'pi pi-cog', defs: COMMON_BASE },
+  { title: 'Valor por defecto', icon: 'pi pi-bolt', defs: DEFAULT_JSON_BLOCK },
+  { title: 'Descripción', icon: 'pi pi-info-circle', defs: DESCRIPTION_BLOCK },
   { title: 'Columna en tabla', icon: 'pi pi-table', defs: COLS_BLOCK },
 ];
 
@@ -375,12 +719,26 @@ export const TYPE_SCHEMAS: Record<string, AdvancedSection[]> = {
   'auto-complete': AUTOCOMPLETE_SCHEMA,
   'button': BUTTON_SCHEMA,
   'files': FILES_SCHEMA,
+  'document': DOCUMENT_SCHEMA,
   'image-uploader': FILES_SCHEMA,
   'code': CODE_SCHEMA,
   'select-button': SELECT_BUTTON_SCHEMA,
+  'json': JSON_SCHEMA,
+  'emails-chips': EMAILS_CHIPS_SCHEMA,
+  'table': FALLBACK_SCHEMA,
+  'signature': FALLBACK_SCHEMA,
+  'signature-pad': FALLBACK_SCHEMA,
+  'login': FALLBACK_SCHEMA,
+  'selfie': FALLBACK_SCHEMA,
 };
 
-export function schemaForType(type: string | undefined | null): AdvancedSection[] {
+export function schemaForType(type: string | undefined | null, config?: any): AdvancedSection[] {
+  if (
+    config?.field === 'code'
+    && Object.prototype.hasOwnProperty.call(config?.default ?? {}, 'scope')
+  ) {
+    return CODE_SCHEMA;
+  }
   if (!type) return FALLBACK_SCHEMA;
   return TYPE_SCHEMAS[type] ?? FALLBACK_SCHEMA;
 }

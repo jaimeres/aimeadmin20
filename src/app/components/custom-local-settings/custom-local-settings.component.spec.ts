@@ -1,8 +1,16 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { FormControl } from '@angular/forms';
 import { of } from 'rxjs';
 
 import { CustomLocalSettingsComponent } from './custom-local-settings.component';
-import { schemaForType } from './type-schemas';
+import {
+  CHILD_FILTER_SCOPE_OPTIONS,
+  CODE_SCOPE_OPTIONS,
+  GRID_SPAN_MD_OPTIONS,
+  GRID_SPAN_OPTIONS,
+  SCOPE_EDITION_OPTIONS,
+  schemaForType,
+} from './type-schemas';
 import { CRUDService } from '../../utils/services/crud.service';
 import { GeneralService } from '../../utils/services/general.service';
 import { SharedDynamicDataService } from '../../utils/services/shared-dynamic-data.service';
@@ -88,6 +96,109 @@ describe('CustomLocalSettingsComponent', () => {
       expect(editDef?.showIf).toBeUndefined();
     }
   });
+
+  // [[[II ESC:031-08 DOC:docs/documents/2026-07-18-031-optimizacion-navegacion-activos.md#escenario-08
+  describe('contratos cerrados del editor orientado a custom-draw-form', () => {
+    it('solo ofrece clases existentes de la cuadricula de 12 columnas', () => {
+      expect(GRID_SPAN_OPTIONS.map(option => option.value)).toEqual(
+        Array.from({ length: 12 }, (_, index) => `col-span-${index + 1}`)
+      );
+      expect(GRID_SPAN_MD_OPTIONS.map(option => option.value)).toEqual(
+        Array.from({ length: 12 }, (_, index) => `md:col-span-${index + 1}`)
+      );
+    });
+
+    it('mantiene separados los tres contratos de scope', () => {
+      expect(CHILD_FILTER_SCOPE_OPTIONS.map(option => option.value)).toEqual(['client', 'server', 'auto']);
+      expect(SCOPE_EDITION_OPTIONS.map(option => option.value)).toEqual(['server', 'local']);
+      expect(CODE_SCOPE_OPTIONS.map(option => option.value)).toEqual([
+        'global', 'prefix', 'suffix', 'fiscal_year',
+        'global_prefix', 'global_suffix', 'global_fiscal_year',
+        'global_prefix_suffix', 'global_prefix_fiscal_year', 'global_suffix_fiscal_year',
+        'prefix_suffix', 'prefix_fiscal_year', 'suffix_fiscal_year',
+        'prefix_suffix_fiscal_year', 'all',
+      ]);
+    });
+
+    it('expone las clases como selectores y respeta móvil/escritorio', () => {
+      const defs = schemaForType('input-text').flatMap(section => section.defs);
+      const mobile = defs.find(def => def.path === 'class');
+      const desktop = defs.find(def => def.path === 'class_md');
+
+      expect(mobile?.kind).toBe('select');
+      expect(mobile?.label).toBe('Ancho móvil');
+      expect(desktop?.kind).toBe('select');
+      expect(desktop?.label).toBe('Ancho escritorio');
+    });
+
+    it('impide aplicar un valor cerrado ajeno al schema', () => {
+      component.ngOnChanges({
+        field: {
+          currentValue: {
+            fields: {
+              code: {
+                type: 'input-text', field: 'code', label: 'Código',
+                class: 'col-span-6', class_md: 'md:col-span-3',
+                default: { active: true, edit: false, scope: 'all' },
+                cols: { label: 'Código' },
+              },
+            },
+            cols: [{ field: 'code', header: 'Código' }],
+            draw: { general: { grid: { 1: { field: 'code' } } } },
+          },
+          previousValue: null,
+          firstChange: true,
+          isFirstChange: () => true,
+        },
+      } as any);
+      component.openAdvanced('code');
+      const scopeControl = component.advancedForm.get('adv_default__scope') as FormControl<any> | null;
+
+      scopeControl?.setValue('create');
+
+      expect(scopeControl?.hasError('closedOption')).toBeTrue();
+      expect(component.advancedForm.invalid).toBeTrue();
+    });
+
+    it('reconstruye el mismo contrato desde los formularios reactivos de cada fila', () => {
+      component.ngOnChanges({
+        field: {
+          currentValue: {
+            fields: {
+              name: {
+                type: 'input-text', field: 'name', label: 'Nombre',
+                cols: { label: 'Nombre', hide: false, hide_mobile: true, sortable: true, locked: false },
+              },
+            },
+            cols: [{ field: 'name', header: 'Nombre' }],
+            draw: {
+              general: { grid: { 1: { field: 'name', class: 'col-span-6', class_md: 'md:col-span-3' } } },
+            },
+          },
+          previousValue: null,
+          firstChange: true,
+          isFirstChange: () => true,
+        },
+      } as any);
+      const row = component.unifiedRows()[0];
+
+      row.form.patchValue({
+        label: 'Nombre completo',
+        sortable: false,
+        hideMobile: false,
+        gridSpan: 12,
+        gridSpanMd: 6,
+      });
+      const saved = component['_buildModifiedField']();
+
+      expect(saved.fields.name.cols.label).toBe('Nombre completo');
+      expect(saved.fields.name.cols.sortable).toBeFalse();
+      expect(saved.fields.name.cols.hide_mobile).toBeFalse();
+      expect(saved.draw.general.grid['1'].class).toBe('col-span-12');
+      expect(saved.draw.general.grid['1'].class_md).toBe('md:col-span-6');
+    });
+  });
+  // ]]]FI
 
   // [[[II ESC:031-06 DOC:docs/documents/2026-07-18-031-optimizacion-navegacion-activos.md#escenario-06
   describe('secciones habilitadas por plataforma', () => {

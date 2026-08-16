@@ -753,6 +753,111 @@ export class CRUD extends Vars implements OnChanges  /*implements OnInit*/ {
     return this._canonicalFormFieldName(fieldName).startsWith(this.noFormDataPrefix);
   }
 
+
+  // [[[II ESC:057-49 DOC:docs/documents/2026-08-08-057-propuesta-compras-v3.md#escenario-49
+  /**
+   * ALTA MANUAL: el padre y sus N partidas en UNA petición.
+   *
+   * El servidor ya lo aceptaba —`Meta.nested_prefixes` + una LISTA en
+   * `<field_key>_data`—, pero el cliente borraba las tablas `no_form_data_*`
+   * antes del POST y nunca componía esa lista. Resultado: la interfaz ofrecía
+   * «Agregar partida» durante el alta y luego exigía guardar el documento
+   * primero. El alta atómica que V3 prometía no existía.
+   *
+   * Qué NO entra aquí, y por qué:
+   *
+   * - las filas CON origen: viajan por `data.meta.sources`, que es el camino de
+   *   la conversión. Mezclar los dos en la misma petición lo rechaza el propio
+   *   cliente, porque el servidor no puede materializar las dos cosas a la vez;
+   * - las filas de vista previa del autocomplete, que nunca se persisten;
+   * - la EDICIÓN: el servidor rechaza la lista en `PATCH` a propósito —no hay
+   *   forma de decir «esta fila cambia, esta se va»— y procesarla duplicaría el
+   *   detalle. Por eso sólo se compone al crear.
+   *
+   * El destino sale de `fields_prefixes` del formulario emparejado con el
+   * `data_type` de la tabla: no se nombra ningún recurso en este archivo.
+   */
+
+  // [[[II ESC:057-49 DOC:docs/documents/2026-08-08-057-propuesta-compras-v3.md#escenario-49
+  /**
+   * Prefijo anidado al que pertenece una tabla derivada, o `null`.
+   *
+   * Empareja `fields_prefixes` del formulario con el `data_type` de la tabla, y
+   * es lo único que hace falta para saber si sus filas pueden viajar con el
+   * padre. No se nombra ningún recurso aquí: todo sale de la configuración.
+   */
+  protected _nestedPrefixForTable(pos: any, tableField: string): string | null {
+    const draw = this._drawFormForDevice(pos);
+    if (!draw || !tableField) return null;
+
+    const declarados = draw.fields_prefixes;
+    const entradas = Array.isArray(declarados) ? declarados : [declarados || {}];
+    const destinos: { prefix: string; type: string }[] = [];
+    entradas.forEach((entrada: any) => {
+      if (!entrada || typeof entrada !== 'object') return;
+      Object.keys(entrada).forEach((prefix) => {
+        const cfg = entrada[prefix] || {};
+        if (cfg?.kind !== 'child') return;
+        const type = String(cfg?.data_type || '');
+        if (type) destinos.push({ prefix, type });
+      });
+    });
+    if (!destinos.length) return null;
+
+    for (const layout of this._collectDrawFormLayouts(draw)) {
+      for (const key of Object.keys(layout)) {
+        const node = layout[key];
+        if (node?.type !== 'table' || node?.field !== tableField) continue;
+        const destino = destinos.find(
+          (d) => d.type === String(node?.data_type?.type || ''),
+        );
+        return destino ? destino.prefix : null;
+      }
+    }
+    return null;
+  }
+  // ]]]FI
+
+  private _buildNestedChildrenPayload(pos: any, formData: any, doCreate: boolean): void {
+    if (!doCreate || !formData || typeof formData !== 'object') return;
+
+    const draw = this._drawFormForDevice(pos);
+    if (!draw) return;
+
+    for (const layout of this._collectDrawFormLayouts(draw)) {
+      for (const key of Object.keys(layout)) {
+        const node = layout[key];
+        if (node?.type !== 'table' || !this._isNoFormDataField(node?.field)) continue;
+
+        const prefijo = this._nestedPrefixForTable(pos, node.field);
+        if (!prefijo) continue;
+
+        const control = this.currentForm(pos)?.get(node.field);
+        if (!(control instanceof FormArray) || !control.length) continue;
+
+        const filas: any[] = [];
+        control.controls.forEach((row: any) => {
+          if (row?.[this.derivedTableDraftFlag] === true) return;
+          if (Object.keys(row?.[this.tableRowSourceFlag] || {}).length) return;
+
+          const crudo = typeof row?.getRawValue === 'function' ? row.getRawValue() : {};
+          const limpia: any = {};
+          Object.keys(crudo).forEach((campo) => {
+            const valor = crudo[campo];
+            if (valor === undefined || valor === null || valor === '') return;
+            limpia[campo] = valor;
+          });
+          if (Object.keys(limpia).length) filas.push(limpia);
+        });
+
+        // `supplier_request_detail_data_` -> `supplier_request_detail_data`, que
+        // es exactamente la llave que el servidor busca.
+        if (filas.length) formData[prefijo.replace(/_$/, '')] = filas;
+      }
+    }
+  }
+  // ]]]FI
+
   private _stripNoFormDataPayload(formData: any): void {
     if (!formData || typeof formData !== 'object') return;
     Object.keys(formData).forEach((key) => {
@@ -3082,6 +3187,7 @@ export class CRUD extends Vars implements OnChanges  /*implements OnInit*/ {
         const headerText = String(headerLabel);
         // ]]]FI
 
+
         if (fieldObj.type == 'Relationship' || fieldObj.type == 'Serializer') {
           columnObj = {
             field: field_prefix + field + '__name',
@@ -4375,6 +4481,24 @@ export class CRUD extends Vars implements OnChanges  /*implements OnInit*/ {
     // sólo tiene que quedarse en la tabla, así que se publica el desenlace en
     // positivo para que la tabla la cierre.
     if (this._isLocalConversionRow(ctx)) {
+      this._publishTableRowSaveOutcome(
+        { field: ctx.field, mode: 'row', pos: this.pos(), row_index: ctx.row_index },
+        true,
+      );
+      return;
+    }
+    // ]]]FI
+
+    // [[[II ESC:057-49 DOC:docs/documents/2026-08-08-057-propuesta-compras-v3.md#escenario-49
+    // Fila MANUAL mientras se CREA el documento: tampoco se persiste por su
+    // cuenta. Viaja con el padre en `<field_key>_data` y el servidor la
+    // materializa en la misma petición.
+    //
+    // Antes caía al guardado transitorio, que exige un padre ya guardado, y
+    // respondía «Guarde primero el documento para poder agregarle partidas».
+    // La interfaz ofrecía agregar la partida y después se negaba a aceptarla:
+    // el alta atómica que V3 prometía no existía.
+    if (this.isCreate() && this._nestedPrefixForTable(this.pos(), ctx.field)) {
       this._publishTableRowSaveOutcome(
         { field: ctx.field, mode: 'row', pos: this.pos(), row_index: ctx.row_index },
         true,
@@ -5804,6 +5928,12 @@ export class CRUD extends Vars implements OnChanges  /*implements OnInit*/ {
     // control string (`object_<field>`), pero el backend recibe un dict dentro
     // de `form_data`. Aquí se recompone ese dict antes de enviar.
     this._rebuildFormDataDicts(safePos, formData);
+
+    // [[[II ESC:057-49 DOC:docs/documents/2026-08-08-057-propuesta-compras-v3.md#escenario-49
+    // ALTA MANUAL: padre + N hijos en UNA petición. Va ANTES del borrado, que es
+    // justamente lo que se comía las partidas capturadas a mano.
+    this._buildNestedChildrenPayload(safePos, formData, doCreate);
+    // ]]]FI
 
     // [[[II ESC:001-17 DOC:docs/documents/2026-05-16_001_consolidacion_dropdown_types_y_fix_escenarios.md#escenario-17
     this._stripNoFormDataPayload(formData);

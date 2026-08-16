@@ -1,16 +1,22 @@
-// [[[II ESC:031-04 DOC:docs/documents/2026-07-18-031-optimizacion-navegacion-activos.md#escenario-04
+// [[[II ESC:031-04 DOC:docs/documents/2026-07-18-031-optimizacion-navegacion-activos.md#escenario-04 ESC:007-09 DOC:docs/documents/2026-06-01_007_custom-draw-form-listbox.md#escenario-09
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { FormControl } from '@angular/forms';
 import { provideNoopAnimations } from '@angular/platform-browser/animations';
 
 import { DrawListboxFieldComponent } from './draw-listbox-field.component';
+import { DynamicDropdownDataService } from '../dynamic-dropdown-data.service';
 
 describe('DrawListboxFieldComponent', () => {
+  let dynamicDropdownDataS: jasmine.SpyObj<DynamicDropdownDataService>;
 
   beforeEach(async () => {
+    dynamicDropdownDataS = jasmine.createSpyObj<DynamicDropdownDataService>('DynamicDropdownDataService', ['logAssetSearch']);
     await TestBed.configureTestingModule({
       imports: [DrawListboxFieldComponent],
-      providers: [provideNoopAnimations()],
+      providers: [
+        provideNoopAnimations(),
+        { provide: DynamicDropdownDataService, useValue: dynamicDropdownDataS },
+      ],
     }).compileComponents();
   });
 
@@ -40,6 +46,43 @@ describe('DrawListboxFieldComponent', () => {
     fixture.nativeElement.querySelector('button[icon="pi pi-times"]').click();
 
     expect(emitted).toEqual(['new:grupos', 'close:grupos']);
+  });
+
+  // [[[II ESC:001-18 DOC:docs/documents/2026-05-16_001_consolidacion_dropdown_types_y_fix_escenarios.md#escenario-18
+  it('emite searchAction sólo cuando la búsqueda adicional está habilitada', () => {
+    const fixture = create({
+      field: 'asset',
+      option_label: 'name',
+      additional_search: { active: true },
+    });
+    const emitted: string[] = [];
+    fixture.componentInstance.searchAction.subscribe((field: string) => emitted.push(field));
+
+    fixture.nativeElement.querySelector('button[icon="pi pi-search"]').click();
+
+    expect(emitted).toEqual(['asset']);
+  });
+  // ]]]FI
+
+  it('registra cache, búsqueda y todas las opciones únicamente para asset', () => {
+    const assetConfig = { field: 'asset', option_label: 'name', option_value: 'id' };
+    const fixture = create(assetConfig);
+
+    fixture.componentInstance.filterEvent.set({ filter: 'BP0696' });
+    fixture.detectChanges();
+
+    expect(dynamicDropdownDataS.logAssetSearch).toHaveBeenCalledWith(
+      assetConfig,
+      { filter: 'BP0696' },
+      [{ id: 1, name: 'Opción uno' }],
+    );
+
+    dynamicDropdownDataS.logAssetSearch.calls.reset();
+    const otherFixture = create({ field: 'responsible', option_label: 'name', option_value: 'id' });
+    otherFixture.componentInstance.filterEvent.set({ filter: 'Ada' });
+    otherFixture.detectChanges();
+
+    expect(dynamicDropdownDataS.logAssetSearch).not.toHaveBeenCalled();
   });
 });
 // ]]]FI

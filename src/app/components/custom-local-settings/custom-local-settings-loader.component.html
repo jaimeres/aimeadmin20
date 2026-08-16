@@ -1,0 +1,14 @@
+<!-- [[[II ESC:031-07 DOC:docs/documents/2026-07-18-031-optimizacion-navegacion-activos.md#escenario-07 -->
+@defer (when visible) {
+  @if (visible) {
+    <app-custom-local-settings-editor
+      [visible]="visible"
+      [field]="field"
+      [formGroup]="formGroup"
+      [sectionConfiguration]="sectionConfiguration"
+      (saveAction)="saveAction.emit()"
+      (visibleAction)="visibleAction.emit($event)"
+    />
+  }
+}
+<!-- ]]]FI -->

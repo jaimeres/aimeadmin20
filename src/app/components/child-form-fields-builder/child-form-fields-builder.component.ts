@@ -734,10 +734,14 @@ export class ChildFormFieldsBuilderComponent implements OnChanges, OnDestroy {
   }
 
   private currentAdvancedSections(): AdvancedSection[] {
-    return schemaForType(this.selectedRow()?.type)
+    const snapshot = this.advancedSnapshot();
+    return schemaForType(this.selectedRow()?.type, snapshot)
       .map((section) => ({
         ...section,
-        defs: section.defs.filter((def) => !this.inlineEditorPaths.has(def.path)),
+        defs: section.defs.filter((def) =>
+          !this.inlineEditorPaths.has(def.path)
+          && (!def.includeIf || def.includeIf(snapshot ?? {}))
+        ),
       }))
       .filter((section) => section.defs.length > 0);
   }
@@ -806,11 +810,11 @@ export class ChildFormFieldsBuilderComponent implements OnChanges, OnDestroy {
   }
 
   private advancedBooleanOnLabel(def: AdvancedFieldDef): string {
-    return this.advancedBooleanLabels[def.path]?.on ?? def.label;
+    return def.booleanOnLabel ?? this.advancedBooleanLabels[def.path]?.on ?? def.label;
   }
 
   private advancedBooleanOffLabel(def: AdvancedFieldDef): string {
-    return this.advancedBooleanLabels[def.path]?.off ?? 'Desactivado';
+    return def.booleanOffLabel ?? this.advancedBooleanLabels[def.path]?.off ?? 'Desactivado';
   }
 
   private isAdvancedDisabled(def: { showIf?: (cfg: any) => boolean }, snapshot: any): boolean {

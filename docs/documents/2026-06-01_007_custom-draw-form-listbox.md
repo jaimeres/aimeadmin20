@@ -61,6 +61,16 @@ El nuevo control soporta dos modos:
 - Decisión: `_refreshDependentChildren()` omite los roots árbol (`tree-select` o `listbox` con `tree`) cuando tienen `tree.lazy` y `tree.levels` no vacío — el mismo criterio que usa `_loadTreeNodeChildren()`. Los tree-select clásicos (sin niveles lazy) y todas las cascadas no-árbol conservan su comportamiento; la carga por expansión y el ícono de recarga no cambian.
 - Verificación sugerida: seleccionar varios nodos de un `tree-select` con niveles y confirmar en Network que no hay requests por selección; expandir un nodo nuevo sí consulta una única vez.
 
+<a id="escenario-09"></a>
+## Escenario 09: Diagnóstico del filtro local de `asset`
+
+- Fecha: 2026-08-13.
+- Objetivo: diagnosticar por qué el buscador local puede mostrar “Sin resultados” aunque el catálogo de activos sí contenga registros, sin cambiar carga, caché, paginación, concurrencia, reintentos ni CORS.
+- Alcance: exclusivamente el campo cuyo `field` efectivo es `asset`; los demás listbox no emiten esta instrumentación.
+- Decisión: al filtrar se escribe en consola el prefijo `[AssetComboDebug][search]` con el texto buscado, `filterBy`, `optionValue`, origen/clave/versiones de caché, versión de petición, conteo, valores y copia completa de las opciones recibidas por PrimeNG.
+- Fuentes distinguidas: opciones locales, `sharedS.data`, memoria scoped de dropdown, caché persistente y respuesta del servidor.
+- Comportamiento preservado: PrimeNG sigue ejecutando exactamente el mismo filtro local y el arreglo de opciones no se transforma ni limita.
+
 <a id="escenario-06"></a>
 ## Escenario 06: Normalizar valor multiple antes de renderizar
 
@@ -94,6 +104,10 @@ El nuevo control soporta dos modos:
 - `src/app/components/custom-draw-form/custom-draw-form.component.ts`
 - `src/app/components/custom-draw-form/custom-draw-form.component.html`
 - `src/app/components/custom-draw-form/custom-draw-form.component.scss`
+- `src/app/components/custom-draw-form/dynamic-dropdown-data.service.ts`
+- `src/app/components/custom-draw-form/dynamic-dropdown-data.service.spec.ts`
+- `src/app/components/custom-draw-form/fields/draw-listbox-field.component.ts`
+- `src/app/components/custom-draw-form/fields/draw-listbox-field.component.spec.ts`
 - `src/app/utils/dropdown-types.const.ts`
 - `src/app/utils/crud.class.ts`
 - `src/app/utils/services/general.service.ts`

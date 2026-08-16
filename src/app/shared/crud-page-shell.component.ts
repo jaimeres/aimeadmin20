@@ -77,16 +77,18 @@ export interface ShellSaveConfig {
       />
     </div>
 
-    <!-- [[[II ESC:031-06 DOC:docs/documents/2026-07-18-031-optimizacion-navegacion-activos.md#escenario-06 -->
-    <app-custom-local-settings
-      *ngIf="crud.showLocalSettingsComponent()"
-      [sectionConfiguration]="crud.localSettingsConfiguration()"
-      [visible]="crud.localSettingsDialogVisible"
-      [field]="crud.fieldConfig()"
-      [formGroup]="crud.configForm"
-      (saveAction)="crud.saveConfig()"
-      (visibleAction)="crud.onLocalSettingsDialogVisible($event)"
-    />
+    <!-- [[[II ESC:031-06 DOC:docs/documents/2026-07-18-031-optimizacion-navegacion-activos.md#escenario-06 ESC:031-07 DOC:docs/documents/2026-07-18-031-optimizacion-navegacion-activos.md#escenario-07 -->
+    @defer (when crud.localSettingsDialogVisible) {
+      <app-custom-local-settings
+        *ngIf="crud.showLocalSettingsComponent() && crud.localSettingsDialogVisible"
+        [sectionConfiguration]="crud.localSettingsConfiguration()"
+        [visible]="crud.localSettingsDialogVisible"
+        [field]="crud.fieldConfig()"
+        [formGroup]="crud.configForm"
+        (saveAction)="crud.saveConfig()"
+        (visibleAction)="crud.onLocalSettingsDialogVisible($event)"
+      />
+    }
     <!-- ]]]FI -->
 
     <app-custom-import

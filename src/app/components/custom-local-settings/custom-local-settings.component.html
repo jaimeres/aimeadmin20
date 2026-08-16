@@ -1,10 +1,9 @@
-<!-- Diálogo principal de configuración del módulo -->
-<p-dialog [(visible)]="visible" styleClass="width-900px-custom min-height-550px-custom"
+<!-- [[[II ESC:031-08 DOC:docs/documents/2026-07-18-031-optimizacion-navegacion-activos.md#escenario-08 -->
+<p-dialog [(visible)]="visible" styleClass="width-1000px-custom min-height-550px-custom"
   header="Configuración del módulo" (onHide)="onHide($event)" [maximizable]="true" [resizable]="true">
 
   <p-tabs [scrollable]="true" [value]="activeMainTab()" (valueChange)="activeMainTab.set($any($event))">
     <p-tablist>
-      <!-- [[[II ESC:031-06 DOC:docs/documents/2026-07-18-031-optimizacion-navegacion-activos.md#escenario-06 -->
       <p-tab *ngIf="localSettingsSections().dialog" value="dialog">
         <i class="pi pi-window-maximize mr-2"></i>Diálogo
       </p-tab>
@@ -23,407 +22,416 @@
         <p-tag class="ml-2" [value]="activeFilterCount().toString()" severity="info" />
         }
       </p-tab>
-      <!-- ]]]FI -->
     </p-tablist>
 
     <p-tabpanels>
-
-      <!-- ══ Pestaña: Diálogo ══════════════════════════════════════════════════ -->
       <p-tabpanel *ngIf="localSettingsSections().dialog" value="dialog">
-        <div class="grid grid-cols-12 gap-3 pt-2">
-          <div class="col-span-12 md:col-span-6">
-            <label class="block text-xs text-color-secondary mb-1">Ancho del diálogo</label>
-            <p-select [options]="widthOptions" optionLabel="label" optionValue="value" [ngModel]="dialogCfg().width"
-              (ngModelChange)="setDialog('width', $event)" styleClass="w-full" appendTo="body"
-              placeholder="Selecciona ancho" />
-          </div>
-          <div class="col-span-12 md:col-span-6">
-            <label class="block text-xs text-color-secondary mb-1">Alto del diálogo</label>
-            <p-select [options]="heightOptions" optionLabel="label" optionValue="value" [ngModel]="dialogCfg().height"
-              (ngModelChange)="setDialog('height', $event)" styleClass="w-full" appendTo="body"
-              placeholder="Selecciona alto" />
-          </div>
+        <form [formGroup]="dialogForm" class="settings-form-grid pt-3">
+          <p-floatlabel variant="on" class="settings-control">
+            <p-select inputId="dialog-width" [options]="widthOptions" optionLabel="label" optionValue="value"
+              formControlName="width" appendTo="body" styleClass="height-input-custom w-full" />
+            <label for="dialog-width">Ancho del diálogo</label>
+          </p-floatlabel>
 
-          <div class="col-span-12 md:col-span-6">
-            <label class="block text-xs text-color-secondary mb-1">Singular</label>
-            <input pInputText [ngModel]="dialogCfg().singular" (ngModelChange)="setDialog('singular', $event)"
-              class="w-full p-inputtext-sm" placeholder="activo" />
-          </div>
-          <div class="col-span-12 md:col-span-6">
-            <label class="block text-xs text-color-secondary mb-1">Plural</label>
-            <input pInputText [ngModel]="dialogCfg().plural" (ngModelChange)="setDialog('plural', $event)"
-              class="w-full p-inputtext-sm" placeholder="activos" />
-          </div>
+          <p-floatlabel variant="on" class="settings-control">
+            <p-select inputId="dialog-height" [options]="heightOptions" optionLabel="label" optionValue="value"
+              formControlName="height" appendTo="body" styleClass="height-input-custom w-full" />
+            <label for="dialog-height">Alto del diálogo</label>
+          </p-floatlabel>
 
-          <div class="col-span-12 md:col-span-6">
-            <label class="block text-xs text-color-secondary mb-1">Artículo (singular)</label>
-            <input pInputText [ngModel]="dialogCfg().singularIndefiniteArticle"
-              (ngModelChange)="setDialog('singularIndefiniteArticle', $event)" class="w-full p-inputtext-sm"
-              placeholder="el activo" />
-          </div>
-          <div class="col-span-12 md:col-span-6">
-            <label class="block text-xs text-color-secondary mb-1">Artículo (plural)</label>
-            <input pInputText [ngModel]="dialogCfg().pluralDefiniteArticle"
-              (ngModelChange)="setDialog('pluralDefiniteArticle', $event)" class="w-full p-inputtext-sm"
-              placeholder="los activos" />
-          </div>
+          <p-floatlabel variant="on" class="settings-control">
+            <input pInputText id="dialog-singular" formControlName="singular" class="height-input-custom w-full" />
+            <label for="dialog-singular">Nombre en singular</label>
+          </p-floatlabel>
+
+          <p-floatlabel variant="on" class="settings-control">
+            <input pInputText id="dialog-plural" formControlName="plural" class="height-input-custom w-full" />
+            <label for="dialog-plural">Nombre en plural</label>
+          </p-floatlabel>
+
+          <p-floatlabel variant="on" class="settings-control">
+            <input pInputText id="dialog-singular-article" formControlName="singularIndefiniteArticle"
+              class="height-input-custom w-full" />
+            <label for="dialog-singular-article">Artículo singular</label>
+          </p-floatlabel>
+
+          <p-floatlabel variant="on" class="settings-control">
+            <input pInputText id="dialog-plural-article" formControlName="pluralDefiniteArticle"
+              class="height-input-custom w-full" />
+            <label for="dialog-plural-article">Artículo plural</label>
+          </p-floatlabel>
+        </form>
+
+        <div class="settings-note mt-3">
+          <i class="pi pi-info-circle"></i>
+          <span>Estos valores configuran <code>draw.dialog</code>; las demás claves de <code>draw</code> representan
+            pestañas de <strong>app-custom-draw-form</strong>.</span>
         </div>
-
-        <p-divider />
-        <small class="text-color-secondary text-xs">
-          <i class="pi pi-info-circle mr-1"></i>
-          Los valores se guardan en <code>draw.dialog</code>. La <strong>clave <code>dialog</code></strong> es estática
-          y representa este formulario. El resto de claves bajo <code>draw</code> son pestañas del formulario y se
-          editan en <em>Tabla y formulario</em>.
-        </small>
       </p-tabpanel>
 
-      <!-- ══ Pestaña: Tabla y formulario ═══════════════════════════════════════ -->
       <p-tabpanel *ngIf="localSettingsSections().layout" value="layout">
-
-        <!-- Selector de pestaña de draw -->
         @if (drawTabs().length > 1) {
-        <div class="flex align-items-center gap-2 pt-2 pb-3 flex-wrap">
-          <span class="text-xs text-color-secondary">Pestaña del formulario:</span>
-          @for (t of drawTabs(); track t) {
-          <p-button [label]="t" size="small" [outlined]="activeDrawTab() !== t"
-            [severity]="activeDrawTab() === t ? 'primary' : 'secondary'" (onClick)="setActiveDrawTab(t)" />
-          }
+        <div class="settings-toolbar pt-3">
+          <span class="settings-toolbar-label">Pestaña del formulario</span>
+          <div class="flex gap-2 flex-wrap">
+            @for (tab of drawTabs(); track tab) {
+            <p-button [label]="tab" size="small" [outlined]="activeDrawTab() !== tab"
+              [severity]="activeDrawTab() === tab ? 'primary' : 'secondary'" (onClick)="setActiveDrawTab(tab)" />
+            }
+          </div>
         </div>
         }
 
-        <!-- Formulario columnas visibles (top-level patch del configForm) -->
         @if (formGroup) {
-        <form [formGroup]="formGroup" class="pt-2 pb-2">
-          <label class="block text-xs text-color-secondary mb-1">Columnas visibles (rápido)</label>
-          <p-multiSelect [options]="fieldSignal()?.cols || []" formControlName="columns" placeholder="Campos a mostrar"
-            optionValue="field" optionLabel="header" selectedItemsLabel="{0} columnas seleccionadas" styleClass="w-full"
-            appendTo="body" />
+        <form [formGroup]="formGroup" class="pt-3">
+          <p-floatlabel variant="on" class="w-full">
+            <p-multiSelect inputId="visible-columns" [options]="fieldSignal()?.cols || []" formControlName="columns"
+              optionValue="field" optionLabel="header" selectedItemsLabel="{0} columnas seleccionadas"
+              styleClass="height-input-custom w-full" appendTo="body" />
+            <label for="visible-columns">Columnas visibles</label>
+          </p-floatlabel>
         </form>
         }
 
-        <!-- Leyenda -->
-        <div class="uf-legend flex gap-3 pt-2 pb-1 text-xs text-color-secondary flex-wrap">
-          <span><i class="pi pi-bars mr-1"></i>Orden</span>
-          <span><i class="pi pi-table mr-1"></i>Tabla</span>
-          <span><i class="pi pi-mobile mr-1"></i>Oculto móvil</span>
-          <span><i class="pi pi-sort-alt mr-1"></i>Ordenable</span>
-          <span><i class="pi pi-lock mr-1"></i>Bloqueado</span>
-          <span class="uf-legend-sep">|</span>
-          <span><i class="pi pi-window-maximize mr-1"></i>Form</span>
-          <span><i class="pi pi-desktop mr-1"></i>Cols esc / <i class="pi pi-mobile mx-1"></i>móvil</span>
-          <span class="uf-legend-sep">|</span>
-          <span><i class="pi pi-sliders-h mr-1"></i>Avanzado por tipo</span>
-        </div>
-
         @if (unifiedRows().length === 0) {
-        <div class="text-center text-color-secondary py-4">
-          <i class="pi pi-table text-2xl mb-2"></i>
-          <p class="text-sm">No hay columnas disponibles.</p>
+        <div class="settings-empty">
+          <i class="pi pi-table"></i>
+          <span>No hay campos disponibles para esta pestaña.</span>
         </div>
         }
 
-        <!-- Lista drag-drop con PrimeNG -->
-        <div class="flex flex-col gap-1 pt-1">
-          @for (row of unifiedRows(); track row.field; let i = $index; let last = $last) {
-          <div pDraggable="rows" pDroppable="rows" (onDragStart)="onRowDragStart(i)" (onDragEnd)="onRowDragEnd()"
-            (onDrop)="onRowDropAt(i)" class="uf-row border-1 surface-border border-round surface-card p-2"
-            [class.uf-row-inactive]="!row.colActive && !row.gridActive">
+        <div class="settings-card-list pt-3">
+          @for (row of unifiedRows(); track row.field; let index = $index) {
+          <article pDraggable="rows" pDroppable="rows" (onDragStart)="onRowDragStart(index)"
+            (onDragEnd)="onRowDragEnd()" (onDrop)="onRowDropAt(index)" class="uf-row settings-card"
+            [class.uf-row-inactive]="!row.colActive && !row.gridActive" [formGroup]="row.form">
 
-            <!-- Fila 1: TABLA -->
-            <div class="flex align-items-center gap-1 flex-wrap">
-              <i class="pi pi-bars drag-handle text-color-secondary flex-shrink-0"></i>
-              <span class="order-badge flex-shrink-0">{{ i + 1 }}</span>
-
-              <input pInputText [ngModel]="row.colsCfg.label" (ngModelChange)="setColsCfg(i, 'label', $event)"
-                placeholder="Etiqueta" class="height-input-custom p-inputtext-sm uf-label-input"
-                [title]="'Campo: ' + row.field" />
-
-              <p-toggleButton [ngModel]="row.colActive" (ngModelChange)="toggleUnifiedColActive(i, $event)"
-                onIcon="pi pi-table" offIcon="pi pi-table" pTooltip="Visible en tabla" tooltipPosition="top"
-                styleClass="height-input-custom uf-icon-toggle" />
-
-              <p-toggleButton [ngModel]="row.colsCfg.sortable" (ngModelChange)="setColsCfg(i, 'sortable', $event)"
-                onIcon="pi pi-sort-alt" offIcon="pi pi-sort-alt-slash" pTooltip="Columna ordenable"
-                tooltipPosition="top" styleClass="height-input-custom uf-icon-toggle" />
-
-              <p-toggleButton [ngModel]="row.colsCfg.locked" (ngModelChange)="setColsCfg(i, 'locked', $event)"
-                onIcon="pi pi-lock" offIcon="pi pi-lock-open" pTooltip="Columna bloqueada" tooltipPosition="top"
-                styleClass="height-input-custom uf-icon-toggle" />
-
-              <p-toggleButton [ngModel]="row.colsCfg.hideMobile" (ngModelChange)="setColsCfg(i, 'hideMobile', $event)"
-                onIcon="pi pi-mobile" offIcon="pi pi-mobile" pTooltip="Oculto en móvil" tooltipPosition="top"
-                styleClass="height-input-custom uf-icon-toggle" />
-
-              <p-button icon="pi pi-sliders-h" size="small" severity="secondary" [text]="true"
-                pTooltip="Editar todas las propiedades del campo" tooltipPosition="top"
-                (onClick)="openAdvanced(row.field)" />
-            </div>
-
-            <!-- Fila 2: FORMULARIO -->
-            <div class="flex align-items-center gap-1 flex-wrap pt-1 pl-5">
-              <p-toggleButton [ngModel]="row.gridActive" (ngModelChange)="toggleUnifiedGridActive(i, $event)"
-                onIcon="pi pi-window-maximize" offIcon="pi pi-window-maximize" pTooltip="Visible en formulario"
-                tooltipPosition="top" styleClass="height-input-custom uf-icon-toggle" />
-
-              @if (row.inGrid && row.gridActive) {
-              <i class="pi pi-desktop text-xs text-color-secondary flex-shrink-0" pTooltip="Columnas escritorio (1-12)"
-                tooltipPosition="top"></i>
-              <p-inputNumber [ngModel]="row.gridSpan" (ngModelChange)="setUnifiedSpan(i, $event, 'gridSpan')" [min]="1"
-                [max]="12" [showButtons]="true" buttonLayout="horizontal" decrementButtonIcon="pi pi-minus"
-                incrementButtonIcon="pi pi-plus" styleClass="grid-span-input" inputStyleClass="text-center text-xs" />
-
-              <i class="pi pi-mobile text-xs text-color-secondary flex-shrink-0" pTooltip="Columnas móvil (1-12)"
-                tooltipPosition="top"></i>
-              <p-inputNumber [ngModel]="row.gridSpanMd" (ngModelChange)="setUnifiedSpan(i, $event, 'gridSpanMd')"
-                [min]="1" [max]="12" [showButtons]="true" buttonLayout="horizontal" decrementButtonIcon="pi pi-minus"
-                incrementButtonIcon="pi pi-plus" styleClass="grid-span-input" inputStyleClass="text-center text-xs" />
-
-              <div class="grid-span-preview" pTooltip="Proporciones escritorio / móvil" tooltipPosition="top">
-                <div class="span-bar desktop-bar" [style.width.%]="(row.gridSpan / 12) * 100"></div>
-                <div class="span-bar mobile-bar" [style.width.%]="(row.gridSpanMd / 12) * 100"></div>
+            <header class="uf-row-header">
+              <div class="uf-row-identity">
+                <button type="button" class="drag-button" pTooltip="Arrastrar para ordenar" tooltipPosition="right">
+                  <i class="pi pi-bars"></i>
+                  <span class="order-badge">{{ index + 1 }}</span>
+                </button>
+                <div>
+                  <strong>{{ row.header }}</strong>
+                  <small>{{ row.field }}</small>
+                </div>
               </div>
-              }
+              <p-button label="Opciones avanzadas" icon="pi pi-sliders-h" size="small" severity="secondary"
+                [outlined]="true" (onClick)="openAdvanced(row.field)" />
+            </header>
+
+            <div class="uf-row-fields">
+              <p-floatlabel variant="on" class="settings-control">
+                <input pInputText [id]="'column-label-' + index" formControlName="label"
+                  class="height-input-custom w-full" />
+                <label [for]="'column-label-' + index">Encabezado de tabla</label>
+              </p-floatlabel>
+
+              <p-floatlabel variant="on" class="settings-control">
+                <p-select [inputId]="'mobile-span-' + index" [options]="spanOptions" optionLabel="label"
+                  optionValue="value" formControlName="gridSpan" appendTo="body"
+                  styleClass="height-input-custom w-full" />
+                <label [for]="'mobile-span-' + index">Ancho móvil</label>
+              </p-floatlabel>
+
+              <p-floatlabel variant="on" class="settings-control">
+                <p-select [inputId]="'desktop-span-' + index" [options]="spanOptions" optionLabel="label"
+                  optionValue="value" formControlName="gridSpanMd" appendTo="body"
+                  styleClass="height-input-custom w-full" />
+                <label [for]="'desktop-span-' + index">Ancho escritorio</label>
+              </p-floatlabel>
             </div>
 
-            @if (!last) {
-            <p-divider styleClass="my-1 mt-2" />
-            }
-          </div>
+            <div class="uf-toggle-grid">
+              <p-toggleButton formControlName="colActive" onLabel="Visible en tabla" offLabel="Oculta en tabla"
+                onIcon="pi pi-table" offIcon="pi pi-eye-slash" styleClass="height-input-custom settings-toggle" />
+              <p-toggleButton formControlName="gridActive" onLabel="Visible en formulario"
+                offLabel="Oculta en formulario" onIcon="pi pi-window-maximize" offIcon="pi pi-eye-slash"
+                styleClass="height-input-custom settings-toggle" />
+              <p-toggleButton formControlName="sortable" onLabel="Columna ordenable" offLabel="Sin ordenar"
+                onIcon="pi pi-sort-alt" offIcon="pi pi-sort-alt-slash"
+                styleClass="height-input-custom settings-toggle" />
+              <p-toggleButton formControlName="locked" onLabel="Columna bloqueada" offLabel="Columna libre"
+                onIcon="pi pi-lock" offIcon="pi pi-lock-open" styleClass="height-input-custom settings-toggle" />
+              <p-toggleButton formControlName="hideMobile" onLabel="Oculta en móvil" offLabel="Visible en móvil"
+                onIcon="pi pi-mobile" offIcon="pi pi-mobile" styleClass="height-input-custom settings-toggle" />
+            </div>
+          </article>
           }
         </div>
 
-        <div class="flex justify-content-end mt-3">
-          <p-button label="Vista previa" icon="pi pi-eye" severity="secondary" [outlined]="true" size="small"
-            (onClick)="openPreview()" />
+        <div class="settings-actions mt-3">
+          <p-button label="Vista previa del diseño" icon="pi pi-eye" severity="secondary" [outlined]="true"
+            size="small" (onClick)="openPreview()" />
         </div>
       </p-tabpanel>
 
-      <!-- ══ Pestaña: Comportamiento (general) ═════════════════════════════════ -->
       <p-tabpanel *ngIf="localSettingsSections().behavior" value="behavior">
-        <div class="grid grid-cols-12 gap-3 pt-2">
-          <div class="col-span-12">
-            <h6 class="m-0 text-sm font-semibold">Carga inicial</h6>
-          </div>
-          <div class="col-span-12 md:col-span-4 flex align-items-center gap-2">
-            <p-toggleButton [ngModel]="behaviorCfg().load_on_start"
-              (ngModelChange)="setBehavior('load_on_start', $event)" onIcon="pi pi-check" offIcon="pi pi-times"
-              styleClass="height-input-custom" />
-            <span class="text-xs">Cargar al iniciar (escritorio)</span>
-          </div>
-          <div class="col-span-12 md:col-span-4 flex align-items-center gap-2">
-            <p-toggleButton [ngModel]="behaviorCfg().load_on_start_mobile"
-              (ngModelChange)="setBehavior('load_on_start_mobile', $event)" onIcon="pi pi-check" offIcon="pi pi-times"
-              styleClass="height-input-custom" />
-            <span class="text-xs">Cargar al iniciar (móvil)</span>
-          </div>
-          <div class="col-span-12 md:col-span-4 flex align-items-center gap-2">
-            <p-toggleButton [ngModel]="behaviorCfg().silent" (ngModelChange)="setBehavior('silent', $event)"
-              onIcon="pi pi-volume-off" offIcon="pi pi-volume-up" styleClass="height-input-custom" />
-            <span class="text-xs">Silencioso (sin spinner)</span>
-          </div>
+        <form [formGroup]="behaviorForm" class="pt-3">
+          <section class="settings-section">
+            <div class="settings-section-heading">
+              <i class="pi pi-play-circle"></i>
+              <div>
+                <h6>Carga inicial</h6>
+                <small>Define cuándo se consultan los datos del módulo.</small>
+              </div>
+            </div>
+            <div class="behavior-toggle-grid">
+              <p-toggleButton formControlName="load_on_start" onLabel="Carga web habilitada"
+                offLabel="Carga web bajo demanda" onIcon="pi pi-desktop" offIcon="pi pi-desktop"
+                styleClass="height-input-custom settings-toggle" />
+              <p-toggleButton formControlName="load_on_start_mobile" onLabel="Carga móvil habilitada"
+                offLabel="Carga móvil bajo demanda" onIcon="pi pi-mobile" offIcon="pi pi-mobile"
+                styleClass="height-input-custom settings-toggle" />
+              <p-toggleButton formControlName="silent" onLabel="Carga silenciosa" offLabel="Mostrar indicador de carga"
+                onIcon="pi pi-volume-off" offIcon="pi pi-spin pi-spinner"
+                styleClass="height-input-custom settings-toggle" />
+            </div>
+          </section>
 
-          <div class="col-span-12 mt-2">
-            <h6 class="m-0 text-sm font-semibold">Paginación</h6>
-          </div>
-          <div class="col-span-6 md:col-span-3">
-            <label class="block text-xs text-color-secondary mb-1">Filas por página</label>
-            <p-inputNumber [ngModel]="behaviorCfg().rows" (ngModelChange)="setBehavior('rows', $event)" [min]="1"
-              [max]="500" [showButtons]="true" buttonLayout="horizontal" styleClass="w-full" />
-          </div>
-          <div class="col-span-6 md:col-span-3">
-            <label class="block text-xs text-color-secondary mb-1">Filas en móvil</label>
-            <p-inputNumber [ngModel]="behaviorCfg().rows_mobile" (ngModelChange)="setBehavior('rows_mobile', $event)"
-              [min]="1" [max]="200" [showButtons]="true" buttonLayout="horizontal" styleClass="w-full" />
-          </div>
-        </div>
+          <section class="settings-section mt-3">
+            <div class="settings-section-heading">
+              <i class="pi pi-list"></i>
+              <div>
+                <h6>Paginación</h6>
+                <small>Cantidad inicial de registros por plataforma.</small>
+              </div>
+            </div>
+            <div class="settings-form-grid">
+              <p-floatlabel variant="on" class="settings-control">
+                <p-inputNumber inputId="rows-web" formControlName="rows" [min]="1" [max]="500"
+                  [showButtons]="true" buttonLayout="horizontal" styleClass="w-full"
+                  inputStyleClass="height-input-custom w-full" />
+                <label for="rows-web">Filas en web</label>
+              </p-floatlabel>
+              <p-floatlabel variant="on" class="settings-control">
+                <p-inputNumber inputId="rows-mobile" formControlName="rows_mobile" [min]="1" [max]="200"
+                  [showButtons]="true" buttonLayout="horizontal" styleClass="w-full"
+                  inputStyleClass="height-input-custom w-full" />
+                <label for="rows-mobile">Filas en móvil</label>
+              </p-floatlabel>
+            </div>
+          </section>
+        </form>
       </p-tabpanel>
 
-      <!-- ══ Pestaña: Filtros ══════════════════════════════════════════════════ -->
       <p-tabpanel *ngIf="localSettingsSections().filters" value="filters">
-        @if (filterableCols().length === 0) {
-        <div class="text-center text-color-secondary py-4">
-          <i class="pi pi-filter text-2xl mb-2"></i>
-          <p class="text-sm">No hay campos filtrables.</p>
+        @if (filterEditorRows().length === 0) {
+        <div class="settings-empty">
+          <i class="pi pi-filter"></i>
+          <span>No hay campos filtrables.</span>
         </div>
         }
 
-        <div class="flex flex-col gap-1 pt-2">
-          <!-- [[[II ESC:005-11 DOC:docs/documents/2026-05-31_005_columnas-form-data-y-tree-select-nombres.md#escenario-11 -->
-          @for (col of filterableCols(); track col.filterKey; let last = $last) {
-          @let fRow = getRow(col.filterKey);
-          @let fType = filterTypeByField()[col.filterKey];
-          @let opsOpts = opsOptionsByField()[col.filterKey];
+        <div class="settings-card-list pt-3">
+          @for (filterRow of filterEditorRows(); track filterRow.col.filterKey) {
+          <article class="settings-card filter-card" [class.filter-row-inactive]="!filterRow.state.active">
+            <header class="filter-card-header">
+              <div>
+                <strong>{{ filterRow.col.header }}</strong>
+                <small>{{ filterRow.col.filterField }}</small>
+              </div>
+              <p-toggleButton [formControl]="filterRow.activeControl" onLabel="Filtro habilitado"
+                offLabel="Filtro deshabilitado" onIcon="pi pi-filter" offIcon="pi pi-filter-slash"
+                styleClass="height-input-custom settings-toggle" />
+            </header>
 
-          <div class="border-1 surface-border border-round surface-card p-2" [class.filter-row-inactive]="!fRow.active">
+            <div class="filter-controls">
+              <p-floatlabel variant="on" class="settings-control">
+                <p-select [inputId]="'filter-operation-' + filterRow.col.filterKey"
+                  [options]="filterRow.operations" [formControl]="filterRow.operationControl" optionLabel="label"
+                  optionValue="value" appendTo="body" styleClass="height-input-custom w-full" />
+                <label [for]="'filter-operation-' + filterRow.col.filterKey">Operación</label>
+              </p-floatlabel>
 
-            <div class="flex align-items-center gap-2 flex-wrap">
-              <p-toggleButton [ngModel]="fRow.active" (ngModelChange)="toggleFilter(col.filterKey, $event)"
-                onIcon="pi pi-filter" offIcon="pi pi-filter-slash" styleClass="height-input-custom uf-icon-toggle" />
-
-              <strong class="text-sm">{{ col.header }}</strong>
-
-              <p-select [options]="opsOpts" [ngModel]="fRow.op" (ngModelChange)="setOp(col.filterKey, $event)"
-                [disabled]="!fRow.active" optionLabel="label" optionValue="value" placeholder="Op"
-                styleClass="height-input-custom filter-op-select" appendTo="body" />
-
-              @if (!isNullOp(fRow.op) && !isRangeOp(fRow.op) && !isInOp(fRow.op)) {
-              @switch (fType) {
+              @if (!filterRow.isNull && !filterRow.isRange && !filterRow.isIn) {
+              @switch (filterRow.type) {
               @case ('text') {
-              <input pInputText [formControl]="$any(getControl('fv_' + col.filterKey))" [disabled]="!fRow.active"
-                placeholder="Valor" class="height-input-custom p-inputtext-sm uf-filter-val" />
+              <p-floatlabel variant="on" class="settings-control">
+                <input pInputText [id]="'filter-value-' + filterRow.col.filterKey"
+                  [formControl]="filterRow.valueControl" class="height-input-custom w-full" />
+                <label [for]="'filter-value-' + filterRow.col.filterKey">Valor</label>
+              </p-floatlabel>
               }
               @case ('numeric') {
-              <p-inputNumber [formControl]="$any(getControl('fv_' + col.filterKey))" [disabled]="!fRow.active"
-                placeholder="Valor" styleClass="height-input-custom uf-filter-val" [useGrouping]="false" />
+              <p-floatlabel variant="on" class="settings-control">
+                <p-inputNumber [inputId]="'filter-value-' + filterRow.col.filterKey"
+                  [formControl]="filterRow.valueControl" [useGrouping]="false" styleClass="w-full"
+                  inputStyleClass="height-input-custom w-full" />
+                <label [for]="'filter-value-' + filterRow.col.filterKey">Valor</label>
+              </p-floatlabel>
               }
               @case ('datetime') {
-              <p-datepicker [formControl]="$any(getControl('fv_' + col.filterKey))" [disabled]="!fRow.active"
-                appendTo="body" styleClass="height-input-custom uf-filter-val" />
+              <p-floatlabel variant="on" class="settings-control">
+                <p-datepicker [inputId]="'filter-value-' + filterRow.col.filterKey"
+                  [formControl]="filterRow.valueControl" appendTo="body" styleClass="height-input-custom w-full" />
+                <label [for]="'filter-value-' + filterRow.col.filterKey">Fecha</label>
+              </p-floatlabel>
               }
               @case ('boolean') {
-              <p-select [formControl]="$any(getControl('fv_' + col.filterKey))" [disabled]="!fRow.active"
-                [options]="booleanOptions" optionLabel="name" optionValue="id" [showClear]="true" appendTo="body"
-                styleClass="height-input-custom uf-filter-val" />
+              <p-floatlabel variant="on" class="settings-control">
+                <p-select [inputId]="'filter-value-' + filterRow.col.filterKey" [formControl]="filterRow.valueControl"
+                  [options]="booleanOptions" optionLabel="name" optionValue="id" [showClear]="true" appendTo="body"
+                  styleClass="height-input-custom w-full" />
+                <label [for]="'filter-value-' + filterRow.col.filterKey">Valor lógico</label>
+              </p-floatlabel>
               }
               @case ('fk') {
-              <p-autoComplete [formControl]="$any(getControl('fv_' + col.filterKey))" [disabled]="!fRow.active"
-                [multiple]="false" [suggestions]="fkSuggestionsSignal()[col.filterKey]"
-                (completeMethod)="completeFkMethod($event, col)" [optionLabel]="getOptionLabel(col)" [minLength]="0"
-                [forceSelection]="true" placeholder="Buscar..." appendTo="body"
-                styleClass="height-input-custom uf-filter-val" />
+              <p-floatlabel variant="on" class="settings-control">
+                <p-autoComplete [inputId]="'filter-value-' + filterRow.col.filterKey"
+                  [formControl]="filterRow.valueControl" [multiple]="false"
+                  [suggestions]="fkSuggestionsSignal()[filterRow.col.filterKey]"
+                  (completeMethod)="completeFkMethod($event, filterRow.col)" [optionLabel]="filterRow.optionLabel"
+                  [minLength]="0" [forceSelection]="true" appendTo="body" styleClass="height-input-custom w-full" />
+                <label [for]="'filter-value-' + filterRow.col.filterKey">Buscar valor</label>
+              </p-floatlabel>
               }
               }
               }
+            </div>
 
-              @if (fRow.active) {
-              <p-button icon="pi pi-times" severity="danger" [text]="true" size="small" pTooltip="Limpiar filtro"
-                tooltipPosition="top" (onClick)="resetFilter(col.filterKey)"
-                styleClass="flex-shrink-0 p-0 height-input-custom" />
+            @if (filterRow.state.active && fkSearchHintSignal()[filterRow.col.filterKey]) {
+            <div class="settings-note compact">
+              <i class="pi pi-info-circle"></i>
+              <span>{{ fkSearchHintSignal()[filterRow.col.filterKey] }}</span>
+            </div>
+            }
+
+            @if (filterRow.isNull) {
+            <div class="settings-note compact">
+              <i class="pi pi-info-circle"></i>
+              <span>Se buscarán registros sin valor en <strong>{{ filterRow.col.header }}</strong>.</span>
+            </div>
+            }
+
+            @if (filterRow.isIn && filterRow.type === 'text') {
+            <p-floatlabel variant="on" class="w-full mt-2">
+              <p-autoComplete [inputId]="'filter-values-' + filterRow.col.filterKey"
+                [formControl]="filterRow.valueControl" [multiple]="true" [typeahead]="false" [addOnBlur]="true"
+                [addOnTab]="true" styleClass="w-full" />
+              <label [for]="'filter-values-' + filterRow.col.filterKey">Valores; presiona Enter para agregar</label>
+            </p-floatlabel>
+            }
+
+            @if (filterRow.isIn && filterRow.type === 'fk') {
+            <p-floatlabel variant="on" class="w-full mt-2">
+              <p-autoComplete [inputId]="'filter-values-' + filterRow.col.filterKey"
+                [formControl]="filterRow.valueControl" [multiple]="true"
+                [suggestions]="fkSuggestionsSignal()[filterRow.col.filterKey]"
+                (completeMethod)="completeFkMethod($event, filterRow.col)" [optionLabel]="filterRow.optionLabel"
+                [minLength]="0" [forceSelection]="true" appendTo="body" styleClass="w-full" />
+              <label [for]="'filter-values-' + filterRow.col.filterKey">Valores relacionados</label>
+            </p-floatlabel>
+            }
+
+            @if (filterRow.isIn && filterRow.type === 'numeric') {
+            <p-floatlabel variant="on" class="w-full mt-2">
+              <p-inputNumber [inputId]="'filter-values-' + filterRow.col.filterKey"
+                [formControl]="filterRow.valueControl" [useGrouping]="false" styleClass="w-full" />
+              <label [for]="'filter-values-' + filterRow.col.filterKey">Valor numérico</label>
+            </p-floatlabel>
+            }
+
+            @if (filterRow.isRange && filterRow.type !== 'boolean') {
+            <div class="filter-range mt-2">
+              @if (filterRow.type === 'numeric') {
+              <p-floatlabel variant="on" class="settings-control">
+                <p-inputNumber [inputId]="'filter-from-' + filterRow.col.filterKey"
+                  [formControl]="filterRow.valueControl" [useGrouping]="false" styleClass="w-full" />
+                <label [for]="'filter-from-' + filterRow.col.filterKey">Desde</label>
+              </p-floatlabel>
+              <p-floatlabel variant="on" class="settings-control">
+                <p-inputNumber [inputId]="'filter-to-' + filterRow.col.filterKey"
+                  [formControl]="filterRow.secondValueControl" [useGrouping]="false" styleClass="w-full" />
+                <label [for]="'filter-to-' + filterRow.col.filterKey">Hasta</label>
+              </p-floatlabel>
+              } @else if (filterRow.type === 'datetime') {
+              <p-floatlabel variant="on" class="settings-control">
+                <p-datepicker [inputId]="'filter-from-' + filterRow.col.filterKey"
+                  [formControl]="filterRow.valueControl" appendTo="body" styleClass="w-full" />
+                <label [for]="'filter-from-' + filterRow.col.filterKey">Desde</label>
+              </p-floatlabel>
+              <p-floatlabel variant="on" class="settings-control">
+                <p-datepicker [inputId]="'filter-to-' + filterRow.col.filterKey"
+                  [formControl]="filterRow.secondValueControl" appendTo="body" styleClass="w-full" />
+                <label [for]="'filter-to-' + filterRow.col.filterKey">Hasta</label>
+              </p-floatlabel>
               }
             </div>
-
-            @if (fRow.active && fkSearchHintSignal()[col.filterKey]) {
-            <small class="text-color-secondary text-xs block mt-1">
-              <i class="pi pi-info-circle mr-1"></i>{{ fkSearchHintSignal()[col.filterKey] }}
-            </small>
             }
 
-            @if (isNullOp(fRow.op)) {
-            <div class="pt-1 text-sm text-color-secondary">
-              Filtra registros donde <strong>{{ col.header }}</strong> no tenga valor.
-            </div>
-            }
-
-            @if (isInOp(fRow.op) && fType === 'text') {
-            <div class="pt-1">
-              <p-autoComplete [formControl]="$any(getControl('fv_' + col.filterKey))" [disabled]="!fRow.active"
-                [multiple]="true" [typeahead]="false" [addOnBlur]="true" [addOnTab]="true"
-                placeholder="Escribir y presionar Enter..." styleClass="w-full" />
-            </div>
-            }
-
-            @if (isInOp(fRow.op) && fType === 'fk') {
-            <div class="pt-1">
-              <p-autoComplete [formControl]="$any(getControl('fv_' + col.filterKey))" [disabled]="!fRow.active"
-                [multiple]="true" [suggestions]="fkSuggestionsSignal()[col.filterKey]"
-                (completeMethod)="completeFkMethod($event, col)" [optionLabel]="getOptionLabel(col)" [minLength]="0"
-                [forceSelection]="true" [addOnBlur]="false" [addOnTab]="false" placeholder="Buscar..." appendTo="body"
-                styleClass="w-full" />
-            </div>
-            }
-
-            @if (isInOp(fRow.op) && fType === 'numeric') {
-            <div class="pt-1">
-              <p-inputNumber [formControl]="$any(getControl('fv_' + col.filterKey))" [disabled]="!fRow.active"
-                placeholder="Ej: 1, 5, 10" styleClass="w-full" [useGrouping]="false" />
-            </div>
-            }
-
-            @if (isRangeOp(fRow.op) && fType !== 'boolean') {
-            <div class="flex gap-2 align-items-center flex-wrap pt-1">
-              @switch (fType) {
-              @case ('numeric') {
-              <p-inputNumber [formControl]="$any(getControl('fv_' + col.filterKey))" placeholder="Desde"
-                styleClass="w-36" [useGrouping]="false" />
-              <span class="text-color-secondary text-xs font-bold">a</span>
-              <p-inputNumber [formControl]="$any(getControl('fv_' + col.filterKey + '_2'))" placeholder="Hasta"
-                styleClass="w-36" [useGrouping]="false" />
+            <footer class="filter-card-footer">
+              @if (filterRow.hasRelativePresets) {
+              <div class="flex gap-2 flex-wrap">
+                <p-button label="Hoy" severity="secondary" [outlined]="true" size="small"
+                  (onClick)="applyRelativePreset(filterRow.col.filterKey, 'day')" />
+                <p-button label="Semana" severity="secondary" [outlined]="true" size="small"
+                  (onClick)="applyRelativePreset(filterRow.col.filterKey, 'week')" />
+                <p-button label="Mes" severity="secondary" [outlined]="true" size="small"
+                  (onClick)="applyRelativePreset(filterRow.col.filterKey, 'month')" />
+                <p-button label="Año" severity="secondary" [outlined]="true" size="small"
+                  (onClick)="applyRelativePreset(filterRow.col.filterKey, 'year')" />
+              </div>
               }
-              @case ('datetime') {
-              <p-datepicker [formControl]="$any(getControl('fv_' + col.filterKey))" appendTo="body" placeholder="Desde"
-                styleClass="w-40" />
-              <span class="text-color-secondary text-xs font-bold">a</span>
-              <p-datepicker [formControl]="$any(getControl('fv_' + col.filterKey + '_2'))" appendTo="body"
-                placeholder="Hasta" styleClass="w-40" />
+              @if (filterRow.state.active) {
+              <p-button label="Limpiar filtro" icon="pi pi-times" severity="danger" [text]="true" size="small"
+                (onClick)="resetFilter(filterRow.col.filterKey)" />
               }
-              }
-            </div>
-            }
-
-            @if (hasRelativePresets(col.filterKey)) {
-            <div class="flex gap-1 flex-wrap pt-1">
-              <p-button label="Hoy" severity="secondary" [outlined]="true" size="small" [disabled]="!fRow.active"
-                (onClick)="applyRelativePreset(col.filterKey, 'day')" />
-              <p-button label="Semana" severity="secondary" [outlined]="true" size="small" [disabled]="!fRow.active"
-                (onClick)="applyRelativePreset(col.filterKey, 'week')" />
-              <p-button label="Mes" severity="secondary" [outlined]="true" size="small" [disabled]="!fRow.active"
-                (onClick)="applyRelativePreset(col.filterKey, 'month')" />
-              <p-button label="Año" severity="secondary" [outlined]="true" size="small" [disabled]="!fRow.active"
-                (onClick)="applyRelativePreset(col.filterKey, 'year')" />
-            </div>
-            }
-          </div>
+            </footer>
+          </article>
           }
-          <!-- ]]]FI -->
         </div>
 
-        @if (filterableCols().length > 0) {
-        <div class="flex justify-content-end mt-3">
-          <p-button label="Limpiar todos" icon="pi pi-filter-slash" severity="secondary" [outlined]="true" size="small"
-            (onClick)="resetAllFilters()" />
+        @if (filterEditorRows().length > 0) {
+        <div class="settings-actions mt-3">
+          <p-button label="Limpiar todos los filtros" icon="pi pi-filter-slash" severity="secondary"
+            [outlined]="true" size="small" (onClick)="resetAllFilters()" />
         </div>
         }
       </p-tabpanel>
-
     </p-tabpanels>
   </p-tabs>
 
-  <!-- Footer -->
   <ng-template #footer>
-    <div class="flex justify-content-between w-full gap-2">
-      <p-button label="Guardar (persistente)" icon="pi pi-cloud-upload" severity="secondary" [outlined]="true"
-        (click)="onSavePersistent()" pTooltip="Guarda la configuración en el servidor para futuras sesiones"
+    <div class="dialog-actions">
+      <p-button label="Guardar en servidor" icon="pi pi-cloud-upload" severity="secondary" [outlined]="true"
+        (onClick)="onSavePersistent()" pTooltip="Conserva esta configuración para futuras sesiones"
         tooltipPosition="top" />
-      <p-button label="Guardar" icon="pi pi-save" (click)="onSave()" styleClass="p-button-raised" />
+      <p-button label="Aplicar en esta sesión" icon="pi pi-save" (onClick)="onSave()" />
     </div>
   </ng-template>
-
 </p-dialog>
 
-<!-- ══ Diálogo: Vista previa del formulario ══════════════════════════════════ -->
-<p-dialog [visible]="previewVisible()" (visibleChange)="previewVisible.set($event)" header="Vista previa del formulario"
-  [modal]="true" [resizable]="true" [maximizable]="true" styleClass="preview-dialog" appendTo="body">
-  <p class="text-xs text-color-secondary mb-3">
-    <i class="pi pi-info-circle mr-1"></i>
-    Arrastra las celdas para reordenar. Usa <strong>–</strong> / <strong>+</strong> para ajustar el ancho (12 columnas).
-  </p>
+<p-dialog [visible]="previewVisible()" (visibleChange)="previewVisible.set($event)"
+  header="Vista previa del formulario" [modal]="true" [resizable]="true" [maximizable]="true"
+  styleClass="width-900px-custom" appendTo="body">
+  <div class="settings-note mb-3">
+    <i class="pi pi-info-circle"></i>
+    <span>La cuadrícula representa las 12 columnas base de <strong>app-custom-draw-form</strong>.</span>
+  </div>
 
-  <div class="preview-grid">
-    @for (row of unifiedRows(); track row.field; let i = $index) {
-    <div pDraggable="rows" pDroppable="rows" (onDragStart)="onRowDragStart(i)" (onDragEnd)="onRowDragEnd()"
-      (onDrop)="onRowDropAt(i)" class="preview-cell" [class.preview-cell-active]="row.inGrid && row.gridActive"
-      [class.preview-cell-inactive]="!row.inGrid || !row.gridActive"
+  <div class="grid grid-cols-12 gap-2 align-items-start" style="min-height: 7rem">
+    @for (row of unifiedRows(); track row.field; let index = $index) {
+    <div pDraggable="rows" pDroppable="rows" (onDragStart)="onRowDragStart(index)" (onDragEnd)="onRowDragEnd()"
+      (onDrop)="onRowDropAt(index)"
+      class="flex flex-col align-items-center justify-content-center gap-1 surface-card border-1 surface-border border-round p-2"
       [style.grid-column]="(row.inGrid && row.gridActive) ? ('span ' + row.gridSpan) : 'span 1'"
-      [pTooltip]="row.inGrid && row.gridActive ? 'Campo: ' + row.field : row.field + ' (oculto)'" tooltipPosition="top">
-      <div class="preview-cell-label">{{ row.colsCfg.label || row.header }}</div>
+      [style.min-height]="row.inGrid && row.gridActive ? '3.25rem' : '2rem'"
+      [style.opacity]="row.inGrid && row.gridActive ? 1 : .35"
+      [style.border-style]="row.inGrid && row.gridActive ? 'solid' : 'dashed'"
+      [pTooltip]="row.inGrid && row.gridActive ? 'Campo: ' + row.field : row.field + ' (oculto)'"
+      tooltipPosition="top">
+      <div class="text-xs font-semibold text-center">{{ row.colsCfg.label || row.header }}</div>
       @if (row.inGrid && row.gridActive) {
-      <div class="preview-cell-controls">
-        <p-button icon="pi pi-minus" size="small" [text]="true" severity="secondary" pTooltip="Reducir ancho"
-          tooltipPosition="top" (onClick)="setUnifiedSpan(i, row.gridSpan - 1, 'gridSpan')" />
-        <span class="preview-cell-span">{{ row.gridSpan }}/12</span>
-        <p-button icon="pi pi-plus" size="small" [text]="true" severity="secondary" pTooltip="Ampliar ancho"
-          tooltipPosition="top" (onClick)="setUnifiedSpan(i, row.gridSpan + 1, 'gridSpan')" />
+      <div class="flex align-items-center gap-1">
+        <p-button icon="pi pi-minus" size="small" [text]="true" severity="secondary"
+          pTooltip="Reducir ancho móvil" tooltipPosition="top"
+          (onClick)="setUnifiedSpan(index, row.gridSpan - 1, 'gridSpan')" />
+        <span class="text-xs text-color-secondary">{{ row.gridSpan }}/12</span>
+        <p-button icon="pi pi-plus" size="small" [text]="true" severity="secondary"
+          pTooltip="Ampliar ancho móvil" tooltipPosition="top"
+          (onClick)="setUnifiedSpan(index, row.gridSpan + 1, 'gridSpan')" />
       </div>
       }
     </div>
@@ -431,82 +439,98 @@
   </div>
 </p-dialog>
 
-<!-- ══ Diálogo: Editor avanzado por tipo de campo ════════════════════════════ -->
 <p-dialog [visible]="advancedField() !== null" (visibleChange)="$event ? null : closeAdvanced()"
   [header]="'Configuración avanzada — ' + (advancedField() ?? '')"
-  styleClass="width-800px-custom min-height-550px-custom" [modal]="true" [resizable]="true" [maximizable]="true"
+  styleClass="width-900px-custom min-height-550px-custom" [modal]="true" [resizable]="true" [maximizable]="true"
   appendTo="body">
 
   @if (advancedField()) {
-  <p-accordion [multiple]="true" [value]="['0']">
-    @for (section of advancedSchema(); track section.title; let sIdx = $index) {
-    <p-accordion-panel [value]="sIdx.toString()">
-      <p-accordion-header>
-        @if (section.icon) {
-        <i [class]="section.icon" class="mr-2"></i>
-        }
-        <span>{{ section.title }}</span>
-      </p-accordion-header>
-      <p-accordion-content>
-        <div class="grid grid-cols-12 gap-2 pt-2">
-          @for (def of section.defs; track def.path) {
-          @if (advShouldShow(def)) {
-          <div class="col-span-12 md:col-span-6">
-            <label class="block text-xs text-color-secondary mb-1">{{ def.label }}</label>
+  <div class="settings-note mb-3">
+    <i class="pi pi-info-circle"></i>
+    <span>Las opciones dependen del tipo que renderiza <strong>app-custom-draw-form</strong>. Los selectores solo
+      ofrecen valores aceptados por el contrato actual.</span>
+  </div>
 
-            @switch (def.kind) {
-            @case ('boolean') {
-            <p-toggleButton [ngModel]="advValue(def.path) === true" (ngModelChange)="advSet(def.path, $event)"
-              onIcon="pi pi-check" offIcon="pi pi-times" onLabel="Sí" offLabel="No" styleClass="height-input-custom" />
-            }
-            @case ('number') {
-            <p-inputNumber [ngModel]="advValue(def.path)" (ngModelChange)="advSet(def.path, $event)"
-              [min]="def.min ?? null" [max]="def.max ?? null" [useGrouping]="false" styleClass="w-full" />
-            }
-            @case ('select') {
-            <p-select [options]="def.options ?? []" optionLabel="label" optionValue="value"
-              [ngModel]="advValue(def.path)" (ngModelChange)="advSet(def.path, $event)" [showClear]="true"
-              appendTo="body" styleClass="w-full" />
-            }
-            @case ('multiselect') {
-            <p-multiSelect [options]="def.options ?? []" optionLabel="label" optionValue="value"
-              [ngModel]="advValue(def.path) ?? []" (ngModelChange)="advSet(def.path, $event)" appendTo="body"
-              styleClass="w-full" />
-            }
-            @case ('textarea') {
-            <textarea pTextarea rows="3" [ngModel]="advValue(def.path)" (ngModelChange)="advSet(def.path, $event)"
-              [placeholder]="def.placeholder ?? ''" class="w-full"></textarea>
-            }
-            @case ('json') {
-            <textarea pTextarea rows="5" [ngModel]="advValueAsJson(def.path)"
-              (ngModelChange)="advSetJson(def.path, $event)" [placeholder]="def.placeholder ?? '[]'"
-              class="w-full font-mono text-xs"></textarea>
-            }
-            @default {
-            <input pInputText [ngModel]="advValue(def.path) ?? ''" (ngModelChange)="advSet(def.path, $event)"
-              [placeholder]="def.placeholder ?? ''" class="w-full p-inputtext-sm" />
-            }
-            }
+  <form [formGroup]="advancedForm">
+    <p-accordion [multiple]="true" [value]="['0']">
+      @for (section of advancedSectionViews(); track section.title; let sectionIndex = $index) {
+      <p-accordion-panel [value]="sectionIndex.toString()">
+        <p-accordion-header>
+          @if (section.icon) {
+          <i [class]="section.icon" class="mr-2"></i>
+          }
+          <span>{{ section.title }}</span>
+        </p-accordion-header>
+        <p-accordion-content>
+          <div class="advanced-grid">
+            @for (def of section.defs; track def.controlName) {
+            <div class="advanced-control" [ngClass]="def.controlClass" [class.advanced-control-disabled]="def.disabled">
+              @if (def.isBoolean) {
+              <p-toggleButton [formControlName]="def.controlName" [onLabel]="def.booleanOnLabel"
+                [offLabel]="def.booleanOffLabel" styleClass="height-input-custom settings-toggle w-full"
+                [pTooltip]="def.hint || def.label" tooltipPosition="top" />
+              } @else if (def.isNumber) {
+              <p-floatlabel variant="on" class="w-full">
+                <p-inputNumber [inputId]="def.inputId" [formControlName]="def.controlName" [min]="def.min"
+                  [max]="def.max" [useGrouping]="false" styleClass="w-full"
+                  inputStyleClass="height-input-custom w-full" />
+                <label [for]="def.inputId">{{ def.label }}</label>
+              </p-floatlabel>
+              } @else if (def.isSelect) {
+              <p-floatlabel variant="on" class="w-full">
+                <p-select [inputId]="def.inputId" [options]="def.optionsList" optionLabel="label" optionValue="value"
+                  [formControlName]="def.controlName" [showClear]="true" appendTo="body"
+                  styleClass="height-input-custom w-full" />
+                <label [for]="def.inputId">{{ def.label }}</label>
+              </p-floatlabel>
+              } @else if (def.isMultiselect) {
+              <p-floatlabel variant="on" class="w-full">
+                <p-multiSelect [inputId]="def.inputId" [options]="def.optionsList" optionLabel="label"
+                  optionValue="value" [formControlName]="def.controlName" appendTo="body"
+                  styleClass="height-input-custom w-full" />
+                <label [for]="def.inputId">{{ def.label }}</label>
+              </p-floatlabel>
+              } @else if (def.isTextarea || def.isJson) {
+              <p-floatlabel variant="on" class="w-full">
+                <textarea pTextarea [id]="def.inputId" [rows]="def.isJson ? 6 : 3"
+                  [formControlName]="def.controlName" class="w-full" [class.font-mono]="def.isJson"></textarea>
+                <label [for]="def.inputId">{{ def.label }}</label>
+              </p-floatlabel>
+              } @else {
+              <p-floatlabel variant="on" class="w-full">
+                <input pInputText [id]="def.inputId" [formControlName]="def.controlName"
+                  class="height-input-custom w-full" />
+                <label [for]="def.inputId">{{ def.label }}</label>
+              </p-floatlabel>
+              }
 
-            @if (def.hint) {
-            <small class="text-color-secondary text-xs">
-              <i class="pi pi-info-circle mr-1"></i>{{ def.hint }}
-            </small>
+              @if (def.hint) {
+              <small class="advanced-hint"><i class="pi pi-info-circle"></i>{{ def.hint }}</small>
+              }
+              @if (advancedForm.get(def.controlName)?.touched && advancedForm.get(def.controlName)?.hasError('closedOption')) {
+              <small class="advanced-error"><i class="pi pi-exclamation-circle"></i>Selecciona un valor permitido.</small>
+              }
+              @if (advancedForm.get(def.controlName)?.touched && advancedForm.get(def.controlName)?.hasError('json')) {
+              <small class="advanced-error"><i class="pi pi-exclamation-circle"></i>El JSON no tiene un formato válido.</small>
+              }
+              @if (advancedForm.get(def.controlName)?.touched && (advancedForm.get(def.controlName)?.hasError('min') || advancedForm.get(def.controlName)?.hasError('max'))) {
+              <small class="advanced-error"><i class="pi pi-exclamation-circle"></i>El valor está fuera del límite permitido.</small>
+              }
+            </div>
             }
           </div>
-          }
-          }
-        </div>
-      </p-accordion-content>
-    </p-accordion-panel>
-    }
-  </p-accordion>
+        </p-accordion-content>
+      </p-accordion-panel>
+      }
+    </p-accordion>
+  </form>
   }
 
   <ng-template #footer>
-    <div class="flex justify-content-end gap-2">
-      <p-button label="Cancelar" severity="secondary" [outlined]="true" (click)="closeAdvanced()" />
-      <p-button label="Aplicar" icon="pi pi-check" (click)="applyAdvanced()" styleClass="p-button-raised" />
+    <div class="dialog-actions end">
+      <p-button label="Cancelar" severity="secondary" [outlined]="true" (onClick)="closeAdvanced()" />
+      <p-button label="Aplicar cambios" icon="pi pi-check" (onClick)="applyAdvanced()" />
     </div>
   </ng-template>
 </p-dialog>
+<!-- ]]]FI -->

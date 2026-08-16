@@ -1,16 +1,17 @@
-// [[[II ESC:031-04 DOC:docs/documents/2026-07-18-031-optimizacion-navegacion-activos.md#escenario-04
+// [[[II ESC:031-04 DOC:docs/documents/2026-07-18-031-optimizacion-navegacion-activos.md#escenario-04 ESC:007-09 DOC:docs/documents/2026-06-01_007_custom-draw-form-listbox.md#escenario-09
 // Campo listbox extraído del template de CustomDrawForm para cargarse con
 // @defer solo cuando un formulario contiene este tipo. Markup idéntico al
 // ng-template original (trazabilidad previa: docs 2026-06-01_007 listbox y
 // 2026-06-04_020 virtual scroll). El padre conserva datos, validaciones y
 // manejo de eventos.
-import { ChangeDetectionStrategy, Component, input, output } from '@angular/core';
+import { ChangeDetectionStrategy, Component, effect, inject, input, output, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormControl, ReactiveFormsModule } from '@angular/forms';
 import { ListboxModule } from 'primeng/listbox';
 import { ButtonModule } from 'primeng/button';
 import { AutoFocusModule } from 'primeng/autofocus';
 import { JoinOrSelfPipe } from '../join-or-self.pipe';
+import { DynamicDropdownDataService } from '../dynamic-dropdown-data.service';
 
 @Component({
   selector: 'app-draw-listbox-field',
@@ -49,7 +50,7 @@ import { JoinOrSelfPipe } from '../join-or-self.pipe';
           ? (fieldConfig().filter_by ? fieldConfig().filter_by + ',label,filter_text,raw.name,raw.display_name,raw.code,raw.id' : 'label,filter_text,raw.name,raw.display_name,raw.code,raw.id')
           : (fieldConfig().filter_by ? fieldConfig().filter_by : (fieldConfig().option_label | joinOrSelf))"
           [scrollHeight]="fieldConfig().scroll_height || '120px'" class="w-full listbox-float"
-          (onChange)="changeAction.emit($event)">
+          (onChange)="changeAction.emit($event)" (onFilter)="filterEvent.set($event)">
 
           <ng-template #group let-group>
             <div class="text-sm font-semibold text-color-secondary listbox-group-label floating-listbox-simple-label ">
@@ -67,6 +68,12 @@ import { JoinOrSelfPipe } from '../join-or-self.pipe';
           <button *ngIf="fieldConfig().reload_icon !== undefined ? fieldConfig().reload_icon : false" type="button" pButton
             icon="pi pi-replay" class="height-icon-custom" title="Recargar"
             (click)="reloadAction.emit(fieldConfig().field)"></button>
+          <!-- [[[II ESC:001-18 DOC:docs/documents/2026-05-16_001_consolidacion_dropdown_types_y_fix_escenarios.md#escenario-18 -->
+          <button *ngIf="fieldConfig().additional_search?.active === true" type="button" pButton
+            icon="pi pi-search" class="height-icon-custom" title="Buscar en el servidor"
+            [disabled]="fieldConfig().readonly === true"
+            (click)="searchAction.emit(fieldConfig().field)"></button>
+          <!-- ]]]FI -->
           <button *ngIf="fieldConfig().new_icon !== undefined ? fieldConfig().new_icon : false" type="button" pButton
             icon="pi pi-plus" class="height-icon-custom" title="Nuevo"
             (click)="newAction.emit(fieldConfig().field)"></button>
@@ -79,16 +86,30 @@ import { JoinOrSelfPipe } from '../join-or-self.pipe';
   `
 })
 export class DrawListboxFieldComponent {
+  private readonly dynamicDropdownDataS = inject(DynamicDropdownDataService);
+
   fieldConfig = input.required<any>();
   control = input.required<FormControl>();
   options = input<any[]>([]);
   multiple = input<boolean>(true);
   virtualReady = input<boolean>(false);
   virtualScrollOptions = input<any>(null);
+  readonly filterEvent = signal<any | null>(null);
 
   changeAction = output<any>();
   reloadAction = output<string>();
+  searchAction = output<string>();
   newAction = output<string>();
   closableAction = output<string>();
+
+  constructor() {
+    effect(() => {
+      const event = this.filterEvent();
+      const config = this.fieldConfig();
+      if (!event || config?.field !== 'asset') return;
+
+      this.dynamicDropdownDataS.logAssetSearch(config, event, this.options());
+    });
+  }
 }
 // ]]]FI

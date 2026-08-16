@@ -2,7 +2,7 @@ import { CommonModule, KeyValue } from '@angular/common';
 import { DROPDOWN_TYPES_PRELOAD } from '../../utils/dropdown-types.const';
 import { TABLE_ROW_SOURCE_FLAG } from '../../utils/table-row-flags.const';
 import { FormControl, FormGroup, FormsModule, ReactiveFormsModule, FormArray, Validators, FormBuilder } from '@angular/forms';
-import { Component, ChangeDetectionStrategy, ChangeDetectorRef, ElementRef, EventEmitter, inject, Input, Output, signal, computed, SimpleChange, SimpleChanges, ViewChild, OnDestroy, OnInit } from '@angular/core';
+import { Component, ChangeDetectionStrategy, ChangeDetectorRef, ElementRef, EventEmitter, inject, Input, Output, signal, computed, effect, SimpleChange, SimpleChanges, ViewChild, OnDestroy, OnInit } from '@angular/core';
 import { Subscription } from 'rxjs';
 import { debounceTime } from 'rxjs/operators';
 import { MenuItem } from 'primeng/api';
@@ -216,6 +216,35 @@ export class CustomDrawFormComponent implements OnInit, OnDestroy {
   readonly isCacheRestored = signal<boolean>(false);
 
   dropdownOptionsSignal = signal<any>({});
+  // [[[II ESC:001-18 DOC:docs/documents/2026-05-16_001_consolidacion_dropdown_types_y_fix_escenarios.md#escenario-18
+  readonly additionalSearchVisible = signal(false);
+  readonly additionalSearchField = signal<any | null>(null);
+  readonly additionalSearchSuggestions = signal<any[]>([]);
+  readonly additionalSearchLoading = signal(false);
+  readonly additionalSearchControl = new FormControl<any>(null);
+  readonly additionalSearchHeader = computed(() => {
+    const field = this.additionalSearchField();
+    return `Buscar ${field?.label || field?.field || 'registro'}`;
+  });
+  readonly additionalSearchMinLength = computed(() => {
+    const config = this.additionalSearchField()?.additional_search?.autocomplete;
+    return Math.max(1, Number(config?.min_search_length) || 5);
+  });
+  private additionalSearchToken = 0;
+  // ]]]FI
+  // [[[II ESC:007-09 DOC:docs/documents/2026-06-01_007_custom-draw-form-listbox.md#escenario-09
+  readonly assetDropdownFilterEvent = signal<{ event: any; fieldConfig: any } | null>(null);
+  private readonly assetDropdownFilterDebugEffect = effect(() => {
+    const filterEvent = this.assetDropdownFilterEvent();
+    if (!filterEvent || filterEvent.fieldConfig?.field !== 'asset') return;
+
+    this.dynamicDropdownDataS.logAssetSearch(
+      filterEvent.fieldConfig,
+      filterEvent.event,
+      this.dropdownOptionsSignal()[filterEvent.fieldConfig.field] || [],
+    );
+  });
+  // ]]]FI
   // [[[II ESC:001-12 DOC:docs/documents/2026-05-16_001_consolidacion_dropdown_types_y_fix_escenarios.md#escenario-12
   fileSplitButtonInvalidSignal = signal<Record<string, boolean>>({});
   private fileSplitButtonValidationTargets: Record<string, string[]> = {};
@@ -349,7 +378,8 @@ export class CustomDrawFormComponent implements OnInit, OnDestroy {
   // [[[II ESC:016-02 DOC:docs/documents/2026-06-02_016_dynamic-dropdown-data-service.md#escenario-02 ESC:017-02 DOC:docs/documents/2026-06-02_017_custom-draw-form-device-drawform.md#escenario-02 ESC:001-09 DOC:docs/documents/2026-05-16_001_consolidacion_dropdown_types_y_fix_escenarios.md#escenario-09
   private getDropdownDataContext(): DynamicDropdownDataContext {
     return {
-      type: this.typeSignal() || this.type || '',
+      type: this.typeSignal() || this.type || this.crudS.type || '',
+      sourceApp: this.crudS.app || '',
       isCreate: this.isCreateSignal(),
     };
   }
@@ -443,6 +473,121 @@ export class CustomDrawFormComponent implements OnInit, OnDestroy {
       }
     }
   }
+
+  // [[[II ESC:001-18 DOC:docs/documents/2026-05-16_001_consolidacion_dropdown_types_y_fix_escenarios.md#escenario-18
+  openAdditionalSearch(fieldConfig: any): void {
+    if (fieldConfig?.additional_search?.active !== true || fieldConfig?.readonly === true) return;
+    const subsidiaries = fieldConfig?.additional_search?.subsidiaries;
+    if (
+      !subsidiaries
+      || typeof subsidiaries !== 'object'
+      || Array.isArray(subsidiaries)
+      || !subsidiaries.filter
+      || typeof subsidiaries.filter !== 'object'
+      || Array.isArray(subsidiaries.filter)
+    ) {
+      this.messageS.changeMessage(
+        'La búsqueda adicional requiere subsidiaries como {"filter": {}}.',
+        null,
+        {},
+        'warn',
+        'Configuración de búsqueda inválida',
+      );
+      return;
+    }
+    this.additionalSearchToken++;
+    this.additionalSearchField.set(fieldConfig);
+    this.additionalSearchSuggestions.set([]);
+    this.additionalSearchControl.reset(null, { emitEvent: false });
+    this.additionalSearchVisible.set(true);
+  }
+
+  closeAdditionalSearch(): void {
+    this.additionalSearchToken++;
+    this.additionalSearchVisible.set(false);
+    this.additionalSearchLoading.set(false);
+    this.additionalSearchSuggestions.set([]);
+    this.additionalSearchControl.reset(null, { emitEvent: false });
+    this.additionalSearchField.set(null);
+  }
+
+  async completeAdditionalSearch(event: any): Promise<void> {
+    const fieldConfig = this.additionalSearchField();
+    const query = String(event?.query ?? '').trim();
+    if (!fieldConfig || query.length < this.additionalSearchMinLength()) {
+      this.additionalSearchSuggestions.set([]);
+      return;
+    }
+
+    const token = ++this.additionalSearchToken;
+    this.additionalSearchLoading.set(true);
+    try {
+      const rows = await this.dynamicDropdownDataS.searchAdditionalOptions(
+        fieldConfig,
+        query,
+        this.getDropdownDataContext(),
+      );
+      if (token === this.additionalSearchToken) {
+        this.additionalSearchSuggestions.set(rows);
+      }
+    } catch {
+      if (token === this.additionalSearchToken) {
+        this.additionalSearchSuggestions.set([]);
+      }
+    } finally {
+      if (token === this.additionalSearchToken) {
+        this.additionalSearchLoading.set(false);
+      }
+    }
+  }
+
+  async selectAdditionalSearch(event: any): Promise<void> {
+    const fieldConfig = this.additionalSearchField();
+    const selected = event?.value;
+    if (!fieldConfig || !selected) return;
+
+    const built = await this._buildDropdownOptionsForField(fieldConfig, [selected]);
+    const selectedOption = built?.[0] ?? selected;
+    const optionValue = fieldConfig?.option_value || 'id';
+    const selectedValue = fieldConfig?.type === 'tree-select'
+      ? selectedOption
+      : (selected?.[optionValue] ?? selected?.id ?? selected?.value);
+    const currentOptions = this.dropdownOptionsSignal()[fieldConfig.field] || [];
+    const existingRows = this._flattenDropdownOptions(currentOptions);
+    const selectedId = selected?.[optionValue] ?? selected?.id ?? selected?.value;
+    const alreadyLoaded = existingRows.some((row: any) =>
+      (row?.[optionValue] ?? row?.id ?? row?.value) === selectedId
+    );
+    if (!alreadyLoaded) {
+      this._updateDropdownOptions(
+        fieldConfig.field,
+        [...currentOptions, selectedOption],
+        fieldConfig,
+      );
+    }
+
+    const control = this.formGroupSignal()?.get(fieldConfig.field);
+    const multiple = fieldConfig?.type === 'multi-select'
+      || fieldConfig?.type === 'tree-select'
+      || (fieldConfig?.type === 'listbox' && this.selectionMultipleSignal()[fieldConfig.field] !== false);
+    const currentValues = Array.isArray(control?.value) ? control.value : [];
+    const valueIdentity = (value: any): any => value?.data?.raw?.[optionValue]
+      ?? value?.data?.id
+      ?? value?.raw?.[optionValue]
+      ?? value?.[optionValue]
+      ?? value?.id
+      ?? value?.value
+      ?? value;
+    const nextValue = multiple
+      ? (currentValues.some((value: any) => valueIdentity(value) === selectedId)
+        ? currentValues
+        : [...currentValues, selectedValue])
+      : selectedValue;
+    control?.setValue(nextValue);
+    this.onChangeDropdown({ value: nextValue }, fieldConfig);
+    this.closeAdditionalSearch();
+  }
+  // ]]]FI
 
   private normalizeOptionsForField(options: any[], fieldConfig: any): any[] {
     return this.dynamicDropdownDataS.normalizeOptionsForField(options, fieldConfig);
@@ -4212,9 +4357,34 @@ export class CustomDrawFormComponent implements OnInit, OnDestroy {
     this._triggerAutoCompleteSearchKey(event, config);
   }
 
+  /**
+   * Texto con el que se dispara la búsqueda por tecla.
+   *
+   * [[[II ESC:057-41 DOC:docs/documents/2026-08-08-057-propuesta-compras-v3.md#escenario-41
+   * Se lee del INPUT y sólo si no hay nada se cae al control del formulario.
+   *
+   * El orden importa y no es una preferencia de estilo: PrimeNG aplica
+   * `forceSelection` —que sale de `force_selection` en la configuración— y ese
+   * modo **no propaga el texto libre al control**. Un buscador que obliga a
+   * elegir de la lista dejaba su control en `null` mientras el usuario escribía,
+   * así que al pulsar Enter la consulta salía vacía y NO se llamaba al servidor,
+   * sin ninguna señal en pantalla.
+   *
+   * Los buscadores que ya funcionaban no cambian: declaran
+   * `free_or_relationship`, su control SÍ guarda lo tecleado, y el input tiene
+   * ese mismo texto. Leerlo del input devuelve exactamente lo de antes.
+   * ]]]FI
+   */
+  private _autoCompleteTypedQuery(event: any, config: any): string {
+    const escrito = (event?.target as HTMLInputElement | undefined)?.value;
+    if (typeof escrito === 'string' && escrito.trim() !== '') return escrito.trim();
+    return (this.formGroupSignal()?.get(config.field)?.value ?? '').toString().trim();
+  }
+
   private _triggerAutoCompleteSearchKey(event: any, config: any): boolean {
-    const query = (this.formGroupSignal()?.get(config.field)?.value ?? '').toString().trim();
+    const query = this._autoCompleteTypedQuery(event, config);
     const exact = this._autoCompleteSearchMode(config) === 'exact';
+
     if (!query || (!exact && query.length < this.autoCompleteMinLength(config))) {
       this.autoCompletePanelSuppressed.set(true);
       this.suggestions.set([]);
@@ -4226,6 +4396,7 @@ export class CustomDrawFormComponent implements OnInit, OnDestroy {
     this._runAutoCompleteSearch(config, query, { advanceOnNoMatch: true, autoApplyUnique: true });
     return true;
   }
+
   // ]]]FI
 
   /**

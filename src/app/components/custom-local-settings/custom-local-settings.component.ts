@@ -5,19 +5,18 @@ import {
   ChangeDetectionStrategy
 } from '@angular/core';
 import {
-  FormControl, FormGroup, UntypedFormGroup,
-  FormsModule, ReactiveFormsModule
+  AbstractControl, FormControl, FormGroup, ValidationErrors, ValidatorFn, Validators, UntypedFormGroup,
+  ReactiveFormsModule
 } from '@angular/forms';
+import { Subscription } from 'rxjs';
 
 import { AccordionModule } from 'primeng/accordion';
 import { AutoCompleteModule } from 'primeng/autocomplete';
 import { ButtonModule } from 'primeng/button';
-import { CheckboxModule } from 'primeng/checkbox';
-import { ChipModule } from 'primeng/chip';
 import { DatePickerModule } from 'primeng/datepicker';
 import { DialogModule } from 'primeng/dialog';
-import { DividerModule } from 'primeng/divider';
 import { DragDropModule } from 'primeng/dragdrop';
+import { FloatLabelModule } from 'primeng/floatlabel';
 import { InputNumberModule } from 'primeng/inputnumber';
 import { InputTextModule } from 'primeng/inputtext';
 import { MultiSelectModule } from 'primeng/multiselect';
@@ -39,7 +38,7 @@ import {
 import { MessageService } from '../services/message.service';
 
 import {
-  AdvancedSection, getByPath, setByPath, schemaForType,
+  AdvancedFieldDef, AdvancedSection, getByPath, setByPath, schemaForType,
   WIDTH_PRESETS, HEIGHT_PRESETS,
 } from './type-schemas';
 
@@ -96,6 +95,56 @@ export interface UnifiedFieldRow {
   fieldRequired: boolean;
   fieldReadonly: boolean;
   fieldPlaceholder: string;
+  form: FormGroup;
+}
+
+interface UnifiedRowFormValue {
+  label: string;
+  colActive: boolean;
+  sortable: boolean;
+  locked: boolean;
+  hideMobile: boolean;
+  gridActive: boolean;
+  gridSpan: number;
+  gridSpanMd: number;
+}
+
+interface AdvancedFieldView extends AdvancedFieldDef {
+  controlName: string;
+  inputId: string;
+  controlClass: string;
+  optionsList: { label: string; value: any }[];
+  booleanOnLabel: string;
+  booleanOffLabel: string;
+  disabled: boolean;
+  isBoolean: boolean;
+  isNumber: boolean;
+  isSelect: boolean;
+  isMultiselect: boolean;
+  isTextarea: boolean;
+  isJson: boolean;
+}
+
+interface AdvancedSectionView {
+  title: string;
+  icon?: string;
+  defs: AdvancedFieldView[];
+}
+
+interface FilterEditorView {
+  col: FilterableCol;
+  state: FilterRow;
+  type: FilterFieldType;
+  operations: OpOption[];
+  activeControl: FormControl<any>;
+  operationControl: FormControl<any>;
+  valueControl: FormControl<any>;
+  secondValueControl: FormControl<any>;
+  optionLabel: string;
+  isNull: boolean;
+  isRange: boolean;
+  isIn: boolean;
+  hasRelativePresets: boolean;
 }
 
 interface DialogCfg {
@@ -193,13 +242,14 @@ const DEFAULT_BEHAVIOR_CFG: BehaviorCfg = {
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
+// [[[II ESC:031-07 DOC:docs/documents/2026-07-18-031-optimizacion-navegacion-activos.md#escenario-07
 @Component({
-  selector: 'app-custom-local-settings',
+  selector: 'app-custom-local-settings-editor',
   standalone: true,
   imports: [
-    CommonModule, FormsModule, ReactiveFormsModule,
-    AccordionModule, AutoCompleteModule, ButtonModule, CheckboxModule, ChipModule,
-    DatePickerModule, DialogModule, DividerModule, DragDropModule,
+    CommonModule, ReactiveFormsModule,
+    AccordionModule, AutoCompleteModule, ButtonModule,
+    DatePickerModule, DialogModule, DragDropModule, FloatLabelModule,
     InputNumberModule, InputTextModule, MultiSelectModule, SelectModule, TabsModule,
     TagModule, TextareaModule, TooltipModule, ToggleButtonModule,
   ],
@@ -207,6 +257,7 @@ const DEFAULT_BEHAVIOR_CFG: BehaviorCfg = {
   styleUrl: './custom-local-settings.component.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
+// ]]]FI
 export class CustomLocalSettingsComponent implements OnChanges, OnDestroy {
 
   private crudS = inject(CRUDService);
@@ -270,8 +321,27 @@ export class CustomLocalSettingsComponent implements OnChanges, OnDestroy {
 
   /** Para drag/drop de PrimeNG */
   private _dragOriginIdx = signal<number | null>(null);
+  private readonly _subscriptions = new Subscription();
+  private readonly _rowFormSubscriptions = new Map<string, Subscription>();
+  private _syncingForms = false;
 
   filterValuesFormGroup = new UntypedFormGroup({});
+  readonly advancedForm = new FormGroup({});
+  readonly dialogForm = new FormGroup({
+    width: new FormControl(DEFAULT_DIALOG_CFG.width, { nonNullable: true }),
+    height: new FormControl(DEFAULT_DIALOG_CFG.height, { nonNullable: true }),
+    singular: new FormControl('', { nonNullable: true }),
+    plural: new FormControl('', { nonNullable: true }),
+    singularIndefiniteArticle: new FormControl('', { nonNullable: true }),
+    pluralDefiniteArticle: new FormControl('', { nonNullable: true }),
+  });
+  readonly behaviorForm = new FormGroup({
+    load_on_start: new FormControl(DEFAULT_BEHAVIOR_CFG.load_on_start, { nonNullable: true }),
+    load_on_start_mobile: new FormControl(DEFAULT_BEHAVIOR_CFG.load_on_start_mobile, { nonNullable: true }),
+    silent: new FormControl(DEFAULT_BEHAVIOR_CFG.silent, { nonNullable: true }),
+    rows: new FormControl(DEFAULT_BEHAVIOR_CFG.rows, { nonNullable: true }),
+    rows_mobile: new FormControl(DEFAULT_BEHAVIOR_CFG.rows_mobile, { nonNullable: true }),
+  });
 
   readonly booleanOptions = [
     { id: 'true', name: 'Sí / Verdadero' },
@@ -280,6 +350,10 @@ export class CustomLocalSettingsComponent implements OnChanges, OnDestroy {
 
   readonly widthOptions = WIDTH_PRESETS;
   readonly heightOptions = HEIGHT_PRESETS;
+  readonly spanOptions = Array.from({ length: 12 }, (_, index) => ({
+    label: `${index + 1} ${index === 0 ? 'columna' : 'columnas'}`,
+    value: index + 1,
+  }));
 
   // ─── Computed maps (evita funciones en HTML) ──────────────────────────────
 
@@ -362,8 +436,60 @@ export class CustomLocalSettingsComponent implements OnChanges, OnDestroy {
     const cfg: any = Array.isArray(fields)
       ? (fields as any[]).find(x => (x?.field ?? x?.name) === f)
       : (fields as Record<string, any>)[f];
-    return schemaForType(cfg?.type);
+    return schemaForType(cfg?.type, cfg);
   });
+
+  readonly advancedSectionViews = computed<AdvancedSectionView[]>(() => {
+    const snapshot = this.advancedSnapshot();
+    if (!snapshot) return [];
+    return this.advancedSchema()
+      .map(section => ({
+        title: section.title,
+        icon: section.icon,
+        defs: section.defs
+          .filter(def => !def.includeIf || def.includeIf(snapshot))
+          .map(def => this._advancedFieldView(def, snapshot)),
+      }))
+      .filter(section => section.defs.length > 0);
+  });
+
+  readonly filterEditorRows = computed<FilterEditorView[]>(() => {
+    const states = this.filterState();
+    const types = this.filterTypeByField();
+    const operations = this.opsOptionsByField();
+    return this.filterableCols().map(col => {
+      const state = states[col.filterKey] ?? { active: false, op: 'exact' };
+      return {
+        col,
+        state,
+        type: types[col.filterKey] ?? 'text',
+        operations: operations[col.filterKey] ?? [],
+        activeControl: this._filterControl(`fa_${col.filterKey}`),
+        operationControl: this._filterControl(`fo_${col.filterKey}`),
+        valueControl: this._filterControl(`fv_${col.filterKey}`),
+        secondValueControl: this._filterControl(`fv_${col.filterKey}_2`),
+        optionLabel: this.getOptionLabel(col),
+        isNull: state.op === 'isnull',
+        isRange: state.op === 'range',
+        isIn: state.op === 'in',
+        hasRelativePresets: state.active
+          && types[col.filterKey] === 'datetime'
+          && col.filter?.relative?.enabled !== false,
+      };
+    });
+  });
+
+  constructor() {
+    this._subscriptions.add(this.dialogForm.valueChanges.subscribe(value => {
+      if (this._syncingForms) return;
+      this.dialogCfg.set({ ...DEFAULT_DIALOG_CFG, ...value } as DialogCfg);
+    }));
+    this._subscriptions.add(this.behaviorForm.valueChanges.subscribe(value => {
+      if (this._syncingForms) return;
+      this.behaviorCfg.set({ ...DEFAULT_BEHAVIOR_CFG, ...value } as BehaviorCfg);
+    }));
+    this._subscriptions.add(this.advancedForm.valueChanges.subscribe(() => this._applyAdvancedFormValue()));
+  }
 
   // [[[II ESC:005-11 DOC:docs/documents/2026-05-31_005_columnas-form-data-y-tree-select-nombres.md#escenario-11
   private _buildFilterableCols(fieldName: string, cfg: any, colHeader?: string): FilterableCol[] {
@@ -454,7 +580,11 @@ export class CustomLocalSettingsComponent implements OnChanges, OnDestroy {
     if (changes['formGroup']) this.formGroupSignal.set(changes['formGroup'].currentValue);
   }
 
-  ngOnDestroy(): void { /* noop */ }
+  ngOnDestroy(): void {
+    this._subscriptions.unsubscribe();
+    this._rowFormSubscriptions.forEach(subscription => subscription.unsubscribe());
+    this._rowFormSubscriptions.clear();
+  }
 
   // ─── FK / dropdowns ───────────────────────────────────────────────────────
 
@@ -578,28 +708,23 @@ export class CustomLocalSettingsComponent implements OnChanges, OnDestroy {
   // ─── Toggles & setters de fila unificada ──────────────────────────────────
 
   toggleUnifiedColActive(i: number, colActive: boolean): void {
-    const arr = [...this.unifiedRows()];
-    arr[i] = { ...arr[i], colActive, inCols: colActive ? true : arr[i].inCols };
-    this.unifiedRows.set(arr);
+    (this.unifiedRows()[i]?.form.get('colActive') as FormControl | null)?.setValue(colActive);
   }
 
   toggleUnifiedGridActive(i: number, gridActive: boolean): void {
-    const arr = [...this.unifiedRows()];
-    arr[i] = { ...arr[i], gridActive, inGrid: gridActive ? true : arr[i].inGrid };
-    this.unifiedRows.set(arr);
+    (this.unifiedRows()[i]?.form.get('gridActive') as FormControl | null)?.setValue(gridActive);
   }
 
   setUnifiedSpan(i: number, val: number, key: 'gridSpan' | 'gridSpanMd'): void {
     const clamped = Math.min(12, Math.max(1, Math.round(val ?? 1)));
-    const arr = [...this.unifiedRows()];
-    arr[i] = { ...arr[i], [key]: clamped };
-    this.unifiedRows.set(arr);
+    (this.unifiedRows()[i]?.form.get(key) as FormControl | null)?.setValue(clamped);
   }
 
   setColsCfg(i: number, key: keyof ColsCfgData, val: any): void {
-    const arr = [...this.unifiedRows()];
-    arr[i] = { ...arr[i], colsCfg: { ...arr[i].colsCfg, [key]: val } };
-    this.unifiedRows.set(arr);
+    const controlName: Record<keyof ColsCfgData, keyof UnifiedRowFormValue> = {
+      label: 'label', sortable: 'sortable', locked: 'locked', hideMobile: 'hideMobile',
+    };
+    (this.unifiedRows()[i]?.form.get(controlName[key]) as FormControl | null)?.setValue(val);
   }
 
   setFieldProp(
@@ -620,10 +745,14 @@ export class CustomLocalSettingsComponent implements OnChanges, OnDestroy {
     const ops = this.opsOptionsByField()[filterKey]?.map(o => o.value) ?? ['exact'];
     const op = active ? (col?.filter?.default ?? ops[0] ?? 'exact') : this.getRow(filterKey).op;
     this.filterState.update(st => ({ ...st, [filterKey]: { active, op } }));
+    this._filterControl(`fa_${filterKey}`).setValue(active, { emitEvent: false });
+    this._filterControl(`fo_${filterKey}`).setValue(op, { emitEvent: false });
+    this._syncFilterDisabledState(filterKey, active);
   }
 
   setOp(filterKey: string, op: string): void {
     this.filterState.update(st => ({ ...st, [filterKey]: { ...this.getRow(filterKey), op } }));
+    this._filterControl(`fo_${filterKey}`).setValue(op, { emitEvent: false });
     this.filterValuesFormGroup.get(`fv_${filterKey}`)?.setValue(null, { emitEvent: false });
     this.filterValuesFormGroup.get(`fv_${filterKey}_2`)?.setValue(null, { emitEvent: false });
   }
@@ -638,6 +767,9 @@ export class CustomLocalSettingsComponent implements OnChanges, OnDestroy {
       case 'year': v1 = this._startOf('year', now); v2 = this._endOf('year', now); break;
     }
     this.filterState.update(st => ({ ...st, [filterKey]: { active: true, op: 'range' } }));
+    this._filterControl(`fa_${filterKey}`).setValue(true, { emitEvent: false });
+    this._filterControl(`fo_${filterKey}`).setValue('range', { emitEvent: false });
+    this._syncFilterDisabledState(filterKey, true);
     this.filterValuesFormGroup.get(`fv_${filterKey}`)?.setValue(v1);
     this.filterValuesFormGroup.get(`fv_${filterKey}_2`)?.setValue(v2);
   }
@@ -648,6 +780,9 @@ export class CustomLocalSettingsComponent implements OnChanges, OnDestroy {
     this.filterState.update(st => ({
       ...st, [filterKey]: { active: false, op: col?.filter?.default ?? ops[0] ?? 'exact' },
     }));
+    this._filterControl(`fa_${filterKey}`).setValue(false, { emitEvent: false });
+    this._filterControl(`fo_${filterKey}`).setValue(col?.filter?.default ?? ops[0] ?? 'exact', { emitEvent: false });
+    this._syncFilterDisabledState(filterKey, false);
     this.filterValuesFormGroup.get(`fv_${filterKey}`)?.setValue(null, { emitEvent: false });
     this.filterValuesFormGroup.get(`fv_${filterKey}_2`)?.setValue(null, { emitEvent: false });
   }
@@ -687,46 +822,153 @@ export class CustomLocalSettingsComponent implements OnChanges, OnDestroy {
       : (fields as Record<string, any>)[field];
     this.advancedSnapshot.set(structuredClone(cfg ?? {}));
     this.advancedField.set(field);
+    this._syncAdvancedForm();
   }
 
   closeAdvanced(): void {
     this.advancedField.set(null);
     this.advancedSnapshot.set(null);
+    Object.keys(this.advancedForm.controls).forEach(controlName => {
+      this.advancedForm.removeControl(controlName, { emitEvent: false });
+    });
   }
 
-  /** Lee un valor del snapshot por path */
-  advValue(path: string): any { return getByPath(this.advancedSnapshot(), path); }
-
-  /** Setea un valor en el snapshot por path */
-  advSet(path: string, value: any): void {
-    const snap = this.advancedSnapshot();
-    if (!snap) return;
-    this.advancedSnapshot.set(setByPath(snap, path, value));
+  private _advancedFieldView(def: AdvancedFieldDef, snapshot: any): AdvancedFieldView {
+    return {
+      ...def,
+      controlName: this._advancedControlName(def.path),
+      inputId: `local-setting-${def.path.replace(/[^a-zA-Z0-9_-]/g, '-')}`,
+      controlClass: def.kind === 'number' ? 'col-span-12 md:col-span-4' : 'col-span-12 md:col-span-6',
+      optionsList: def.options ?? [],
+      booleanOnLabel: def.booleanOnLabel ?? def.label,
+      booleanOffLabel: def.booleanOffLabel ?? 'Deshabilitado',
+      disabled: !!def.showIf && !def.showIf(snapshot),
+      isBoolean: def.kind === 'boolean',
+      isNumber: def.kind === 'number',
+      isSelect: def.kind === 'select',
+      isMultiselect: def.kind === 'multiselect',
+      isTextarea: def.kind === 'textarea',
+      isJson: def.kind === 'json',
+    };
   }
 
-  advSetJson(path: string, raw: string): void {
-    try {
-      const parsed = raw?.trim() ? JSON.parse(raw) : null;
-      this.advSet(path, parsed);
-    } catch {
-      // mantener el string crudo como fallback (visible al usuario)
-      this.advSet(path, raw);
+  private _advancedControlName(path: string): string {
+    return `adv_${path.replace(/[^a-zA-Z0-9_]/g, '__')}`;
+  }
+
+  private _currentAdvancedDefs(): AdvancedFieldDef[] {
+    const snapshot = this.advancedSnapshot();
+    if (!snapshot) return [];
+    return this.advancedSchema()
+      .flatMap(section => section.defs)
+      .filter(def => !def.includeIf || def.includeIf(snapshot));
+  }
+
+  private _syncAdvancedForm(): void {
+    const snapshot = this.advancedSnapshot();
+    const defs = snapshot ? this._currentAdvancedDefs() : [];
+    const activeControls = new Set(defs.map(def => this._advancedControlName(def.path)));
+    this._syncingForms = true;
+
+    Object.keys(this.advancedForm.controls).forEach(controlName => {
+      if (!activeControls.has(controlName)) {
+        this.advancedForm.removeControl(controlName, { emitEvent: false });
+      }
+    });
+
+    defs.forEach(def => {
+      const controlName = this._advancedControlName(def.path);
+      if (!this.advancedForm.contains(controlName)) {
+        this.advancedForm.addControl(controlName, new FormControl(null, this._advancedValidators(def)), { emitEvent: false });
+      }
+      const control = (this.advancedForm.controls as Record<string, FormControl>)[controlName];
+      control.setValidators(this._advancedValidators(def));
+      const value = getByPath(snapshot, def.path);
+      control.setValue(def.kind === 'json' ? this._stringifyJson(value) : (value ?? null), { emitEvent: false });
+      control.updateValueAndValidity({ emitEvent: false });
+      this._setControlDisabled(control, !!def.showIf && !def.showIf(snapshot));
+    });
+
+    this._syncingForms = false;
+  }
+
+  private _applyAdvancedFormValue(): void {
+    if (this._syncingForms) return;
+    const snapshot = this.advancedSnapshot();
+    if (!snapshot) return;
+    const rawValue = this.advancedForm.getRawValue() as Record<string, any>;
+    let nextSnapshot = structuredClone(snapshot);
+
+    this._currentAdvancedDefs().forEach(def => {
+      const controlName = this._advancedControlName(def.path);
+      if (!Object.prototype.hasOwnProperty.call(rawValue, controlName)) return;
+      const raw = rawValue[controlName];
+      const previous = getByPath(snapshot, def.path);
+      if (previous === undefined && (raw === null || raw === undefined || raw === '')) return;
+      nextSnapshot = setByPath(nextSnapshot, def.path, def.kind === 'json' ? this._parseJson(raw) : raw);
+    });
+
+    this.advancedSnapshot.set(nextSnapshot);
+    this._syncAdvancedDisabledStates();
+  }
+
+  private _syncAdvancedDisabledStates(): void {
+    const snapshot = this.advancedSnapshot();
+    if (!snapshot) return;
+    this._syncingForms = true;
+    this._currentAdvancedDefs().forEach(def => {
+      const control = (this.advancedForm.controls as Record<string, FormControl>)[this._advancedControlName(def.path)];
+      if (control) this._setControlDisabled(control, !!def.showIf && !def.showIf(snapshot));
+    });
+    this._syncingForms = false;
+  }
+
+  private _setControlDisabled(control: FormControl, disabled: boolean): void {
+    if (disabled && control.enabled) control.disable({ emitEvent: false });
+    if (!disabled && control.disabled) control.enable({ emitEvent: false });
+  }
+
+  private _advancedValidators(def: AdvancedFieldDef): ValidatorFn[] {
+    const validators: ValidatorFn[] = [];
+    if (def.min !== undefined) validators.push(Validators.min(def.min));
+    if (def.max !== undefined) validators.push(Validators.max(def.max));
+    if ((def.kind === 'select' || def.kind === 'multiselect') && def.options?.length) {
+      const allowed = new Set(def.options.map(option => option.value));
+      validators.push((control: AbstractControl): ValidationErrors | null => {
+        const value = control.value;
+        if (value === null || value === undefined || value === '') return null;
+        const values = def.kind === 'multiselect' ? (Array.isArray(value) ? value : [value]) : [value];
+        return values.every(item => allowed.has(item)) ? null : { closedOption: true };
+      });
     }
+    if (def.kind === 'json') {
+      validators.push((control: AbstractControl): ValidationErrors | null => {
+        const value = control.value;
+        if (value === null || value === undefined || String(value).trim() === '') return null;
+        try { JSON.parse(String(value)); return null; } catch { return { json: true }; }
+      });
+    }
+    return validators;
   }
 
-  advValueAsJson(path: string): string {
-    const v = this.advValue(path);
-    if (v == null) return '';
-    if (typeof v === 'string') return v;
-    try { return JSON.stringify(v, null, 2); } catch { return String(v); }
+  private _stringifyJson(value: any): string {
+    if (value == null) return '';
+    if (typeof value === 'string') return value;
+    try { return JSON.stringify(value, null, 2); } catch { return String(value); }
   }
 
-  advShouldShow(def: { showIf?: (cfg: any) => boolean }): boolean {
-    return !def.showIf || def.showIf(this.advancedSnapshot() ?? {});
+  private _parseJson(raw: any): any {
+    if (typeof raw !== 'string') return raw;
+    try { return raw.trim() ? JSON.parse(raw) : null; } catch { return raw; }
   }
 
   /** Aplica el snapshot al fieldSignal (en memoria) */
   applyAdvanced(): void {
+    if (this.advancedForm.invalid) {
+      this.advancedForm.markAllAsTouched();
+      this.messageS.changeMessage('Revisa los valores marcados: deben pertenecer al contrato permitido.');
+      return;
+    }
     const f = this.advancedField();
     const snap = this.advancedSnapshot();
     if (!f || !snap) { this.closeAdvanced(); return; }
@@ -749,9 +991,14 @@ export class CustomLocalSettingsComponent implements OnChanges, OnDestroy {
     const arr = [...this.unifiedRows()];
     const idx = arr.findIndex(r => r.field === field);
     if (idx < 0) return;
+    const baseSpan = this._spanFromClass(cfg?.class, arr[idx].gridSpan);
+    const desktopSpan = this._spanFromClass(cfg?.class_md, arr[idx].gridSpanMd);
     arr[idx] = {
       ...arr[idx],
       header: cfg?.label ?? arr[idx].header,
+      gridSpan: baseSpan,
+      gridSpanMd: desktopSpan,
+      colActive: cfg?.cols?.hide !== true,
       fieldHide: cfg?.hide === true,
       fieldRequired: cfg?.required === true,
       fieldReadonly: cfg?.readonly === true,
@@ -765,6 +1012,15 @@ export class CustomLocalSettingsComponent implements OnChanges, OnDestroy {
       },
     };
     this.unifiedRows.set(arr);
+    arr[idx].form.patchValue({
+      label: arr[idx].colsCfg.label,
+      colActive: arr[idx].colActive,
+      sortable: arr[idx].colsCfg.sortable,
+      locked: arr[idx].colsCfg.locked,
+      hideMobile: arr[idx].colsCfg.hideMobile,
+      gridSpan: baseSpan,
+      gridSpanMd: desktopSpan,
+    }, { emitEvent: false });
   }
 
   // ─── Diálogo principal ────────────────────────────────────────────────────
@@ -803,11 +1059,11 @@ export class CustomLocalSettingsComponent implements OnChanges, OnDestroy {
   // ─── Diálogo: setters de configuración ────────────────────────────────────
 
   setDialog<K extends keyof DialogCfg>(key: K, val: DialogCfg[K]): void {
-    this.dialogCfg.update(c => ({ ...c, [key]: val }));
+    (this.dialogForm.controls[key] as FormControl<any>).setValue(val);
   }
 
   setBehavior<K extends keyof BehaviorCfg>(key: K, val: BehaviorCfg[K]): void {
-    this.behaviorCfg.update(c => ({ ...c, [key]: val }));
+    (this.behaviorForm.controls[key] as FormControl<any>).setValue(val);
   }
 
   // ─── Construcción del payload modificado ──────────────────────────────────
@@ -943,20 +1199,28 @@ export class CustomLocalSettingsComponent implements OnChanges, OnDestroy {
     }
 
     // Cargar dialog cfg
-    this.dialogCfg.set({
+    const dialogCfg = {
       ...DEFAULT_DIALOG_CFG,
       ...(draw?.dialog ?? {}),
-    } as DialogCfg);
+    } as DialogCfg;
+    this.dialogCfg.set(dialogCfg);
+    this._syncingForms = true;
+    this.dialogForm.patchValue(dialogCfg, { emitEvent: false });
+    this._syncingForms = false;
 
     // Cargar behavior
     const g = f?.general ?? {};
-    this.behaviorCfg.set({
+    const behaviorCfg = {
       load_on_start: g?.load?.load_on_start ?? false,
       load_on_start_mobile: g?.load?.load_on_start_mobile ?? false,
       silent: g?.load?.silent ?? true,
       rows: g?.pagination?.rows ?? 20,
       rows_mobile: g?.pagination?.rows_mobile ?? 10,
-    });
+    };
+    this.behaviorCfg.set(behaviorCfg);
+    this._syncingForms = true;
+    this.behaviorForm.patchValue(behaviorCfg, { emitEvent: false });
+    this._syncingForms = false;
 
     this._initFilterState();
     this._loadDrawTabIntoRows(this.activeDrawTab());
@@ -970,6 +1234,7 @@ export class CustomLocalSettingsComponent implements OnChanges, OnDestroy {
       this._ensureControls(col.filterKey);
       const filter = col?.filter;
       const isActive = filter?.active === true;
+      this._filterControl(`fa_${col.filterKey}`).setValue(isActive, { emitEvent: false });
       if (isActive && filter?.default_value !== undefined && filter?.default_value !== null) {
         let preloadValue = filter.default_value;
         const ft = colTypeToFilterType(col.type ?? '');
@@ -987,6 +1252,8 @@ export class CustomLocalSettingsComponent implements OnChanges, OnDestroy {
         active: filter?.active === true,
         op: filter?.default ?? opsArr[0] ?? 'exact',
       };
+      this._filterControl(`fo_${col.filterKey}`).setValue(state[col.filterKey].op, { emitEvent: false });
+      this._syncFilterDisabledState(col.filterKey, state[col.filterKey].active);
     }
     this.filterState.set(state);
     this._loadAllDropdownOptions(cols);
@@ -994,10 +1261,32 @@ export class CustomLocalSettingsComponent implements OnChanges, OnDestroy {
   // ]]]FI
 
   private _ensureControls(field: string): void {
+    if (!this.filterValuesFormGroup.contains(`fa_${field}`)) {
+      const activeControl = new FormControl<boolean>(false, { nonNullable: true });
+      this.filterValuesFormGroup.addControl(`fa_${field}`, activeControl);
+      this._subscriptions.add(activeControl.valueChanges.subscribe(active => this.toggleFilter(field, active)));
+    }
+    if (!this.filterValuesFormGroup.contains(`fo_${field}`)) {
+      const operationControl = new FormControl<string>('exact', { nonNullable: true });
+      this.filterValuesFormGroup.addControl(`fo_${field}`, operationControl);
+      this._subscriptions.add(operationControl.valueChanges.subscribe(op => this.setOp(field, op)));
+    }
     if (!this.filterValuesFormGroup.contains(`fv_${field}`))
       this.filterValuesFormGroup.addControl(`fv_${field}`, new FormControl<any>(null));
     if (!this.filterValuesFormGroup.contains(`fv_${field}_2`))
       this.filterValuesFormGroup.addControl(`fv_${field}_2`, new FormControl<any>(null));
+  }
+
+  private _filterControl(name: string): FormControl<any> {
+    return this.filterValuesFormGroup.get(name) as FormControl<any>;
+  }
+
+  private _syncFilterDisabledState(field: string, active: boolean): void {
+    [`fo_${field}`, `fv_${field}`, `fv_${field}_2`].forEach(name => {
+      const control = this._filterControl(name);
+      if (!control) return;
+      this._setControlDisabled(control, !active);
+    });
   }
 
   /** Persiste las filas actuales en el buffer de la pestaña activa */
@@ -1062,7 +1351,7 @@ export class CustomLocalSettingsComponent implements OnChanges, OnDestroy {
     });
 
     const rawFields = this.fieldSignal()?.fields ?? {};
-    const rows: UnifiedFieldRow[] = ordered.map(({ field, header }) => {
+    const rows: Array<Omit<UnifiedFieldRow, 'form'>> = ordered.map(({ field, header }) => {
       const gridCfg = gridMap.get(field);
       const spanMatch = (gridCfg?.class ?? 'col-span-6').match(/col-span-(\d+)/);
       const spanMdMatch = (gridCfg?.class_md ?? 'md:col-span-6').match(/col-span-(\d+)/);
@@ -1092,7 +1381,68 @@ export class CustomLocalSettingsComponent implements OnChanges, OnDestroy {
         fieldPlaceholder: rawFieldCfg?.placeholder ?? '',
       };
     });
+    this._setUnifiedRows(rows);
+  }
+
+  private _setUnifiedRows(rows: Array<Omit<UnifiedFieldRow, 'form'>>): void {
+    this._rowFormSubscriptions.forEach(subscription => subscription.unsubscribe());
+    this._rowFormSubscriptions.clear();
+
+    const rowsWithForms = rows.map(row => {
+      const form = new FormGroup({
+        label: new FormControl(row.colsCfg.label, { nonNullable: true }),
+        colActive: new FormControl(row.colActive, { nonNullable: true }),
+        sortable: new FormControl(row.colsCfg.sortable, { nonNullable: true }),
+        locked: new FormControl(row.colsCfg.locked, { nonNullable: true }),
+        hideMobile: new FormControl(row.colsCfg.hideMobile, { nonNullable: true }),
+        gridActive: new FormControl(row.gridActive, { nonNullable: true }),
+        gridSpan: new FormControl(row.gridSpan, { nonNullable: true }),
+        gridSpanMd: new FormControl(row.gridSpanMd, { nonNullable: true }),
+      });
+      const rowWithForm: UnifiedFieldRow = { ...row, form };
+      this._rowFormSubscriptions.set(
+        row.field,
+        form.valueChanges.subscribe(value => this._applyUnifiedRowFormValue(row.field, value)),
+      );
+      return rowWithForm;
+    });
+    this.unifiedRows.set(rowsWithForms);
+  }
+
+  private _applyUnifiedRowFormValue(field: string, value: Partial<UnifiedRowFormValue>): void {
+    if (this._syncingForms) return;
+    const rows = [...this.unifiedRows()];
+    const index = rows.findIndex(row => row.field === field);
+    if (index < 0) return;
+    const row = rows[index];
+    const colActive = value.colActive === true;
+    const gridActive = value.gridActive === true;
+    rows[index] = {
+      ...row,
+      colActive,
+      inCols: colActive ? true : row.inCols,
+      gridActive,
+      inGrid: gridActive ? true : row.inGrid,
+      gridSpan: this._normalizeSpan(value.gridSpan, row.gridSpan),
+      gridSpanMd: this._normalizeSpan(value.gridSpanMd, row.gridSpanMd),
+      colsCfg: {
+        label: String(value.label ?? row.colsCfg.label),
+        sortable: value.sortable === true,
+        locked: value.locked === true,
+        hideMobile: value.hideMobile === true,
+      },
+    };
     this.unifiedRows.set(rows);
+  }
+
+  private _normalizeSpan(value: any, fallback: number): number {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? Math.min(12, Math.max(1, Math.round(parsed))) : fallback;
+  }
+
+  private _spanFromClass(value: any, fallback: number): number {
+    const match = String(value ?? '').match(/(?:^|:)col-span-(\d+)$/);
+    return match ? this._normalizeSpan(match[1], fallback) : fallback;
   }
 
   private _loadAllDropdownOptions(cols: any[]): void {

@@ -14,10 +14,12 @@
     [filterDelayTable]="filterDelayTable()" />
 </div>
 
-<!-- [[[II ESC:031-06 DOC:docs/documents/2026-07-18-031-optimizacion-navegacion-activos.md#escenario-06 -->
-<app-custom-local-settings *ngIf="showLocalSettingsComponent()" [sectionConfiguration]="localSettingsConfiguration()" [visible]="localSettingsDialogVisible"
-  [field]="fieldConfig()" [formGroup]="configForm"
-  (saveAction)="saveConfig()" (visibleAction)="onLocalSettingsDialogVisible($event)" />
+<!-- [[[II ESC:031-06 DOC:docs/documents/2026-07-18-031-optimizacion-navegacion-activos.md#escenario-06 ESC:031-07 DOC:docs/documents/2026-07-18-031-optimizacion-navegacion-activos.md#escenario-07 -->
+@defer (when localSettingsDialogVisible) {
+  <app-custom-local-settings *ngIf="showLocalSettingsComponent() && localSettingsDialogVisible" [sectionConfiguration]="localSettingsConfiguration()" [visible]="localSettingsDialogVisible"
+    [field]="fieldConfig()" [formGroup]="configForm"
+    (saveAction)="saveConfig()" (visibleAction)="onLocalSettingsDialogVisible($event)" />
+}
 <!-- ]]]FI -->
 
 <app-custom-import [visible]="importDialogVisible" (visibleAction)="onImportDialogVisible($event)"
@@ -53,6 +55,12 @@
       <p-tabpanels>
 
         <p-tabpanel value="0">
+          <!-- [[[II ESC:057-50 DOC:docs/documents/2026-08-08-057-propuesta-compras-v3.md#escenario-50
+               `onSelectAutoCompleteAction`: elegir el documento ORIGEN jala sus
+               partidas, y eso ocurre en esa salida. Sin enlazarla el componente
+               EMITE y nadie escucha — el mismo defecto que la 036 corrigió para
+               las otras tres, con el mismo síntoma: se selecciona y no pasa nada.
+               ]]]FI -->
           <!-- [[[II ESC:036-08 DOC:docs/documents/2026-08-04-036-meta-sources-tabla-derivada.md#escenario-08
                Faltaban las tres salidas del formulario dinámico: sin ellas el
                componente EMITE y nadie escucha, así que el botón «Jalar partidas»
@@ -63,6 +71,7 @@
             [delegateTableSave]="true" (onTableRowSave)="handleTableRowSave($event)"
             [tableRowSaveOutcome]="tableRowSaveOutcome()"
             (onButtonClickAction)="handleButtonClick($event)"
+            (onSelectAutoCompleteAction)="onSelectAutoComplete($event)"
             [isCreate]="isCreate()" />
           <!-- ]]]FI -->
         </p-tabpanel>

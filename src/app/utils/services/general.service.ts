@@ -620,6 +620,7 @@ export class GeneralService {
               } else {
                 displayValue = inc.attributes.username || inc.attributes.name || '';
               }
+
               // tree-select usa 'label' como clave nativa; los demas usan rel__name
               data[relationshipName + '__name'] = displayValue;
               if (isTreeSel) data['label'] = displayValue;

@@ -1,4 +1,4 @@
-import { inject, Injectable } from '@angular/core';
+import { inject, Injectable, signal } from '@angular/core';
 import { firstValueFrom } from 'rxjs';
 import { AuthService } from '@/auth/services/auth.service';
 import { CRUDService } from '@/utils/services/crud.service';
@@ -9,13 +9,27 @@ import { SharedDynamicDataService } from '@/utils/services/shared-dynamic-data.s
 
 export interface DynamicDropdownDataContext {
   type?: string | null;
+  sourceApp?: string | null;
   isCreate?: boolean;
+}
+
+export interface AssetDropdownCacheDebug {
+  source: 'local-options' | 'shared-data' | 'shared-dropdown' | 'persistent-cache'
+    | 'persistent-cache-miss' | 'persistent-cache-invalid' | 'server-request' | 'server-response';
+  cacheKey: string;
+  cacheEnabled: boolean;
+  requestVersion: number;
+  cachedVersion: string | null;
+  appVersion: string | null;
+  savedAt: number | null;
+  ttlMs: number | null;
+  optionCount: number;
 }
 
 @Injectable({
   providedIn: 'root',
 })
-// [[[II ESC:016-01 DOC:docs/documents/2026-06-02_016_dynamic-dropdown-data-service.md#escenario-01 ESC:017-02 DOC:docs/documents/2026-06-02_017_custom-draw-form-device-drawform.md#escenario-02 ESC:019-02 DOC:docs/documents/2026-06-04_019_dropdown-cache-platform-read.md#escenario-02 ESC:020-02 DOC:docs/documents/2026-06-04_020_custom-draw-form-virtual-scroll-dropdowns.md#escenario-02 ESC:012-02 DOC:docs/documents/2026-06-02_012_custom-draw-form-dropdown-inflight-cache.md#escenario-02 ESC:013-03 DOC:docs/documents/2026-06-02_013_custom-draw-form-mobile-dropdown-cache.md#escenario-03 ESC:013-04 DOC:docs/documents/2026-06-02_013_custom-draw-form-mobile-dropdown-cache.md#escenario-04 ESC:013-05 DOC:docs/documents/2026-06-02_013_custom-draw-form-mobile-dropdown-cache.md#escenario-05 ESC:001-09 DOC:docs/documents/2026-05-16_001_consolidacion_dropdown_types_y_fix_escenarios.md#escenario-09
+// [[[II ESC:016-01 DOC:docs/documents/2026-06-02_016_dynamic-dropdown-data-service.md#escenario-01 ESC:017-02 DOC:docs/documents/2026-06-02_017_custom-draw-form-device-drawform.md#escenario-02 ESC:019-02 DOC:docs/documents/2026-06-04_019_dropdown-cache-platform-read.md#escenario-02 ESC:020-02 DOC:docs/documents/2026-06-04_020_custom-draw-form-virtual-scroll-dropdowns.md#escenario-02 ESC:012-02 DOC:docs/documents/2026-06-02_012_custom-draw-form-dropdown-inflight-cache.md#escenario-02 ESC:013-03 DOC:docs/documents/2026-06-02_013_custom-draw-form-mobile-dropdown-cache.md#escenario-03 ESC:013-04 DOC:docs/documents/2026-06-02_013_custom-draw-form-mobile-dropdown-cache.md#escenario-04 ESC:013-05 DOC:docs/documents/2026-06-02_013_custom-draw-form-mobile-dropdown-cache.md#escenario-05 ESC:001-09 DOC:docs/documents/2026-05-16_001_consolidacion_dropdown_types_y_fix_escenarios.md#escenario-09 ESC:007-09 DOC:docs/documents/2026-06-01_007_custom-draw-form-listbox.md#escenario-09
 export class DynamicDropdownDataService {
   private readonly crudS = inject(CRUDService);
   private readonly sharedS = inject(SharedDynamicDataService);
@@ -26,6 +40,7 @@ export class DynamicDropdownDataService {
 
   private readonly dropdownInFlight = new Map<string, { request: Promise<any[]>; version: number }>();
   private readonly dropdownRequestVersion = new Map<string, number>();
+  readonly assetCacheDebug = signal<AssetDropdownCacheDebug | null>(null);
 
   private perfNow(): number {
     return typeof performance !== 'undefined' ? performance.now() : Date.now();
@@ -34,6 +49,23 @@ export class DynamicDropdownDataService {
   private logPerf(label: string, start: number, extra: any = {}): void {
     const elapsed = this.perfNow() - start;
     //console.info(`[DynamicDropdownData][perf] ${label}: ${elapsed.toFixed(2)}ms`, extra);
+  }
+
+  logAssetSearch(element: any, event: any, options: any[]): void {
+    if (element?.field !== 'asset') return;
+
+    const safeOptions = Array.isArray(options) ? options : [];
+    const optionValue = element?.option_value || 'id';
+    console.info('[AssetComboDebug][search]', {
+      field: element.field,
+      search: event?.filter ?? '',
+      filterBy: element?.filter_by || element?.option_label || null,
+      optionValue,
+      cache: this.assetCacheDebug(),
+      optionCount: safeOptions.length,
+      values: safeOptions.map((option: any) => option?.[optionValue]),
+      options: safeOptions.map((option: any) => option && typeof option === 'object' ? { ...option } : option),
+    });
   }
 
   buildDropdownKey(field: string, context: DynamicDropdownDataContext = {}): string {
@@ -48,6 +80,79 @@ export class DynamicDropdownDataService {
     return !!(appType.app && appType.type);
   }
 
+  // [[[II ESC:001-18 DOC:docs/documents/2026-05-16_001_consolidacion_dropdown_types_y_fix_escenarios.md#escenario-18
+  async searchAdditionalOptions(
+    element: any,
+    query: string,
+    context: DynamicDropdownDataContext = {},
+  ): Promise<any[]> {
+    const config = element?.additional_search;
+    const subsidiaries = config?.subsidiaries;
+    const field = String(element?.field || '');
+    const excludedPrefixes = [
+      'form_fields_data_', 'parent_form_data_', 'child_form_fields',
+      'no_form_data_', 'object_form_fields_data_',
+    ];
+    if (
+      config?.active !== true
+      || !subsidiaries
+      || typeof subsidiaries !== 'object'
+      || Array.isArray(subsidiaries)
+      || !subsidiaries.filter
+      || typeof subsidiaries.filter !== 'object'
+      || Array.isArray(subsidiaries.filter)
+      || ['dropdown-choice', 'multi-choice', 'select-button'].includes(String(element?.type || ''))
+      || excludedPrefixes.some(prefix => field.startsWith(prefix))
+      || !this.canRequestServer(element)
+    ) return [];
+
+    const dt = element?.data_type ?? {};
+    const appType = this.getDropdownAppType(element);
+    const searchConfig = config?.autocomplete ?? {};
+    const filterParts: string[] = [];
+    const baseFilter = this.buildDropdownFilter(dt?.filter);
+    if (baseFilter) filterParts.push(baseFilter);
+
+    const normalizedQuery = String(query ?? '').trim();
+    if (normalizedQuery) {
+      const encoded = encodeURIComponent(normalizedQuery);
+      const by = String(searchConfig?.by || 'search').trim();
+      const exact = searchConfig?.search_mode === 'exact';
+      filterParts.push(by === 'search'
+        ? `filter[search]=${encoded}`
+        : `filter[${by}.${exact ? 'iexact' : 'icontains'}]=${encoded}`);
+    }
+
+    const sourceResource = String(context?.type || this.crudS.type || '').trim();
+    const sourceRoute = this.crudS.getAppType(sourceResource)?.app
+      || context?.sourceApp
+      || this.crudS.app
+      || '';
+    const sourceApp = String(sourceRoute).split('/')[0].trim();
+    if (!sourceApp || !sourceResource || !element?.field) return [];
+    const referenceSearchApp = [
+      appType.app,
+      'reference-search',
+      encodeURIComponent(sourceApp),
+      encodeURIComponent(sourceResource),
+      encodeURIComponent(String(element.field)),
+    ].join('/');
+
+    const data = await firstValueFrom(this.crudS.getObject({
+      app: referenceSearchApp,
+      type: appType.type,
+      filter: filterParts.filter(Boolean).join('&'),
+      sort: dt?.ordering || '',
+      limit: Number(searchConfig?.limit) || 25,
+    }));
+    const rows = this.generalS.DJAtoObject({
+      respDJA: data,
+      fields: { [element.field]: element },
+    }) || [];
+    return this.normalizeOptionsForField(rows, element);
+  }
+  // ]]]FI
+
   async dataDropdownExists(
     element: any,
     context: DynamicDropdownDataContext = {},
@@ -57,6 +162,7 @@ export class DynamicDropdownDataService {
 
     const localOptions = this.getLocalOptions(element);
     if (localOptions !== false) {
+      this.publishAssetCacheDebug(element, context, 'local-options', localOptions.length);
       return localOptions;
     }
 
@@ -66,11 +172,13 @@ export class DynamicDropdownDataService {
     // en esta sesión.
     const sharedData = this.getSharedOptions(this.sharedS.data, element, context);
     if (sharedData !== false) {
+      this.publishAssetCacheDebug(element, context, 'shared-data', sharedData.length);
       return sharedData;
     }
 
     const sharedDropdown = this.getSharedDropdownOptions(element, context);
     if (sharedDropdown !== false) {
+      this.publishAssetCacheDebug(element, context, 'shared-dropdown', sharedDropdown.length);
       return sharedDropdown;
     }
 
@@ -91,6 +199,8 @@ export class DynamicDropdownDataService {
     force = false
   ): Promise<any[] | false> {
     const perfStart = this.perfNow();
+
+
     if (!this.canRequestServer(element)) return false;
 
     const requestKey = this.getDropdownRequestKey(element);
@@ -101,6 +211,9 @@ export class DynamicDropdownDataService {
 
     if (!request) {
       requestVersion = this.nextDropdownRequestVersion(element.field);
+      this.publishAssetCacheDebug(element, context, 'server-request', 0, {
+        requestVersion,
+      });
       request = this.fetchDropdownRows(element);
       if (!force) {
         this.dropdownInFlight.set(requestKey, { request, version: requestVersion });
@@ -126,12 +239,16 @@ export class DynamicDropdownDataService {
 
     const normalizeStart = this.perfNow();
     const normalized = this.normalizeOptionsForField(rows, element);
+
     this.logPerf('loadServerOptions.normalize', normalizeStart, {
       field: element?.field,
       type: element?.type,
       rows: normalized.length
     });
     this.setSharedDropdownOptions(element, context, normalized);
+    this.publishAssetCacheDebug(element, context, 'server-response', normalized.length, {
+      requestVersion: requestVersion ?? 0,
+    });
 
     if (this.isMobileCacheEnabled(element)) {
       const cacheStart = this.perfNow();
@@ -444,6 +561,29 @@ export class DynamicDropdownDataService {
     return `dropdownCache:${userKey}:${app}:${type}:${field}:${queryScope}`;
   }
 
+  private publishAssetCacheDebug(
+    element: any,
+    context: DynamicDropdownDataContext,
+    source: AssetDropdownCacheDebug['source'],
+    optionCount: number,
+    detail: Partial<AssetDropdownCacheDebug> = {},
+  ): void {
+    if (element?.field !== 'asset') return;
+
+    this.assetCacheDebug.set({
+      source,
+      cacheKey: this.getMobileCacheKey(element, context),
+      cacheEnabled: this.isMobileCacheEnabled(element),
+      requestVersion: this.dropdownRequestVersion.get('asset') ?? 0,
+      cachedVersion: null,
+      appVersion: null,
+      savedAt: null,
+      ttlMs: this.getMobileCacheTtlMs(element),
+      optionCount,
+      ...detail,
+    });
+  }
+
   private async readMobileCache(
     element: any,
     context: DynamicDropdownDataContext
@@ -458,36 +598,64 @@ export class DynamicDropdownDataService {
       }
 
       const value = await this.clientCacheS.getItem(key);
-      if (!value) return null;
+      if (!value) {
+        this.publishAssetCacheDebug(element, context, 'persistent-cache-miss', 0);
+        return null;
+      }
 
       const parsed = JSON.parse(value);
       const data = parsed?.data;
       const savedAt = Number(parsed?.savedAt);
 
       if (!Array.isArray(data) || !Number.isFinite(savedAt) || savedAt <= 0) {
+        this.publishAssetCacheDebug(element, context, 'persistent-cache-invalid', Array.isArray(data) ? data.length : 0, {
+          cachedVersion: parsed?.version ?? null,
+          savedAt: Number.isFinite(savedAt) ? savedAt : null,
+        });
         await this.clientCacheS.removeItem(key);
         return null;
       }
 
       const appVersion = await this.formCacheS.getAppVersion();
       if (!parsed?.version || parsed.version !== appVersion) {
+        this.publishAssetCacheDebug(element, context, 'persistent-cache-invalid', data.length, {
+          cachedVersion: parsed?.version ?? null,
+          appVersion,
+          savedAt,
+        });
         await this.clientCacheS.removeItem(key);
         return null;
       }
 
       if (Date.now() - savedAt > ttlMs) {
+        this.publishAssetCacheDebug(element, context, 'persistent-cache-invalid', data.length, {
+          cachedVersion: parsed.version,
+          appVersion,
+          savedAt,
+        });
         await this.clientCacheS.removeItem(key);
         return null;
       }
 
       const normalized = this.prepareCachedOptions(data, element);
       if (normalized === false) {
+        this.publishAssetCacheDebug(element, context, 'persistent-cache-invalid', data.length, {
+          cachedVersion: parsed.version,
+          appVersion,
+          savedAt,
+        });
         await this.clientCacheS.removeItem(key);
         return null;
       }
 
+      this.publishAssetCacheDebug(element, context, 'persistent-cache', normalized.length, {
+        cachedVersion: parsed.version,
+        appVersion,
+        savedAt,
+      });
       return normalized;
     } catch {
+      this.publishAssetCacheDebug(element, context, 'persistent-cache-invalid', 0);
       try {
         await this.clientCacheS.removeItem(key);
       } catch { /* Cache opcional. */ }

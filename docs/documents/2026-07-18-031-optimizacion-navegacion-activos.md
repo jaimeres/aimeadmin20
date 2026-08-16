@@ -125,6 +125,107 @@ Decisión: `CRUDService.options()` (singleton root) guarda en memoria de sesión
 - En `AssetComponent` se conserva el `@defer` anterior: la condición nueva actúa dentro del bloque diferido. En Maintenance se sustituye la desactivación manual usada para la prueba de rendimiento por la condición configurable.
 - El servidor define una sola variable base (`local_settings_configuration`) y cada configuración CRUD con nodo `general` la importa mediante el patrón existente `from .base import *`.
 
+<a id="escenario-07"></a>
+## Escenario 07: Carga bajo demanda de CustomLocalSettings
+
+2026-08-12. La prueba en equipos de gama baja y media-baja confirmó que dejar
+`active: true`, incluso con únicamente la sección `filters`, mantiene una demora
+aproximada de cinco segundos al cambiar entre componentes. La condición del
+escenario 06 evitaba crear el editor sólo cuando `active` era falso; con el
+contrato vigente, el editor cerrado seguía instanciándose, procesando `field` y
+creando el árbol completo del diálogo durante la navegación.
+
+La medición del grafo de producción confirmó además que los consumidores de
+`LOCAL_BASE` importaban de forma inmediata un chunk compartido de 75,595 bytes
+que contenía CustomLocalSettings, `type-schemas` y DragDrop. Agregar `@defer` al
+template no bastaba mientras el componente pesado continuara dentro de ese
+arreglo compartido.
+
+Solución aplicada:
+
+- `CustomLocalSettingsLoaderComponent` conserva el selector y el contrato público
+  (`visible`, `field`, `formGroup`, `sectionConfiguration`, `saveAction` y
+  `visibleAction`), pero no contiene formularios ni componentes PrimeNG pesados.
+- El editor real usa el selector interno `app-custom-local-settings-editor` y la
+  fachada lo monta dentro de `@defer` únicamente cuando `visible` es verdadero.
+- Los 21 consumidores usan `@defer (when localSettingsDialogVisible)` y conservan
+  un `*ngIf` compuesto por `active` y `localSettingsDialogVisible`. Antes del
+  primer clic no existe instancia del editor; al cerrar, el `*ngIf` destruye su
+  formulario y su árbol visual.
+- No se usa `prefetch on idle`: en dispositivos limitados la prioridad es que la
+  navegación no compita con el parseo del editor. El costo se paga sólo al abrir
+  «Configuración del módulo» por primera vez.
+- No se modifican en este escenario el diseño visual, las etiquetas, los
+  ToggleButton, los presets de clases, `type-schemas` ni schemas del servidor. La
+  fachada deja el editor aislado para que esa siguiente fase pueda reorganizar su
+  UI sin volver a incorporarlo al grafo de navegación.
+
+Medición después del cambio:
+
+- `warehouse-movement` deja de importar el chunk inmediato de 75,595 bytes y sólo
+  conserva la fachada compartida de 1,491 bytes (reducción directa de 74,104 bytes
+  sin comprimir en ese enlace del grafo).
+- El editor queda como chunk lazy independiente de 63,817 bytes, además de sus
+  dependencias dinámicas, y sólo se solicita al abrirlo.
+- El chunk propio de la ruta cambia de 10,246 a 10,368 bytes por las instrucciones
+  del bloque diferido; ese incremento de 122 bytes es intencional.
+
+<a id="escenario-08"></a>
+## Escenario 08: Editor visual orientado a CustomDrawForm y contratos cerrados
+
+2026-08-12. Después de aislar la carga del editor en el escenario 07, se
+reorganiza únicamente su UI cliente. El repositorio del servidor no se modifica
+porque otro agente trabaja en su schema; sus comentarios y consumidores sí se
+auditan como fuente del contrato.
+
+### UI y formularios
+
+- El editor adopta el patrón visual del constructor que previsualiza
+  `app-custom-draw-form`: formularios reactivos, `p-floatlabel` con variante
+  `on`, tarjetas responsivas, controles PrimeNG y etiquetas completas en español.
+- Se retira `FormsModule` y todo `ngModel` del editor. Diálogo, comportamiento,
+  filas, filtros y opciones avanzadas tienen controles reactivos estables; los
+  formularios de fila se destruyen al cambiar de pestaña o cerrar el editor.
+- Cada campo separa identidad, encabezado, ancho móvil, ancho escritorio,
+  visibilidad de tabla/formulario, orden, bloqueo y visibilidad móvil. Los
+  ToggleButton expresan ambos estados dentro del botón; ya no muestran un simple
+  «Sí/No» ni dependen exclusivamente de iconos.
+- La vista previa conserva el grid ligero del editor para no importar otra vez
+  el componente pesado dentro de su propio chunk lazy, pero usa exactamente la
+  semántica de 12 columnas de CustomDrawForm.
+
+### Contratos derivados del servidor y del consumidor
+
+| Propiedad | Valores ofrecidos por la UI | Consumidor |
+|---|---|---|
+| `class` | `col-span-1` … `col-span-12` | ancho base/móvil del formulario |
+| `class_md` | `md:col-span-1` … `md:col-span-12` | ancho desde breakpoint `md`/escritorio |
+| `default.scope` de código | los 15 scopes de numeración del serializer (`global` … `all`) | separación de consecutivos |
+| `filter.scope` de hijos | `client`, `server`, `auto` | lugar donde se resuelve la cascada |
+| `scope_edition` de columnas de tabla | `server`, `local` | persistencia de la edición |
+| `content_type` de documento | `base64`, `path`, `form-data` | tratamiento del archivo legacy |
+| `source` de documento | `camera`, `gallery`, `both` | origen de captura permitido |
+
+- Los tres `scope` se modelan como contratos distintos. En particular se elimina
+  `create` del selector de `default.scope`: el serializer no lo reconoce y antes
+  terminaba silenciosamente en el scope global vacío.
+- Las clases dejan de ser texto libre. Las etiquetas se corrigen: `class` es
+  móvil/base y `class_md` es escritorio, según el `ngClass` real de
+  CustomDrawForm. Los valores heredados que no pertenezcan al contrato se muestran
+  como inválidos y deben sustituirse antes de aplicar el editor avanzado.
+- Los comentarios de `base.py` también alimentan los selectores cerrados de
+  formato y origen de fecha, posición de prefijo/sufijo, iconos, severidad,
+  origen de sugerencias, modo/prioridad de correo y captura de documentos.
+- Un validador reactivo comprueba cada select cerrado y el JSON editable. El
+  editor no aplica el snapshot si existe un valor ajeno al catálogo o JSON
+  inválido; el resto de propiedades libres (campo API, endpoint, separadores,
+  zona IANA y texto) conserva entrada de texto porque su contrato no es enum.
+- `type-schemas.ts` continúa compartido con
+  `ChildFormFieldsBuilderComponent`; `includeIf` impide que una sección opcional
+  cree claves ausentes como efecto secundario. No se cambian `appendFile`,
+  reconciliación de validators, `validateStepFields`, routing base64 ni los casos
+  legacy `document`/`key != field`.
+
 ## Decisiones tomadas
 
 - La instrumentación se hace con funciones sueltas, sin servicio ni DI, para no agregar peso al arranque.
@@ -140,6 +241,11 @@ Decisión: `CRUDService.options()` (singleton root) guarda en memoria de sesión
 - Escenario 06: auditoría estática de los 21 puntos de montaje de `app-custom-local-settings`; los 21 contienen `*ngIf` enlazado a la señal compartida.
 - Escenario 06: `manage.py check` del servidor sin errores; 160/160 recursos de `D_CONFIGURATION()` publican las cinco claves en las tres plataformas y los 16 defaults JSON modificados pasan sus validadores. La validación global de todos los defaults sigue encontrando el incumplimiento preexistente de CFDI (`Serie`, `Folio`, `Fecha`, etc.) fuera del alcance de este escenario.
 - Escenario 06: 3 pruebas dirigidas del servidor pasan; cubren los 160 recursos, los defaults de las tres plataformas y la herencia en las personalizaciones CEB.
+- Escenario 07: build de producción con `stats.json` exitoso; el editor aparece como entrypoint lazy y no como import inmediato de `warehouse-movement`.
+- Escenario 07: auditoría estática de 21/21 montajes con trigger `localSettingsDialogVisible`, condición `active && visible` y enlace de `sectionConfiguration`.
+- Escenario 07: 21 pruebas Angular dirigidas aprobadas; incluyen fachada cerrada sin editor, resolución de plataforma, apertura/bloqueo de `CRUD.localSettings()`, preservación del payload y comportamiento existente de filtros.
+- Escenario 08: build Angular de producción exitoso, incluido el compilador de templates. El editor permanece en un chunk lazy de 71.16 kB; sus estilos quedan en 3.79 kB y respetan el límite de error de 4 kB. TypeScript (`tsc --noEmit`) exitoso.
+- Escenario 08: 22 pruebas Angular dirigidas aprobadas en ChromeHeadless para CustomLocalSettings y ChildFormFieldsBuilder. Cubren los contratos de clases, los tres scopes, rechazo de un scope ajeno, secciones por plataforma, payload reactivo de layout/filtros y compatibilidad del builder compartido.
 - Build de producción con `--stats-json` antes y después: exitoso, mismos warnings preexistentes (budgets, CommonJS, stylesheet no localizado). Métricas en Notas.
 - Specs dirigidos ejecutados (ChromeHeadless): 31 en total, 27 pasan — perf-trace (8), guard nuevo (4), client-cache-storage, auth.service, asset.component (`should create`), custom-draw-form incluyendo los 3 nuevos del escáner diferido.
 - Los 4 specs que fallan son de la tabla derivada (ESC:030, doc 2026-07-14-030): se verificó en un worktree limpio de `HEAD` (7fac73a, sin estos cambios) que fallan idéntico — son preexistentes del trabajo de tabla derivada incompleto ("tabla mejorada pero incompleta"), no de esta optimización.
@@ -161,6 +267,8 @@ Decisión: `CRUDService.options()` (singleton root) guarda en memoria de sesión
 
 - Escenario 06: `src/app/utils/crud.class.ts`, `src/app/utils/placeholder-crud-config.ts` y `src/app/shared/crud-page-shell.component.ts`.
 - Escenario 06: los 20 templates que montan directamente `app-custom-local-settings`, incluida la restauración condicionada de Maintenance.
+- Escenario 07: `src/app/components/custom-local-settings/custom-local-settings-loader.component.ts`, su template y su spec; selector interno del editor, `src/app/shared/components.index.ts`, `src/app/assets/asset/asset.component.ts`, `src/app/shared/crud-page-shell.component.ts` y los 20 templates consumidores.
+- Escenario 08: `src/app/components/custom-local-settings/custom-local-settings.component.ts`, su template, estilos y spec; `type-schemas.ts`; y el consumidor compartido `src/app/components/child-form-fields-builder/child-form-fields-builder.component.ts`.
 - Escenario 06 (servidor): `apps/utils/configurations/base.py`, 17 módulos de defaults, `configuration_functions.py` y `docs/documents/2026-08-12-067-visibilidad-configuracion-local.md`.
 - `src/app/utils/perf-trace.ts` (nuevo) y `src/app/utils/perf-trace.spec.ts` (nuevo)
 - `src/app.component.ts`

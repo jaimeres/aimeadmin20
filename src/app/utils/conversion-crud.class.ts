@@ -305,6 +305,47 @@ protected _pickSourceDocument(pos: any, contract: any): any {
   return null;
 }
 
+// [[[II ESC:057-47 DOC:docs/documents/2026-08-08-057-propuesta-compras-v3.md#escenario-47
+/**
+ * Elegir el documento origen JALA sus partidas. No hay botón.
+ *
+ * Antes hacía falta un segundo gesto —un botón `pull_sources`— para algo que el
+ * usuario ya había pedido al elegir el documento. Peor: ese botón leía el
+ * documento del CONTROL del buscador (`_pickSourceDocument`), y si el control no
+ * lo conservaba no ocurría nada y sin aviso.
+ *
+ * Aquí se pasa el objeto SELECCIONADO directamente, así que no depende de dónde
+ * quedó guardado. Sirve igual para Enter —la coincidencia exacta única llama a
+ * este mismo handler— que para elegir del panel.
+ */
+override onSelectAutoComplete(e: any): void {
+  super.onSelectAutoComplete(e);
+  this._pullOnSourceDocumentSelected(e);
+}
+
+/** Trae las partidas si el campo elegido es un buscador del documento ORIGEN. */
+private _pullOnSourceDocumentSelected(e: any): void {
+  try {
+    const pos = this.pos();
+    const entry = this._conversionSourceTables(pos)[0];
+    if (!entry?.contract?.filter) return;
+
+    // Los buscadores del documento origen son los que apuntan a SU recurso; los
+    // resuelve el mismo helper de siempre, así que agregar otro perfil de
+    // búsqueda sigue siendo configuración y no toca este archivo.
+    const campos = this._sourceDocumentFields(pos, entry.contract);
+    if (!campos.includes(String(e?.field ?? ''))) return;
+
+    const seleccionado = e?.event?.value ?? e?.event?.item ?? e?.event;
+    if (!seleccionado || typeof seleccionado !== 'object') return;
+
+    this.pullSourceDocument({ pos, document: seleccionado });
+  } catch {
+    // Traer las partidas es una comodidad: si algo falla, la captura sigue.
+  }
+}
+// ]]]FI
+
 protected pullSourceDocument(options: { pos?: any; document?: any } = {}): void {
   const pos = options.pos ?? this.pos();
   const entry = this._conversionSourceTables(pos)[0];
@@ -323,7 +364,7 @@ protected pullSourceDocument(options: { pos?: any; document?: any } = {}): void 
   const documentId = (raw && typeof raw === 'object') ? (raw.id ?? raw.value) : raw;
   if (!documentId) {
     this.messageS.changeMessage(
-      'Elija primero el documento del que quiere jalar las partidas.', null, {}, 'warn');
+      'Elija primero el documento del que quiere tomar las partidas.', null, {}, 'warn');
     return;
   }
 
@@ -399,12 +440,21 @@ private _appendSourceRows(
 
   let added = 0;
   let skipped = 0;
+  const descartes: any[] = [];
   rows.forEach((row: any) => {
-    if (!row?.id) return;
-    if (present.has(String(row.id))) { skipped++; return; }
+    if (!row?.id) { descartes.push({ motivo: 'la fila no trae id', row }); return; }
+    if (present.has(String(row.id))) {
+      skipped++; descartes.push({ motivo: 'ya presente', id: row.id }); return;
+    }
 
     const pending = this._sourcePendingQuantity(row, contract);
-    if (pending !== undefined && Number(pending) <= 0) { skipped++; return; }
+    if (pending !== undefined && Number(pending) <= 0) {
+      skipped++;
+      descartes.push({ motivo: 'saldo <= 0', id: row.id, pending,
+                       campos_pending: contract?.pending,
+                       valores: (contract?.pending || []).map((c: string) => [c, row?.[c]]) });
+      return;
+    }
 
     const projected = this._completeCreatedLocalTableRow(pos, table, row);
     if (contract.quantity && pending !== undefined) projected[contract.quantity] = pending;
@@ -434,11 +484,33 @@ private _appendSourceRows(
   control.updateValueAndValidity();
   // ]]]FI
 
-  this.messageS.changeMessage(
-    added
-      ? `Se agregaron ${added} partida(s)` + (skipped ? `; ${skipped} sin saldo o ya presentes.` : '.')
-      : 'El documento no tiene partidas con saldo por jalar.',
-    null, {}, added ? 'success' : 'warn', 'Aviso');
+
+  // [[[II ESC:057-51 DOC:docs/documents/2026-08-08-057-propuesta-compras-v3.md#escenario-51
+  // El aviso distingue POR QUÉ no entró una partida. Antes decía «sin saldo»
+  // para los dos casos, así que volver a elegir el mismo documento —cuyas
+  // partidas YA estaban en la tabla— acusaba un problema de saldo que no
+  // existía, y mandaba a revisar el documento equivocado.
+  const repetidas = descartes.filter((d) => d.motivo === 'ya presente').length;
+  const sinSaldo = skipped - repetidas;
+  let aviso: string;
+  if (added) {
+    const detalle = [
+      repetidas ? `${repetidas} ya estaba(n) en la tabla` : '',
+      sinSaldo ? `${sinSaldo} sin saldo disponible` : '',
+    ].filter(Boolean).join(' y ');
+    aviso = `Se agregaron ${added} partida(s)` + (detalle ? `; ${detalle}.` : '.');
+  } else if (repetidas && !sinSaldo) {
+    aviso = 'Las partidas de ese documento ya están en la tabla.';
+  } else if (sinSaldo && !repetidas) {
+    aviso = 'El documento no tiene partidas con saldo disponible.';
+  } else if (repetidas || sinSaldo) {
+    aviso = `No se agregó ninguna partida: ${repetidas} ya estaba(n) en la tabla `
+      + `y ${sinSaldo} sin saldo disponible.`;
+  } else {
+    aviso = 'El documento no tiene partidas.';
+  }
+  this.messageS.changeMessage(aviso, null, {}, added ? 'success' : 'warn', 'Aviso');
+  // ]]]FI
 }
 // ]]]FI
 

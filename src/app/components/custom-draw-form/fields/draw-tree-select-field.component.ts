@@ -35,6 +35,12 @@ import { AutoFocusModule } from 'primeng/autofocus';
       <button *ngIf="fieldConfig().reload_icon !== undefined ? fieldConfig().reload_icon : false" type="button" pButton
         icon="pi pi-replay" class="height-icon-custom" style="width: 40px !important;"
         (click)="reloadAction.emit(fieldConfig().field)"></button>
+      <!-- [[[II ESC:001-18 DOC:docs/documents/2026-05-16_001_consolidacion_dropdown_types_y_fix_escenarios.md#escenario-18 -->
+      <button *ngIf="fieldConfig().additional_search?.active === true" type="button" pButton
+        icon="pi pi-search" class="height-icon-custom" style="width: 40px !important;"
+        title="Buscar en el servidor" [disabled]="fieldConfig().readonly === true"
+        (click)="searchAction.emit(fieldConfig().field)"></button>
+      <!-- ]]]FI -->
       <button *ngIf="fieldConfig().icon" type="button" pButton [icon]="fieldConfig().icon.icon" class="height-icon-custom"
         style="width: 40px !important;"></button>
       <button *ngIf="fieldConfig()?.icon2" type="button" pButton [icon]="fieldConfig().icon2.icon" class="height-icon-custom"
@@ -56,5 +62,6 @@ export class DrawTreeSelectFieldComponent {
   nodeChangeAction = output<any>();
   nodeExpandAction = output<any>();
   reloadAction = output<string>();
+  searchAction = output<string>();
 }
 // ]]]FI
