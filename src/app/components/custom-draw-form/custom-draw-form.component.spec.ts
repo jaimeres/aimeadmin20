@@ -1053,11 +1053,14 @@ describe('CustomDrawFormComponent', () => {
 
   it('rechaza la configuración booleana anterior y explica el contrato esperado', () => {
     const messageSpy = spyOn((component as any).messageS, 'changeMessage');
+    spyOn(
+      (component as any).dynamicDropdownDataS,
+      'getAdditionalSearchConfig',
+    ).and.returnValue({ active: true, subsidiaries: true });
 
     component.openAdditionalSearch({
       field: 'asset',
       type: 'dropdown',
-      additional_search: { active: true, subsidiaries: true },
     });
 
     expect(component.additionalSearchVisible()).toBeFalse();

@@ -1162,3 +1162,47 @@ p-speeddial.crud-speeddial .p-speeddial-list>li>button:focus-visible {
 .sb-full.p-splitbutton .p-splitbutton-menubutton {
   flex: 0 0 auto;
 }
+
+
+/* ─── Configuración del módulo (app-custom-local-settings) ───────────────────
+   Estaban como `::ng-deep` dentro del componente. Apuntan a clases de PrimeNG,
+   así que su sitio es la hoja global; las clases son exclusivas de ese diálogo. */
+
+// Solo icono: el estado se lee por el icono y el resaltado del botón.
+.filter-toggle {
+  flex: 0 0 auto;
+
+  .p-togglebutton {
+    min-width: 0;
+    padding: .5rem .6rem;
+    width: auto;
+  }
+
+  .p-togglebutton-label {
+    display: none;
+  }
+}
+
+.settings-dialog {
+  // Sustituye al ancho fijo de 1000px: crece en escritorio para que las columnas
+  // respiren y nunca desborda en pantallas chicas.
+  min-height: 50%;
+  width: min(1240px, 96vw);
+}
+
+.settings-toggle {
+  width: 100%;
+
+  .p-togglebutton {
+    justify-content: flex-start;
+    min-width: 0;
+    padding-inline: .65rem;
+    width: 100%;
+  }
+
+  .p-togglebutton-label {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+}

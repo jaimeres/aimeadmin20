@@ -1,0 +1,21 @@
+/* [[[II ESC:027-10 DOC:docs/documents/2026-07-01-027-autenticacion-segura-dispositivo-movil.md#escenario-10 */
+:host {
+  position: fixed;
+  top: max(0.75rem, env(safe-area-inset-top));
+  left: 50%;
+  z-index: 13000;
+  width: min(44rem, calc(100% - 1.5rem));
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+
+:host ::ng-deep .offline-banner__message {
+  width: 100%;
+  box-shadow: 0 0.35rem 1rem rgb(0 0 0 / 22%);
+}
+
+.offline-banner__content {
+  display: inline;
+  line-height: 1.35;
+}
+/* ]]]FI */

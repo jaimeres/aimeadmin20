@@ -34,6 +34,30 @@ export class MessageService {
    * @param life (toast) --15000-- tiempo de vida del mensaje en milisegundos.
    */
   changeMessage(msg: string = 'No fue posible ejecutar la solicitud', err = null, customFields = {}, severity = 'error', summary = 'Error', swal = false, life = 15000) {
+    // [[[II ESC:027-09 DOC:docs/documents/2026-07-01-027-autenticacion-segura-dispositivo-movil.md#escenario-09 ESC:027-11 DOC:docs/documents/2026-07-01-027-autenticacion-segura-dispositivo-movil.md#escenario-11 ESC:027-12 DOC:docs/documents/2026-07-01-027-autenticacion-segura-dispositivo-movil.md#escenario-12 ESC:027-13 DOC:docs/documents/2026-07-01-027-autenticacion-segura-dispositivo-movil.md#escenario-13
+    // Los consumidores suelen agregar su propio texto al error HTTP. Se
+    // normaliza aquí para que ninguno vuelva a mostrar "Unknown Error Failed
+    // to fetch" después de que el interceptor detectó un fallo de transporte.
+    if ((err as any)?.status === 0 && (err as any)?.error?.transportFailure) {
+      const localServerFailure = Boolean((err as any)?.error?.localServerFailure);
+      const serverUnavailable = Boolean((err as any)?.error?.serverUnavailable);
+      msg = localServerFailure
+        ? 'No fue posible conectarse con el servidor local. Verifica que el servicio esté iniciado en el equipo de desarrollo.'
+        : serverUnavailable
+          ? 'No fue posible comunicarse con el servidor. Tu conexión a Internet está disponible, pero el servicio no responde o está bloqueando el acceso.'
+        : 'Sin acceso a Internet desde la aplicación. Revisa el Wi-Fi, los datos móviles o las restricciones de red de la aplicación.';
+      err = null;
+      severity = 'warn';
+      summary = localServerFailure
+        ? 'Servidor local no disponible'
+        : serverUnavailable
+          ? 'Servidor no disponible'
+          : 'Sin conexión';
+      swal = false;
+      life = 20000;
+    }
+    // ]]]FI
+
     console.log('Mensaje cambiado:', { msg, err, customFields, severity, summary, swal, life });
 
     this.messageSource.next({ msg: msg, err: err, nameEsp: customFields, severity: severity, summary: summary, swal: swal, life: life });

@@ -123,12 +123,12 @@
 
                 <p-inputNumber
                   *ngIf="rowEditState.isRowEditing && isCellEditableForRow(rowData, col)"
-                  [formControlName]="col.field" [mode]="col.mode || 'decimal'" [min]="col.min" [max]="col.max"
+                  [formControlName]="col.field" [mode]="col.mode || 'decimal'" [min]="col.min" [max]="cellMax(col, rowData)"
                   [minFractionDigits]="col.min_fraction_digits" [maxFractionDigits]="col.max_fraction_digits"
                   class="w-full" />
 
                 <p-inputNumber *ngIf="rowEditState.editingCells[col.field]" [formControlName]="col.field"
-                  [mode]="col.mode || 'decimal'" [min]="col.min" [max]="col.max"
+                  [mode]="col.mode || 'decimal'" [min]="col.min" [max]="cellMax(col, rowData)"
                   [minFractionDigits]="col.min_fraction_digits" [maxFractionDigits]="col.max_fraction_digits"
                   (onKeyDown)="onCellKeydown($event, config.field, rowIndex, col.field)" class="w-full"
                   [pAutoFocus]="true" />
@@ -263,6 +263,30 @@
         </ng-container>
       </tr>
     </ng-template>
+
+    <!-- [[[II ESC:057-97 DOC:docs/documents/2026-08-08-057-propuesta-compras-v3.md#escenario-97
+         TOTALES DE LA TABLA. Solo se pintan los que la tabla puede resolver con
+         sus propias columnas; los que dependen de un dato que no viaja en la
+         fila —los impuestos viven en la foto `applied_taxes`— no se muestran,
+         porque un cero seria afirmar que no hay impuestos.
+
+         Es un reflejo, no la verdad: el servidor recalcula con los datos
+         congelados de cada partida y su numero es el que se guarda. -->
+    <ng-template pTemplate="footer">
+      <tr *ngIf="tableTotals.length">
+        <td [attr.colspan]="footerColspan" style="padding: 0.4rem 0.6rem;">
+          <div class="flex flex-wrap justify-content-end align-items-center gap-3">
+            <span *ngFor="let total of tableTotals; trackBy: trackByTotalField"
+              class="flex align-items-center gap-2"
+              pTooltip="Total de referencia; el servidor recalcula con los datos congelados de cada partida.">
+              <span class="text-xs text-color-secondary">{{ total.label }}</span>
+              <strong>{{ total.display }}</strong>
+            </span>
+          </div>
+        </td>
+      </tr>
+    </ng-template>
+    <!-- ]]]FI -->
   </p-table>
 </ng-container>
 <!-- ]]]FI -->

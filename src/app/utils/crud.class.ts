@@ -13,7 +13,7 @@ import {
 } from './types/crud.types';
 import { Vars } from './vars.class';
 import { DROPDOWN_TYPES_PAYLOAD } from './dropdown-types.const';
-import { DERIVED_TABLE_DRAFT_FLAG, RAW_ATTRIBUTE_PREFIX, TABLE_ROW_SOURCE_FLAG, TABLE_ROW_SOURCE_VERSION_SUFFIX } from './table-row-flags.const';
+import { DERIVED_TABLE_DRAFT_FLAG, RAW_ATTRIBUTE_PREFIX, TABLE_ROW_LOCAL_SOURCE_FLAG, TABLE_ROW_SOURCE_FLAG, TABLE_ROW_SOURCE_VERSION_SUFFIX } from './table-row-flags.const';
 import { resolveLocalSettingsConfiguration } from './local-settings-configuration';
 
 @Directive()
@@ -104,7 +104,7 @@ export class CRUD extends Vars implements OnChanges  /*implements OnInit*/ {
     return !!value && typeof value === 'object' && Object.keys(value).length > 0;
   }
 
-  private ensureConfigForPos(pos: any, onReady: () => void): boolean {
+  protected ensureConfigForPos(pos: any, onReady: () => void): boolean {
     const module = String(pos ?? '').trim();
     if (!module || this.crudS.authS.isConfigModuleLoaded(module)) return true;
 
@@ -194,6 +194,9 @@ export class CRUD extends Vars implements OnChanges  /*implements OnInit*/ {
       // `dependentStatus`, asi que el filtro de la config solo debe ofrecer los suyos.
       module: this.module[safePos],
       // ]]]FI
+      // App de Django del recurso, publicada por el aplanado de la configuracion.
+      // Es la clave del JSONField de `Configuration` al guardar en el servidor.
+      config_app: this.crudS.authS.config?.[safePos]?.config_app,
     }));
     // [[[II ESC:005-16 DOC:docs/documents/2026-05-31_005_columnas-form-data-y-tree-select-nombres.md#escenario-16
     // `fields` viaja tambien al export para que la tabla pueda formatear las columnas
@@ -835,20 +838,79 @@ export class CRUD extends Vars implements OnChanges  /*implements OnInit*/ {
         const control = this.currentForm(pos)?.get(node.field);
         if (!(control instanceof FormArray) || !control.length) continue;
 
+        // [[[II ESC:057-62 DOC:docs/documents/2026-08-08-057-propuesta-compras-v3.md#escenario-62
+        // La fila que se excluye es la JALADA, y la marca que dice eso es
+        // `TABLE_ROW_LOCAL_SOURCE_FLAG` — «PRESENCIA = es fila de origen», según
+        // su propia declaración en `table-row-flags.const.ts`.
+        //
+        // Antes se probaba `TABLE_ROW_SOURCE_FLAG`, que es OTRA bandera: la que
+        // guarda el objeto fuente de CUALQUIER fila (UUID canónico + etiqueta).
+        // Al elegir un producto a mano, `_applyCellSelection` la llena, así que
+        // la fila capturada quedaba «no vacía» y se descartaba del anidado: el
+        // documento se guardaba SIN sus partidas y sin decir nada.
+        const columnas = this.generalS.configuredTableColumns(node?.columns);
         const filas: any[] = [];
         control.controls.forEach((row: any) => {
           if (row?.[this.derivedTableDraftFlag] === true) return;
-          if (Object.keys(row?.[this.tableRowSourceFlag] || {}).length) return;
+          if (row?.[TABLE_ROW_LOCAL_SOURCE_FLAG]) return;
 
           const crudo = typeof row?.getRawValue === 'function' ? row.getRawValue() : {};
+          // El UUID canónico de una relación NO vive en el control: la celda
+          // autocomplete guarda ahí el texto visible y deja el id en la fila
+          // fuente. Enviar el control tal cual mandaba el NOMBRE del producto.
+          const fuente = row?.[this.tableRowSourceFlag] || {};
           const limpia: any = {};
+
+          const asignar = (campo: string, valor: any, column: any) => {
+            if (valor === undefined || valor === null || valor === '') return;
+            if (valor && typeof valor === 'object') { limpia[campo] = valor; return; }
+            // Una columna con `data_type.type` ES una relación: el servidor la
+            // exige como identificador de recurso `{type, id}` y rechaza el
+            // UUID suelto con `Incorrect type. Expected resource identifier
+            // object, received str`. El recurso sale de la configuración
+            // (`getAppType`), no de este archivo.
+            const recurso = this.crudS.getAppType(column?.data_type?.type)?.type;
+            limpia[campo] = recurso ? { type: recurso, id: String(valor) } : valor;
+          };
+
+          columnas.forEach((column: any) => {
+            const campo = column?.field;
+            if (!campo || column?.scope_edition === 'local') return;
+
+            // Buscador con doble función: con opción elegida el UUID va a
+            // `relationship_field` y el texto libre se queda en la columna.
+            const relacion = column?.relationship_field;
+            if (relacion) {
+              asignar(relacion, fuente[relacion] ?? crudo[relacion], column);
+              const texto = crudo[campo];
+              if (texto !== undefined && texto !== null && texto !== '' && typeof texto !== 'object') {
+                limpia[campo] = texto;
+              }
+              return;
+            }
+
+            // Sin `relationship_field` la columna ES la relación: el UUID vive
+            // en la fila fuente y el control sólo tiene la etiqueta.
+            const canonico = (fuente[campo] !== undefined && fuente[campo] !== null && fuente[campo] !== '')
+              ? fuente[campo]
+              : crudo[campo];
+            asignar(campo, canonico, column);
+          });
+
+          // Controles que no son columna declarada (p.ej. la FK inyectada al
+          // padre) viajan tal cual: sin configuración no hay nada que traducir.
           Object.keys(crudo).forEach((campo) => {
+            if (limpia[campo] !== undefined) return;
+            if (columnas.some((column: any) => column?.field === campo
+                                            || column?.relationship_field === campo)) return;
             const valor = crudo[campo];
             if (valor === undefined || valor === null || valor === '') return;
             limpia[campo] = valor;
           });
+
           if (Object.keys(limpia).length) filas.push(limpia);
         });
+        // ]]]FI
 
         // `supplier_request_detail_data_` -> `supplier_request_detail_data`, que
         // es exactamente la llave que el servidor busca.
@@ -3370,6 +3432,21 @@ export class CRUD extends Vars implements OnChanges  /*implements OnInit*/ {
     return this.currentForm().get(field) as FormArray;
   }
 
+  // [[[II ESC:057-91 DOC:docs/documents/2026-08-08-057-propuesta-compras-v3.md#escenario-91
+  /** Recuerda que un campo quedó cerrado, para que `enableForm()` lo respete. */
+  protected _rememberDisabled(fieldName: string): void {
+    const pos = this.pos();
+    if (!this.initialDisabledForm[pos]) this.initialDisabledForm[pos] = {};
+    this.initialDisabledForm[pos][fieldName] = true;
+  }
+
+  /** Olvida el candado: el campo vuelve a ser del usuario. */
+  protected _forgetDisabled(fieldName: string): void {
+    const pos = this.pos();
+    if (this.initialDisabledForm[pos]) delete this.initialDisabledForm[pos][fieldName];
+  }
+  // ]]]FI
+
   /**
    * Habilita el formulario
    */
@@ -4635,6 +4712,16 @@ export class CRUD extends Vars implements OnChanges  /*implements OnInit*/ {
     // usar la configuración del hijo: `fields` resuelve el `option_label` de sus
     // relaciones y `cols` sus etiquetas. Con la del padre, las celdas de relación
     // quedarían sin `<campo>__name` y mostrarían UUID.
+    // [[[II ESC:057-134 DOC:docs/documents/2026-08-08-057-propuesta-compras-v3.md#escenario-134
+    // Y ESA CONFIGURACIÓN HAY QUE ASEGURARLA ANTES DE LEERLA. `authS.config` se
+    // carga POR MÓDULO: estando en Pedido, `supplier-request-detail` puede no
+    // estarlo, y el getter no devuelve `undefined` sino un módulo VACÍO. El
+    // resultado era una celda Producto con el UUID en vez de «DIESEL»
+    // —comprobado en pantalla—, que es exactamente el fallo que `ensureConfigForPos`
+    // ya evita en `getAll`, `openNew`, `_buildSecundaryDetail` y la jalada.
+    // Este camino era el último que leía otra configuración sin pasar por él.
+    if (!this.ensureConfigForPos(type, () => this._loadParentChildRows(pos, table, contract, parentId))) return;
+    // ]]]FI
     const childConfig = this.crudS.authS.config?.[type];
 
     this.showBlocked();
@@ -4649,13 +4736,33 @@ export class CRUD extends Vars implements OnChanges  /*implements OnInit*/ {
             fields: childConfig?.fields || {},
           });
           control.clear({ emitEvent: false });
-          (Array.isArray(rows) ? rows : [rows]).forEach((row: any) => {
+          // [[[II ESC:057-129 DOC:docs/documents/2026-08-08-057-propuesta-compras-v3.md#escenario-129
+          // Tercer camino de la misma columna: ABRIR el documento. `Código` y
+          // `Descripción` no son campos de la partida —cuelgan del producto— y
+          // sin esto la tabla los pintaba vacíos aunque el `include` ya trajera
+          // el dato. Mismo resolvedor que la jalada y la copia. ]]]FI
+          const conDerivados = this.generalS.enrichRowRelationDataFromColumns(
+            Array.isArray(rows) ? rows : [rows], resp, table?.columns);
+          conDerivados.forEach((row: any) => {
             if (!row) return;
             // Misma proyección respuesta→columnas que usa una fila recién creada.
             const projected = this._completeCreatedLocalTableRow(pos, table, row);
             control.push(this._createNoFormDataTableRowFormGroup(table, projected), { emitEvent: false });
           });
-          control.updateValueAndValidity({ emitEvent: false });
+          // [[[II ESC:057-134 DOC:docs/documents/2026-08-08-057-propuesta-compras-v3.md#escenario-134
+          // AQUÍ SÍ SE EMITE, y es lo que hacía que la tabla no pintara nada.
+          //
+          // `dynamic-table-field` se entera de que su FormArray cambió por UNA
+          // sola vía: se suscribe a `valueChanges` y de ahí llama a
+          // `markForCheck()`. Las filas se empujaban con `emitEvent: false` y el
+          // cierre también silenciaba el evento, así que el componente nunca se
+          // enteraba: las filas estaban en el formulario y el `tbody` vacío.
+          //
+          // Cada `push` sigue callado —no hace falta una notificación por fila—;
+          // se emite UNA al terminar, que es lo mismo que hace el alta manual
+          // de una fila desde la propia tabla.
+          control.updateValueAndValidity();
+          // ]]]FI
         },
         error: (err: any) => {
           this.showBlocked(false);
@@ -5873,7 +5980,21 @@ export class CRUD extends Vars implements OnChanges  /*implements OnInit*/ {
     // moneda) mostraba el UUID. Config-driven: cada endpoint declara el suyo. ]]]FI
     if (local_table?.field) {
       const tablePos = local_table.pos ?? safePos;
-      const responseInclude = this._findNoFormDataTableConfig(tablePos, local_table.field)?.response_include;
+      const tableConfig = this._findNoFormDataTableConfig(tablePos, local_table.field);
+      // [[[II ESC:057-60 DOC:docs/documents/2026-08-08-057-propuesta-compras-v3.md#escenario-60
+      // El `response_include` de la tabla describe las relaciones del recurso de
+      // la TABLA. Sólo se fusiona si lo que se está guardando ES ese recurso.
+      //
+      // Sin esta comprobación, un botón del formulario del DOCUMENTO —cuya
+      // respuesta también alimenta la tabla— mandaba el include de la partida en
+      // el POST del documento, y el servidor respondía 400 porque ese recurso no
+      // tiene esas relaciones: «This endpoint does not support the include
+      // parameter for path product.base_product».
+      const tableType = this.crudS.getAppType(tableConfig?.data_type?.type)?.type;
+      const savingType = this.crudS.getAppType(this.type[safePos])?.type;
+      const mismoRecurso = !!tableType && !!savingType && tableType === savingType;
+      // ]]]FI
+      const responseInclude = mismoRecurso ? tableConfig?.response_include : '';
       if (typeof responseInclude === 'string' && responseInclude.trim() !== '') {
         const parts = new Set(
           [...String(include || '').split(','), ...responseInclude.split(',')]
@@ -5958,8 +6079,15 @@ export class CRUD extends Vars implements OnChanges  /*implements OnInit*/ {
     // No aplica al guardado de una FILA (`local_table`): ahí el recurso que se
     // crea es el detalle, no el documento, y su form transitorio ni siquiera
     // clona el FormArray de la tabla.
+    // [[[II ESC:057-57 DOC:docs/documents/2026-08-08-057-propuesta-compras-v3.md#escenario-57
+    // También al ACTUALIZAR: sobre un documento que ya existe, `meta.sources` le
+    // SUMA partidas en vez de crear otro. Es el mismo contrato y el mismo motor;
+    // lo único distinto es el verbo.
+    //
+    // Estuvo cableado a `doCreate` y por eso el `PATCH` viajaba SIN fuentes: la
+    // capacidad del servidor existía y no tenía consumidor. ]]]FI
     let conversionMeta: any = null;
-    if (doCreate && !local_table) {
+    if (!local_table) {
       const conversion = this._conversionMetaForCreate(safePos);
       if (conversion.abort) {
         this.showBlocked(false);
@@ -6068,8 +6196,16 @@ export class CRUD extends Vars implements OnChanges  /*implements OnInit*/ {
         }
       }
 
-      this.crudS.edit({ formData, id, include /*, files*/ }).subscribe({
+      this.crudS.edit({ formData, id, include, meta: conversionMeta /*, files*/ }).subscribe({
         next: (resp: any) => {
+          // [[[II ESC:057-57 DOC:docs/documents/2026-08-08-057-propuesta-compras-v3.md#escenario-57
+          // Sumar partidas a un documento existente responde lo mismo que crear
+          // convirtiendo: `{meta:{conversion_run_id,...}}`, no un recurso.
+          // Aplanarlo metería basura en el listado, así que se cierra igual que
+          // el alta por conversión y se relee. ]]]FI
+          if (conversionMeta && this._finishConversionResponse(safePos, resp, options)) {
+            return;
+          }
           const msg = this.singular[safePos] || this.singular[0];
 
           this.messageS.changeMessage(
@@ -7827,7 +7963,19 @@ export class CRUD extends Vars implements OnChanges  /*implements OnInit*/ {
             if (control) {
               control.disable();
               object_control?.disable();
-              //console.log(`✅ [CRUD] Campo "${fieldName}" deshabilitado`);
+              // [[[II ESC:057-91 DOC:docs/documents/2026-08-08-057-propuesta-compras-v3.md#escenario-91
+              // EL CANDADO TIENE QUE SOBREVIVIR AL GUARDADO. `save()` termina
+              // llamando a `enableForm()`, que habilita TODO el formulario y
+              // sólo vuelve a cerrar lo que está en `initialDisabledForm` —que
+              // se llena al construir el formulario, con lo que declara la
+              // configuración—.
+              //
+              // Un campo cerrado después por `fields_disable` no estaba ahí, así
+              // que el primer guardado lo reabría. Efecto observado: el envío
+              // salía sin ese campo —Angular excluye los deshabilitados de
+              // `.value`— y el intento siguiente se quejaba de que faltaba.
+              this._rememberDisabled(fieldName);
+              // ]]]FI
             }
           } /*else {
             console.warn(`⚠️ [CRUD] Campo "${fieldName}" no encontrado en el formulario`);
@@ -7853,6 +8001,9 @@ export class CRUD extends Vars implements OnChanges  /*implements OnInit*/ {
             if (control) {
               control.enable();
               object_control?.enable();
+              // [[[II ESC:057-91 `fields_enable` es la contraparte: el campo deja
+              // de estar cerrado también para el próximo `enableForm()`. ]]]FI
+              this._forgetDisabled(fieldName);
             }
           }
         });

@@ -1042,6 +1042,88 @@ export class GeneralService {
     });
   }
 
+  // ==========================================================================
+  // [[[II ESC:057-129 DOC:docs/documents/2026-08-08-057-propuesta-compras-v3.md#escenario-129
+  /**
+   * Rellena las columnas `<relación>_data_<campo>` de una FILA ya aplanada.
+   *
+   * EL PROBLEMA. Estas columnas —`product_data_code`, `product_data_name`— no
+   * son campos de la partida: `SupplierRequestDetail` y `DeliveryNoteDetail` no
+   * guardan `code` ni `name`, los leen a través del producto. El servidor manda
+   * el dato (`include=product.base_product` trae el `base-product` con su
+   * código y su nombre), pero `DJAtoObject` sólo produce por relación el UUID y
+   * UNA etiqueta —`product` y `product__name`—, así que la celda quedaba vacía
+   * al abrir el documento, al jalar y al copiar. Sólo se llenaba tecleando en
+   * el buscador de la propia celda.
+   *
+   * LA REGLA. El valor de la celda es el MISMO que muestra su autocomplete:
+   * el `option_label` de la columna resuelto DENTRO del recurso relacionado que
+   * nombra `relationship_field`. Mismo resolvedor (`_applyRelationDataFields`,
+   * el del escenario 035-01), misma declaración, así que después de recargar la
+   * celda dice exactamente lo que decía al seleccionarla.
+   *
+   * NO SE DECLARA NADA NUEVO. `field`, `relationship_field`, `option_label` e
+   * `include` ya estaban en la configuración de la columna; lo único que
+   * faltaba era leerlos también para la fila y no sólo para la sugerencia.
+   *
+   * No pisa valores existentes: una columna con captura propia —`code` local,
+   * `local_editable`— conserva lo suyo.
+   */
+  enrichRowRelationDataFromColumns(rows: any[], resp: any, columns: any): any[] {
+    if (!Array.isArray(rows)) return rows;
+
+    const included = resp?.included;
+    if (!Array.isArray(included) || included.length === 0) return rows;
+
+    // Columnas que declaran las DOS mitades del contrato: un campo con forma
+    // `<relación>_data_<campo>` y la relación de la que cuelga.
+    const derivadas = this.configuredTableColumns(columns)
+      .map((column: any) => ({
+        field: column?.field,
+        relationship: String(column?.relationship_field || '').trim(),
+        labelKeys: this._labelKeysOf(column?.option_label),
+      }))
+      .filter((column: any) => !!column.field
+        && !!column.relationship
+        && !!this._relationDataFieldParts(column.field)
+        && column.labelKeys.length > 0);
+
+    if (!derivadas.length) return rows;
+
+    return rows.map((row: any) => {
+      if (!row || typeof row !== 'object') return row;
+      const next = { ...row };
+
+      for (const columna of derivadas) {
+        const actual = next[columna.field];
+        if (actual !== undefined && actual !== null && actual !== '') continue;
+
+        const relationData = next.relationships?.[columna.relationship]?.data;
+        if (!relationData || Array.isArray(relationData)) continue;
+
+        const incluido = this._findIncludedItem(included, relationData);
+        if (!incluido) continue;
+
+        // MISMA construcción que la etiqueta de la relación: se conservan las
+        // `relationships` del incluido, que es de donde cuelga el salto
+        // siguiente (producto -> producto base).
+        const fuente: any = {
+          id: incluido.id, ...incluido.attributes, relationships: incluido.relationships,
+        };
+        this._applyRelationDataFields(fuente, included, columna.labelKeys);
+
+        const partes = columna.labelKeys
+          .map((key: string) => fuente[key])
+          .filter((value: any) => value !== undefined && value !== null && value !== '')
+          .map((value: any) => String(value).trim());
+        if (partes.length) next[columna.field] = partes.join(' ');
+      }
+
+      return next;
+    });
+  }
+  // ]]]FI
+
   // [[[II ESC:030-20 DOC:docs/documents/2026-07-14-030-child-runtime-overlay.md#escenario-20
   /**
    * Lee de un objeto (sugerencia de autocomplete / fila seleccionada) el valor

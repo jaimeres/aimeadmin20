@@ -9,11 +9,16 @@ export const environment = {
   //base_url: 'http://127.0.0.1:8000/v1',
   //android_native_loopback_host: 'http://127.0.0.1:8000/v1',
 
+  // [[[II ESC:027-13 DOC:docs/documents/2026-07-01-027-autenticacion-segura-dispositivo-movil.md#escenario-13 CONFIG
+  /** Destino web independiente del API para clasificar fallos status 0. */
+  connectivity_probe_url: 'https://erp.jukai.io/',
+  // ]]]FI
+
   mk: 'jukai.io',
   mk_red: 'https://jukai.io',
   // [[[II ESC:028-01 DOC:docs/documents/2026-07-07-028-version-headers-update-policy.md#escenario-01 CONFIG
   /** Versión de la app. Cambiar aqui invalida todos los cachés automáticamente. */
-  appBuild: 5,
+  appBuild: 6,
   appVersion: '1.0.10',
   // ]]]FI
   erp: 'https://erp.jukai.io',

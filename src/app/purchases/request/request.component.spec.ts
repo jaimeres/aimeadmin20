@@ -3,6 +3,7 @@ import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { FormArray, FormControl, FormGroup } from '@angular/forms';
 import { provideRouter } from '@angular/router';
+import { of } from 'rxjs';
 
 import { RequestComponent } from './request.component';
 
@@ -148,6 +149,13 @@ describe('RequestComponent', () => {
     it('rol padre: al EDITAR carga los hijos del padre filtrando por su ForeignKey', () => {
       const { table, form } = setUp(asParent());
       component.isCreate.set(false);
+      // [[[II ESC:057-134 DOC:docs/documents/2026-08-08-057-propuesta-compras-v3.md#escenario-134
+      // La carga pasa por `ensureConfigForPos`: sin la configuración del HIJO
+      // cargada, `authS.config` devuelve un módulo vacío y las celdas de
+      // relación pintan el UUID. Aquí se declara cargada, que es el estado real
+      // cuando el usuario abre el documento. ]]]FI
+      const authS: any = (component as any).crudS.authS;
+      authS._config = { ...(authS._config || {}), 'request-detail': { fields: {}, cols: {} } };
 
       (component as any)._applyParentChildTables(POS, { id: 'request-1' });
 
@@ -275,6 +283,15 @@ describe('RequestComponent', () => {
         no_form_data_table_derived: new FormArray<FormGroup>(rows),
       });
       (component as any).pos.set(POS);
+      // [[[II ESC:057-57 DOC:docs/documents/2026-08-08-057-propuesta-compras-v3.md#escenario-57
+      // ESTE ESCENARIO ES UN ALTA, y hay que declararlo. Fuera del alta, una fila
+      // con FK al origen puede ser una partida YA guardada que nació de una
+      // conversión anterior, y volver a mandarla haría que el servidor intentara
+      // convertirla otra vez; por eso `_collectConversionSources` sólo toma esas
+      // filas cuando `isCreate()`. La prueba montaba el formulario sin decirlo,
+      // así que descartaba todas las filas y `sources` salía vacío.
+      (component as any).isCreate.set(true);
+      // ]]]FI
       component.form.set({ [POS]: form } as any);
       component.drawForm.set({
         [POS]: {
@@ -422,7 +439,13 @@ describe('RequestComponent', () => {
     // [[[II ESC:036-05 DOC:docs/documents/2026-08-04-036-meta-sources-tabla-derivada.md#escenario-05
     it('la fila se guarda contra el formulario ABIERTO, no contra typeDefault', () => {
       setUp([]);
-      component.isCreate.set(true);
+      // [[[II ESC:057-88 DOC:docs/documents/2026-08-08-057-propuesta-compras-v3.md#escenario-88
+      // En ALTA la fila ya NO se guarda suelta: viaja con el padre en
+      // `<prefijo>_data` (escenario 49), y eso lo comprueba la prueba de
+      // arriba. Lo que ESTA prueba fija —contra qué formulario se guarda— sólo
+      // aplica cuando sí hay guardado delegado, o sea fuera del alta.
+      component.isCreate.set(false);
+      // ]]]FI
       const saveSpy = spyOn(component, 'save');
 
       component.handleTableRowSave({
@@ -452,7 +475,9 @@ describe('RequestComponent', () => {
           quantity: 'requested',
           version: 'modified_at,created_at',
           filter: 'supplier_request',
-          pending: 'requested,delivered',
+          // [[[II ESC:057-112 DOC:docs/documents/2026-08-08-057-propuesta-compras-v3.md#escenario-112
+          // El saldo lo PUBLICA el servidor; el cliente ya no resta. ]]]FI
+          pending: 'pending_quantity',
         });
         // `addControl` sobre un FormGroup tipado exige el literal declarado; el
         // motor trabaja con controles dinámicos, así que aquí se usa la forma no
@@ -461,8 +486,35 @@ describe('RequestComponent', () => {
         form.addControl('no_form_data_source_code', new FormControl('pedido-1'));
         form.addControl('supplier', new FormControl('prov-1'));
         form.addControl('currency', new FormControl(''));
+        // [[[II ESC:057-62 DOC:docs/documents/2026-08-08-057-propuesta-compras-v3.md#escenario-62
+        // PRECONDICIÓN REAL: jalar aplana las partidas con la configuración del
+        // recurso ORIGEN, que se carga por módulo y bajo demanda. Sin ella la
+        // celda mostraría el UUID, así que el motor la pide antes de consultar.
+        // Aquí se declara cargada; el caso contrario tiene su propia prueba.
+        (component as any).crudS.authS.isConfigModuleLoaded = () => true;
+        // ]]]FI
         return { ...built, form };
       };
+
+      // [[[II ESC:057-62 DOC:docs/documents/2026-08-08-057-propuesta-compras-v3.md#escenario-62
+      it('sin la configuración del recurso origen NO consulta: primero la pide', () => {
+        const built = withDocument();
+        const pedidas: string[][] = [];
+        (component as any).crudS.authS.isConfigModuleLoaded = () => false;
+        (component as any).crudS.authS.ensureConfigModules = (modulos: string[]) => {
+          pedidas.push(modulos);
+          return of(false);
+        };
+
+        (component as any).pullSourceDocument({ pos: POS });
+
+        // Ni una petición de partidas: aplanarlas sin `fields` dejaría el UUID
+        // en la celda, que es justo el defecto que esta guardia evita.
+        TestBed.inject(HttpTestingController).verify();
+        expect(pedidas).toEqual([['supplier-request-detail']]);
+        expect((built.form.get('no_form_data_table_derived') as FormArray).length).toBe(0);
+      });
+      // ]]]FI
 
       it('trae las partidas del documento y las deja como filas ORIGEN', () => {
         const { form } = withDocument();
@@ -475,17 +527,21 @@ describe('RequestComponent', () => {
         req.flush({
           data: [
             { id: 'src-1', type: 'supplier-request-detail',
-              attributes: { requested: 10, delivered: 4, modified_at: '2026-08-02T10:30:00Z' } },
+              attributes: { requested: 10, delivered: 4, pending_quantity: '6',
+                            modified_at: '2026-08-02T10:30:00Z' } },
+            // Sin saldo: el servidor publica 0 y la partida no se ofrece.
             { id: 'src-2', type: 'supplier-request-detail',
-              attributes: { requested: 5, delivered: 5, created_at: '2026-08-01T09:00:00Z' } },
+              attributes: { requested: 5, delivered: 5, pending_quantity: '0',
+                            created_at: '2026-08-01T09:00:00Z' } },
           ],
         });
 
         const filas = form.get('no_form_data_table_derived') as FormArray;
         // La segunda partida ya no tiene saldo: no se ofrece.
         expect(filas.length).toBe(1);
-        // La cantidad propuesta es el PENDIENTE, no lo pedido.
-        expect(filas.at(0).get('requested')?.value).toBe(6);
+        // La cantidad propuesta es el PENDIENTE que publicó el SERVIDOR, no una
+        // resta hecha aquí.
+        expect(filas.at(0).get('requested')?.value).toBe('6');
 
         const { sources } = (component as any)._collectConversionSources(POS);
         expect(sources.length).toBe(1);
@@ -499,7 +555,8 @@ describe('RequestComponent', () => {
         const http = TestBed.inject(HttpTestingController);
         const respuesta = () => ({
           data: [{ id: 'src-1', type: 'supplier-request-detail',
-                   attributes: { requested: 10, delivered: 0, modified_at: '2026-08-02T10:30:00Z' } }],
+                   attributes: { requested: 10, delivered: 0, pending_quantity: '10',
+                                 modified_at: '2026-08-02T10:30:00Z' } }],
         });
 
         (component as any).pullSourceDocument({ pos: POS });
@@ -539,7 +596,11 @@ describe('RequestComponent', () => {
 
     it('una fila manual sigue delegando el guardado normal', () => {
       setUp([]);
-      component.isCreate.set(true);
+      // [[[II ESC:057-88 DOC:docs/documents/2026-08-08-057-propuesta-compras-v3.md#escenario-88
+      // Fuera del alta el guardado delegado sigue siendo el de siempre; dentro
+      // del alta la fila viaja con el padre y no se guarda sola.
+      component.isCreate.set(false);
+      // ]]]FI
       const saveSpy = spyOn(component, 'save');
 
       component.handleTableRowSave({

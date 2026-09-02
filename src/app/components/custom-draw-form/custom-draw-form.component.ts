@@ -476,8 +476,9 @@ export class CustomDrawFormComponent implements OnInit, OnDestroy {
 
   // [[[II ESC:001-18 DOC:docs/documents/2026-05-16_001_consolidacion_dropdown_types_y_fix_escenarios.md#escenario-18
   openAdditionalSearch(fieldConfig: any): void {
-    if (fieldConfig?.additional_search?.active !== true || fieldConfig?.readonly === true) return;
-    const subsidiaries = fieldConfig?.additional_search?.subsidiaries;
+    const config = this.dynamicDropdownDataS.getAdditionalSearchConfig(fieldConfig);
+    if (config?.active !== true || fieldConfig?.readonly === true) return;
+    const subsidiaries = config?.subsidiaries;
     if (
       !subsidiaries
       || typeof subsidiaries !== 'object'
@@ -496,7 +497,10 @@ export class CustomDrawFormComponent implements OnInit, OnDestroy {
       return;
     }
     this.additionalSearchToken++;
-    this.additionalSearchField.set(fieldConfig);
+    this.additionalSearchField.set({
+      ...fieldConfig,
+      additional_search: config,
+    });
     this.additionalSearchSuggestions.set([]);
     this.additionalSearchControl.reset(null, { emitEvent: false });
     this.additionalSearchVisible.set(true);
@@ -6076,6 +6080,23 @@ export class CustomDrawFormComponent implements OnInit, OnDestroy {
   handleTableDelete(event: any, tableConfig: any): void {
     this.onTableDeleteRow.emit(event);
     if (event?.isDerivedDraft === true) return;
+
+    // [[[II ESC:057-52 DOC:docs/documents/2026-08-08-057-propuesta-compras-v3.md#escenario-52
+    // NO es lo mismo una fila capturada a mano que una jalada de un documento
+    // INFERIOR, aunque en la tabla se vean igual.
+    //
+    // La capturada a mano es un registro de ESTA tabla: si ya está guardada,
+    // quitarla es un DELETE al servidor. La jalada es la partida del documento
+    // de abajo mostrada aquí; todavía no existe como partida de este documento
+    // y el de abajo debe quedar intacto, así que quitarla es local y el
+    // servidor no tiene por qué enterarse. Al final es el cliente quien le dice
+    // qué convertir.
+    //
+    // Sin esta distinción el borrado mandaba un DELETE con el id de la partida
+    // ORIGEN contra el recurso de esta tabla: fallaba, y el manejador de error
+    // reinsertaba la fila, así que no había forma de quitarla.
+    if (event?.isLocalSourceRow === true) return;
+    // ]]]FI
 
     const resource = this._tableServerResource(tableConfig);
     const rowId = event?.sourceRow?.id ?? event?.rowData?.id;

@@ -1,8 +1,8 @@
 <!-- [[[II ESC:031-08 DOC:docs/documents/2026-07-18-031-optimizacion-navegacion-activos.md#escenario-08 -->
-<p-dialog [(visible)]="visible" styleClass="width-1000px-custom min-height-550px-custom"
+<p-dialog [(visible)]="visible" styleClass="settings-dialog min-height-550px-custom"
   header="Configuración del módulo" (onHide)="onHide($event)" [maximizable]="true" [resizable]="true">
 
-  <p-tabs [scrollable]="true" [value]="activeMainTab()" (valueChange)="activeMainTab.set($any($event))">
+  <p-tabs [scrollable]="true" [lazy]="true" [value]="activeMainTab()" (valueChange)="activeMainTab.set($any($event))">
     <p-tablist>
       <p-tab *ngIf="localSettingsSections().dialog" value="dialog">
         <i class="pi pi-window-maximize mr-2"></i>Diálogo
@@ -100,7 +100,7 @@
         </div>
         }
 
-        <div class="settings-card-list pt-3">
+        <div class="settings-card-list fields-grid pt-3">
           @for (row of unifiedRows(); track row.field; let index = $index) {
           <article pDraggable="rows" pDroppable="rows" (onDragStart)="onRowDragStart(index)"
             (onDragEnd)="onRowDragEnd()" (onDrop)="onRowDropAt(index)" class="uf-row settings-card"
@@ -112,13 +112,11 @@
                   <i class="pi pi-bars"></i>
                   <span class="order-badge">{{ index + 1 }}</span>
                 </button>
-                <div>
-                  <strong>{{ row.header }}</strong>
-                  <small>{{ row.field }}</small>
-                </div>
+                <strong>{{ row.header }}</strong>
               </div>
-              <p-button label="Opciones avanzadas" icon="pi pi-sliders-h" size="small" severity="secondary"
-                [outlined]="true" (onClick)="openAdvanced(row.field)" />
+              <p-button icon="pi pi-sliders-h" size="small" severity="secondary" [outlined]="true"
+                [rounded]="true" ariaLabel="Opciones avanzadas" pTooltip="Opciones avanzadas"
+                tooltipPosition="left" (onClick)="openAdvanced(row.field)" />
             </header>
 
             <div class="uf-row-fields">
@@ -144,25 +142,25 @@
             </div>
 
             <div class="uf-toggle-grid">
-              <p-toggleButton formControlName="colActive" onLabel="Visible en tabla" offLabel="Oculta en tabla"
-                onIcon="pi pi-table" offIcon="pi pi-eye-slash" styleClass="height-input-custom settings-toggle" />
+              <p-toggleButton formControlName="colActive" onLabel="Visible en tabla" offLabel="Oculta en tabla" styleClass="height-input-custom settings-toggle" />
               <p-toggleButton formControlName="gridActive" onLabel="Visible en formulario"
-                offLabel="Oculta en formulario" onIcon="pi pi-window-maximize" offIcon="pi pi-eye-slash"
+                offLabel="Oculta en formulario"
                 styleClass="height-input-custom settings-toggle" />
               <p-toggleButton formControlName="sortable" onLabel="Columna ordenable" offLabel="Sin ordenar"
-                onIcon="pi pi-sort-alt" offIcon="pi pi-sort-alt-slash"
                 styleClass="height-input-custom settings-toggle" />
-              <p-toggleButton formControlName="locked" onLabel="Columna bloqueada" offLabel="Columna libre"
-                onIcon="pi pi-lock" offIcon="pi pi-lock-open" styleClass="height-input-custom settings-toggle" />
-              <p-toggleButton formControlName="hideMobile" onLabel="Oculta en móvil" offLabel="Visible en móvil"
-                onIcon="pi pi-mobile" offIcon="pi pi-mobile" styleClass="height-input-custom settings-toggle" />
+              <p-toggleButton formControlName="locked" onLabel="Columna bloqueada" offLabel="Columna libre" styleClass="height-input-custom settings-toggle" />
+              <p-toggleButton formControlName="hideMobile" onLabel="Oculta en móvil" offLabel="Visible en móvil" styleClass="height-input-custom settings-toggle" />
             </div>
           </article>
           }
         </div>
 
         <div class="settings-actions mt-3">
-          <p-button label="Vista previa del diseño" icon="pi pi-eye" severity="secondary" [outlined]="true"
+          <p-button label="Traer dato de una relación" severity="secondary" [outlined]="true" size="small"
+            (onClick)="openAddField('relation')" />
+          <p-button label="Agregar campo libre" severity="secondary" [outlined]="true" size="small"
+            (onClick)="openAddField('free')" />
+          <p-button label="Vista previa del diseño" severity="secondary" [outlined]="true"
             size="small" (onClick)="openPreview()" />
         </div>
       </p-tabpanel>
@@ -179,13 +177,12 @@
             </div>
             <div class="behavior-toggle-grid">
               <p-toggleButton formControlName="load_on_start" onLabel="Carga web habilitada"
-                offLabel="Carga web bajo demanda" onIcon="pi pi-desktop" offIcon="pi pi-desktop"
+                offLabel="Carga web bajo demanda"
                 styleClass="height-input-custom settings-toggle" />
               <p-toggleButton formControlName="load_on_start_mobile" onLabel="Carga móvil habilitada"
-                offLabel="Carga móvil bajo demanda" onIcon="pi pi-mobile" offIcon="pi pi-mobile"
+                offLabel="Carga móvil bajo demanda"
                 styleClass="height-input-custom settings-toggle" />
               <p-toggleButton formControlName="silent" onLabel="Carga silenciosa" offLabel="Mostrar indicador de carga"
-                onIcon="pi pi-volume-off" offIcon="pi pi-spin pi-spinner"
                 styleClass="height-input-custom settings-toggle" />
             </div>
           </section>
@@ -224,20 +221,17 @@
         </div>
         }
 
-        <div class="settings-card-list pt-3">
+        <div class="settings-card-list filters-grid pt-3">
           @for (filterRow of filterEditorRows(); track filterRow.col.filterKey) {
           <article class="settings-card filter-card" [class.filter-row-inactive]="!filterRow.state.active">
-            <header class="filter-card-header">
-              <div>
-                <strong>{{ filterRow.col.header }}</strong>
-                <small>{{ filterRow.col.filterField }}</small>
-              </div>
-              <p-toggleButton [formControl]="filterRow.activeControl" onLabel="Filtro habilitado"
-                offLabel="Filtro deshabilitado" onIcon="pi pi-filter" offIcon="pi pi-filter-slash"
-                styleClass="height-input-custom settings-toggle" />
-            </header>
+            <div class="filter-row">
+              <p-toggleButton [formControl]="filterRow.activeControl" onLabel="" offLabel=""
+                onIcon="pi pi-filter" offIcon="pi pi-filter-slash" styleClass="filter-toggle"
+                [pTooltip]="filterRow.state.active ? 'Deshabilitar filtro' : 'Habilitar filtro'"
+                tooltipPosition="top" />
 
-            <div class="filter-controls">
+              <span class="filter-label">{{ filterRow.col.header }}</span>
+
               <p-floatlabel variant="on" class="settings-control">
                 <p-select [inputId]="'filter-operation-' + filterRow.col.filterKey"
                   [options]="filterRow.operations" [formControl]="filterRow.operationControl" optionLabel="label"
@@ -245,7 +239,17 @@
                 <label [for]="'filter-operation-' + filterRow.col.filterKey">Operación</label>
               </p-floatlabel>
 
+              <div class="filter-value">
               @if (!filterRow.isNull && !filterRow.isRange && !filterRow.isIn) {
+              @if (filterRow.hasOptions) {
+              <p-floatlabel variant="on" class="settings-control">
+                <p-select [inputId]="'filter-value-' + filterRow.col.filterKey" [options]="filterRow.options"
+                  [formControl]="filterRow.valueControl" [optionLabel]="filterRow.optionLabel"
+                  [optionValue]="filterRow.optionValue" [filter]="true" [showClear]="true" appendTo="body"
+                  styleClass="height-input-custom w-full" />
+                <label [for]="'filter-value-' + filterRow.col.filterKey">Valor</label>
+              </p-floatlabel>
+              } @else {
               @switch (filterRow.type) {
               @case ('text') {
               <p-floatlabel variant="on" class="settings-control">
@@ -289,6 +293,55 @@
               }
               }
               }
+              }
+
+              @if (filterRow.isIn && filterRow.hasOptions) {
+              <p-floatlabel variant="on" class="settings-control">
+                <p-multiSelect [inputId]="'filter-values-' + filterRow.col.filterKey" display="chip"
+                  [options]="filterRow.options" [formControl]="filterRow.valueControl"
+                  [optionLabel]="filterRow.optionLabel" [optionValue]="filterRow.optionValue" [filter]="true"
+                  [showToggleAll]="true" appendTo="body" styleClass="height-input-custom w-full" />
+                <label [for]="'filter-values-' + filterRow.col.filterKey">Valores</label>
+              </p-floatlabel>
+              }
+
+              @if (filterRow.isIn && !filterRow.hasOptions && filterRow.type === 'text') {
+              <p-floatlabel variant="on" class="settings-control">
+                <p-autoComplete [inputId]="'filter-values-' + filterRow.col.filterKey"
+                  [formControl]="filterRow.valueControl" [multiple]="true" [typeahead]="false" [addOnBlur]="true"
+                  [addOnTab]="true" styleClass="w-full" />
+                <label [for]="'filter-values-' + filterRow.col.filterKey">Valores (Enter para agregar)</label>
+              </p-floatlabel>
+              }
+
+              @if (filterRow.isIn && !filterRow.hasOptions && filterRow.type === 'fk') {
+              <p-floatlabel variant="on" class="settings-control">
+                <p-autoComplete [inputId]="'filter-values-' + filterRow.col.filterKey"
+                  [formControl]="filterRow.valueControl" [multiple]="true"
+                  [suggestions]="fkSuggestionsSignal()[filterRow.col.filterKey]"
+                  (completeMethod)="completeFkMethod($event, filterRow.col)" [optionLabel]="filterRow.optionLabel"
+                  [minLength]="0" [forceSelection]="true" appendTo="body" styleClass="w-full" />
+                <label [for]="'filter-values-' + filterRow.col.filterKey">Valores relacionados</label>
+              </p-floatlabel>
+              }
+
+              @if (filterRow.isIn && filterRow.type === 'numeric') {
+              <p-floatlabel variant="on" class="settings-control">
+                <p-inputNumber [inputId]="'filter-values-' + filterRow.col.filterKey"
+                  [formControl]="filterRow.valueControl" [useGrouping]="false" styleClass="w-full"
+                  inputStyleClass="height-input-custom w-full" />
+                <label [for]="'filter-values-' + filterRow.col.filterKey">Valor numérico</label>
+              </p-floatlabel>
+              }
+              </div>
+
+              <div class="filter-clear">
+                @if (filterRow.state.active) {
+                <p-button icon="pi pi-times" severity="danger" [text]="true" [rounded]="true" size="small"
+                  ariaLabel="Limpiar filtro" pTooltip="Limpiar filtro" tooltipPosition="top"
+                  (onClick)="resetFilter(filterRow.col.filterKey)" />
+                }
+              </div>
             </div>
 
             @if (filterRow.state.active && fkSearchHintSignal()[filterRow.col.filterKey]) {
@@ -303,34 +356,6 @@
               <i class="pi pi-info-circle"></i>
               <span>Se buscarán registros sin valor en <strong>{{ filterRow.col.header }}</strong>.</span>
             </div>
-            }
-
-            @if (filterRow.isIn && filterRow.type === 'text') {
-            <p-floatlabel variant="on" class="w-full mt-2">
-              <p-autoComplete [inputId]="'filter-values-' + filterRow.col.filterKey"
-                [formControl]="filterRow.valueControl" [multiple]="true" [typeahead]="false" [addOnBlur]="true"
-                [addOnTab]="true" styleClass="w-full" />
-              <label [for]="'filter-values-' + filterRow.col.filterKey">Valores; presiona Enter para agregar</label>
-            </p-floatlabel>
-            }
-
-            @if (filterRow.isIn && filterRow.type === 'fk') {
-            <p-floatlabel variant="on" class="w-full mt-2">
-              <p-autoComplete [inputId]="'filter-values-' + filterRow.col.filterKey"
-                [formControl]="filterRow.valueControl" [multiple]="true"
-                [suggestions]="fkSuggestionsSignal()[filterRow.col.filterKey]"
-                (completeMethod)="completeFkMethod($event, filterRow.col)" [optionLabel]="filterRow.optionLabel"
-                [minLength]="0" [forceSelection]="true" appendTo="body" styleClass="w-full" />
-              <label [for]="'filter-values-' + filterRow.col.filterKey">Valores relacionados</label>
-            </p-floatlabel>
-            }
-
-            @if (filterRow.isIn && filterRow.type === 'numeric') {
-            <p-floatlabel variant="on" class="w-full mt-2">
-              <p-inputNumber [inputId]="'filter-values-' + filterRow.col.filterKey"
-                [formControl]="filterRow.valueControl" [useGrouping]="false" styleClass="w-full" />
-              <label [for]="'filter-values-' + filterRow.col.filterKey">Valor numérico</label>
-            </p-floatlabel>
             }
 
             @if (filterRow.isRange && filterRow.type !== 'boolean') {
@@ -361,8 +386,8 @@
             </div>
             }
 
+            @if (filterRow.hasRelativePresets) {
             <footer class="filter-card-footer">
-              @if (filterRow.hasRelativePresets) {
               <div class="flex gap-2 flex-wrap">
                 <p-button label="Hoy" severity="secondary" [outlined]="true" size="small"
                   (onClick)="applyRelativePreset(filterRow.col.filterKey, 'day')" />
@@ -373,12 +398,8 @@
                 <p-button label="Año" severity="secondary" [outlined]="true" size="small"
                   (onClick)="applyRelativePreset(filterRow.col.filterKey, 'year')" />
               </div>
-              }
-              @if (filterRow.state.active) {
-              <p-button label="Limpiar filtro" icon="pi pi-times" severity="danger" [text]="true" size="small"
-                (onClick)="resetFilter(filterRow.col.filterKey)" />
-              }
             </footer>
+            }
           </article>
           }
         </div>
@@ -420,7 +441,7 @@
       [style.min-height]="row.inGrid && row.gridActive ? '3.25rem' : '2rem'"
       [style.opacity]="row.inGrid && row.gridActive ? 1 : .35"
       [style.border-style]="row.inGrid && row.gridActive ? 'solid' : 'dashed'"
-      [pTooltip]="row.inGrid && row.gridActive ? 'Campo: ' + row.field : row.field + ' (oculto)'"
+      [pTooltip]="row.inGrid && row.gridActive ? row.header : row.header + ' (oculto)'"
       tooltipPosition="top">
       <div class="text-xs font-semibold text-center">{{ row.colsCfg.label || row.header }}</div>
       @if (row.inGrid && row.gridActive) {
@@ -439,8 +460,90 @@
   </div>
 </p-dialog>
 
+<p-dialog [visible]="addFieldMode() !== null" (visibleChange)="$event ? null : closeAddField()"
+  [header]="addFieldMode() === 'relation' ? 'Traer dato de una relación' : 'Agregar campo libre'"
+  styleClass="width-600px-custom" [modal]="true" appendTo="body">
+
+  <form [formGroup]="addFieldForm" class="pt-2">
+    @if (addFieldMode() === 'relation') {
+    <div class="settings-note mb-3">
+      <i class="pi pi-info-circle"></i>
+      <span>Elige de qué relación quieres traer un dato. Llega como <strong>solo lectura</strong>: el dato
+        pertenece al registro relacionado, no a este.</span>
+    </div>
+
+    <div class="settings-form-grid">
+      <p-floatlabel variant="on" class="settings-control">
+        <p-select inputId="add-relation" [options]="relationOptions()" optionLabel="label" optionValue="value"
+          formControlName="relation" [filter]="true" appendTo="body" styleClass="height-input-custom w-full" />
+        <label for="add-relation">Relación</label>
+      </p-floatlabel>
+
+      <p-floatlabel variant="on" class="settings-control">
+        <p-select inputId="add-related-field" [options]="relatedFieldOptions()" optionLabel="label"
+          optionValue="value" formControlName="relatedField" [filter]="true" appendTo="body"
+          [disabled]="loadingRelated()" [emptyMessage]="loadingRelated() ? 'Cargando…' : 'Sin datos'"
+          styleClass="height-input-custom w-full" />
+        <label for="add-related-field">Dato</label>
+      </p-floatlabel>
+    </div>
+
+    @if (loadingRelated()) {
+    <div class="settings-note compact mt-3">
+      <i class="pi pi-spin pi-spinner"></i>
+      <span>Cargando los datos de la relación…</span>
+    </div>
+    } @else if (addFieldForm.controls.relation.value && relatedFieldOptions().length === 0) {
+    <div class="settings-note compact mt-3">
+      <i class="pi pi-info-circle"></i>
+      <span>Esa relación no publica datos que se puedan traer.</span>
+    </div>
+    }
+    }
+
+    @if (addFieldMode() === 'free') {
+    <div class="settings-form-grid">
+      <p-floatlabel variant="on" class="settings-control">
+        <input pInputText id="add-label" formControlName="label" class="height-input-custom w-full" />
+        <label for="add-label">Nombre del campo</label>
+      </p-floatlabel>
+
+      <p-floatlabel variant="on" class="settings-control">
+        <p-select inputId="add-target" [options]="freeFieldTargets" optionLabel="label" optionValue="value"
+          formControlName="target" appendTo="body" styleClass="height-input-custom w-full" />
+        <label for="add-target">Dónde se guarda</label>
+      </p-floatlabel>
+
+      <p-floatlabel variant="on" class="settings-control">
+        <p-select inputId="add-type" [options]="fieldTypeOptions" optionLabel="label" optionValue="value"
+          formControlName="type" [filter]="true" appendTo="body" styleClass="height-input-custom w-full" />
+        <label for="add-type">Tipo de campo</label>
+      </p-floatlabel>
+    </div>
+
+    @if (freeFieldUsesOptions()) {
+    <p-floatlabel variant="on" class="w-full mt-3">
+      <textarea pTextarea id="add-options" formControlName="options" rows="5" class="w-full font-mono"></textarea>
+      <label for="add-options">Valores de la lista (JSON)</label>
+    </p-floatlabel>
+    <div class="settings-note compact">
+      <i class="pi pi-info-circle"></i>
+      <span>Arreglo de objetos con <code>id</code> y <code>name</code>, uno por valor de la lista.</span>
+    </div>
+    }
+    }
+  </form>
+
+  <ng-template #footer>
+    <div class="dialog-actions end">
+      <p-button label="Cancelar" severity="secondary" [outlined]="true" (onClick)="closeAddField()" />
+      <p-button label="Agregar" (onClick)="applyAddField()" />
+    </div>
+  </ng-template>
+</p-dialog>
+
 <p-dialog [visible]="advancedField() !== null" (visibleChange)="$event ? null : closeAdvanced()"
-  [header]="'Configuración avanzada — ' + (advancedField() ?? '')"
+  [header]="'Configuración avanzada — ' + advancedHeader()"
   styleClass="width-900px-custom min-height-550px-custom" [modal]="true" [resizable]="true" [maximizable]="true"
   appendTo="body">
 

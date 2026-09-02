@@ -1,7 +1,18 @@
-// [[[II ESC:006-01 DOC:docs/documents/2026-06-01_006_android-http-local-debug.md#escenario-01
+// [[[II ESC:006-01 DOC:docs/documents/2026-06-01_006_android-http-local-debug.md#escenario-01 ESC:027-12 DOC:docs/documents/2026-07-01-027-autenticacion-segura-dispositivo-movil.md#escenario-12
 import { environment } from '../../environments/environment';
 
-const ANDROID_LOOPBACK_HOSTS = new Set(['127.0.0.1', 'localhost']);
+const LOOPBACK_HOSTS = new Set(['127.0.0.1', 'localhost', '::1', '[::1]']);
+
+export function isLoopbackUrl(rawUrl: string): boolean {
+  if (!rawUrl) return false;
+
+  try {
+    const baseUrl = typeof window === 'undefined' ? 'http://localhost' : window.location.origin;
+    return LOOPBACK_HOSTS.has(new URL(rawUrl.trim(), baseUrl).hostname.toLowerCase());
+  } catch {
+    return false;
+  }
+}
 
 function isNativeAndroid(): boolean {
   const capacitor = (window as any)?.Capacitor;
@@ -22,7 +33,7 @@ export function resolveNativeLocalUrl(rawUrl: string): string {
 
   try {
     const parsed = new URL(trimmedUrl);
-    if (!ANDROID_LOOPBACK_HOSTS.has(parsed.hostname)) {
+    if (!LOOPBACK_HOSTS.has(parsed.hostname.toLowerCase())) {
       return trimmedUrl;
     }
 

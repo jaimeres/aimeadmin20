@@ -1,14 +1,26 @@
 import { HttpErrorResponse } from '@angular/common/http';
+import { isLoopbackUrl } from '@/utils/native-local-url.util';
 
-// [[[II ESC:027-07 DOC:docs/documents/2026-07-01-027-autenticacion-segura-dispositivo-movil.md#escenario-07
+// [[[II ESC:027-07 DOC:docs/documents/2026-07-01-027-autenticacion-segura-dispositivo-movil.md#escenario-07 ESC:027-11 DOC:docs/documents/2026-07-01-027-autenticacion-segura-dispositivo-movil.md#escenario-11 ESC:027-12 DOC:docs/documents/2026-07-01-027-autenticacion-segura-dispositivo-movil.md#escenario-12 ESC:027-13 DOC:docs/documents/2026-07-01-027-autenticacion-segura-dispositivo-movil.md#escenario-13
 export function resolveLoginErrorMessage(error: unknown, connected: boolean): string {
   const status = error instanceof HttpErrorResponse
     ? error.status
     : Number((error as { status?: unknown } | null)?.status ?? 0);
 
   if (status === 0) {
+    const localServerFailure = Boolean((error as HttpErrorResponse)?.error?.localServerFailure)
+      || isLoopbackUrl((error as HttpErrorResponse)?.url || '');
+
+    if (connected && localServerFailure) {
+      return 'No fue posible conectarse con el servidor local. Verifica que el servicio esté iniciado en el equipo de desarrollo.';
+    }
+
+    if (connected && (error as HttpErrorResponse)?.error?.serverUnavailable) {
+      return 'No fue posible comunicarse con el servidor. Tu conexión a Internet está disponible, pero el servicio no responde o está bloqueando el acceso.';
+    }
+
     return connected
-      ? 'La aplicación no pudo comunicarse con el servidor aunque el equipo tiene conexión. El servicio puede estar temporalmente fuera de línea o bloqueando el acceso. Intenta nuevamente y, si continúa, contacta a soporte.'
+      ? 'Sin acceso a Internet desde la aplicación. El equipo muestra una red activa, pero la aplicación no puede usarla. Revisa el Wi-Fi, los datos móviles o las restricciones de red de la aplicación.'
       : 'Sin conexión a Internet. Revisa tu Wi-Fi o datos móviles y vuelve a intentarlo.';
   }
 

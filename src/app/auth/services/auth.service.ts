@@ -1690,6 +1690,8 @@ export class AuthService {
         draw?: any;
         general?: any;
         fields?: any;
+        /** App de Django del recurso; se conserva para poder devolver la config. */
+        config_app?: string;
       }
     } = {};
 
@@ -1737,6 +1739,11 @@ export class AuthService {
         if (fields && typeof fields === "object") {
           customField[clave2]['fields'] = fields;
         }
+
+        // La app de Django (`clave1`) se pierde al aplanar, pero es el campo de
+        // `Configuration` donde vive el recurso; guardarla permite devolver la
+        // configuracion al servidor con la forma que espera el modelo.
+        customField[clave2]['config_app'] = clave1;
       }
     }
 

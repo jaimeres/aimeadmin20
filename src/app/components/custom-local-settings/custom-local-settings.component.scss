@@ -1,22 +1,77 @@
+// Los bloques `::ng-deep` de este componente viven en `src/assets/styles.scss`:
+// apuntan a clases de PrimeNG (`.p-togglebutton`, el diálogo) que no son del
+// ámbito del componente, y aquí solo consumían presupuesto de estilos.
 // [[[II ESC:031-08 DOC:docs/documents/2026-07-18-031-optimizacion-navegacion-activos.md#escenario-08
-.settings-form-grid,
-.filter-controls,
-.filter-range {
+.settings-form-grid {
   display: grid;
   gap: .85rem;
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
+.filter-range {
+  display: grid;
+  gap: .7rem;
+  grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr));
+}
+
+// Un filtro es UNA fila: estado, etiqueta, operación y valor. Los bloques
+// condicionales (varios valores, rango, avisos) van debajo.
+// Rejilla con pistas FIJAS, no flex: con flex cada fila repartia el espacio
+// segun su propio contenido (si tenia valor, si estaba activa) y ninguna
+// coincidia con la de al lado. Las cinco celdas existen siempre, aunque la
+// operacion no pida valor o el filtro este apagado.
+.filter-row {
+  // `end` y no `center`: el float label de Operación siempre lleva su etiqueta
+  // encima y el de Valor solo cuando tiene contenido, así que centrar dejaba las
+  // cajas a distinta altura. Alineando por abajo, los inputs quedan a la par.
+  align-items: end;
+  display: grid;
+  gap: .6rem;
+  grid-template-columns: auto minmax(0, 1fr) minmax(0, 1.05fr) minmax(0, 1.35fr) 1.75rem;
+
+  > .filter-toggle,
+  > .filter-label,
+  > .filter-clear {
+    align-self: center;
+  }
+}
+
+.filter-clear {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.filter-row .settings-control {
+  width: 100%;
+}
+
+.filter-label {
+  font-size: .85rem;
+  font-weight: 600;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+}
+
 .settings-control {
   display: block;
-  min-width: 0;
   width: 100%;
+}
+
+// Todo lo que vive en rejilla o flex necesita poder encoger por debajo de su
+// contenido; agrupado en una sola regla en vez de repetirlo en cada bloque.
+.settings-control,
+.filter-value,
+.filter-clear,
+.filter-label,
+.advanced-control,
+.uf-row-identity,
+.uf-row-identity strong {
+  min-width: 0;
 }
 
 .settings-toolbar,
 .settings-section-heading,
 .uf-row-header,
-.filter-card-header,
 .filter-card-footer,
 .dialog-actions {
   align-items: center;
@@ -68,8 +123,37 @@
 }
 
 .settings-card-list {
+  align-items: start;
   display: grid;
   gap: .75rem;
+}
+
+.settings-card-list.fields-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.settings-card-list.filters-grid {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+@media (min-width: 992px) {
+  .settings-card-list.fields-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .settings-card-list.filters-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 1400px) {
+  :host ::ng-deep .settings-dialog {
+    width: min(1600px, 96vw);
+  }
+
+  .settings-card-list.fields-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
 }
 
 .settings-card,
@@ -77,36 +161,30 @@
   background: var(--surface-card);
   border: 1px solid var(--surface-border);
   border-radius: .6rem;
-  padding: .85rem;
 }
 
-.uf-row-header,
-.filter-card-header {
+.settings-card { padding: .7rem; }
+.settings-section { padding: .85rem; }
+
+.uf-row-header {
   border-bottom: 1px solid var(--surface-border);
-  margin-bottom: .85rem;
-  padding-bottom: .65rem;
+  gap: .5rem;
+  margin-bottom: .65rem;
+  padding-bottom: .5rem;
 }
 
-.uf-row-identity,
-.filter-card-header > div {
+.uf-row-identity {
   align-items: center;
   display: flex;
   gap: .65rem;
-  min-width: 0;
+}
 
-  strong,
-  small {
-    display: block;
-  }
-
-  strong {
-    font-size: .88rem;
-  }
-
-  small {
-    color: var(--text-color-secondary);
-    font-size: .68rem;
-  }
+.uf-row-identity strong {
+  display: block;
+  font-size: .88rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .drag-button {
@@ -135,33 +213,36 @@
 
 .uf-row-fields {
   display: grid;
-  gap: .85rem;
-  grid-template-columns: minmax(12rem, 2fr) repeat(2, minmax(8rem, 1fr));
+  gap: .6rem;
+  grid-template-columns: repeat(auto-fit, minmax(7.5rem, 1fr));
+
+  > :first-child {
+    grid-column: 1 / -1;
+  }
 }
 
-.uf-toggle-grid,
+// 13rem es el ancho a partir del cual las etiquetas largas de los interruptores
+// caben completas; por debajo se apilan en vez de recortarse con puntos suspensivos.
+.uf-toggle-grid {
+  display: grid;
+  gap: .45rem;
+  grid-template-columns: minmax(0, 1fr);
+  margin-top: .6rem;
+}
+
+// 990px es el punto de quiebre de pantallas chicas: a partir de ahí la tarjeta
+// ya tiene ancho para dos interruptores por fila.
+@media (min-width: 990px) {
+  .uf-toggle-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
 .behavior-toggle-grid {
   display: grid;
   gap: .55rem;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr));
   margin-top: .75rem;
-}
-
-:host ::ng-deep .settings-toggle {
-  width: 100%;
-
-  .p-togglebutton {
-    justify-content: flex-start;
-    min-width: 0;
-    padding-inline: .65rem;
-    width: 100%;
-  }
-
-  .p-togglebutton-label {
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
 }
 
 .settings-actions {
@@ -215,10 +296,6 @@
   grid-template-columns: repeat(12, minmax(0, 1fr));
 }
 
-.advanced-control {
-  min-width: 0;
-}
-
 .advanced-hint,
 .advanced-error {
   align-items: flex-start;
@@ -233,10 +310,16 @@
   font-size: .68rem;
 }
 
+@media (max-width: 640px) {
+  .settings-card-list.fields-grid,
+  .settings-card-list.filters-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
 @media (max-width: 760px) {
   .settings-form-grid,
   .uf-row-fields,
-  .filter-controls,
   .filter-range,
   .uf-toggle-grid,
   .behavior-toggle-grid {
@@ -244,11 +327,19 @@
   }
 
   .uf-row-header,
-  .filter-card-header,
   .filter-card-footer,
   .dialog-actions {
     align-items: stretch;
     flex-direction: column;
+  }
+
+  .filter-row {
+    grid-template-columns: auto minmax(0, 1fr) 1.75rem;
+  }
+
+  .filter-row .settings-control,
+  .filter-value {
+    grid-column: 2 / -1;
   }
 }
 // ]]]FI

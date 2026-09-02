@@ -10,5 +10,10 @@
       (visibleAction)="visibleAction.emit($event)"
     />
   }
+} @loading (minimum 250ms) {
+  <div class="local-settings-loading" role="status" aria-live="polite">
+    <i class="pi pi-spin pi-spinner"></i>
+    <span>Cargando configuración del módulo…</span>
+  </div>
 }
 <!-- ]]]FI -->

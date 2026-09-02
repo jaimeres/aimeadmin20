@@ -1,0 +1,15 @@
+<!-- [[[II ESC:027-10 DOC:docs/documents/2026-07-01-027-autenticacion-segura-dispositivo-movil.md#escenario-10 ESC:027-11 DOC:docs/documents/2026-07-01-027-autenticacion-segura-dispositivo-movil.md#escenario-11 -->
+@if (!internetAvailable()) {
+<p-message severity="warn" icon="pi pi-wifi" [closable]="false" styleClass="offline-banner__message" role="alert"
+  aria-live="assertive">
+  <span class="offline-banner__content">
+    <strong>Sin conexión a Internet.</strong>
+    @if (connected()) {
+    Revisa el Wi-Fi, los datos móviles o las restricciones de red de la aplicación.
+    } @else {
+    Revisa el Wi-Fi o los datos móviles.
+    }
+  </span>
+</p-message>
+}
+<!-- ]]]FI -->

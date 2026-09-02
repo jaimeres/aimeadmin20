@@ -1,0 +1,25 @@
+<!-- [[[II ESC:057-54 DOC:docs/documents/2026-08-08-057-propuesta-compras-v3.md#escenario-54
+     Estilos PROPIOS y explícitos, no clases de tema: la primera versión usaba
+     `surface-100` y quedó como un bloque enorme y oscuro dentro del formulario.
+     Una tira informativa no puede alterar el alto de nada ni depender de qué
+     tono tenga `surface-*` en el tema activo. -->
+<div *ngIf="documents?.length"
+  style="display: flex; align-items: center; flex-wrap: wrap; gap: .35rem;
+         padding: .25rem 0; margin: 0 0 .35rem 0; line-height: 1.2;">
+  <span style="font-size: .7rem; opacity: .7;">
+    <i class="pi pi-link" style="font-size: .7rem;"></i> Partidas tomadas de:
+  </span>
+
+  <span *ngFor="let document of documents; trackBy: trackById"
+    style="display: inline-flex; align-items: center; gap: .2rem; font-size: .7rem;
+           padding: .1rem .2rem .1rem .45rem; border: 1px solid rgba(128,128,128,.35);
+           border-radius: 10rem;">
+    <span style="font-weight: 500;">{{ document.label }}</span>
+    <span style="opacity: .7;">({{ document.rows }})</span>
+    <p-button icon="pi pi-times" severity="danger" [text]="true" [rounded]="true"
+      pTooltip="Retirar este documento y sus partidas"
+      [style]="{'height': '1.1rem', 'width': '1.1rem', 'padding': '0'}"
+      (onClick)="removeDocument.emit({ field: document.field, id: document.id })" />
+  </span>
+</div>
+<!-- ]]]FI -->

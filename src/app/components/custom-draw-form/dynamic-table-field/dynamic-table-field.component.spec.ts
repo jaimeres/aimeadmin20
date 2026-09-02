@@ -301,5 +301,130 @@ describe('DynamicTableFieldComponent', () => {
     expect(component.cellMinLength({ field: 'codigo_producto', search_mode: 'exact' })).toBe(0);
   });
   // ]]]FI
+
+  // [[[II ESC:057-97 DOC:docs/documents/2026-08-08-057-propuesta-compras-v3.md#escenario-97
+  // TOTALES DE LA TABLA DERIVADA. La declaracion `totals` es la MISMA que lee
+  // apps/purchases/services/totals_services.py en el servidor; aqui solo se
+  // refleja lo que la tabla tiene delante.
+  const TOTALS_CONFIG: any = {
+    field: 'no_form_data_table_derived',
+    columns: [
+      { field: 'requested', type: 'input-number' },
+      { field: 'price', type: 'input-number' },
+      { field: 'discount', type: 'input-number' },
+      { field: 'discount_type' },
+    ],
+    totals: {
+      active: true,
+      line_subtotal: ['requested', 'price'],
+      fields: {
+        0: { field: 'subtotal', label: 'Subtotal', operation: 'sum', source: 'base' },
+        1: {
+          field: 'discount', label: 'Descuento', from: 'discount', operation: 'sum',
+          base: 'line_subtotal', type_field: 'discount_type', type_percentage: 'P',
+        },
+        2: {
+          field: 'total_taxes', label: 'Impuestos trasladados', operation: 'sum',
+          source: 'frozen', from: 'applied_taxes', path: 'taxes',
+          match: { type_tax: 'T' }, amount: 'amount',
+        },
+      },
+    },
+  };
+
+  function mountTotals(rows: any[], config: any = TOTALS_CONFIG): void {
+    component.tableConfig = config;
+    component.formGroup = new FormGroup({
+      [config.field]: new FormArray(
+        rows.map((row) => new FormGroup(
+          Object.keys(row).reduce((controls: any, key: string) => {
+            controls[key] = new FormControl(row[key]);
+            return controls;
+          }, {}),
+        )),
+      ),
+    });
+    component.ngOnChanges({
+      tableConfig: new SimpleChange(null, config, true),
+      formGroup: new SimpleChange(null, component.formGroup, true),
+    } as any);
+  }
+
+  it('totals the rows using the same declaration the server reads', () => {
+    mountTotals([
+      { requested: 3, price: 10, discount: 5, discount_type: 'P' },
+      { requested: 2, price: 20, discount: 7, discount_type: 'I' },
+    ]);
+
+    const totales = component.tableTotals.reduce((mapa: any, total: any) => {
+      mapa[total.field] = total.value;
+      return mapa;
+    }, {});
+
+    // 3*10 + 2*20
+    expect(totales['subtotal']).toBe(70);
+    // 5% de 30 = 1.5, mas un importe fijo de 7
+    expect(totales['discount']).toBe(8.5);
+  });
+
+  it('hides the total it cannot resolve instead of showing a zero', () => {
+    // `applied_taxes` no es columna de la tabla: los impuestos viven en la foto
+    // que congela el servidor. Mostrar 0 seria afirmar que no hay impuestos.
+    mountTotals([{ requested: 1, price: 100, discount: 0, discount_type: '' }]);
+    expect(component.tableTotals.some((t: any) => t.field === 'total_taxes')).toBeFalse();
+    expect(component.tableTotals.some((t: any) => t.field === 'subtotal')).toBeTrue();
+  });
+
+  it('reads a frozen total from the photo when the row carries it', () => {
+    mountTotals([
+      {
+        requested: 1, price: 100, discount: 0, discount_type: '',
+        applied_taxes: {
+          base: '100', quantity: '1',
+          taxes: [
+            { type_tax: 'T', amount: '16' },
+            { type_tax: 'R', amount: '10.67' },
+          ],
+        },
+      },
+      {
+        requested: 1, price: 50, discount: 0, discount_type: '',
+        // La foto puede llegar serializada; se lee igual.
+        applied_taxes: '{"base":"50","taxes":[{"type_tax":"T","amount":"8"}]}',
+      },
+    ], {
+      ...TOTALS_CONFIG,
+      columns: [...TOTALS_CONFIG.columns, { field: 'applied_taxes' }],
+    });
+
+    const impuestos = component.tableTotals.find((t: any) => t.field === 'total_taxes');
+    // Solo los TRASLADADOS: el retenido va a otro campo del encabezado.
+    expect(impuestos?.value).toBe(24);
+  });
+
+  it('shows no totals when the table does not declare them', () => {
+    mountTotals([{ requested: 3, price: 10 }], {
+      field: 'no_form_data_table_derived',
+      columns: [{ field: 'requested' }, { field: 'price' }],
+    });
+    expect(component.tableTotals).toEqual([]);
+
+    // `active: false` apaga el renglon completo aunque haya campos declarados.
+    mountTotals([{ requested: 3, price: 10 }], {
+      ...TOTALS_CONFIG,
+      totals: { ...TOTALS_CONFIG.totals, active: false },
+    });
+    expect(component.tableTotals).toEqual([]);
+  });
+
+  it('recalculates the totals when a cell changes', () => {
+    mountTotals([{ requested: 2, price: 10, discount: 0, discount_type: '' }]);
+    expect(component.tableTotals.find((t: any) => t.field === 'subtotal')?.value).toBe(20);
+
+    const fila = component.getTableData('no_form_data_table_derived')[0] as FormGroup;
+    fila.get('requested')?.setValue(5);
+    expect(component.tableTotals.find((t: any) => t.field === 'subtotal')?.value).toBe(50);
+  });
+  // ]]]FI
 // ]]]FI
 });

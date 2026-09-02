@@ -93,6 +93,33 @@ export const CHILD_FILTER_SCOPE_OPTIONS = [
   { label: 'Automático', value: 'auto' },
 ];
 
+/**
+ * El control pertenece al esquema cuando el contrato declara la clave, sin mirar
+ * el valor que tenga hoy. Asi un campo nunca recibe claves que su tipo no declara.
+ */
+const hasKey = (path: string) => (cfg: any) => getByPath(cfg, path) !== undefined;
+
+export const POSITION_OPTIONS = [
+  { label: 'Prefijo', value: 'prefix' },
+  { label: 'Sufijo', value: 'suffix' },
+];
+
+export const ICON_SIDE_OPTIONS = [
+  { label: 'Izquierda', value: 'left' },
+  { label: 'Derecha', value: 'right' },
+];
+
+export const CLIENT_OPTIONS = [
+  { label: 'Web', value: 'web' },
+  { label: 'Móvil', value: 'mobile' },
+  { label: 'Escritorio', value: 'desktop' },
+];
+
+export const SEARCH_MODE_OPTIONS = [
+  { label: 'Parcial', value: 'partial' },
+  { label: 'Exacta', value: 'exact' },
+];
+
 export const SCOPE_EDITION_OPTIONS = [
   { label: 'Guardar en servidor', value: 'server' },
   { label: 'Solo edición local', value: 'local' },
@@ -158,9 +185,40 @@ const COMMON_BASE: AdvancedFieldDef[] = [
 
 const DEFAULT_BLOCK: AdvancedFieldDef[] = [
   { path: 'default.active', label: 'Valor por defecto', kind: 'boolean', booleanOnLabel: 'Aplicar valor', booleanOffLabel: 'Sin valor' },
-  { path: 'default.value', label: 'Valor por defecto', kind: 'text', showIf: c => c?.default?.active },
+  { path: 'default.value', label: 'Valor por defecto', kind: 'text', includeIf: hasKey('default.value'), showIf: c => c?.default?.active },
   { path: 'default.edit', label: 'Edición del valor', kind: 'boolean', booleanOnLabel: 'Valor editable', booleanOffLabel: 'Valor bloqueado' },
 ];
+
+/**
+ * Consulta con la que una relación preselecciona su registro por defecto. Es el
+ * bloque `default` de los tipos relacionales del servidor, que no usa `value`.
+ */
+const RELATION_DEFAULT_BLOCK: AdvancedFieldDef[] = (() => {
+  const active = (c: any) => c?.default?.active === true;
+  const text = (key: string, label: string, hint?: string): AdvancedFieldDef => ({
+    path: `default.${key}`, label, kind: 'text', includeIf: hasKey(`default.${key}`), showIf: active, hint,
+  });
+  return [
+    {
+      path: 'default.result_position', label: 'Coincidencia a tomar', kind: 'text',
+      includeIf: hasKey('default.result_position'), showIf: active,
+      hint: 'first, last o la posición 1-n dentro del resultado de la consulta.',
+    },
+    text('id', 'Identificador exacto', 'Tiene prioridad sobre el resto de los criterios.'),
+    text('field_name', 'Campo de búsqueda', 'Atributo del recurso contra el que se compara, p.ej. name.'),
+    text('name', 'Nombre buscado'),
+    text('code', 'Código buscado'),
+    text('status', 'Estado buscado'),
+    text('created_at', 'Fecha de creación'),
+    text('created_by', 'Creado por'),
+    text('modified_by', 'Modificado por'),
+    {
+      path: 'default.modules', label: 'Módulos (JSON)', kind: 'json',
+      includeIf: hasKey('default.modules'), showIf: active,
+      hint: 'Lista de claves de módulo que acotan la consulta.',
+    },
+  ];
+})();
 
 const DEFAULT_JSON_BLOCK: AdvancedFieldDef[] = [
   { path: 'default.active', label: 'Valor por defecto', kind: 'boolean', booleanOnLabel: 'Aplicar valor', booleanOffLabel: 'Sin valor' },
@@ -168,13 +226,24 @@ const DEFAULT_JSON_BLOCK: AdvancedFieldDef[] = [
   { path: 'default.edit', label: 'Edición del valor', kind: 'boolean', booleanOnLabel: 'Valor editable', booleanOffLabel: 'Valor bloqueado' },
 ];
 
-const DESCRIPTION_BLOCK: AdvancedFieldDef[] = [
-  { path: 'description.active', label: 'Mostrar descripción', kind: 'boolean' },
-  { path: 'description.name', label: 'Texto descripción', kind: 'text', showIf: c => c?.description?.active },
-  { path: 'description.height', label: 'Alto', kind: 'text', /* placeholder: '60px' */ showIf: c => c?.description?.active },
-  { path: 'description.slice', label: 'Cortar a (chars)', kind: 'text', showIf: c => c?.description?.active },
-  { path: 'description.caracter_slice', label: 'Sufijo de corte', kind: 'text', /* placeholder: '' */ showIf: c => c?.description?.active },
-];
+const makeDescriptionBlock = (prefix = ''): AdvancedFieldDef[] => {
+  const root = prefix ? `${prefix}.description` : 'description';
+  const active = (c: any) => getByPath(c, `${root}.active`) === true;
+  return [
+    { path: `${root}.active`, label: 'Mostrar descripción', kind: 'boolean', includeIf: hasKey(`${root}.active`) },
+    { path: `${root}.name`, label: 'Texto descripción', kind: 'text', includeIf: hasKey(`${root}.name`), showIf: active },
+    { path: `${root}.height`, label: 'Alto', kind: 'text', includeIf: hasKey(`${root}.height`), showIf: active },
+    { path: `${root}.slice`, label: 'Cortar a (chars)', kind: 'text', includeIf: hasKey(`${root}.slice`), showIf: active },
+    { path: `${root}.caracter_slice`, label: 'Sufijo de corte', kind: 'text', includeIf: hasKey(`${root}.caracter_slice`), showIf: active },
+    {
+      path: `${root}.border`, label: 'Borde (CSS)', kind: 'text',
+      includeIf: hasKey(`${root}.border`), showIf: active,
+      hint: 'Valor CSS de borde, p.ej. 2px solid #ccc. Vacío = sin borde.',
+    },
+  ];
+};
+
+const DESCRIPTION_BLOCK: AdvancedFieldDef[] = makeDescriptionBlock();
 
 const SCANNER_BLOCK: AdvancedFieldDef[] = [
   { path: 'scanner.active', label: 'Escáner', kind: 'boolean', booleanOnLabel: 'Escáner habilitado', booleanOffLabel: 'Escáner deshabilitado' },
@@ -193,6 +262,127 @@ const COLS_BLOCK: AdvancedFieldDef[] = [
   { path: 'cols.hide_mobile', label: 'Visibilidad móvil', kind: 'boolean', booleanOnLabel: 'Oculta en móvil', booleanOffLabel: 'Visible en móvil' },
   { path: 'cols.sortable', label: 'Orden de columna', kind: 'boolean', booleanOnLabel: 'Ordenable', booleanOffLabel: 'No ordenable' },
   { path: 'cols.locked', label: 'Bloqueo de columna', kind: 'boolean', booleanOnLabel: 'Bloqueada', booleanOffLabel: 'Libre' },
+  {
+    path: 'cols.multiple.active', label: 'Valores múltiples', kind: 'boolean',
+    booleanOnLabel: 'Listar todos', booleanOffLabel: 'Resumir conteo',
+    includeIf: hasKey('cols.multiple.active'),
+    hint: 'Cuando la relación trae varios valores, decide si se listan o se resumen.',
+  },
+  {
+    path: 'cols.multiple.separator', label: 'Separador', kind: 'text',
+    includeIf: hasKey('cols.multiple.separator'), showIf: c => c?.cols?.multiple?.active,
+  },
+  {
+    path: 'cols.multiple.msg_more', label: 'Mensaje de resumen', kind: 'text',
+    includeIf: hasKey('cols.multiple.msg_more'), showIf: c => c?.cols?.multiple?.active !== true,
+    hint: 'Usa {e} como marcador del conteo, p.ej. {e} elemento(s)...',
+  },
+];
+
+// ─── Bloques compartidos derivados del contrato del servidor ─────────────────
+
+const CACHE_PLATFORMS: { key: string; label: string }[] = [
+  { key: 'web', label: 'Web' },
+  { key: 'mobile', label: 'Móvil' },
+  { key: 'desktop', label: 'Escritorio' },
+];
+
+const CACHE_BLOCK: AdvancedFieldDef[] = CACHE_PLATFORMS.flatMap(({ key, label }): AdvancedFieldDef[] => [
+  {
+    path: `cache.${key}.read`, label: `${label} · Lectura`, kind: 'boolean',
+    booleanOnLabel: 'Lee del caché', booleanOffLabel: 'Siempre al servidor',
+    includeIf: hasKey(`cache.${key}.read`),
+  },
+  {
+    path: `cache.${key}.time`, label: `${label} · Vigencia (s)`, kind: 'number', min: 0,
+    includeIf: hasKey(`cache.${key}.time`), showIf: c => getByPath(c, `cache.${key}.read`) === true,
+  },
+  {
+    path: `cache.${key}.encrypted`, label: `${label} · Cifrado`, kind: 'boolean',
+    booleanOnLabel: 'Cifrado', booleanOffLabel: 'Sin cifrar',
+    includeIf: hasKey(`cache.${key}.encrypted`),
+  },
+  {
+    path: `cache.${key}.creation`, label: `${label} · En alta`, kind: 'boolean',
+    booleanOnLabel: 'Conserva al crear', booleanOffLabel: 'Sin conservar al crear',
+    includeIf: hasKey(`cache.${key}.creation`),
+  },
+  {
+    path: `cache.${key}.edition`, label: `${label} · En edición`, kind: 'boolean',
+    booleanOnLabel: 'Conserva al editar', booleanOffLabel: 'Sin conservar al editar',
+    includeIf: hasKey(`cache.${key}.edition`),
+  },
+]);
+
+const CACHE_SECTION: AdvancedSection = { title: 'Caché', icon: 'pi pi-database', defs: CACHE_BLOCK };
+
+const DATA_SOURCE_QUERY_BLOCK: AdvancedFieldDef[] = [
+  {
+    path: 'data_type.ordering', label: 'Orden del servidor', kind: 'text',
+    includeIf: hasKey('data_type.ordering'), hint: 'Campos separados por coma, p.ej. -created_at,name.',
+  },
+  {
+    path: 'data_type.limit', label: 'Máximo a cargar', kind: 'number', min: 1, max: 1000,
+    includeIf: hasKey('data_type.limit'), hint: 'Vacío = sin límite. El servidor pagina a mil elementos.',
+  },
+  {
+    path: 'data_type.filter', label: 'Filtro del recurso (JSON)', kind: 'json',
+    includeIf: hasKey('data_type.filter'),
+    hint: 'Contrato BOS de filtros: {"campo":{"active":true,"ops":["exact"],"default":"exact","default_value":null}}.',
+  },
+  {
+    path: 'options', label: 'Opciones locales (JSON)', kind: 'json',
+    includeIf: hasKey('options'),
+    hint: 'Excluyente con data_type.type. Array de objetos, p.ej. [{"id":1,"name":"Opción 1"}].',
+  },
+  {
+    path: 'filter_group', label: 'Campo de agrupación', kind: 'text',
+    includeIf: hasKey('filter_group'),
+    hint: 'Campo del padre por el que se acotan los datos cuando el combo depende de otro.',
+  },
+  {
+    path: 'input_editable', label: 'Escritura en el input', kind: 'boolean',
+    booleanOnLabel: 'Permitir escribir', booleanOffLabel: 'Solo selección',
+    includeIf: hasKey('input_editable'),
+  },
+  {
+    path: 'scroll_height', label: 'Alto del panel', kind: 'text',
+    includeIf: hasKey('scroll_height'), /* placeholder: '150px' */
+  },
+  {
+    path: 'selection_limit', label: 'Límite de selección', kind: 'number', min: 0,
+    includeIf: hasKey('selection_limit'), hint: 'Vacío = sin límite. Solo aplica con selección múltiple.',
+  },
+  {
+    path: 'cols_values', label: 'Campos guardados (JSON)', kind: 'json',
+    includeIf: hasKey('cols_values'),
+    hint: 'Solo para combos personalizados: qué campos del elegido se guardan.',
+  },
+];
+
+const VIRTUAL_SCROLL_BLOCK: AdvancedFieldDef[] = [
+  {
+    path: 'virtual_scrolling.active', label: 'Scroll virtual', kind: 'boolean',
+    booleanOnLabel: 'Scroll virtual activo', booleanOffLabel: 'Lista completa',
+    includeIf: hasKey('virtual_scrolling.active'),
+  },
+  {
+    path: 'virtual_scrolling.item_size', label: 'Alto del elemento (px)', kind: 'number', min: 1,
+    includeIf: hasKey('virtual_scrolling.item_size'), showIf: c => c?.virtual_scrolling?.active === true,
+  },
+];
+
+const CHILDREN_BLOCK: AdvancedFieldDef[] = [
+  {
+    path: 'children.active', label: 'Campos dependientes', kind: 'boolean',
+    booleanOnLabel: 'Cascada activa', booleanOffLabel: 'Sin cascada',
+    includeIf: hasKey('children.active'),
+  },
+  {
+    path: 'children.fields', label: 'Campos dependientes (JSON)', kind: 'json',
+    includeIf: hasKey('children.fields'), showIf: c => c?.children?.active === true,
+    hint: 'Mapa de hijos static / dynamic / derived tal como lo declara la configuración.',
+  },
 ];
 
 const CHILD_RUNTIME_BLOCK: AdvancedFieldDef[] = [
@@ -243,6 +433,7 @@ const TEXT_SCHEMA: AdvancedSection[] = [
   { title: 'Escáner', icon: 'pi pi-qrcode', defs: SCANNER_BLOCK },
   { title: 'Descripción', icon: 'pi pi-info-circle', defs: DESCRIPTION_BLOCK },
   { title: 'Columna en tabla', icon: 'pi pi-table', defs: COLS_BLOCK },
+  CACHE_SECTION,
 ];
 
 const TEXTAREA_SCHEMA: AdvancedSection[] = [
@@ -258,6 +449,7 @@ const TEXTAREA_SCHEMA: AdvancedSection[] = [
   },
   { title: 'Descripción', icon: 'pi pi-info-circle', defs: DESCRIPTION_BLOCK },
   { title: 'Columna en tabla', icon: 'pi pi-table', defs: COLS_BLOCK },
+  CACHE_SECTION,
 ];
 
 const NUMBER_SCHEMA: AdvancedSection[] = [
@@ -288,9 +480,35 @@ const NUMBER_SCHEMA: AdvancedSection[] = [
         ],
         showIf: c => c?.show_buttons === true,
       },
+      {
+        path: 'spinner_mode', label: 'Modo del spinner', kind: 'select',
+        options: [
+          { label: 'Horizontal', value: 'horizontal' },
+          { label: 'Vertical', value: 'vertical' },
+        ],
+        includeIf: hasKey('spinner_mode'), showIf: c => c?.show_buttons === true,
+      },
+      {
+        path: 'increment_button_icon', label: 'Icono de aumentar', kind: 'select', options: PRIME_ICON_OPTIONS,
+        includeIf: hasKey('increment_button_icon'), showIf: c => c?.show_buttons === true,
+      },
+      {
+        path: 'decrement_button_icon', label: 'Icono de disminuir', kind: 'select', options: PRIME_ICON_OPTIONS,
+        includeIf: hasKey('decrement_button_icon'), showIf: c => c?.show_buttons === true,
+      },
+      {
+        path: 'increment_button_class', label: 'Clase de aumentar', kind: 'text',
+        includeIf: hasKey('increment_button_class'), showIf: c => c?.show_buttons === true,
+      },
+      {
+        path: 'decrement_button_class', label: 'Clase de disminuir', kind: 'text',
+        includeIf: hasKey('decrement_button_class'), showIf: c => c?.show_buttons === true,
+      },
     ],
   },
+  { title: 'Descripción', icon: 'pi pi-info-circle', defs: DESCRIPTION_BLOCK },
   { title: 'Columna en tabla', icon: 'pi pi-table', defs: COLS_BLOCK },
+  CACHE_SECTION,
 ];
 
 const TOGGLE_SCHEMA: AdvancedSection[] = [
@@ -308,7 +526,9 @@ const TOGGLE_SCHEMA: AdvancedSection[] = [
       { path: 'label_false', label: 'Etiqueta falso', kind: 'text', /* placeholder: 'Inactivo' */ },
     ],
   },
+  { title: 'Descripción', icon: 'pi pi-info-circle', defs: DESCRIPTION_BLOCK },
   { title: 'Columna en tabla', icon: 'pi pi-table', defs: COLS_BLOCK },
+  CACHE_SECTION,
 ];
 
 const DATE_SCHEMA: AdvancedSection[] = [
@@ -333,6 +553,7 @@ const DATE_SCHEMA: AdvancedSection[] = [
     ]
   },
   { title: 'Columna en tabla', icon: 'pi pi-table', defs: COLS_BLOCK },
+  CACHE_SECTION,
 ];
 
 // [[[II ESC:001-18 DOC:docs/documents/2026-05-16_001_consolidacion_dropdown_types_y_fix_escenarios.md#escenario-18
@@ -352,6 +573,12 @@ const ADDITIONAL_SEARCH_BLOCK: AdvancedSection = {
       path: 'additional_search.active', label: 'Buscar en el servidor', kind: 'boolean',
       includeIf: ADDITIONAL_SEARCH_SUPPORTED,
       hint: 'Agrega un buscador independiente sin cambiar la precarga normal del combo.',
+    },
+    {
+      path: 'additional_search.filter', label: 'Filtro del recurso (JSON)', kind: 'json',
+      includeIf: c => ADDITIONAL_SEARCH_SUPPORTED(c) && hasKey('additional_search.filter')(c),
+      showIf: c => c?.additional_search?.active === true,
+      hint: 'Contrato BOS de filtros aplicado al recurso destino. Vacío = sin acotar.',
     },
     {
       path: 'additional_search.subsidiaries', label: 'Sucursales permitidas (JSON)', kind: 'json',
@@ -391,25 +618,31 @@ const ADDITIONAL_SEARCH_BLOCK: AdvancedSection = {
 };
 // ]]]FI
 
+const DATA_SOURCE_BLOCK: AdvancedFieldDef[] = [
+  { path: 'data_type.type', label: 'Fuente', kind: 'text', includeIf: hasKey('data_type.type'), hint: 'Productos, clientes, etc' },
+  { path: 'option_value', label: 'option_value', kind: 'text', includeIf: hasKey('option_value') },
+  { path: 'option_label', label: 'option_label', kind: 'text', includeIf: hasKey('option_label') },
+  { path: 'filter_local', label: 'Filtro local', kind: 'boolean', includeIf: hasKey('filter_local') },
+  { path: 'filter_by', label: 'Filtrar por (campos)', kind: 'text', includeIf: hasKey('filter_by') },
+  { path: 'editable', label: 'Editable', kind: 'boolean', includeIf: hasKey('editable') },
+  { path: 'reload_icon', label: 'Icono recargar', kind: 'boolean', includeIf: hasKey('reload_icon') },
+  { path: 'new_icon', label: 'Icono nuevo', kind: 'boolean', includeIf: hasKey('new_icon') },
+  { path: 'closable_icon', label: 'Icono limpiar', kind: 'boolean', includeIf: hasKey('closable_icon') },
+  ...DATA_SOURCE_QUERY_BLOCK,
+];
+
+const DATA_SOURCE_SECTION: AdvancedSection = { title: 'Origen de datos', icon: 'pi pi-database', defs: DATA_SOURCE_BLOCK };
+
 const FK_LIKE_SCHEMA: AdvancedSection[] = [
   { title: 'General', icon: 'pi pi-cog', defs: COMMON_BASE },
-  {
-    title: 'Origen de datos', icon: 'pi pi-database', defs: [
-      { path: 'data_type.type', label: 'Fuente', kind: 'text', hint: 'Productos, clientes, etc' },
-      { path: 'option_value', label: 'option_value', kind: 'text', /* placeholder: 'id' */ },
-      { path: 'option_label', label: 'option_label', kind: 'text', /* placeholder: 'name' */ },
-      { path: 'filter_local', label: 'Filtro local', kind: 'boolean' },
-      { path: 'filter_by', label: 'Filtrar por (campos)', kind: 'text', /* placeholder: 'name' */ },
-      { path: 'editable', label: 'Editable', kind: 'boolean' },
-      { path: 'reload_icon', label: 'Icono recargar', kind: 'boolean' },
-      { path: 'new_icon', label: 'Icono nuevo', kind: 'boolean' },
-      { path: 'closable_icon', label: 'Icono limpiar', kind: 'boolean' },
-    ],
-  },
-  { title: 'Valor por defecto', icon: 'pi pi-bolt', defs: DEFAULT_BLOCK },
-  { title: 'Resolución dependiente', icon: 'pi pi-sitemap', defs: CHILD_RUNTIME_BLOCK },
+  DATA_SOURCE_SECTION,
+  { title: 'Valor por defecto', icon: 'pi pi-bolt', defs: [...DEFAULT_BLOCK, ...RELATION_DEFAULT_BLOCK] },
+  { title: 'Resolución dependiente', icon: 'pi pi-sitemap', defs: [...CHILD_RUNTIME_BLOCK, ...CHILDREN_BLOCK] },
   ADDITIONAL_SEARCH_BLOCK,
+  { title: 'Rendimiento de la lista', icon: 'pi pi-bolt', defs: VIRTUAL_SCROLL_BLOCK },
+  { title: 'Descripción', icon: 'pi pi-info-circle', defs: DESCRIPTION_BLOCK },
   { title: 'Columna en tabla', icon: 'pi pi-table', defs: COLS_BLOCK },
+  CACHE_SECTION,
 ];
 
 // [[[II ESC:001-09 DOC:docs/documents/2026-05-16_001_consolidacion_dropdown_types_y_fix_escenarios.md#escenario-09
@@ -425,30 +658,131 @@ const MULTI_CHOICE_SCHEMA: AdvancedSection[] = [
       { path: 'option_label', label: 'option_label', kind: 'text', /* placeholder: 'name' */ },
       { path: 'filter_local', label: 'Filtro local', kind: 'boolean' },
       { path: 'filter_by', label: 'Filtrar por (campos)', kind: 'text', /* placeholder: 'name' */ },
-      { path: 'selection_limit', label: 'Límite de selección', kind: 'number', min: 0 },
+      ...DATA_SOURCE_QUERY_BLOCK,
     ],
   },
-  { title: 'Valor por defecto', icon: 'pi pi-bolt', defs: DEFAULT_BLOCK },
+  { title: 'Valor por defecto', icon: 'pi pi-bolt', defs: [...DEFAULT_BLOCK, ...RELATION_DEFAULT_BLOCK] },
+  { title: 'Resolución dependiente', icon: 'pi pi-sitemap', defs: [...CHILD_RUNTIME_BLOCK, ...CHILDREN_BLOCK] },
+  { title: 'Rendimiento de la lista', icon: 'pi pi-bolt', defs: VIRTUAL_SCROLL_BLOCK },
+  { title: 'Descripción', icon: 'pi pi-info-circle', defs: DESCRIPTION_BLOCK },
   { title: 'Columna en tabla', icon: 'pi pi-table', defs: COLS_BLOCK },
+  CACHE_SECTION,
 ];
 // ]]]FI
 
-const AUTOCOMPLETE_SCHEMA: AdvancedSection[] = [
-  ...FK_LIKE_SCHEMA,
+const AUTOCOMPLETE_BLOCK: AdvancedFieldDef[] = [
+  { path: 'min_length', label: 'Largo mínimo', kind: 'number', min: 0 },
+  { path: 'delay', label: 'Delay (ms)', kind: 'number', min: 0 },
+  { path: 'multiple', label: 'Selección múltiple', kind: 'boolean' },
   {
-    title: 'Auto-complete', icon: 'pi pi-search', defs: [
-      { path: 'min_length', label: 'Largo mínimo', kind: 'number', min: 0 },
-      { path: 'delay', label: 'Delay (ms)', kind: 'number', min: 0 },
-      { path: 'multiple', label: 'Selección múltiple', kind: 'boolean' },
-      { path: 'force_selection', label: 'Forzar selección', kind: 'boolean' },
-      { path: 'auto_highlight', label: 'Resaltar primer item', kind: 'boolean' },
-      { path: 'complete_on_focus', label: 'Buscar al enfocar', kind: 'boolean' },
-      { path: 'select_on_focus', label: 'Seleccionar al enfocar', kind: 'boolean' },
-      { path: 'scroll_height', label: 'Alto scroll', kind: 'text', /* placeholder: '200px' */ },
-      { path: 'virtual_scroll', label: 'Scroll virtual', kind: 'boolean' },
-      //{ path: 'placeholder', label: 'Placeholder', kind: 'text' },
-    ],
+    path: 'unique', label: 'Valores repetidos', kind: 'boolean',
+    booleanOnLabel: 'Sin duplicados', booleanOffLabel: 'Permite duplicados',
+    includeIf: hasKey('unique'), showIf: c => c?.multiple === true,
   },
+  { path: 'force_selection', label: 'Forzar selección', kind: 'boolean' },
+  { path: 'auto_highlight', label: 'Resaltar primer item', kind: 'boolean' },
+  { path: 'complete_on_focus', label: 'Buscar al enfocar', kind: 'boolean' },
+  { path: 'select_on_focus', label: 'Seleccionar al enfocar', kind: 'boolean' },
+  { path: 'scroll_height', label: 'Alto scroll', kind: 'text', /* placeholder: '200px' */ },
+  { path: 'virtual_scroll', label: 'Scroll virtual', kind: 'boolean' },
+  {
+    path: 'lazy', label: 'Carga bajo demanda', kind: 'boolean',
+    booleanOnLabel: 'Carga diferida', booleanOffLabel: 'Carga completa',
+    includeIf: hasKey('lazy'),
+  },
+  {
+    path: 'dropdown', label: 'Botón desplegable', kind: 'boolean',
+    booleanOnLabel: 'Con botón de lista', booleanOffLabel: 'Solo escritura',
+    includeIf: hasKey('dropdown'),
+  },
+  {
+    path: 'focus_after_select', label: 'Foco tras elegir', kind: 'text',
+    includeIf: hasKey('focus_after_select'),
+    hint: 'Nombre del campo que toma el foco al seleccionar; vacío = comportamiento normal.',
+  },
+];
+
+const AUTOCOMPLETE_SEARCH_BLOCK: AdvancedFieldDef[] = [
+  {
+    path: 'smart_search', label: 'Búsqueda inteligente', kind: 'boolean',
+    booleanOnLabel: 'filter[search]', booleanOffLabel: 'campo.icontains',
+    includeIf: hasKey('smart_search'),
+  },
+  {
+    path: 'search_mode', label: 'Coincidencia', kind: 'select', options: SEARCH_MODE_OPTIONS,
+    includeIf: hasKey('search_mode'),
+  },
+  {
+    path: 'min_search_length', label: 'Caracteres para buscar', kind: 'number', min: 0,
+    includeIf: hasKey('min_search_length'),
+    hint: 'Umbral de la consulta parcial. No aplica con coincidencia exacta.',
+  },
+  {
+    path: 'search_key', label: 'Tecla de búsqueda', kind: 'text',
+    includeIf: hasKey('search_key'), hint: 'Vacío, f3, enter, tab o flechas arriba/abajo.',
+  },
+  {
+    path: 'search_locale', label: 'Locale de búsqueda', kind: 'text',
+    includeIf: hasKey('search_locale'), hint: 'Afecta el tratamiento de acentos, p.ej. es.',
+  },
+  {
+    path: 'include', label: 'Campos incluidos', kind: 'text',
+    includeIf: hasKey('include'),
+  },
+  {
+    path: 'show_empty_message', label: 'Aviso sin resultados', kind: 'boolean',
+    booleanOnLabel: 'Mostrar aviso', booleanOffLabel: 'Sin aviso',
+    includeIf: hasKey('show_empty_message'),
+  },
+  {
+    path: 'empty_message', label: 'Mensaje sin resultados', kind: 'text',
+    includeIf: hasKey('empty_message'), showIf: c => c?.show_empty_message === true,
+  },
+];
+
+const AUTOCOMPLETE_PANEL_BLOCK: AdvancedFieldDef[] = [
+  {
+    path: 'panel.active', label: 'Panel de sugerencias', kind: 'boolean',
+    booleanOnLabel: 'Panel con columnas', booleanOffLabel: 'Lista simple',
+    includeIf: hasKey('panel.active'),
+  },
+  {
+    path: 'panel.fields', label: 'Columnas del panel (JSON)', kind: 'json',
+    includeIf: hasKey('panel.fields'), showIf: c => c?.panel?.active === true,
+    hint: 'Mapa por posición con field, header, type, class y class_md.',
+  },
+  {
+    path: 'icon.active', label: 'Icono principal', kind: 'boolean',
+    booleanOnLabel: 'Visible', booleanOffLabel: 'Oculto', includeIf: hasKey('icon.active'),
+  },
+  {
+    path: 'icon.icon', label: 'Icono principal', kind: 'select', options: PRIME_ICON_OPTIONS,
+    includeIf: hasKey('icon.icon'), showIf: c => c?.icon?.active === true,
+  },
+  {
+    path: 'icon.position', label: 'Posición del icono', kind: 'select', options: ICON_SIDE_OPTIONS,
+    includeIf: hasKey('icon.position'), showIf: c => c?.icon?.active === true,
+  },
+  {
+    path: 'icon2.active', label: 'Icono secundario', kind: 'boolean',
+    booleanOnLabel: 'Visible', booleanOffLabel: 'Oculto', includeIf: hasKey('icon2.active'),
+  },
+  {
+    path: 'icon2.icon', label: 'Icono secundario', kind: 'select', options: PRIME_ICON_OPTIONS,
+    includeIf: hasKey('icon2.icon'), showIf: c => c?.icon2?.active === true,
+  },
+  {
+    path: 'icon2.position', label: 'Posición del secundario', kind: 'select', options: ICON_SIDE_OPTIONS,
+    includeIf: hasKey('icon2.position'), showIf: c => c?.icon2?.active === true,
+  },
+];
+
+const AUTOCOMPLETE_SCHEMA: AdvancedSection[] = [
+  ...FK_LIKE_SCHEMA.slice(0, 2),
+  { title: 'Auto-complete', icon: 'pi pi-search', defs: AUTOCOMPLETE_BLOCK },
+  { title: 'Búsqueda', icon: 'pi pi-filter', defs: AUTOCOMPLETE_SEARCH_BLOCK },
+  { title: 'Panel e iconos', icon: 'pi pi-list', defs: AUTOCOMPLETE_PANEL_BLOCK },
+  ...FK_LIKE_SCHEMA.slice(2),
 ];
 
 const BUTTON_SCHEMA: AdvancedSection[] = [
@@ -483,10 +817,32 @@ const BUTTON_SCHEMA: AdvancedSection[] = [
       { path: 'action', label: 'Acción', kind: 'text', hint: 'identificador del handler en el componente padre' },
     ],
   },
+  {
+    title: 'Efecto de la acción', icon: 'pi pi-bolt', defs: [
+      {
+        path: 'sent_data', label: 'Datos que devuelve', kind: 'text',
+        includeIf: hasKey('sent_data'),
+        hint: 'Campo o expresión cuyo valor copia la acción hacia el formulario.',
+      },
+      {
+        path: 'send_additional_data', label: 'Datos adicionales (JSON)', kind: 'json',
+        includeIf: hasKey('send_additional_data'),
+      },
+      {
+        path: 'fields_reset_form', label: 'Campos que reinicia (JSON)', kind: 'json',
+        includeIf: hasKey('fields_reset_form'),
+      },
+      {
+        path: 'fields_disable', label: 'Campos que deshabilita (JSON)', kind: 'json',
+        includeIf: hasKey('fields_disable'),
+      },
+    ],
+  },
 ];
 
 const FILES_SCHEMA: AdvancedSection[] = [
   { title: 'General', icon: 'pi pi-cog', defs: COMMON_BASE },
+  { title: 'Valor por defecto', icon: 'pi pi-bolt', defs: [...DEFAULT_JSON_BLOCK, ...RELATION_DEFAULT_BLOCK] },
   {
     title: 'Subida (móvil/desktop)', icon: 'pi pi-upload', defs: [
       { path: 'upload.active', label: 'Activo', kind: 'boolean' },
@@ -499,18 +855,104 @@ const FILES_SCHEMA: AdvancedSection[] = [
       { path: 'upload.quality', label: 'Calidad imagen (%)', kind: 'number', min: 1, max: 100 },
       { path: 'upload.max_width', label: 'Ancho máx (px)', kind: 'number', min: 0 },
       { path: 'upload.max_height', label: 'Alto máx (px)', kind: 'number', min: 0 },
+      {
+        path: 'upload.accept', label: 'Extensiones aceptadas (JSON)', kind: 'json',
+        includeIf: hasKey('upload.accept'), hint: 'Array de extensiones, p.ej. [".pdf",".jpg",".png"].',
+      },
+      {
+        path: 'upload.select_system', label: 'Documentos del sistema', kind: 'boolean',
+        booleanOnLabel: 'Permitir elegirlos', booleanOffLabel: 'Acotar por recurso',
+        includeIf: hasKey('upload.select_system'),
+      },
+      {
+        path: 'upload.name_file_user', label: 'Nombre enviado por usuario', kind: 'text',
+        includeIf: hasKey('upload.name_file_user'),
+      },
+      {
+        path: 'upload.size_rule', label: 'Reglas por tamaño (JSON)', kind: 'json',
+        includeIf: hasKey('upload.size_rule'),
+        hint: 'Array de {over_kb, quality, max_width, max_height} evaluado de mayor a menor.',
+      },
+      {
+        path: 'upload.cache', label: 'Caché de la subida (JSON)', kind: 'json',
+        includeIf: hasKey('upload.cache'),
+        hint: 'Mismo contrato de caché por plataforma: web, mobile y desktop.',
+      },
     ],
   },
   {
     title: 'Subida servidor', icon: 'pi pi-cloud-upload', defs: [
-      { path: 'server_upload.active', label: 'Activo', kind: 'boolean', includeIf: c => c?.server_upload != null },
-      { path: 'server_upload.required', label: 'Requerido', kind: 'boolean', includeIf: c => c?.server_upload != null },
-      { path: 'server_upload.max_files', label: 'Máx. archivos', kind: 'number', min: 1, includeIf: c => c?.server_upload != null },
-      { path: 'server_upload.max_size', label: 'Tamaño máx (bytes)', kind: 'number', min: 0, includeIf: c => c?.server_upload != null },
+      { path: 'server_upload.active', label: 'Activo', kind: 'boolean', includeIf: hasKey('server_upload.active') },
+      { path: 'server_upload.required', label: 'Requerido', kind: 'boolean', includeIf: hasKey('server_upload.required') },
+      { path: 'server_upload.max_files', label: 'Máx. archivos', kind: 'number', min: 1, includeIf: hasKey('server_upload.max_files') },
+      { path: 'server_upload.max_size', label: 'Tamaño máx (bytes)', kind: 'number', min: 0, includeIf: hasKey('server_upload.max_size') },
+      {
+        path: 'server_upload.accept', label: 'Extensiones aceptadas (JSON)', kind: 'json',
+        includeIf: hasKey('server_upload.accept'),
+      },
+      { path: 'server_upload.allow_gallery', label: 'Permitir galería', kind: 'boolean', includeIf: hasKey('server_upload.allow_gallery') },
+      { path: 'server_upload.allow_camera', label: 'Permitir cámara', kind: 'boolean', includeIf: hasKey('server_upload.allow_camera') },
+      { path: 'server_upload.label', label: 'Etiqueta subida', kind: 'text', includeIf: hasKey('server_upload.label') },
+      { path: 'server_upload.quality', label: 'Calidad imagen (%)', kind: 'number', min: 1, max: 100, includeIf: hasKey('server_upload.quality') },
+      { path: 'server_upload.max_width', label: 'Ancho máx (px)', kind: 'number', min: 0, includeIf: hasKey('server_upload.max_width') },
+      { path: 'server_upload.max_height', label: 'Alto máx (px)', kind: 'number', min: 0, includeIf: hasKey('server_upload.max_height') },
+      {
+        path: 'server_upload.select_system', label: 'Documentos del sistema', kind: 'boolean',
+        booleanOnLabel: 'Permitir elegirlos', booleanOffLabel: 'Acotar por recurso',
+        includeIf: hasKey('server_upload.select_system'),
+      },
+      { path: 'server_upload.name_file_user', label: 'Nombre enviado por usuario', kind: 'text', includeIf: hasKey('server_upload.name_file_user') },
+      {
+        path: 'server_upload.size_rule', label: 'Reglas por tamaño (JSON)', kind: 'json',
+        includeIf: hasKey('server_upload.size_rule'),
+      },
     ],
   },
+  DATA_SOURCE_SECTION,
+  { title: 'Resolución dependiente', icon: 'pi pi-sitemap', defs: [...CHILD_RUNTIME_BLOCK, ...CHILDREN_BLOCK] },
+  { title: 'Rendimiento de la lista', icon: 'pi pi-bolt', defs: VIRTUAL_SCROLL_BLOCK },
+  { title: 'Descripción', icon: 'pi pi-info-circle', defs: DESCRIPTION_BLOCK },
   { title: 'Columna en tabla', icon: 'pi pi-table', defs: COLS_BLOCK },
+  CACHE_SECTION,
 ];
+
+/**
+ * Segmentos opcionales que el servidor concatena al consecutivo. Cada uno declara
+ * el mismo contrato `{order, active, position, separator}` en `code.default`.
+ */
+const CODE_SEGMENTS: { key: string; label: string }[] = [
+  { key: 'created_by', label: 'Usuario' },
+  { key: 'company', label: 'Empresa' },
+  { key: 'subsidiary', label: 'Sucursal' },
+  { key: 'warehouse', label: 'Almacén' },
+  { key: 'section', label: 'Sección' },
+  { key: 'rack', label: 'Rack' },
+  { key: 'slots', label: 'Ubicación' },
+  { key: 'workshop', label: 'Taller' },
+];
+
+const CODE_SEGMENT_DEFS: AdvancedFieldDef[] = CODE_SEGMENTS.flatMap(({ key, label }): AdvancedFieldDef[] => {
+  const segmentActive = (c: any) => getByPath(c, `default.${key}.active`) === true;
+  return [
+    {
+      path: `default.${key}.active`, label: `${label} · Incluir`, kind: 'boolean',
+      booleanOnLabel: 'Incluido', booleanOffLabel: 'Excluido',
+      includeIf: hasKey(`default.${key}.active`), showIf: c => c?.default?.active,
+    },
+    {
+      path: `default.${key}.order`, label: `${label} · Orden`, kind: 'number', min: 1,
+      includeIf: hasKey(`default.${key}.order`), showIf: segmentActive,
+    },
+    {
+      path: `default.${key}.position`, label: `${label} · Posición`, kind: 'select', options: POSITION_OPTIONS,
+      includeIf: hasKey(`default.${key}.position`), showIf: segmentActive,
+    },
+    {
+      path: `default.${key}.separator`, label: `${label} · Separador`, kind: 'text',
+      includeIf: hasKey(`default.${key}.separator`), showIf: segmentActive,
+    },
+  ];
+});
 
 const CODE_SCHEMA: AdvancedSection[] = [
   { title: 'General', icon: 'pi pi-cog', defs: COMMON_BASE },
@@ -578,8 +1020,12 @@ const CODE_SCHEMA: AdvancedSection[] = [
       { path: 'default.fill.separator', label: 'Separador del relleno', kind: 'text', showIf: c => c?.default?.fill?.active },
     ]
   },
+  { title: 'Segmentos del código', icon: 'pi pi-sitemap', defs: CODE_SEGMENT_DEFS },
+  { title: 'Descripción del código', icon: 'pi pi-info-circle', defs: makeDescriptionBlock('default') },
   { title: 'Escáner', icon: 'pi pi-qrcode', defs: SCANNER_BLOCK },
+  { title: 'Descripción', icon: 'pi pi-info-circle', defs: DESCRIPTION_BLOCK },
   { title: 'Columna en tabla', icon: 'pi pi-table', defs: COLS_BLOCK },
+  CACHE_SECTION,
 ];
 
 const SELECT_BUTTON_SCHEMA: AdvancedSection[] = [
@@ -593,10 +1039,14 @@ const SELECT_BUTTON_SCHEMA: AdvancedSection[] = [
         path: 'data_type.options', label: 'Opciones (JSON)', kind: 'json',
         hint: 'Array de objetos. P.ej. [{"id":"SI","name":"SI"},{"id":"NO","name":"NO"}]'
       },
+      ...DATA_SOURCE_QUERY_BLOCK,
     ]
   },
-  { title: 'Valor por defecto', icon: 'pi pi-bolt', defs: DEFAULT_BLOCK },
+  { title: 'Valor por defecto', icon: 'pi pi-bolt', defs: [...DEFAULT_BLOCK, ...RELATION_DEFAULT_BLOCK] },
+  { title: 'Resolución dependiente', icon: 'pi pi-sitemap', defs: [...CHILD_RUNTIME_BLOCK, ...CHILDREN_BLOCK] },
+  { title: 'Descripción', icon: 'pi pi-info-circle', defs: DESCRIPTION_BLOCK },
   { title: 'Columna en tabla', icon: 'pi pi-table', defs: COLS_BLOCK },
+  CACHE_SECTION,
 ];
 
 const DOCUMENT_SCHEMA: AdvancedSection[] = [
@@ -656,6 +1106,30 @@ const EMAILS_CHIPS_SCHEMA: AdvancedSection[] = [
       },
       { path: 'suggestions.min_chars', label: 'Caracteres mínimos', kind: 'number', min: 0, showIf: c => c?.suggestions?.enabled },
       { path: 'suggestions.max_suggestions', label: 'Máximo de sugerencias', kind: 'number', min: 1, showIf: c => c?.suggestions?.enabled },
+      {
+        path: 'suggestions.api_endpoint', label: 'Endpoint de sugerencias', kind: 'text',
+        includeIf: hasKey('suggestions.api_endpoint'),
+        showIf: c => c?.suggestions?.enabled && c?.suggestions?.data_source === 'api',
+      },
+      {
+        path: 'suggestions.local_list', label: 'Lista local (JSON)', kind: 'json',
+        includeIf: hasKey('suggestions.local_list'),
+        showIf: c => c?.suggestions?.enabled && c?.suggestions?.data_source === 'local',
+      },
+      {
+        path: 'suggestions.show_on_focus', label: 'Mostrar al enfocar', kind: 'boolean',
+        includeIf: hasKey('suggestions.show_on_focus'), showIf: c => c?.suggestions?.enabled,
+      },
+    ],
+  },
+  {
+    title: 'Separadores', icon: 'pi pi-ellipsis-h', defs: [
+      { path: 'separator.comma', label: 'Coma', kind: 'boolean', includeIf: hasKey('separator.comma') },
+      { path: 'separator.semicolon', label: 'Punto y coma', kind: 'boolean', includeIf: hasKey('separator.semicolon') },
+      { path: 'separator.space', label: 'Espacio', kind: 'boolean', includeIf: hasKey('separator.space') },
+      { path: 'separator.tab', label: 'Tabulador', kind: 'boolean', includeIf: hasKey('separator.tab') },
+      { path: 'separator.blur', label: 'Al perder el foco', kind: 'boolean', includeIf: hasKey('separator.blur') },
+      { path: 'separator.paste', label: 'Al pegar', kind: 'boolean', includeIf: hasKey('separator.paste') },
     ],
   },
   {
@@ -680,16 +1154,141 @@ const EMAILS_CHIPS_SCHEMA: AdvancedSection[] = [
         ],
         showIf: c => c?.email_sending?.enabled,
       },
+      {
+        path: 'email_sending.max_recipients_per_email', label: 'Destinatarios por correo', kind: 'number', min: 1,
+        includeIf: hasKey('email_sending.max_recipients_per_email'),
+        showIf: c => c?.email_sending?.enabled && c?.email_sending?.send_mode === 'multiple',
+      },
+      {
+        path: 'email_sending.batch_size', label: 'Tamaño del lote', kind: 'number', min: 1,
+        includeIf: hasKey('email_sending.batch_size'), showIf: c => c?.email_sending?.enabled,
+      },
+      {
+        path: 'email_sending.require_confirmation', label: 'Confirmación previa', kind: 'boolean',
+        booleanOnLabel: 'Pedir confirmación', booleanOffLabel: 'Enviar directo',
+        includeIf: hasKey('email_sending.require_confirmation'), showIf: c => c?.email_sending?.enabled,
+      },
     ],
   },
   { title: 'Descripción', icon: 'pi pi-info-circle', defs: DESCRIPTION_BLOCK },
   { title: 'Columna en tabla', icon: 'pi pi-table', defs: COLS_BLOCK },
+  CACHE_SECTION,
 ];
 
 const JSON_SCHEMA: AdvancedSection[] = [
   { title: 'General', icon: 'pi pi-cog', defs: COMMON_BASE },
   { title: 'Valor por defecto', icon: 'pi pi-bolt', defs: DEFAULT_JSON_BLOCK },
+  {
+    title: 'Estructura', icon: 'pi pi-code', defs: [
+      {
+        path: 'fields', label: 'Campos dinámicos (JSON)', kind: 'json', includeIf: hasKey('fields'),
+        hint: 'Definición de los campos que el formulario dibuja dentro de este JSON.',
+      },
+      { path: 'draw.dialog', label: 'Diálogo (JSON)', kind: 'json', includeIf: hasKey('draw.dialog') },
+      { path: 'draw.grid', label: 'Cuadrícula (JSON)', kind: 'json', includeIf: hasKey('draw.grid') },
+      {
+        path: 'schema', label: 'Esquema de validación (JSON)', kind: 'json', includeIf: hasKey('schema'),
+      },
+    ],
+  },
   { title: 'Descripción', icon: 'pi pi-info-circle', defs: DESCRIPTION_BLOCK },
+  { title: 'Columna en tabla', icon: 'pi pi-table', defs: COLS_BLOCK },
+  CACHE_SECTION,
+];
+
+const TABLE_SCHEMA: AdvancedSection[] = [
+  { title: 'General', icon: 'pi pi-cog', defs: COMMON_BASE },
+  { title: 'Valor por defecto', icon: 'pi pi-bolt', defs: DEFAULT_JSON_BLOCK },
+  {
+    title: 'Columnas', icon: 'pi pi-table', defs: [
+      {
+        path: 'columns', label: 'Columnas (JSON)', kind: 'json', includeIf: hasKey('columns'),
+        hint: 'Array de columnas; cada una declara field, header y su tipo de celda.',
+      },
+      { path: 'column_groups', label: 'Grupos de columnas (JSON)', kind: 'json', includeIf: hasKey('column_groups') },
+      { path: 'frozen_columns', label: 'Columnas fijas (JSON)', kind: 'json', includeIf: hasKey('frozen_columns') },
+      { path: 'frozen_rows', label: 'Filas fijas (JSON)', kind: 'json', includeIf: hasKey('frozen_rows') },
+      { path: 'row_group', label: 'Agrupación de filas (JSON)', kind: 'json', includeIf: hasKey('row_group') },
+      { path: 'row_span', label: 'Combinación de filas (JSON)', kind: 'json', includeIf: hasKey('row_span') },
+    ],
+  },
+  {
+    title: 'Edición de filas', icon: 'pi pi-pencil', defs: [
+      { path: 'initial_rows', label: 'Filas iniciales', kind: 'number', min: 0, includeIf: hasKey('initial_rows') },
+      {
+        path: 'add_row', label: 'Agregar filas', kind: 'boolean',
+        booleanOnLabel: 'Permitido', booleanOffLabel: 'Bloqueado', includeIf: hasKey('add_row'),
+      },
+      {
+        path: 'delete_row', label: 'Eliminar filas', kind: 'boolean',
+        booleanOnLabel: 'Permitido', booleanOffLabel: 'Bloqueado', includeIf: hasKey('delete_row'),
+      },
+      {
+        path: 'selection_mode', label: 'Selección', kind: 'select',
+        options: [
+          { label: 'Una fila', value: 'single' },
+          { label: 'Varias filas', value: 'multiple' },
+        ],
+        includeIf: hasKey('selection_mode'),
+      },
+    ],
+  },
+  {
+    title: 'Presentación', icon: 'pi pi-eye', defs: [
+      { path: 'sort', label: 'Ordenamiento', kind: 'boolean', includeIf: hasKey('sort') },
+      { path: 'paginator', label: 'Paginador', kind: 'boolean', includeIf: hasKey('paginator') },
+      { path: 'row_number', label: 'Número de fila', kind: 'boolean', includeIf: hasKey('row_number') },
+      { path: 'show_grid_lines', label: 'Líneas de cuadrícula', kind: 'boolean', includeIf: hasKey('show_grid_lines') },
+      { path: 'striped_rows', label: 'Filas alternadas', kind: 'boolean', includeIf: hasKey('striped_rows') },
+      { path: 'column_resizing', label: 'Ancho ajustable', kind: 'boolean', includeIf: hasKey('column_resizing') },
+      { path: 'export', label: 'Exportación', kind: 'boolean', includeIf: hasKey('export') },
+      {
+        path: 'responsive_layout', label: 'Comportamiento responsivo', kind: 'select',
+        options: [
+          { label: 'Desplazamiento', value: 'scroll' },
+          { label: 'Apilado', value: 'stack' },
+        ],
+        includeIf: hasKey('responsive_layout'),
+      },
+    ],
+  },
+  DATA_SOURCE_SECTION,
+  { title: 'Columna en tabla', icon: 'pi pi-table', defs: COLS_BLOCK },
+  CACHE_SECTION,
+];
+
+const SIGNATURE_SCHEMA: AdvancedSection[] = [
+  { title: 'General', icon: 'pi pi-cog', defs: COMMON_BASE },
+  {
+    title: 'Firma', icon: 'pi pi-pencil', defs: [
+      {
+        path: 'add_signature', label: 'Captura de firma', kind: 'boolean',
+        booleanOnLabel: 'Habilitada', booleanOffLabel: 'Deshabilitada', includeIf: hasKey('add_signature'),
+      },
+      { path: 'signature_width', label: 'Ancho del lienzo (px)', kind: 'number', min: 1, includeIf: hasKey('signature_width') },
+      { path: 'signature_height', label: 'Alto del lienzo (px)', kind: 'number', min: 1, includeIf: hasKey('signature_height') },
+      { path: 'pen_color', label: 'Color del trazo', kind: 'text', includeIf: hasKey('pen_color') },
+      { path: 'background_color', label: 'Color de fondo', kind: 'text', includeIf: hasKey('background_color') },
+      { path: 'border_color', label: 'Color del borde', kind: 'text', includeIf: hasKey('border_color') },
+      { path: 'border_width', label: 'Grosor del borde (px)', kind: 'number', min: 0, includeIf: hasKey('border_width') },
+    ],
+  },
+  {
+    title: 'Alcance', icon: 'pi pi-shield', defs: [
+      {
+        path: 'client', label: 'Dispositivos permitidos', kind: 'multiselect', options: CLIENT_OPTIONS,
+        includeIf: hasKey('client'),
+      },
+      {
+        path: 'fields_accept_signature', label: 'Campos que confirman la firma (JSON)', kind: 'json',
+        includeIf: hasKey('fields_accept_signature'),
+      },
+      {
+        path: 'fields', label: 'Campos del bloque de firma (JSON)', kind: 'json', includeIf: hasKey('fields'),
+        hint: 'Cada entrada declara field, label, type y sus validaciones.',
+      },
+    ],
+  },
   { title: 'Columna en tabla', icon: 'pi pi-table', defs: COLS_BLOCK },
 ];
 
@@ -725,9 +1324,9 @@ export const TYPE_SCHEMAS: Record<string, AdvancedSection[]> = {
   'select-button': SELECT_BUTTON_SCHEMA,
   'json': JSON_SCHEMA,
   'emails-chips': EMAILS_CHIPS_SCHEMA,
-  'table': FALLBACK_SCHEMA,
-  'signature': FALLBACK_SCHEMA,
-  'signature-pad': FALLBACK_SCHEMA,
+  'table': TABLE_SCHEMA,
+  'signature': SIGNATURE_SCHEMA,
+  'signature-pad': SIGNATURE_SCHEMA,
   'login': FALLBACK_SCHEMA,
   'selfie': FALLBACK_SCHEMA,
 };

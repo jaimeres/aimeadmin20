@@ -24,6 +24,9 @@ import { UpdateManagerService } from './app/utils/services/update-manager.servic
 import { UpdateCheckResult } from './app/utils/services/update.service';
 import { App } from '@capacitor/app';
 import { Preferences } from '@capacitor/preferences';
+// [[[II ESC:027-10 DOC:docs/documents/2026-07-01-027-autenticacion-segura-dispositivo-movil.md#escenario-10
+import { OfflineBannerComponent } from './app/components/offline-banner/offline-banner.component';
+// ]]]FI
 // [[[II ESC:027-06 DOC:docs/documents/2026-07-01-027-autenticacion-segura-dispositivo-movil.md#escenario-06
 import { NetworkStatusService } from './app/utils/services/network-status.service';
 // ]]]FI
@@ -36,9 +39,15 @@ import { NetworkStatusService } from './app/utils/services/network-status.servic
     BlockUIModule,
     SkeletonModule,
     CommonModule,
-    UpdateDialogComponent
+    UpdateDialogComponent,
+    // [[[II ESC:027-10 DOC:docs/documents/2026-07-01-027-autenticacion-segura-dispositivo-movil.md#escenario-10
+    OfflineBannerComponent,
+    // ]]]FI
   ],
   template: `
+    <!-- [[[II ESC:027-10 DOC:docs/documents/2026-07-01-027-autenticacion-segura-dispositivo-movil.md#escenario-10 -->
+    <app-offline-banner />
+    <!-- ]]]FI -->
     <router-outlet></router-outlet>
     
     <!-- Diálogo de actualización -->

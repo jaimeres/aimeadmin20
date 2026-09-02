@@ -14,16 +14,19 @@ describe('DynamicDropdownDataService', () => {
   let sharedS: { data: { [key: string]: any }; drawDropdown: { [key: string]: any } };
   let crudS: jasmine.SpyObj<CRUDService>;
   let generalS: { DJAtoObject: () => any[]; isMobile: () => boolean; isDesktopApp: () => boolean };
+  let authS: any;
   let currentPlatform: 'mobile' | 'desktop' | 'web';
 
   beforeEach(() => {
     sharedS = { data: {}, drawDropdown: {} };
     crudS = jasmine.createSpyObj<CRUDService>('CRUDService', [
       'buildDropdownFilterString',
+      'buildConfiguredSearchFilter',
       'getAppType',
       'getObject',
     ]);
     crudS.buildDropdownFilterString.and.returnValue('');
+    crudS.buildConfiguredSearchFilter.and.returnValue('');
     crudS.getAppType.and.returnValue({});
     crudS.getObject.and.returnValue(of({}) as any);
     currentPlatform = 'web';
@@ -31,6 +34,24 @@ describe('DynamicDropdownDataService', () => {
       DJAtoObject: () => [],
       isMobile: () => currentPlatform === 'mobile',
       isDesktopApp: () => currentPlatform === 'desktop',
+    };
+    authS = {
+      userId: () => null,
+      username: () => null,
+      config: {
+        asset: {
+          general: {
+            additional_search: {
+              active: true,
+              filter: {
+                search: { active: true, default: 'exact' },
+              },
+              subsidiaries: { filter: {} },
+              autocomplete: { by: 'search', min_search_length: 5, limit: 25 },
+            },
+          },
+        },
+      },
     };
 
     TestBed.configureTestingModule({
@@ -44,10 +65,7 @@ describe('DynamicDropdownDataService', () => {
         },
         {
           provide: AuthService,
-          useValue: {
-            userId: () => null,
-            username: () => null,
-          },
+          useValue: authS,
         },
         {
           provide: FormCacheService,
@@ -94,13 +112,12 @@ describe('DynamicDropdownDataService', () => {
   });
 
   // [[[II ESC:001-18 DOC:docs/documents/2026-05-16_001_consolidacion_dropdown_types_y_fix_escenarios.md#escenario-18
-  it('should keep real filters and place the validated reference context in the route', async () => {
-    crudS.getAppType.and.callFake((type: any) => type === 'inventory-movement-detail'
-      ? { app: 'inventories/inventory-movement-detail', type }
-      : { app: 'assets/asset', type: 'asset' });
+  it('should read search permission from the target resource configuration', async () => {
+    crudS.getAppType.and.returnValue({ app: 'assets/asset', type: 'asset' });
     (crudS as any).type = 'inventory-movement-detail';
     (crudS as any).app = 'inventories/inventory-movement-detail';
     crudS.buildDropdownFilterString.and.returnValue('filter[is_active.exact]=true');
+    crudS.buildConfiguredSearchFilter.and.returnValue('filter[search]=BP0696');
     crudS.getObject.and.returnValue(of({ data: [] }) as any);
     generalS.DJAtoObject = () => [{ id: 'asset-2', name: 'BP0696' }];
 
@@ -110,20 +127,35 @@ describe('DynamicDropdownDataService', () => {
       option_label: 'name',
       option_value: 'id',
       data_type: { type: 'asset', filter: { is_active: true } },
-      additional_search: {
-        active: true,
-        subsidiaries: { filter: {} },
-        autocomplete: { by: 'search', min_search_length: 5, limit: 25 },
-      },
     }, 'BP0696');
 
     expect(rows).toEqual([jasmine.objectContaining({ id: 'asset-2', name: 'BP0696' })]);
     expect(crudS.getObject).toHaveBeenCalledWith(jasmine.objectContaining({
-      app: 'assets/asset/reference-search/inventories/inventory-movement-detail/asset',
+      app: 'assets/asset/reference-search',
       type: 'asset',
       limit: 25,
       filter: 'filter[is_active.exact]=true&filter[search]=BP0696',
     }));
+    expect(crudS.buildConfiguredSearchFilter).toHaveBeenCalledWith(
+      authS.config.asset.general.additional_search.filter,
+      'BP0696',
+      'filter[search]=BP0696',
+    );
+  });
+
+  it('should use the generic relation contract only when target config is not hydrated', () => {
+    crudS.getAppType.and.returnValue({ app: 'assets/asset', type: 'asset' });
+    delete authS.config.asset;
+    const visualConfig = {
+      active: true,
+      filter: {},
+      subsidiaries: { filter: {} },
+    };
+
+    expect(service.getAdditionalSearchConfig({
+      data_type: { type: 'asset' },
+      additional_search: visualConfig,
+    })).toBe(visualConfig);
   });
 
   it('should not issue additional searches for choice or dynamic fields', async () => {
@@ -141,11 +173,10 @@ describe('DynamicDropdownDataService', () => {
       type: 'dropdown',
       field: 'parent_form_data_ASSET',
     }, 'BP0696')).toEqual([]);
+    authS.config.asset.general.additional_search.subsidiaries = true;
     expect(await service.searchAdditionalOptions({
       ...config,
       type: 'dropdown',
-      subsidiaries: undefined,
-      additional_search: { active: true, subsidiaries: true },
     }, 'BP0696')).toEqual([]);
     expect(crudS.getObject).not.toHaveBeenCalled();
   });

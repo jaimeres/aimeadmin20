@@ -5,6 +5,13 @@ import { ConfirmationService, MenuItem } from 'primeng/api';
 // carga el resto del sistema.
 import { ConversionCRUD } from '../../utils/conversion-crud.class';
 // ]]]FI
+// [[[II ESC:057-54 DOC:docs/documents/2026-08-08-057-propuesta-compras-v3.md#escenario-54
+// Se importa aquí y NO en `LOCAL_BASE`: la tira de documentos origen sólo tiene
+// sentido en un documento que se alimenta de otro, y `LOCAL_BASE` lo carga todo
+// el sistema. Mismo criterio con el que `ConversionCRUD` vive fuera de `CRUD`.
+import { CustomSourceDocumentsComponent }
+  from '../../components/custom-source-documents/custom-source-documents.component';
+// ]]]FI
 import { PurchaseService } from '../services/purchase.service';
 import { LOCAL_BASE } from '../../shared/components.index';
 import { PRIME_MODULES } from '../../shared/primeng.index';
@@ -24,6 +31,7 @@ import { InputTextModule } from 'primeng/inputtext';
     InputTextModule,
     ...LOCAL_BASE,
     ...PRIME_MODULES,
+    CustomSourceDocumentsComponent,
   ],
   templateUrl: './supplier-request.component.html',
   styleUrl: './supplier-request.component.scss',

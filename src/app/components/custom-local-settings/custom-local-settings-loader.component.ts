@@ -19,6 +19,21 @@ import { CustomLocalSettingsComponent } from './custom-local-settings.component'
   standalone: true,
   imports: [CustomLocalSettingsComponent],
   templateUrl: './custom-local-settings-loader.component.html',
+  // El bloque @loading solo existe mientras se descarga el chunk diferido; se
+  // escribe aqui para no cargar estilos ni componentes extra en el bundle previo.
+  styles: [`
+    .local-settings-loading {
+      align-items: center;
+      background: color-mix(in srgb, var(--surface-ground) 82%, transparent);
+      color: var(--text-color-secondary);
+      display: flex;
+      gap: .6rem;
+      inset: 0;
+      justify-content: center;
+      position: fixed;
+      z-index: 1101;
+    }
+  `],
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class CustomLocalSettingsLoaderComponent {

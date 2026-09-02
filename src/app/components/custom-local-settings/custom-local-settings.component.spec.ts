@@ -20,7 +20,7 @@ describe('CustomLocalSettingsComponent', () => {
   let component: CustomLocalSettingsComponent;
   let fixture: ComponentFixture<CustomLocalSettingsComponent>;
   // [[[II ESC:005-17 DOC:docs/documents/2026-05-31_005_columnas-form-data-y-tree-select-nombres.md#escenario-17
-  let crudMock: { getAppType: jasmine.Spy; getObject: jasmine.Spy; sharedModuleScopedKey: (t: string, m?: any) => string };
+  let crudMock: { getAppType: jasmine.Spy; getObject: jasmine.Spy; sharedModuleScopedKey: (t: string, m?: any) => string; authS: { config: Record<string, any> } };
   let generalMock: { DJAtoObject: jasmine.Spy };
   let sharedMock: { data: Record<string, any>; drawDropdown: Record<string, any> };
 
@@ -60,6 +60,18 @@ describe('CustomLocalSettingsComponent', () => {
       ),
       getObject: jasmine.createSpy('getObject').and.returnValue(of({ data: [] })),
       sharedModuleScopedKey: (type: string, module?: any) => (module ? `${type}_${module}` : type),
+      // El editor lee los campos del recurso destino de la config ya cargada.
+      authS: {
+        config: {
+          asset: {
+            fields: {
+              year: { type: 'input-number', label: 'Año', readonly: false, cols: { label: 'Año' } },
+              serial: { type: 'input-text', label: 'Serie', cols: { label: 'Serie' } },
+              tabla: { type: 'table', label: 'Partidas' },
+            },
+          },
+        },
+      },
     };
     generalMock = {
       DJAtoObject: jasmine.createSpy('DJAtoObject').and.returnValue(STATUS_OPTIONS),
@@ -385,4 +397,260 @@ describe('CustomLocalSettingsComponent', () => {
     });
   });
   // ]]]FI
+
+  describe('alta de campos', () => {
+
+    /** Modulo con una relacion a `asset` etiquetada «Bomba». */
+    const moduloConRelacion = () => ({
+      app: 'maintenance',
+      config_app: 'assets',
+      general: {},
+      draw: { dialog: {}, general: { grid: {} } },
+      cols: [{ field: 'asset__name', header: 'Bomba' }],
+      fields: {
+        asset: { type: 'dropdown', label: 'Bomba', data_type: { type: 'asset' }, cols: { label: 'Bomba' } },
+      },
+    });
+
+    beforeEach(() => {
+      component.ngOnChanges({
+        field: {
+          currentValue: moduloConRelacion(),
+          previousValue: null, firstChange: true, isFirstChange: () => true,
+        },
+      } as any);
+    });
+
+    it('ofrece las relaciones por su etiqueta, no por la clave', () => {
+      expect(component.relationOptions()).toEqual([
+        { label: 'Bomba', value: 'asset', dataType: 'asset' },
+      ]);
+    });
+
+    it('ofrece los datos del recurso destino y descarta los no listables', () => {
+      component.addFieldForm.controls.relation.setValue('asset');
+      const etiquetas = component.relatedFieldOptions().map(o => o.label);
+      expect(etiquetas).toEqual(['Año', 'Serie']);      // `tabla` es SKIP_TYPE
+      expect(component.relatedFieldOptions()).toContain({ label: 'Año', value: 'year' });
+    });
+
+    it('pide la configuración del recurso destino cuando no está en memoria', () => {
+      // La config de un módulo NO visitado no está cargada: hay que pedirla.
+      const cargado: Record<string, boolean> = { asset: false };
+      crudMock.authS = {
+        ...crudMock.authS,
+        isConfigModuleLoaded: (m: string) => !!cargado[m],
+        ensureConfigModules: jasmine.createSpy('ensureConfigModules').and.callFake((mods: string[]) => {
+          mods.forEach(m => (cargado[m] = true));
+          return of(true);
+        }),
+      } as any;
+
+      component.openAddField('relation');
+      component.addFieldForm.controls.relation.setValue('asset');
+
+      expect((crudMock.authS as any).ensureConfigModules).toHaveBeenCalledWith(['asset']);
+      expect(component.relatedFieldOptions().map(o => o.label)).toEqual(['Año', 'Serie']);
+      expect(component.loadingRelated()).toBeFalse();
+    });
+
+    it('no vuelve a pedirla si el módulo ya está cargado', () => {
+      crudMock.authS = {
+        ...crudMock.authS,
+        isConfigModuleLoaded: () => true,
+        ensureConfigModules: jasmine.createSpy('ensureConfigModules'),
+      } as any;
+
+      component.openAddField('relation');
+      component.addFieldForm.controls.relation.setValue('asset');
+
+      expect((crudMock.authS as any).ensureConfigModules).not.toHaveBeenCalled();
+      expect(component.relatedFieldOptions().length).toBe(2);
+    });
+
+    it('limpia el dato elegido al cambiar de relación', () => {
+      component.openAddField('relation');
+      component.addFieldForm.controls.relation.setValue('asset');
+      component.addFieldForm.controls.relatedField.setValue('year');
+
+      component.addFieldForm.controls.relation.setValue('');
+      expect(component.addFieldForm.controls.relatedField.value).toBe('');
+      expect(component.relatedFieldOptions()).toEqual([]);
+    });
+
+    it('expande la relación como solo lectura y registra el prefijo', () => {
+      component.openAddField('relation');
+      component.addFieldForm.controls.relation.setValue('asset');
+      component.addFieldForm.controls.relatedField.setValue('year');
+      component.applyAddField();
+
+      const campo = component.fieldSignal().fields['asset_data_year'];
+      expect(campo).toBeDefined();
+      expect(campo.readonly).toBeTrue();
+      expect(campo.required).toBeFalse();
+      expect(campo.label).toBe('Bomba · Año');
+      expect(campo.type).toBe('input-number');       // heredado del recurso destino
+
+      expect(component.fieldSignal().draw.fields_prefixes).toEqual([
+        { asset_data_: { data_type: 'asset', kind: 'parent', filter: 'asset' } },
+      ]);
+      expect(component.addFieldMode()).toBeNull();
+    });
+
+    it('no duplica el campo ni el prefijo', () => {
+      for (let i = 0; i < 2; i++) {
+        component.openAddField('relation');
+        component.addFieldForm.controls.relation.setValue('asset');
+        component.addFieldForm.controls.relatedField.setValue('year');
+        component.applyAddField();
+      }
+      expect(component.fieldSignal().draw.fields_prefixes.length).toBe(1);
+    });
+
+    it('crea el campo libre con el prefijo del destino, sin exponerlo', () => {
+      component.openAddField('free');
+      component.addFieldForm.patchValue({
+        label: 'Número de serie', target: 'parent_form_data_', type: 'input-text',
+      });
+      component.applyAddField();
+
+      const campo = component.fieldSignal().fields['parent_form_data_NUMERO_DE_SERIE'];
+      expect(campo).toBeDefined();
+      expect(campo.label).toBe('Número de serie');    // el usuario solo ve esto
+      expect(campo.type).toBe('input-text');
+      expect(campo.cols.label).toBe('Número de serie');
+    });
+
+    it('guarda la lista de valores cuando el tipo la usa', () => {
+      component.openAddField('free');
+      component.addFieldForm.patchValue({
+        label: 'Prioridad', type: 'dropdown-choice',
+        options: '[{"id":"A","name":"Alta"}]',
+      });
+      expect(component.freeFieldUsesOptions()).toBeTrue();
+      component.applyAddField();
+
+      const campo = component.fieldSignal().fields['form_fields_data_PRIORIDAD'];
+      expect(campo.data_type.options).toEqual([{ id: 'A', name: 'Alta' }]);
+    });
+
+    it('rechaza una lista de valores mal formada', () => {
+      component.openAddField('free');
+      component.addFieldForm.patchValue({ label: 'Prioridad', type: 'dropdown-choice', options: '{no json' });
+      component.applyAddField();
+
+      expect(component.fieldSignal().fields['form_fields_data_PRIORIDAD']).toBeUndefined();
+      expect(component.addFieldMode()).toBe('free');   // el diálogo sigue abierto
+    });
+
+    it('el campo agregado aparece como fila del editor', () => {
+      component.openAddField('relation');
+      component.addFieldForm.controls.relation.setValue('asset');
+      component.addFieldForm.controls.relatedField.setValue('serial');
+      component.applyAddField();
+
+      const fila = component.unifiedRows().find(r => r.field === 'asset_data_serial');
+      expect(fila).toBeDefined();
+      expect(fila!.header).toBe('Bomba · Serie');
+    });
+  });
+
+  describe('payload para el servidor', () => {
+
+    /** Igual que la config real: la columna llega como `status__name`. */
+    const campoConRelacion = () => ({
+      ...statusField(),
+      app: 'maintenance',
+      config_app: 'assets',
+      draw: { dialog: {}, general: { grid: {} } },
+      general: {},
+    });
+
+    beforeEach(() => {
+      component.ngOnChanges({
+        field: {
+          currentValue: campoConRelacion(),
+          previousValue: null, firstChange: true, isFirstChange: () => true,
+        },
+      } as any);
+    });
+
+    it('agrupa la columna `__name` y el campo en UNA sola fila', () => {
+      const filas = component.unifiedRows().filter(r => r.field === 'status');
+      expect(filas.length).toBe(1);
+      expect(filas[0].colField).toBe('status__name');
+      expect(component.unifiedRows().some(r => r.field === 'status__name')).toBeFalse();
+    });
+
+    it('envía al servidor el campo sin sufijo y anidado bajo la app', () => {
+      const payload = component['_buildServerPayload'](component['_buildModifiedField']());
+
+      expect(Object.keys(payload!)).toEqual(['assets']);
+      expect(Object.keys(payload!['assets'])).toEqual(['maintenance']);
+
+      const recurso = payload!['assets']['maintenance'];
+      expect(recurso.cols).toEqual({ 0: { field: 'status' } });
+      expect(recurso.fields.status).toBeDefined();
+      expect(recurso.app).toBeUndefined();
+      expect(recurso.module).toBeUndefined();
+      expect(recurso.config_app).toBeUndefined();
+    });
+
+    it('escribe los metadatos de la columna en el campo del servidor', () => {
+      const fila = component.unifiedRows().find(r => r.field === 'status')!;
+      fila.form.get('label')!.setValue('Situación');
+      fila.form.get('sortable')!.setValue(false);
+
+      const recurso = component['_buildServerPayload'](component['_buildModifiedField']())!['assets']['maintenance'];
+      expect(recurso.fields.status.cols.label).toBe('Situación');
+      expect(recurso.fields.status.cols.sortable).toBeFalse();
+    });
+
+    it('la tabla del cliente conserva la clave con sufijo', () => {
+      const local = component['_buildModifiedField']();
+      expect(local.cols.map((c: any) => c.field)).toEqual(['status__name']);
+    });
+
+    it('reconstruye el grid con solo la colocación, no la config del campo', () => {
+      // Forma REAL que deja el aplanado del cliente: la entrada del grid es la
+      // configuración completa del campo más `key`, y su `field` puede no ser
+      // el del grid (o faltar).
+      component.ngOnChanges({
+        field: {
+          currentValue: {
+            ...campoConRelacion(),
+            draw: {
+              dialog: {},
+              fields_prefixes: [{ status_data_: { kind: 'child' } }],
+              general: {
+                grid: {
+                  62: { key: 'status', type: 'dropdown', label: 'Estado', cache: {}, class: 'col-span-6' },
+                  63: { key: 'code', field: '', type: 'input-text', hide: true },
+                },
+              },
+            },
+          },
+          previousValue: null, firstChange: false, isFirstChange: () => false,
+        },
+      } as any);
+
+      const recurso = component['_buildServerPayload'](component['_buildModifiedField']())!['assets']['maintenance'];
+      const entradas = Object.values(recurso.draw.general.grid) as any[];
+
+      expect(entradas.every(e => typeof e.field === 'string' && e.field.length > 0)).toBeTrue();
+      expect(entradas.every(e => e.type === undefined && e.cache === undefined && e.key === undefined)).toBeTrue();
+      expect(recurso.draw.fields_prefixes).toBeUndefined();
+      expect(recurso.fields_prefixes).toEqual([{ status_data_: { kind: 'child' } }]);
+    });
+
+    it('sin app resoluble no envía nada', () => {
+      component.ngOnChanges({
+        field: {
+          currentValue: { ...campoConRelacion(), config_app: undefined },
+          previousValue: null, firstChange: false, isFirstChange: () => false,
+        },
+      } as any);
+      expect(component['_buildServerPayload'](component['_buildModifiedField']())).toBeNull();
+    });
+  });
 });

@@ -1,14 +1,17 @@
 import { inject, Injector } from '@angular/core';
-import { HttpErrorResponse, HttpEvent, HttpHandlerFn, HttpHeaders, HttpRequest } from '@angular/common/http';
-import { Observable, from, throwError } from 'rxjs';
-import { catchError, mergeMap, take } from 'rxjs/operators';
+import { HttpErrorResponse, HttpEvent, HttpHandlerFn, HttpHeaders, HttpRequest, HttpResponse } from '@angular/common/http';
+import { Observable, Subscription, from, of, throwError } from 'rxjs';
+import { catchError, filter, mergeMap, take, tap, timeout } from 'rxjs/operators';
 import { AuthService } from '../services/auth.service';
 import { GeneralService } from '@/utils/services/general.service';
+import { NetworkStatusService } from '@/utils/services/network-status.service';
+import { MessageService } from '@/components/services/message.service';
 import { UpdateManagerService } from '@/utils/services/update-manager.service';
 import { Preferences } from '@capacitor/preferences';
 import { App } from '@capacitor/app';
 import { Device } from '@capacitor/device';
 import { environment } from 'src/environments/environment';
+import { isLoopbackUrl } from '@/utils/native-local-url.util';
 
 let cachedClientDeviceId: string | null = null;
 let cachedAppInfo: { version?: string; build?: string } | null = null;
@@ -150,9 +153,154 @@ const triggerMandatoryUpdateCheck = (error: unknown, failedRequest: HttpRequest<
 export const TokenAccessInterceptor = (req: HttpRequest<any>, next: HttpHandlerFn): Observable<HttpEvent<any>> => {
   const authService = inject(AuthService);
   const generalService = inject(GeneralService);
+  const networkStatusService = inject(NetworkStatusService);
+  const messageService = inject(MessageService);
   const injector = inject(Injector);
   let request = req;
   const contentType = req.headers.get('Content-Type');
+
+  // [[[II ESC:027-08 DOC:docs/documents/2026-07-01-027-autenticacion-segura-dispositivo-movil.md#escenario-08 ESC:027-09 DOC:docs/documents/2026-07-01-027-autenticacion-segura-dispositivo-movil.md#escenario-09 ESC:027-11 DOC:docs/documents/2026-07-01-027-autenticacion-segura-dispositivo-movil.md#escenario-11 ESC:027-12 DOC:docs/documents/2026-07-01-027-autenticacion-segura-dispositivo-movil.md#escenario-12 ESC:027-13 DOC:docs/documents/2026-07-01-027-autenticacion-segura-dispositivo-movil.md#escenario-13
+  const requestInactivityTimeout = ['GET', 'HEAD'].includes(req.method) ? 15000 : 60000;
+
+  const handleRequestFailure = (error: unknown): Observable<never> => {
+    const status = error instanceof HttpErrorResponse
+      ? error.status
+      : Number((error as { status?: unknown } | null)?.status ?? 0);
+    if (status !== 0) {
+      // Cualquier estado HTTP demuestra que hubo respuesta del servidor.
+      networkStatusService.reportServerResponse();
+      return throwError(() => error);
+    }
+
+    // El bloqueo se libera antes de comprobar un destino independiente.
+    messageService.showBlocked(false);
+
+    const connected = networkStatusService.connected();
+    const errorUrl = error instanceof HttpErrorResponse && error.url
+      ? error.url
+      : req.urlWithParams;
+    const localServerFailure = connected && isLoopbackUrl(errorUrl);
+    const internetProbe = !connected
+      ? of(false)
+      : localServerFailure
+        ? of(true)
+        : from(networkStatusService.probeInternetAccess());
+
+    return internetProbe.pipe(
+      mergeMap((internetReachable) => {
+        const serverUnavailable = connected && internetReachable;
+
+        if (serverUnavailable) {
+          networkStatusService.reportInternetAvailable();
+        } else {
+          networkStatusService.reportTransportFailure();
+        }
+
+        if (authService.loggedin()) {
+          const message = localServerFailure
+            ? 'No fue posible conectarse con el servidor local. Verifica que el servicio esté iniciado en el equipo de desarrollo.'
+            : serverUnavailable
+              ? 'No fue posible comunicarse con el servidor. Tu conexión a Internet está disponible, pero el servicio no responde o está bloqueando el acceso.'
+              : connected
+                ? 'Sin acceso a Internet desde la aplicación. Revisa el Wi-Fi, los datos móviles o las restricciones de red de la aplicación.'
+                : 'Sin conexión a Internet. Revisa tu Wi-Fi o datos móviles y vuelve a intentarlo.';
+          const summary = localServerFailure
+            ? 'Servidor local no disponible'
+            : serverUnavailable
+              ? 'Servidor no disponible'
+              : 'Sin conexión';
+
+          messageService.changeMessage(message, null, {}, 'warn', summary, false, 20000);
+        }
+
+        if (error instanceof HttpErrorResponse && error.error?.transportFailure && !serverUnavailable) {
+          return throwError(() => error);
+        }
+
+        return throwError(() => new HttpErrorResponse({
+          error: {
+            ...(typeof (error as HttpErrorResponse).error === 'object' && (error as HttpErrorResponse).error
+              ? (error as HttpErrorResponse).error
+              : {}),
+            message: (error as HttpErrorResponse).error?.message || 'No fue posible conectar con el servidor.',
+            transportFailure: true,
+            ...(serverUnavailable ? { serverUnavailable: true } : {}),
+            ...(localServerFailure ? { localServerFailure: true } : {}),
+          },
+          headers: (error as HttpErrorResponse).headers,
+          status: 0,
+          statusText: (error as HttpErrorResponse).statusText || 'Connection Error',
+          url: (error as HttpErrorResponse).url || req.urlWithParams,
+        }));
+      }),
+    );
+  };
+
+  const withRequestFailureHandling = (
+    source: Observable<HttpEvent<any>>,
+  ): Observable<HttpEvent<any>> => new Observable<HttpEvent<any>>((subscriber) => {
+    let requestSubscription = Subscription.EMPTY;
+    const networkSubscription = networkStatusService.connectionChanges.pipe(
+      filter((connected) => !connected),
+      take(1),
+    ).subscribe(() => {
+      subscriber.error(new HttpErrorResponse({
+        status: 0,
+        statusText: 'Offline',
+        url: req.urlWithParams,
+        error: { message: 'El equipo perdió la conexión a Internet.' },
+      }));
+    });
+
+    // Cierra la carrera entre la verificación previa y la suscripción al
+    // monitor. Si la red cayó en ese intervalo, la petición no se inicia.
+    if (!networkStatusService.connected()) {
+      subscriber.error(new HttpErrorResponse({
+        status: 0,
+        statusText: 'Offline',
+        url: req.urlWithParams,
+        error: { message: 'El equipo no tiene conexión a Internet.' },
+      }));
+    } else {
+      requestSubscription = source.pipe(
+        timeout({
+          each: requestInactivityTimeout,
+          with: () => throwError(() => new HttpErrorResponse({
+            status: 0,
+            statusText: 'Connection Timeout',
+            url: req.urlWithParams,
+            error: {
+              message: 'El servidor no respondió después de perder la conexión.',
+              transportFailure: true,
+              timeout: true,
+            },
+          })),
+        }),
+        tap((event) => {
+          if (event instanceof HttpResponse) {
+            networkStatusService.reportServerResponse();
+          }
+        }),
+      ).subscribe(subscriber);
+    }
+
+    return () => {
+      networkSubscription.unsubscribe();
+      requestSubscription.unsubscribe();
+    };
+  }).pipe(
+    catchError((error) => handleRequestFailure(error)),
+  );
+
+  if (!networkStatusService.connected()) {
+    return handleRequestFailure(new HttpErrorResponse({
+      status: 0,
+      statusText: 'Offline',
+      url: req.urlWithParams,
+      error: { message: 'El equipo no tiene conexión a Internet.' },
+    }));
+  }
+  // ]]]FI
 
   const buildHeaders = async (access?: string): Promise<HttpHeaders> => {
     let headers = req.headers;
@@ -215,26 +363,32 @@ export const TokenAccessInterceptor = (req: HttpRequest<any>, next: HttpHandlerF
 
   // Si AuthorizationCheck es true, no enviar el token en headers
   if (req?.body?.authorizationCheck) {
-    return from(buildHeaders()).pipe(
-      mergeMap((headers) => sendRequest(headers))
+    return withRequestFailureHandling(
+      from(buildHeaders()).pipe(
+        mergeMap((headers) => sendRequest(headers))
+      )
     );
   }
 
   // Si el token de acceso tiene más de 20 segundos de vida, lo envía
   if (authService.getTimeUntilTokenExpiration > 20) {
     const access = authService.access;
-    return from(buildHeaders(access)).pipe(
-      mergeMap((headers) => sendRequest(headers))
+    return withRequestFailureHandling(
+      from(buildHeaders(access)).pipe(
+        mergeMap((headers) => sendRequest(headers))
+      )
     );
   }
 
   // Si el token está por expirar, refresca antes de enviar la solicitud
-  return authService.tokenValidateInterceptor().pipe(
-    take(1),
-    mergeMap(access => {
-      return from(buildHeaders(access)).pipe(
-        mergeMap((headers) => sendRequest(headers))
-      );
-    })
+  return withRequestFailureHandling(
+    authService.tokenValidateInterceptor().pipe(
+      take(1),
+      mergeMap(access => {
+        return from(buildHeaders(access)).pipe(
+          mergeMap((headers) => sendRequest(headers))
+        );
+      })
+    )
   );
 };

@@ -80,13 +80,31 @@ export class DynamicDropdownDataService {
     return !!(appType.app && appType.type);
   }
 
+  getAdditionalSearchConfig(element: any): any | null {
+    const targetType = this.getDropdownAppType(element)?.type;
+    const targetConfig = targetType
+      ? this.authS.config?.[targetType]?.general?.additional_search
+      : null;
+    if (targetConfig && typeof targetConfig === 'object' && !Array.isArray(targetConfig)) {
+      return targetConfig;
+    }
+
+    // La caché modular puede no haber hidratado aún el recurso destino. El
+    // bloque del tipo relacional sólo permite renderizar/armar la petición; el
+    // AssetViewSet vuelve a validar la autorización contra D_ASSET.general.
+    const fieldConfig = element?.additional_search;
+    return fieldConfig && typeof fieldConfig === 'object' && !Array.isArray(fieldConfig)
+      ? fieldConfig
+      : null;
+  }
+
   // [[[II ESC:001-18 DOC:docs/documents/2026-05-16_001_consolidacion_dropdown_types_y_fix_escenarios.md#escenario-18
   async searchAdditionalOptions(
     element: any,
     query: string,
-    context: DynamicDropdownDataContext = {},
+    _context: DynamicDropdownDataContext = {},
   ): Promise<any[]> {
-    const config = element?.additional_search;
+    const config = this.getAdditionalSearchConfig(element);
     const subsidiaries = config?.subsidiaries;
     const field = String(element?.field || '');
     const excludedPrefixes = [
@@ -118,25 +136,18 @@ export class DynamicDropdownDataService {
       const encoded = encodeURIComponent(normalizedQuery);
       const by = String(searchConfig?.by || 'search').trim();
       const exact = searchConfig?.search_mode === 'exact';
-      filterParts.push(by === 'search'
+      const fallbackFilter = by === 'search'
         ? `filter[search]=${encoded}`
-        : `filter[${by}.${exact ? 'iexact' : 'icontains'}]=${encoded}`);
+        : `filter[${by}.${exact ? 'iexact' : 'icontains'}]=${encoded}`;
+      const configuredSearch = this.crudS.buildConfiguredSearchFilter(
+        config?.filter,
+        normalizedQuery,
+        fallbackFilter,
+      );
+      if (configuredSearch) filterParts.push(configuredSearch);
     }
 
-    const sourceResource = String(context?.type || this.crudS.type || '').trim();
-    const sourceRoute = this.crudS.getAppType(sourceResource)?.app
-      || context?.sourceApp
-      || this.crudS.app
-      || '';
-    const sourceApp = String(sourceRoute).split('/')[0].trim();
-    if (!sourceApp || !sourceResource || !element?.field) return [];
-    const referenceSearchApp = [
-      appType.app,
-      'reference-search',
-      encodeURIComponent(sourceApp),
-      encodeURIComponent(sourceResource),
-      encodeURIComponent(String(element.field)),
-    ].join('/');
+    const referenceSearchApp = `${appType.app}/reference-search`;
 
     const data = await firstValueFrom(this.crudS.getObject({
       app: referenceSearchApp,

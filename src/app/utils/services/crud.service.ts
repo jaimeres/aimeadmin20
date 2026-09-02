@@ -921,7 +921,7 @@ export class CRUDService {
    * @returns retorna el objeto editado
    */
   edit({ formData = {}, id = '', include = '', fields = '', filter = '', type = '',
-    app = '', url = null, relationships = null }: {
+    app = '', url = null, relationships = null, meta = null }: {
       formData?: any;
       id?: string;
       include?: string;
@@ -931,6 +931,11 @@ export class CRUDService {
       app?: string;
       url?: string | null;
       relationships?: any[] | null;
+      // [[[II ESC:057-57 DOC:docs/documents/2026-08-08-057-propuesta-compras-v3.md#escenario-57
+      // `data.meta` del contrato de conversiones, igual que en `saveObject`. Con
+      // `sources` el PATCH SUMA partidas al documento; sin él es el PATCH de
+      // siempre, byte por byte. ]]]FI
+      meta?: any;
     }) {
 
     const query = this.query(include, filter, '', fields, 250, type);
@@ -955,7 +960,8 @@ export class CRUDService {
       attributes: formData,
       type: type || this.type,
       relationships: relationships || this.relationships,
-      id: id
+      id: id,
+      meta
     })).pipe(
       map((resp: any) => resp)
     );

@@ -3,6 +3,12 @@ import { SelectModule } from 'primeng/select';
 import { LOCAL_BASE } from './components.index';
 import { PRIME_MODULES } from './primeng.index';
 import { TaskModuleLoaderComponent } from '../components/task-module-loader/task-module-loader.component';
+// [[[II ESC:057-54 DOC:docs/documents/2026-08-08-057-propuesta-compras-v3.md#escenario-54
+// Tira de documentos ORIGEN cargados. Se pinta sola: si el CRUD del módulo no
+// es de conversión, el método no existe y el bloque no se instancia.
+import { CustomSourceDocumentsComponent }
+  from '../components/custom-source-documents/custom-source-documents.component';
+// ]]]FI
 
 /**
  * Configuración de tabs adicionales para el dialog.
@@ -36,7 +42,8 @@ export interface ShellSaveConfig {
 @Component({
   selector: 'app-crud-page-shell',
   standalone: true,
-  imports: [SelectModule, TaskModuleLoaderComponent, ...PRIME_MODULES, ...LOCAL_BASE],
+  imports: [SelectModule, TaskModuleLoaderComponent, CustomSourceDocumentsComponent,
+    ...PRIME_MODULES, ...LOCAL_BASE],
   template: `
     <p-confirmdialog />
 
@@ -131,6 +138,15 @@ export interface ShellSaveConfig {
 
           <p-tabpanels>
             <p-tabpanel [value]="0">
+              <!-- [[[II ESC:057-54 DOC:docs/documents/2026-08-08-057-propuesta-compras-v3.md#escenario-54
+                   Sólo aparece en un documento que se alimenta de otro: el
+                   método existe únicamente en ConversionCRUD. Nada de comillas
+                   invertidas aquí dentro: la plantilla del shell ES un template
+                   literal y las cerraría a media línea. ]]]FI -->
+              <app-custom-source-documents *ngIf="crud.conversionSourceDocuments"
+                [documents]="crud.conversionSourceDocuments()"
+                (removeDocument)="crud.removeConversionSourceDocument($event.field, $event.id)" />
+
               <app-custom-draw-form
                 *ngIf="crud.form()[$any(crud.typeDefault)] && crud.drawForm()[crud.typeDefault]?.['general']"
                 [drawForm]="crud.drawForm()[crud.typeDefault]['general']"

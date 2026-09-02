@@ -16,9 +16,9 @@
 
 <!-- [[[II ESC:031-06 DOC:docs/documents/2026-07-18-031-optimizacion-navegacion-activos.md#escenario-06 ESC:031-07 DOC:docs/documents/2026-07-18-031-optimizacion-navegacion-activos.md#escenario-07 -->
 @defer (when localSettingsDialogVisible) {
-  <app-custom-local-settings *ngIf="showLocalSettingsComponent() && localSettingsDialogVisible" [sectionConfiguration]="localSettingsConfiguration()" [visible]="localSettingsDialogVisible"
-    [field]="fieldConfig()" [formGroup]="configForm"
-    (saveAction)="saveConfig()" (visibleAction)="onLocalSettingsDialogVisible($event)" />
+<app-custom-local-settings *ngIf="showLocalSettingsComponent() && localSettingsDialogVisible"
+  [sectionConfiguration]="localSettingsConfiguration()" [visible]="localSettingsDialogVisible" [field]="fieldConfig()"
+  [formGroup]="configForm" (saveAction)="saveConfig()" (visibleAction)="onLocalSettingsDialogVisible($event)" />
 }
 <!-- ]]]FI -->
 
@@ -28,8 +28,8 @@
 <app-custom-actions-selection [visible]="actionsSelectionDialogVisible" (visibleChange)="onVisibleChange($event)" />
 
 <p-dialog [(visible)]="formDialogVisible[$any(typeDefault)]" (onHide)="onHide($any(typeDefault))"
-  (onShow)="onShow($any(typeDefault))" [styleClass]="styleClassDialog()" modal="true"
-  [style]="{'contain': 'layout style paint'}">
+  (onShow)="onShow($any(typeDefault), $any(supplierRequestRef))" [styleClass]="styleClassDialog()" modal="true"
+  [style]="{'contain': 'layout style paint'}" #supplierRequestRef [maximizable]="true">
 
   <ng-template #header>
     <div class="p-dialog-title">
@@ -66,13 +66,18 @@
                componente EMITE y nadie escucha, así que el botón «Jalar partidas»
                se veía, registraba el clic y no hacía nada, y una fila de la tabla
                derivada tampoco podía guardarse. -->
+          <!-- [[[II ESC:057-54 DOC:docs/documents/2026-08-08-057-propuesta-compras-v3.md#escenario-54
+               Elegir el documento origen cambia el formulario sin dejar rastro.
+               Esta tira es el rastro y la reversa: qué documentos entraron y
+               cómo sacarlos sin borrar fila por fila. ]]]FI -->
+          <app-custom-source-documents [documents]="conversionSourceDocuments()"
+            (removeDocument)="removeConversionSourceDocument($event.field, $event.id)" />
+
           <app-custom-draw-form *ngIf="form()[$any(typeDefault)] && drawForm()[typeDefault]"
             [drawForm]="drawForm()[typeDefault]['general']" [formGroup]="form()[$any(typeDefault)]"
             [delegateTableSave]="true" (onTableRowSave)="handleTableRowSave($event)"
-            [tableRowSaveOutcome]="tableRowSaveOutcome()"
-            (onButtonClickAction)="handleButtonClick($event)"
-            (onSelectAutoCompleteAction)="onSelectAutoComplete($event)"
-            [isCreate]="isCreate()" />
+            [tableRowSaveOutcome]="tableRowSaveOutcome()" (onButtonClickAction)="handleButtonClick($event)"
+            (onSelectAutoCompleteAction)="onSelectAutoComplete($event)" [isCreate]="isCreate()" />
           <!-- ]]]FI -->
         </p-tabpanel>
 

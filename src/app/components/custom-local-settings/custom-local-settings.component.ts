@@ -38,6 +38,7 @@ import {
 import { MessageService } from '../services/message.service';
 
 import {
+  FIELD_TYPE_OPTIONS,
   AdvancedFieldDef, AdvancedSection, getByPath, setByPath, schemaForType,
   WIDTH_PRESETS, HEIGHT_PRESETS,
 } from './type-schemas';
@@ -81,7 +82,10 @@ export interface ColsCfgData {
 }
 
 export interface UnifiedFieldRow {
+  /** Campo como lo guarda el servidor (sin `__name` / `__text`). */
   field: string;
+  /** Campo como lo nombra la tabla del cliente; puede llevar `__name`/`__text`. */
+  colField: string;
   header: string;
   hasFilter: boolean;
   inCols: boolean;
@@ -141,6 +145,12 @@ interface FilterEditorView {
   valueControl: FormControl<any>;
   secondValueControl: FormControl<any>;
   optionLabel: string;
+  // [[[II ESC:005-17 DOC:docs/documents/2026-05-31_005_columnas-form-data-y-tree-select-nombres.md#escenario-17
+  /** `true` cuando la fila se dibuja con lista de opciones (nombre) y no con clave escrita. */
+  hasOptions: boolean;
+  options: any[];
+  optionValue: string;
+  // ]]]FI
   isNull: boolean;
   isRange: boolean;
   isIn: boolean;
@@ -165,6 +175,28 @@ interface BehaviorCfg {
 }
 
 // ─── Constants ────────────────────────────────────────────────────────────────
+
+/**
+ * Devuelve el campo tal como lo conoce el servidor.
+ *
+ * El cliente construye `<campo>__name` y `<campo>__text` al armar las columnas
+ * de la tabla (`crud.class.ts`, columnObj) para separar la clave de su texto;
+ * en la configuración del servidor esos sufijos NO existen: `fields`, `cols` y
+ * `draw.<pestaña>.grid` siempre usan el campo pelón.
+ */
+function toServerField(field: string): string {
+  return String(field ?? '').replace(/(__name|__text)$/, '');
+}
+
+/**
+ * Dónde se guarda un campo libre. El prefijo es contrato del servidor
+ * (`apps/utils/serializers.py:3951-3952`); el usuario solo ve el destino.
+ */
+export const FREE_FIELD_TARGETS = [
+  { label: 'En este registro', value: 'form_fields_data_', hint: 'Se guarda en los campos libres del propio registro.' },
+  { label: 'En el documento padre', value: 'parent_form_data_', hint: 'Se guarda en los datos del documento que lo contiene.' },
+  { label: 'Solo en pantalla', value: 'no_form_data_', hint: 'Auxiliar del formulario; no se envía al servidor.' },
+];
 
 const SKIP_TYPES = new Set(['table', 'button', 'document', 'signature', 'selfie', 'signature-pad']);
 const FK_MIN_CHARS = 5;
@@ -316,6 +348,28 @@ export class CustomLocalSettingsComponent implements OnChanges, OnDestroy {
   behaviorCfg = signal<BehaviorCfg>({ ...DEFAULT_BEHAVIOR_CFG });
 
   /** Field actualmente en el editor avanzado, o null */
+  /** Alta de campos: `relation` expande una relación, `free` crea uno libre. */
+  addFieldMode = signal<'relation' | 'free' | null>(null);
+  /**
+   * Campos del recurso destino. Va en señal y no leído directo de
+   * `authS.config` porque la configuración de un módulo que no se ha visitado
+   * NO está en memoria: se pide con `ensureConfigModules` y el computed tiene
+   * que volver a evaluarse cuando llega.
+   */
+  private readonly _relatedFields = signal<Record<string, any>>({});
+  readonly loadingRelated = signal<boolean>(false);
+  readonly freeFieldTargets = FREE_FIELD_TARGETS;
+  readonly fieldTypeOptions = FIELD_TYPE_OPTIONS;
+
+  readonly addFieldForm = new FormGroup({
+    relation: new FormControl<string>('', { nonNullable: true }),
+    relatedField: new FormControl<string>('', { nonNullable: true }),
+    label: new FormControl<string>('', { nonNullable: true }),
+    target: new FormControl<string>('form_fields_data_', { nonNullable: true }),
+    type: new FormControl<string>('input-text', { nonNullable: true }),
+    options: new FormControl<string>('', { nonNullable: true }),
+  });
+
   advancedField = signal<string | null>(null);
   advancedSnapshot = signal<any>(null);
 
@@ -428,6 +482,240 @@ export class CustomLocalSettingsComponent implements OnChanges, OnDestroy {
     this.unifiedRows().filter(r => r.inGrid && r.gridActive).length
   );
 
+  // ─── Alta de campos: relación expandida y campo libre ─────────────────────
+
+  /**
+   * Relaciones del módulo que se pueden expandir: los campos que apuntan a otro
+   * recurso (`data_type.type`). Se ofrecen por su etiqueta —«Bomba»—, nunca por
+   * la clave.
+   */
+  readonly relationOptions = computed<{ label: string; value: string; dataType: string }[]>(() => {
+    const fields = this.fieldSignal()?.fields ?? {};
+    const entradas: [string, any][] = Array.isArray(fields)
+      ? (fields as any[]).map(f => [f?.field ?? f?.name, f])
+      : Object.entries(fields as Record<string, any>);
+
+    return entradas
+      .filter(([nombre, cfg]) => !!nombre && !!cfg?.data_type?.type && !String(nombre).includes('_data_'))
+      .map(([nombre, cfg]) => ({
+        label: cfg?.cols?.label || cfg?.label || nombre,
+        value: nombre,
+        dataType: String(cfg.data_type.type),
+      }))
+      .sort((a, b) => a.label.localeCompare(b.label));
+  });
+
+  /**
+   * Campos del recurso destino, tomados de la configuración que el cliente ya
+   * tiene cargada. Se excluyen los que a su vez son dinámicos para no encadenar
+   * expansiones.
+   */
+  readonly relatedFieldOptions = computed<{ label: string; value: string }[]>(() => {
+    const fields = this._relatedFields();
+
+    return Object.entries(fields as Record<string, any>)
+      .filter(([nombre, cfg]) => !!nombre && !String(nombre).includes('_data_')
+        && !SKIP_TYPES.has(cfg?.type ?? ''))
+      .map(([nombre, cfg]) => ({ label: cfg?.cols?.label || cfg?.label || nombre, value: nombre }))
+      .sort((a, b) => a.label.localeCompare(b.label));
+  });
+
+  /** `true` cuando el tipo elegido para un campo libre se alimenta de una lista fija. */
+  readonly freeFieldUsesOptions = computed<boolean>(() => {
+    const tipo = this.addFieldForm.controls.type.value;
+    return ['dropdown-choice', 'multi-choice', 'select-button', 'listbox'].includes(tipo);
+  });
+
+  /**
+   * Trae los campos del recurso destino. Si su configuración no está en memoria
+   * —lo normal cuando el usuario no ha visitado ese módulo— se pide y se aplica
+   * al llegar.
+   */
+  private _loadRelatedFields(relacion: string): void {
+    this.addFieldForm.controls.relatedField.setValue('', { emitEvent: false });
+    this._relatedFields.set({});
+
+    const rel = this.relationOptions().find(r => r.value === relacion);
+    if (!rel) return;
+
+    const auth: any = this.crudS.authS;
+    const aplicar = () => this._relatedFields.set(auth?.config?.[rel.dataType]?.fields ?? {});
+
+    if (auth?.isConfigModuleLoaded?.(rel.dataType)) { aplicar(); return; }
+
+    const carga = auth?.ensureConfigModules?.([rel.dataType]);
+    if (!carga?.subscribe) { aplicar(); return; }
+
+    this.loadingRelated.set(true);
+    carga.subscribe({
+      next: () => { aplicar(); this.loadingRelated.set(false); },
+      error: () => { this.loadingRelated.set(false); },
+    });
+  }
+
+  openAddField(mode: 'relation' | 'free'): void {
+    this.addFieldForm.reset({
+      relation: '', relatedField: '', label: '',
+      target: 'form_fields_data_', type: 'input-text', options: '',
+    }, { emitEvent: false });
+    this._relatedFields.set({});
+    this.loadingRelated.set(false);
+    this.addFieldMode.set(mode);
+  }
+
+  closeAddField(): void { this.addFieldMode.set(null); }
+
+  /** Etiqueta que verá el usuario en la fila recién creada. */
+  private _addFieldLabel(): string {
+    const modo = this.addFieldMode();
+    if (modo === 'free') return this.addFieldForm.controls.label.value.trim();
+    const rel = this.relationOptions().find(r => r.value === this.addFieldForm.controls.relation.value);
+    const campo = this.relatedFieldOptions().find(f => f.value === this.addFieldForm.controls.relatedField.value);
+    return rel && campo ? `${rel.label} · ${campo.label}` : '';
+  }
+
+  applyAddField(): void {
+    const modo = this.addFieldMode();
+    const nombre = modo === 'relation' ? this._buildRelationField() : this._buildFreeField();
+    if (!nombre) return;
+    this.closeAddField();
+    this._refreshRowsAfterAdd(nombre);
+  }
+
+  /**
+   * Expande una relación: registra el prefijo en `fields_prefixes` y copia la
+   * configuración del campo destino como SOLO LECTURA — el dato pertenece al
+   * recurso relacionado, no a este.
+   */
+  private _buildRelationField(): string | null {
+    const rel = this.relationOptions().find(r => r.value === this.addFieldForm.controls.relation.value);
+    const campo = this.addFieldForm.controls.relatedField.value;
+    if (!rel || !campo) {
+      this.messageS.changeMessage('Elige la relación y el campo que quieres traer.');
+      return null;
+    }
+
+    const prefijo = `${rel.value}_data_`;
+    const nombre = `${prefijo}${campo}`;
+    const root = { ...(this.fieldSignal() ?? {}) };
+    if (root.fields?.[nombre]) {
+      this.messageS.changeMessage('Ese campo ya está agregado.');
+      return null;
+    }
+
+    const origen = this.crudS.authS?.config?.[rel.dataType]?.fields?.[campo] ?? {};
+    const etiqueta = this._addFieldLabel();
+
+    root.fields = {
+      ...(root.fields ?? {}),
+      [nombre]: {
+        ...structuredClone(origen),
+        field: nombre,
+        label: etiqueta,
+        readonly: true,
+        required: false,
+        hide: false,
+        cols: { ...(origen?.cols ?? {}), label: etiqueta, hide: false },
+      },
+    };
+
+    // El prefijo declara de dónde sale el dato. `kind: 'parent'` porque se sube
+    // por la relación hasta su dueño; `filter` es el campo que las une.
+    const draw = { ...(root.draw ?? {}) };
+    const prefijos: any[] = Array.isArray(draw['fields_prefixes']) ? [...draw['fields_prefixes']] : [];
+    const yaEsta = prefijos.some(e => e && typeof e === 'object' && prefijo in e);
+    if (!yaEsta) {
+      prefijos.push({ [prefijo]: { data_type: rel.dataType, kind: 'parent', filter: rel.value } });
+      draw['fields_prefixes'] = prefijos;
+      root.draw = draw;
+    }
+
+    this.fieldSignal.set(root);
+    return nombre;
+  }
+
+  /** Crea un campo libre en el destino elegido, sin exponer el prefijo. */
+  private _buildFreeField(): string | null {
+    const etiqueta = this.addFieldForm.controls.label.value.trim();
+    if (!etiqueta) {
+      this.messageS.changeMessage('Escribe el nombre del campo.');
+      return null;
+    }
+
+    const prefijo = this.addFieldForm.controls.target.value;
+    const clave = etiqueta.normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+      .replace(/[^a-zA-Z0-9]+/g, '_').replace(/^_+|_+$/g, '').toUpperCase();
+    if (!clave) {
+      this.messageS.changeMessage('El nombre debe tener al menos una letra o número.');
+      return null;
+    }
+
+    const nombre = `${prefijo}${clave}`;
+    const root = { ...(this.fieldSignal() ?? {}) };
+    if (root.fields?.[nombre]) {
+      this.messageS.changeMessage('Ya existe un campo con ese nombre.');
+      return null;
+    }
+
+    const tipo = this.addFieldForm.controls.type.value;
+    const cfg: any = {
+      field: nombre,
+      label: etiqueta,
+      type: tipo,
+      type_mobile: tipo,
+      class: 'col-span-6',
+      class_md: 'md:col-span-3',
+      hide: false,
+      required: false,
+      readonly: false,
+      default: { active: false, value: '', edit: true },
+      cols: { label: etiqueta, hide: false, hide_mobile: true, sortable: true, locked: false },
+    };
+
+    if (this.freeFieldUsesOptions()) {
+      const crudo = this.addFieldForm.controls.options.value.trim();
+      let opciones: any = [];
+      if (crudo) {
+        try { opciones = JSON.parse(crudo); } catch {
+          this.messageS.changeMessage('La lista de valores no es un JSON válido.');
+          return null;
+        }
+      }
+      cfg.data_type = { type: '', options: opciones };
+      cfg.option_value = 'id';
+      cfg.option_label = 'name';
+    }
+
+    root.fields = { ...(root.fields ?? {}), [nombre]: cfg };
+    this.fieldSignal.set(root);
+    return nombre;
+  }
+
+  /** Recarga las filas y deja el campo nuevo visible en la pestaña activa. */
+  private _refreshRowsAfterAdd(nombre: string): void {
+    this._stashCurrentDrawTab();
+    const tab = this.activeDrawTab();
+    const grid = { ...(this._drawTabsBuffer[tab] ?? {}) };
+    const siguiente = String(Object.keys(grid).length + 1);
+    grid[siguiente] = { key: nombre, field: nombre, hide: false, class: 'col-span-6', class_md: 'md:col-span-3' };
+    this._drawTabsBuffer[tab] = grid;
+    this._loadDrawTabIntoRows(tab);
+    this.messageS.changeMessage('Campo agregado a la configuración', null, {}, 'success', 'Agregado');
+  }
+
+  /** Etiqueta legible del campo abierto en avanzadas; nunca la clave del API. */
+  readonly advancedHeader = computed<string>(() => {
+    const field = this.advancedField();
+    if (!field) return '';
+    const row = this.unifiedRows().find(r => r.field === field);
+    if (row) return row.colsCfg.label || row.header;
+    const fields = this.fieldSignal()?.fields ?? {};
+    const cfg: any = Array.isArray(fields)
+      ? (fields as any[]).find(x => (x?.field ?? x?.name) === field)
+      : (fields as Record<string, any>)[field];
+    return cfg?.cols?.label ?? cfg?.label ?? field;
+  });
+
   /** Esquema de campos avanzados según el `type` del campo abierto */
   advancedSchema = computed<AdvancedSection[]>(() => {
     const f = this.advancedField();
@@ -457,6 +745,8 @@ export class CustomLocalSettingsComponent implements OnChanges, OnDestroy {
     const states = this.filterState();
     const types = this.filterTypeByField();
     const operations = this.opsOptionsByField();
+    // Leer la señal aquí hace que la fila se redibuje sola cuando llega el catálogo.
+    const optionsByKey = this.dropdownOptionsSignal();
     return this.filterableCols().map(col => {
       const state = states[col.filterKey] ?? { active: false, op: 'exact' };
       return {
@@ -469,6 +759,11 @@ export class CustomLocalSettingsComponent implements OnChanges, OnDestroy {
         valueControl: this._filterControl(`fv_${col.filterKey}`),
         secondValueControl: this._filterControl(`fv_${col.filterKey}_2`),
         optionLabel: this.getOptionLabel(col),
+        // [[[II ESC:005-17 DOC:docs/documents/2026-05-31_005_columnas-form-data-y-tree-select-nombres.md#escenario-17
+        hasOptions: this.hasOptionList(col.filterKey),
+        options: optionsByKey[col.filterKey] ?? [],
+        optionValue: this.getOptionValue(col),
+        // ]]]FI
         isNull: state.op === 'isnull',
         isRange: state.op === 'range',
         isIn: state.op === 'in',
@@ -489,6 +784,9 @@ export class CustomLocalSettingsComponent implements OnChanges, OnDestroy {
       this.behaviorCfg.set({ ...DEFAULT_BEHAVIOR_CFG, ...value } as BehaviorCfg);
     }));
     this._subscriptions.add(this.advancedForm.valueChanges.subscribe(() => this._applyAdvancedFormValue()));
+    this._subscriptions.add(
+      this.addFieldForm.controls.relation.valueChanges.subscribe(rel => this._loadRelatedFields(rel)),
+    );
   }
 
   // [[[II ESC:005-11 DOC:docs/documents/2026-05-31_005_columnas-form-data-y-tree-select-nombres.md#escenario-11
@@ -519,7 +817,9 @@ export class CustomLocalSettingsComponent implements OnChanges, OnDestroy {
         filterField,
         filterKey: `${fieldName}::${filterField}`,
         filterMode: 'explicit',
-        header: `${header} / ${entry?.label ?? entry?.header ?? filterField}`,
+        // La clave del filtro (`code`) no se muestra: solo se agrega un sufijo cuando la
+        // entrada declara su propia etiqueta, para distinguir varias entradas del campo.
+        header: (entry?.label ?? entry?.header) ? `${header} / ${entry?.label ?? entry?.header}` : header,
         type: this._resolveExplicitFilterType(entry),
         data_type: entry?.data_type?.type ?? entry?.data_type ?? '',
         filter_by: entry?.by ?? entry?.filter_by ?? '',
@@ -1041,14 +1341,111 @@ export class CustomLocalSettingsComponent implements OnChanges, OnDestroy {
       this.formGroupSignal()?.addControl('fields', new FormControl(null));
     this.formGroupSignal()?.get('fields')?.setValue(modifiedField.fields, { emitEvent: false });
 
-    const appKey = this.fieldSignal()?.app;
-    const payload = appKey ? { [appKey]: modifiedField } : modifiedField;
+    const payload = this._buildServerPayload(modifiedField);
+    if (!payload) {
+      this.messageS.changeMessage('No se pudo identificar el módulo de la configuración; no se envió al servidor.');
+      this.saveAction.emit();
+      return;
+    }
 
     this.crudS.edit({ formData: payload, app: 'settings/settings/me', type: 'configuration' }).subscribe({
       next: () => this.messageS.changeMessage('Configuración guardada en el servidor', null, {}, 'success', 'Guardado'),
       error: () => this.messageS.changeMessage('No se pudo guardar la configuración en el servidor'),
     });
     this.saveAction.emit();
+  }
+
+  /**
+   * Traduce el árbol editado al contrato que guarda el servidor.
+   *
+   * `Configuration` tiene un `JSONField` por app de Django y dentro un recurso
+   * por clave, así que el payload va anidado `app -> recurso -> contrato`. El
+   * aplanado de la configuración descarta la app, por eso viaja en `config_app`.
+   *
+   * `cols` cambia de forma: en el cliente es el arreglo de columnas de la tabla,
+   * en el servidor es el mapa `orden -> {field}` que solo declara pertenencia y
+   * orden. Los metadatos de cada columna (etiqueta, visibilidad, orden, bloqueo)
+   * ya viajan en `fields[<campo>].cols`, que `_buildModifiedField` escribe.
+   *
+   * Devuelve `null` cuando falta la app o el recurso: es preferible avisar a
+   * enviar un árbol que el servidor descartaría en silencio.
+   */
+  private _buildServerPayload(modifiedField: any): Record<string, any> | null {
+    const configApp = this.fieldSignal()?.config_app;
+    const resource = this.fieldSignal()?.app;
+    if (!configApp || resource === undefined || resource === null || resource === '') return null;
+
+    const cols: Record<number, any> = {};
+    this.unifiedRows()
+      .filter(row => row.inCols)
+      .forEach((row, index) => {
+        // `hide` reproduce cómo el contrato vigente marca las columnas ocultas.
+        cols[index] = row.colActive ? { field: row.field } : { field: row.field, hide: true };
+      });
+
+    const { app, module, config_app, cols: _clientCols, draw: clientDraw, ...contrato } = modifiedField ?? {};
+    const recurso: Record<string, any> = { ...contrato, cols, draw: this._buildServerDraw(clientDraw) };
+
+    // El cliente guarda `fields_prefixes` dentro de `draw`; en el servidor va al
+    // nivel del recurso.
+    const prefixes = (clientDraw ?? {})['fields_prefixes'];
+    if (Array.isArray(prefixes)) recurso['fields_prefixes'] = prefixes;
+
+    return { [configApp]: { [resource]: recurso } };
+  }
+
+  /**
+   * Reconstruye `draw` con la forma que guarda el servidor.
+   *
+   * El aplanado del cliente (`auth.service.processDrawSection`) REEMPLAZA cada
+   * entrada del grid por la configuración completa del campo más una clave
+   * `key`, así que devolverla tal cual escribiría el campo entero dentro del
+   * grid — y cuando el `field` expandido no coincide con la clave del grid, la
+   * entrada llega incluso sin `field` y el servidor la rechaza.
+   *
+   * En el servidor una entrada del grid solo declara COLOCACIÓN: `field` y, si
+   * acaso, `hide` / `class` / `class_md`. `key` es la clave real del grid, por
+   * eso tiene prioridad sobre el `field` expandido.
+   */
+  private _buildServerDraw(clientDraw: any): Record<string, any> {
+    const out: Record<string, any> = { dialog: { ...this.dialogCfg() } };
+
+    for (const [tab, value] of Object.entries(clientDraw ?? {})) {
+      if (tab === 'dialog' || tab === 'fields_prefixes') continue;
+      if (!value || typeof value !== 'object' || Array.isArray(value)) continue;
+
+      const seccion: Record<string, any> = { grid: this._buildServerGrid((value as any).grid) };
+      for (const dispositivo of ['mobile', 'desktop']) {
+        const propio = (value as any)[dispositivo];
+        if (propio && typeof propio === 'object' && !Array.isArray(propio)) {
+          seccion[dispositivo] = { ...propio, grid: this._buildServerGrid(propio.grid) };
+        }
+      }
+      out[tab] = seccion;
+    }
+
+    return out;
+  }
+
+  /** Mapa `orden -> colocación` con las únicas claves que el servidor guarda. */
+  private _buildServerGrid(grid: any): Record<number, any> {
+    const out: Record<number, any> = {};
+    let orden = 0;
+
+    for (const entrada of Object.values(grid ?? {})) {
+      const e: any = entrada;
+      if (!e || typeof e !== 'object' || Array.isArray(e)) continue;
+      const field = toServerField(e.key ?? e.field ?? '');
+      if (!field) continue;
+
+      const colocacion: Record<string, any> = { field };
+      if (e.hide !== undefined) colocacion['hide'] = e.hide === true;
+      if (e.class) colocacion['class'] = e.class;
+      if (e.class_md) colocacion['class_md'] = e.class_md;
+      out[orden++] = colocacion;
+    }
+
+    return out;
   }
 
   // ─── Vista previa ─────────────────────────────────────────────────────────
@@ -1132,10 +1529,13 @@ export class CustomLocalSettingsComponent implements OnChanges, OnDestroy {
     const rawColsArr: any[] = this.fieldSignal()?.cols ?? [];
     const colsOrigMap: Record<string, any> = {};
     for (const c of rawColsArr) colsOrigMap[c?.field ?? ''] = c;
+    // `cols` del cliente conserva `__name`/`__text`: es la clave con la que la
+    // tabla resuelve el texto de la relación. El servidor recibe el campo pelón
+    // desde `_buildServerPayload`.
     const colsOut = this.unifiedRows()
       .filter(r => r.inCols && r.colActive)
       .map(r => ({
-        ...(colsOrigMap[r.field] ?? { field: r.field }),
+        ...(colsOrigMap[r.colField] ?? { field: r.colField }),
         header: r.colsCfg.label || r.header,
       }));
 
@@ -1187,7 +1587,10 @@ export class CustomLocalSettingsComponent implements OnChanges, OnDestroy {
 
     // Pestañas de draw (excluye dialog)
     const draw = f?.draw ?? {};
-    const tabs = Object.keys(draw).filter(k => k !== 'dialog');
+    const tabs = Object.keys(draw).filter(
+      k => k !== 'dialog' && k !== 'fields_prefixes'
+        && draw[k] && typeof draw[k] === 'object' && !Array.isArray(draw[k]),
+    );
     const finalTabs = tabs.length > 0 ? tabs : ['general'];
     this.drawTabs.set(finalTabs);
     this.activeDrawTab.set(finalTabs[0]);
@@ -1303,6 +1706,10 @@ export class CustomLocalSettingsComponent implements OnChanges, OnDestroy {
       if (!r.inGrid) continue;
       grid[String(key++)] = {
         ...(origByField[r.field] ?? {}),
+        // `key` es la clave real del grid; el aplanado del cliente la agrega y
+        // `_buildServerGrid` la usa como autoridad. Se fija junto a `field` para
+        // que ambas coincidan y el spread anterior no las desalinee.
+        key: r.field,
         field: r.field,
         hide: !r.gridActive,
         class: `col-span-${r.gridSpan}`,
@@ -1318,40 +1725,53 @@ export class CustomLocalSettingsComponent implements OnChanges, OnDestroy {
     const rawGrid: Record<string, any> = this._drawTabsBuffer[tab] ?? {};
     const gridIsEmpty = Object.keys(rawGrid).length === 0;
 
+    // Todo se indexa por el campo del SERVIDOR: así la columna `supplier__name`
+    // y el campo `supplier` del formulario son UNA sola fila, y lo que se guarda
+    // (`fields`, `cols`, `grid`) queda con la clave que el servidor entiende.
     const colsMap = new Map<string, any>();
-    rawCols.forEach(c => { if (c?.field) colsMap.set(c.field, c); });
+    rawCols.forEach(c => { if (c?.field) colsMap.set(toServerField(c.field), c); });
 
     const gridMap = new Map<string, any>();
     Object.entries(rawGrid)
       .sort(([a], [b]) => Number(a) - Number(b))
-      .forEach(([, cfg]: [string, any]) => { if (cfg?.field) gridMap.set(cfg.field, cfg); });
+      .forEach(([, cfg]: [string, any]) => { if (cfg?.field) gridMap.set(toServerField(cfg.field), cfg); });
 
     const filterCols = this.filterableCols();
-    const filterableSet = new Set(filterCols.map(c => c.field));
+    const filterableSet = new Set(filterCols.map(c => toServerField(c.field)));
+
+    // La etiqueta sale de la configuración del campo cuando la entrada del grid
+    // no la trae: es el caso de todo campo recién agregado desde el editor.
+    const rawFieldsMap: any = this.fieldSignal()?.fields ?? {};
+    const etiquetaDe = (nombre: string, respaldo?: string): string => {
+      const cfg: any = Array.isArray(rawFieldsMap)
+        ? (rawFieldsMap as any[]).find(f => (f?.field ?? f?.name) === nombre)
+        : rawFieldsMap[nombre];
+      return respaldo || cfg?.cols?.label || cfg?.label || nombre;
+    };
 
     const seen = new Set<string>();
-    const ordered: Array<{ field: string; header: string }> = [];
+    const ordered: Array<{ field: string; colField: string; header: string }> = [];
     rawCols.forEach(c => {
-      if (c?.field && !seen.has(c.field)) {
-        seen.add(c.field);
-        ordered.push({ field: c.field, header: c.header ?? c.field });
-      }
+      if (!c?.field) return;
+      const serverField = toServerField(c.field);
+      if (seen.has(serverField)) return;
+      seen.add(serverField);
+      ordered.push({ field: serverField, colField: c.field, header: c.header ?? serverField });
     });
     gridMap.forEach((cfg, fName) => {
-      if (!seen.has(fName)) {
-        seen.add(fName);
-        ordered.push({ field: fName, header: cfg?.label ?? fName });
-      }
+      if (seen.has(fName)) return;
+      seen.add(fName);
+      ordered.push({ field: fName, colField: fName, header: etiquetaDe(fName, cfg?.label) });
     });
     filterCols.forEach(col => {
-      if (!seen.has(col.field)) {
-        seen.add(col.field);
-        ordered.push({ field: col.field, header: col.header });
-      }
+      const serverField = toServerField(col.field);
+      if (seen.has(serverField)) return;
+      seen.add(serverField);
+      ordered.push({ field: serverField, colField: serverField, header: etiquetaDe(serverField, col.header) });
     });
 
     const rawFields = this.fieldSignal()?.fields ?? {};
-    const rows: Array<Omit<UnifiedFieldRow, 'form'>> = ordered.map(({ field, header }) => {
+    const rows: Array<Omit<UnifiedFieldRow, 'form'>> = ordered.map(({ field, colField, header }) => {
       const gridCfg = gridMap.get(field);
       const spanMatch = (gridCfg?.class ?? 'col-span-6').match(/col-span-(\d+)/);
       const spanMdMatch = (gridCfg?.class_md ?? 'md:col-span-6').match(/col-span-(\d+)/);
@@ -1361,6 +1781,7 @@ export class CustomLocalSettingsComponent implements OnChanges, OnDestroy {
       const rawColsCfg = rawFieldCfg?.cols ?? {};
       return {
         field,
+        colField,
         header,
         hasFilter: filterableSet.has(field),
         inCols: colsMap.has(field),

@@ -14,9 +14,10 @@ import { TooltipModule } from 'primeng/tooltip';
 import { catchError, filter as rxFilter, map, Observable, of, Subscription } from 'rxjs';
 import { CustomButtonCrudComponent } from '../../custom-button-crud/custom-button-crud.component';
 import { JoinOrSelfPipe } from '../join-or-self.pipe';
-import { DERIVED_TABLE_DRAFT_FLAG, RAW_ATTRIBUTE_PREFIX, TABLE_ROW_SOURCE_FLAG, TABLE_ROW_SOURCE_VERSION_SUFFIX } from '../../../utils/table-row-flags.const';
+import { DERIVED_TABLE_DRAFT_FLAG, RAW_ATTRIBUTE_PREFIX, ROW_DERIVED_BY_KEY, SOURCE_VERSION_KEYS, TABLE_ROW_LOCAL_SOURCE_FLAG, TABLE_ROW_SOURCE_FLAG, TABLE_ROW_SOURCE_VERSION_SUFFIX } from '../../../utils/table-row-flags.const';
 import { CRUDService } from '../../../utils/services/crud.service';
 import { GeneralService } from '../../../utils/services/general.service';
+import { MessageService } from '../../services/message.service';
 
 // [[[II ESC:015-01 DOC:docs/documents/2026-06-02_015_dynamic-table-field-component.md#escenario-01 ESC:001-09 DOC:docs/documents/2026-05-16_001_consolidacion_dropdown_types_y_fix_escenarios.md#escenario-09 ESC:030-01 DOC:docs/documents/2026-07-14-030-child-runtime-overlay.md#escenario-01 ESC:030-03 DOC:docs/documents/2026-07-14-030-child-runtime-overlay.md#escenario-03
 @Component({
@@ -50,9 +51,14 @@ export class DynamicTableFieldComponent implements OnChanges, OnDestroy {
   // el resto del form; no se duplica logica de red. ]]]FI
   private readonly crudS = inject(CRUDService);
   private readonly generalS = inject(GeneralService);
+  // [[[II ESC:057-63 DOC:docs/documents/2026-08-08-057-propuesta-compras-v3.md#escenario-63
+  // Un rechazo tiene que DECIRSE. Mismo servicio y misma vía que usa el
+  // resto del cliente (`notification-socket.service.ts`). ]]]FI
+  private readonly messageS = inject(MessageService);
   // [[[II ESC:030-01 Fuente única compartida en utils/table-row-flags.const.ts ]]]FI
   private readonly tableRowSourceFlag = TABLE_ROW_SOURCE_FLAG;
   private readonly derivedTableDraftFlag = DERIVED_TABLE_DRAFT_FLAG;
+  private readonly tableRowLocalSourceFlag = TABLE_ROW_LOCAL_SOURCE_FLAG;
   // Fila agregada desde la tabla y aún NO confirmada contra el servidor: si se
   // cancela la edición se elimina (no debe quedar una fila fantasma).
   private readonly pendingNewRowFlag = '__pendingNewRow';
@@ -100,6 +106,9 @@ export class DynamicTableFieldComponent implements OnChanges, OnDestroy {
   // editable; fila relacionada => derived edit:false bloquea la celda). ]]]FI
   private _relationshipColumnFields: string[] = [];
   private _derivedLockedFields = new Set<string>();
+  // [[[II ESC:057-71 Bloqueos por derivación, indexados por la columna PADRE
+  // que los declara. ]]]FI
+  private _derivedLockedByParent = new Map<string, Set<string>>();
   // [[[II ESC:030-12 Fila que ya se emitió al motor y espera confirmación del
   // servidor. Mientras exista, esa fila permanece en edición. ]]]FI
   private _pendingRowSave: { tableField: string; rowIndex: number } | null = null;
@@ -115,6 +124,14 @@ export class DynamicTableFieldComponent implements OnChanges, OnDestroy {
     };
   } = {};
   private tableCellClassCache: { [cacheKey: string]: string } = {};
+  // [[[II ESC:057-97 DOC:docs/documents/2026-08-08-057-propuesta-compras-v3.md#escenario-97
+  // TOTALES DE LA TABLA. Nodos declarados en `totals.fields` y campos cuyo
+  // producto es la base de la fila (`totals.line_subtotal`). Aqui NO se calcula
+  // la verdad: el servidor recalcula con los datos congelados. Esto solo refleja
+  // lo que la tabla tiene delante mientras se captura. ]]]FI
+  private _totalsNodes: any[] = [];
+  private _lineBaseFields: string[] = [];
+  private _tableTotalsCache: Array<{ field: string; label: string; value: number; display: string }> | null = null;
 
   ngOnChanges(changes: SimpleChanges): void {
     if (changes['tableConfig']) {
@@ -258,6 +275,148 @@ export class DynamicTableFieldComponent implements OnChanges, OnDestroy {
     return this.getTableFormArray(field)?.controls || [];
   }
 
+  // [[[II ESC:057-97 DOC:docs/documents/2026-08-08-057-propuesta-compras-v3.md#escenario-97
+  // TOTALES DE LA TABLA DERIVADA.
+  //
+  // La tabla del documento destino declara en `totals` que campos del
+  // ENCABEZADO acumulan sus partidas, de que campo de cada fila sale el valor y
+  // como se lee. La MISMA declaracion la usa el servidor
+  // (apps/purchases/services/totals_services.py), asi que las dos cuentas no
+  // pueden divergir por definicion.
+  //
+  // Separacion estricta: aqui es SOLO VISUAL. El servidor recalcula con los
+  // datos CONGELADOS de la partida —impuestos, descuentos, retenciones— y su
+  // numero es el que se guarda. Este refleja lo que hay en la tabla.
+  //
+  // Un nodo que la tabla NO puede resolver —porque su campo no es columna, como
+  // los impuestos, que viven en la foto `applied_taxes`— no se muestra. Mostrar
+  // cero seria peor que no mostrar nada: seria afirmar que no hay impuestos.
+  get tableTotals(): Array<{ field: string; label: string; value: number; display: string }> {
+    if (this._tableTotalsCache) return this._tableTotalsCache;
+    this._tableTotalsCache = this._resolveTableTotals();
+    return this._tableTotalsCache;
+  }
+
+  /** Columnas que abarca el renglon de totales (incluye # y Acciones). */
+  get footerColspan(): number {
+    return (this.normalizedColumns?.length || 0)
+      + (this.tableConfig?.row_number ? 1 : 0)
+      + (this.tableConfig?.delete_row ? 1 : 0);
+  }
+
+  trackByTotalField(index: number, total: any): any {
+    return total?.field ?? index;
+  }
+
+  private _resolveTableTotals(): Array<{ field: string; label: string; value: number; display: string }> {
+    const rows = this.getTableData(this.tableConfig?.field);
+    if (!rows.length || !this._totalsNodes.length) return [];
+
+    const resueltos: Array<{ field: string; label: string; value: number; display: string }> = [];
+    for (const node of this._totalsNodes) {
+      let total = 0;
+      let resoluble = true;
+      for (const row of rows) {
+        const base = this._rowBaseValue(row);
+        const aporte = this._rowContribution(node, row, base);
+        if (aporte === null) { resoluble = false; break; }
+        total += aporte;
+      }
+      if (!resoluble) continue;
+      resueltos.push({
+        field: node.field,
+        label: node.label || node.field,
+        // El numero crudo aparte del formateado: el formato depende del locale
+        // del navegador y no sirve para comparar ni para recalcular.
+        value: total,
+        display: this.formatNumberCell(total, node),
+      });
+    }
+    return resueltos;
+  }
+
+  /**
+   * Base de la fila: el PRODUCTO de los campos que declara
+   * `totals.line_subtotal`. `null` cuando la tabla no tiene alguno de esos
+   * campos como control, que es la senal de que no puede calcularla.
+   */
+  private _rowBaseValue(row: any): number | null {
+    if (!this._lineBaseFields.length) return null;
+    let base = 1;
+    for (const field of this._lineBaseFields) {
+      const control = row?.get?.(field);
+      if (!control) return null;
+      const numeric = Number(control.value);
+      if (!Number.isFinite(numeric)) return 0;
+      base *= numeric;
+    }
+    return base;
+  }
+
+  /**
+   * Aporte de UNA fila al campo que declara el nodo. `null` = la tabla no
+   * tiene con que resolverlo y el total completo se descarta.
+   */
+  private _rowContribution(node: any, row: any, base: number | null): number | null {
+    const source = node?.source || 'field';
+
+    if (source === 'base') return base;
+
+    if (source === 'frozen') {
+      const control = row?.get?.(node.from || 'applied_taxes');
+      if (!control) return null;
+      return this._frozenContribution(node, control.value);
+    }
+
+    const control = row?.get?.(node.from || node.field);
+    if (!control) return null;
+    const numeric = Number(control.value);
+    if (!Number.isFinite(numeric)) return 0;
+
+    // Un PORCENTAJE se aplica sobre la base de SU fila, asi que cambiar la
+    // cantidad o el precio mueve el importe solo. Sin base no hay como.
+    if (node.type_field) {
+      const tipo = row?.get?.(node.type_field);
+      if (!tipo) return null;
+      if (tipo.value && tipo.value === node.type_percentage) {
+        if (base === null) return null;
+        return (base * numeric) / 100;
+      }
+    }
+    return numeric;
+  }
+
+  /**
+   * Aporte que sale de un campo CONGELADO en JSON (la foto de impuestos), no de
+   * una columna sumable: `path` dice que parte se lee, `match` filtra que
+   * renglones del desglose entran y `amount` cual de sus llaves suma.
+   */
+  private _frozenContribution(node: any, raw: any): number {
+    let foto = raw;
+    if (typeof foto === 'string') {
+      try { foto = JSON.parse(foto); } catch { return 0; }
+    }
+    if (!foto || typeof foto !== 'object') return 0;
+
+    const valor = foto[node.path || 'base'];
+    if (!Array.isArray(valor)) {
+      const numeric = Number(valor);
+      return Number.isFinite(numeric) ? numeric : 0;
+    }
+
+    const filtro = node.match || {};
+    const llave = node.amount || 'amount';
+    return valor.reduce((suma: number, renglon: any) => {
+      if (!renglon || typeof renglon !== 'object') return suma;
+      for (const campo of Object.keys(filtro)) {
+        if (String(renglon[campo]) !== String(filtro[campo])) return suma;
+      }
+      const numeric = Number(renglon[llave]);
+      return suma + (Number.isFinite(numeric) ? numeric : 0);
+    }, 0);
+  }
+  // ]]]FI
+
   onRowSelect(event: any, field: string): void {
     this.rowSelect.emit({ event: this.normalizeTableEvent(event), field, data: this.getTableValue(field) });
   }
@@ -266,12 +425,52 @@ export class DynamicTableFieldComponent implements OnChanges, OnDestroy {
     this.rowUnselect.emit({ event: this.normalizeTableEvent(event), field, data: this.getTableValue(field) });
   }
 
+  /**
+   * [[[II ESC:057-63 DOC:docs/documents/2026-08-08-057-propuesta-compras-v3.md#escenario-63
+   * ¿Hay en la tabla filas traídas de otro documento?
+   *
+   * La tabla NO sabe qué es una conversión y sigue sin saberlo: sólo mira la
+   * marca que la fila ya trae puesta —`TABLE_ROW_LOCAL_SOURCE_FLAG`, cuya
+   * presencia significa «esta fila vino de otro lado»— igual que ya mira
+   * `editable` y `max` de esa misma marca para limitar la edición de la celda.
+   *
+   * Sin ninguna fila marcada esto devuelve `false` y la tabla se comporta como
+   * siempre: la restricción SÓLO existe una vez que se trajo un documento.
+   * ]]]FI
+   */
+  hasBroughtRows(field: string): boolean {
+    const formArray = this.getTableFormArray(field);
+    if (!formArray) return false;
+    return formArray.controls.some((row: any) => !!row?.[this.tableRowLocalSourceFlag]);
+  }
+
   addTableRow(field: string, tableConfig: any): void {
     // [[[II ESC:030-09 Solo la config decide si la tabla es de solo lectura. Si el
     // FormArray quedó deshabilitado por una ruta ajena (disableForm global, overlay
     // de children), se rehabilita: era la causa de que el "+" dejara de responder
     // de forma intermitente. ]]]FI
     if (this.isTableReadonly(field) || this.isAnyRowEditing(field)) return;
+
+    // [[[II ESC:057-63 DOC:docs/documents/2026-08-08-057-propuesta-compras-v3.md#escenario-63
+    // YA GANÓ EL TRAÍDO. Con filas de otro documento en la tabla, agregar una a
+    // mano no puede salir bien: el documento se arma de una forma o de la otra.
+    //
+    // Esto se comprobaba sólo al GUARDAR, así que el usuario capturaba la
+    // partida entera —producto, cantidad, precio— para que se la rechazaran al
+    // final. El aviso va aquí, en el gesto, que es donde todavía sirve.
+    //
+    // No se niega el camino, se dice cuál es: retirar lo traído, o guardar y
+    // capturar después sobre el documento ya creado.
+    if (this.hasBroughtRows(field)) {
+      this.messageS.changeMessage(
+        'Estas partidas se trajeron de otro documento, así que este ya se arma '
+        + 'de esa forma. Retire las traídas para capturar a mano, o cree un '
+        + 'documento nuevo con las capturadas.',
+        null, {}, 'warn');
+      return;
+    }
+    // ]]]FI
+
     const formArray = this.getTableFormArray(field);
     if (!formArray) return;
     if (formArray.disabled) formArray.enable({ emitEvent: false });
@@ -320,6 +519,10 @@ export class DynamicTableFieldComponent implements OnChanges, OnDestroy {
     const rowToDelete = rowControl?.getRawValue();
     const sourceRow = (rowControl as any)?.[this.tableRowSourceFlag];
     const isDerivedDraft = (rowControl as any)?.[this.derivedTableDraftFlag] === true;
+    // [[[II ESC:057-52 DOC:docs/documents/2026-08-08-057-propuesta-compras-v3.md#escenario-52
+    // Fila jalada de un documento INFERIOR: se quita en el cliente y ya. El
+    // registro que se ve pertenece al documento de abajo. ]]]FI
+    const isLocalSourceRow = !!(rowControl as any)?.[this.tableRowLocalSourceFlag];
 
     formArray.removeAt(rowIndex);
     formArray.markAsDirty();
@@ -336,6 +539,7 @@ export class DynamicTableFieldComponent implements OnChanges, OnDestroy {
       rowData: rowToDelete,
       sourceRow,
       isDerivedDraft,
+      isLocalSourceRow,
       rowIndex,
       field,
       data: this.getTableValue(field)
@@ -828,6 +1032,16 @@ export class DynamicTableFieldComponent implements OnChanges, OnDestroy {
     });
   }
 
+  // [[[II ESC:057-72 DOC:docs/documents/2026-08-08-057-propuesta-compras-v3.md#escenario-72
+  /** Columna PADRE que derivó esta fila, si se sabe. */
+  private _rowDerivedBy(rowData: any): string {
+    const source = (rowData instanceof FormGroup
+      ? (rowData as any)[this.tableRowSourceFlag]
+      : rowData) || {};
+    return String(source[ROW_DERIVED_BY_KEY] || '');
+  }
+  // ]]]FI
+
   /** Editabilidad de la celda considerando la FILA (manual vs relacionada). */
   isCellEditableForRow(rowData: any, column: any): boolean {
     // [[[II ESC:030-15 DOC:docs/documents/2026-07-14-030-child-runtime-overlay.md#escenario-15
@@ -835,10 +1049,97 @@ export class DynamicTableFieldComponent implements OnChanges, OnDestroy {
     // celda. La excepción manual conserva únicamente la libertad frente a
     // `edit`/`default.edit` para relaciones no seleccionadas. ]]]FI
     if (column?.readonly === true) return false;
+
+    // [[[II ESC:057-67 DOC:docs/documents/2026-08-08-057-propuesta-compras-v3.md#escenario-67
+    // UNA FILA TRAÍDA SÓLO ABRE LA COLUMNA QUE VIAJA.
+    //
+    // El escenario 54 retiró este candado con el argumento de que «el servidor
+    // rechaza igual lo que no admite». Es FALSO, y por eso vuelve: de una fila
+    // traída al servidor le viaja `{id, source_version, quantity}` y nada más
+    // (`_collectConversionSources`). Editar producto o precio no se rechaza —
+    // **no se ve siquiera**: la pantalla cambia, el valor no llega, y el
+    // usuario recibe la confirmación visual de un dato que nunca se guardó.
+    // Es el no-op silencioso que las reglas del proyecto prohíben.
+    //
+    // La columna que sí viaja la declara `sources.quantity`, y llega en la
+    // marca de la fila como `editable`. La tabla sigue sin saber qué es una
+    // conversión: obedece la marca, igual que obedece `max`.
+    //
+    // Sin marca —fila capturada a mano— no se cierra nada y manda la
+    // configuración de la columna, que es el comportamiento de siempre.
+    const traida = (rowData as any)?.[this.tableRowLocalSourceFlag];
+    if (traida) {
+      // [[[II ESC:057-71 DOC:docs/documents/2026-08-08-057-propuesta-compras-v3.md#escenario-71
+      // MANDA LA DERIVACIÓN QUE PRODUJO LA FILA. Traer una partida del documento
+      // inferior es una derivación como cualquier otra: su padre es la columna
+      // ORIGEN, y lo que esa derivación declare para cada columna es lo que
+      // gobierna aquí — igual que al elegir un producto manda lo que declara la
+      // columna del producto.
+      //
+      // Esto sustituye al candado del escenario 67, que decidía por igual todas
+      // las columnas leyendo una sola llave. Aquella era una regla del cliente;
+      // ésta es la configuración.
+      const origen = this._tableSourcesContract()?.column || '';
+      const bloqueados = this._derivedLockedByParent.get(origen);
+      if (bloqueados) return !bloqueados.has(column?.field);
+
+      // [[[II ESC:057-74 DOC:docs/documents/2026-08-08-057-propuesta-compras-v3.md#escenario-74
+      // Sin derivación declarada manda la configuración de la propia columna,
+      // que es la regla general: campo raíz ⇒ su configuración. Aquí había un
+      // último resto de trato especial —abrir sólo la columna de
+      // `sources.quantity`—; la cantidad no es un campo privilegiado, es
+      // editable cuando su declaración lo dice. ]]]FI
+      return this._isColumnEditable(column)
+        && !this._derivedLockedFields.has(column?.field);
+      // ]]]FI
+    }
+    // ]]]FI
+
     if (this.isManualRow(rowData)) return true;
     if (!this._isColumnEditable(column)) return false;
+
+    // [[[II ESC:057-72 DOC:docs/documents/2026-08-08-057-propuesta-compras-v3.md#escenario-72
+    // MANDA EL PADRE QUE DERIVÓ ESTA FILA. La captura manual se carga por el
+    // buscador que el usuario usó —`code` o `name` en la solicitud, `product`
+    // en pedido y remisión—, así que es la derivación de ESE buscador la que
+    // gobierna la fila, no la unión de todas las columnas.
+    //
+    // Sin padre registrado —fila leída del servidor, que no sabe quién la
+    // derivó— se cae a la unión, que es el comportamiento previo.
+    const padre = this._rowDerivedBy(rowData);
+    const porPadre = padre ? this._derivedLockedByParent.get(padre) : undefined;
+    if (porPadre) return !porPadre.has(column?.field);
+    // ]]]FI
+
     return !this._derivedLockedFields.has(column?.field);
   }
+
+  // [[[II ESC:057-54 DOC:docs/documents/2026-08-08-057-propuesta-compras-v3.md#escenario-54
+  /**
+   * Tope de una celda numérica en ESTA fila.
+   *
+   * `col.max` es del tipo de dato y vale para toda la columna. Una fila traída
+   * de un documento inferior tiene además un tope propio —el saldo de su partida
+   * de origen— que no puede vivir en la configuración de la columna porque
+   * cambia en cada fila. Gana el menor de los dos.
+   *
+   * El servidor ya rechaza pasarse del saldo
+   * (`apps/purchases/services/allocation_services.py:288`), en las dos
+   * conversiones. Esto evita que el usuario capture algo que sólo se le va a
+   * rechazar al guardar; no lo sustituye.
+   */
+  cellMax(column: any, rowData: any): number | null {
+    const columnMax = column?.max;
+    const origen = (rowData as any)?.[this.tableRowLocalSourceFlag];
+    const rowMax = (origen && column?.field === origen.editable) ? origen.max : undefined;
+
+    const valid = [columnMax, rowMax]
+      .map((value) => (value === undefined || value === null || value === '' ? null : Number(value)))
+      .filter((value): value is number => value !== null && !Number.isNaN(value));
+
+    return valid.length ? Math.min(...valid) : null;
+  }
+  // ]]]FI
 
   /** Editabilidad para el recorrido de fila: por fila si se conoce el grupo. */
   private _cellEditable(column: any, rowGroup: FormGroup | null): boolean {
@@ -1413,9 +1714,8 @@ export class DynamicTableFieldComponent implements OnChanges, OnDestroy {
       //
       // No se hace spread del objeto seleccionado — el comentario de arriba
       // explica por qué sería un error —, así que se copian SÓLO los atributos
-      // declarados en `sources.version`, en orden: gana el primero con valor
-      // (el servidor usa `modified_at or created_at`). La clave sigue la misma
-      // convención que `<campo>__name`.
+      // de `SOURCE_VERSION_KEYS`, en orden: gana el primero con valor. La clave
+      // sigue la misma convención que `<campo>__name`.
       this._retainSourceVersion(source, column, selected);
       // ]]]FI
 
@@ -1463,6 +1763,25 @@ export class DynamicTableFieldComponent implements OnChanges, OnDestroy {
       }
 
       (rowGroup as any)[this.tableRowSourceFlag] = source;
+      // [[[II ESC:057-102 DOC:docs/documents/2026-08-08-057-propuesta-compras-v3.md#escenario-102
+      // ELEGIR LA PARTIDA ORIGEN CELDA POR CELDA ES JALARLA, y la fila tiene que
+      // decirlo. Sin la marca, esa fila quedaba en tierra de nadie: llevaba el
+      // id del origen —así que viajaba en `data.meta.sources`— y a la vez no
+      // contaba como traída, así que `_isCapturedManualRow` la tomaba por
+      // captura manual y el documento entraba por los DOS caminos a la vez, que
+      // es justo lo que la exclusividad existe para impedir.
+      //
+      // Hoy la columna origen está `readonly` y esta ruta no se puede recorrer;
+      // se cierra ahora para que abrirla sea configuración y no un cambio de
+      // código con un agujero dentro.
+      //
+      // °°° `max` NO se pone aquí a propósito. El tope es el saldo, y el saldo
+      // se calcula UNA sola vez —en el servidor— o se lee de la jalada
+      // documental; escribir la resta otra vez en este archivo sería la segunda
+      // copia de la misma cuenta. Sin `max`, `cellMax` cae al de la columna y el
+      // rechazo definitivo lo sigue dando el servidor, que es donde vive.
+      this._markRowAsPulled(rowGroup, column, selected);
+      // ]]]FI
       rowGroup.markAsDirty();
     }
 
@@ -1471,6 +1790,30 @@ export class DynamicTableFieldComponent implements OnChanges, OnDestroy {
     this._finishCellAndAdvance(tableField, rowIndex, column.field, column);
     this.cdr.markForCheck();
   }
+
+  // [[[II ESC:057-102 DOC:docs/documents/2026-08-08-057-propuesta-compras-v3.md#escenario-102
+  /**
+   * Marca la fila como TRAÍDA cuando la columna elegida es la columna ORIGEN.
+   *
+   * Es la misma marca que pone la jalada documental, con la misma forma, para
+   * que las guardas de exclusividad no tengan que distinguir por qué camino
+   * llegó la fila.
+   */
+  private _markRowAsPulled(rowGroup: FormGroup, column: any, selected: any): void {
+    const contract = this._tableSourcesContract();
+    if (!contract || column?.field !== contract.column) return;
+
+    const documento = contract.filter
+      ? (selected?.[contract.filter] ?? selected?.[`${contract.filter}__name`] ?? null)
+      : null;
+    (rowGroup as any)[this.tableRowLocalSourceFlag] = {
+      ...((rowGroup as any)[this.tableRowLocalSourceFlag] || {}),
+      document: documento,
+      label: selected?.[`${contract.filter}__name`] || '',
+      editable: contract.quantity || '',
+    };
+  }
+  // ]]]FI
 
   // [[[II ESC:036-02 DOC:docs/documents/2026-08-04-036-meta-sources-tabla-derivada.md#escenario-02
   /**
@@ -1481,7 +1824,9 @@ export class DynamicTableFieldComponent implements OnChanges, OnDestroy {
    * única llave que distingue una tabla de captura manual de una que además
    * puede jalar partidas de un documento origen.
    */
-  private _tableSourcesContract(): { column: string; quantity: string; amount: string; version: string[] } | null {
+  private _tableSourcesContract(): {
+    column: string; quantity: string; amount: string; version: readonly string[]; filter: string;
+  } | null {
     const raw = this.tableConfig?.sources;
     const column = typeof raw?.column === 'string' ? raw.column.trim() : '';
     if (!column) return null;
@@ -1489,10 +1834,15 @@ export class DynamicTableFieldComponent implements OnChanges, OnDestroy {
       column,
       quantity: typeof raw?.quantity === 'string' ? raw.quantity.trim() : '',
       amount: typeof raw?.amount === 'string' ? raw.amount.trim() : '',
-      version: String(raw?.version || '')
-        .split(',')
-        .map((key: string) => key.trim())
-        .filter((key: string) => !!key),
+      // [[[II ESC:057-105 DOC:docs/documents/2026-08-08-057-propuesta-compras-v3.md#escenario-105
+      // La versión NO es configuración: el servidor compara siempre contra
+      // `modified_at or created_at`. Fuente única compartida con la jalada
+      // documental, que es donde las dos copias divergían. ]]]FI
+      version: SOURCE_VERSION_KEYS,
+      // [[[II ESC:057-102 `filter` es la ForeignKey de la partida hacia SU
+      // documento. La jalada documental ya la usa; aquí sirve para saber de qué
+      // documento salió una fila elegida celda por celda. ]]]FI
+      filter: typeof raw?.filter === 'string' ? raw.filter.trim() : '',
     };
   }
 
@@ -1663,6 +2013,10 @@ export class DynamicTableFieldComponent implements OnChanges, OnDestroy {
   private _applyDerivedChildren(rowGroup: FormGroup, column: any, selected: any, source: any): void {
     // Nodos derived por nombre o numerados ({0:...}): normalización única.
     const derivedNodes = this.generalS.configuredChildNodes(column?.children?.fields?.derived);
+    // [[[II ESC:057-72 DOC:docs/documents/2026-08-08-057-propuesta-compras-v3.md#escenario-72
+    // La fila recuerda QUIÉN la derivó: es lo único que permite que el mismo
+    // campo se comporte distinto según el padre que lo llenó. ]]]FI
+    if (derivedNodes.length && column?.field) source[ROW_DERIVED_BY_KEY] = column.field;
 
     derivedNodes.forEach((cfg: any) => {
       const targetField: string = cfg.field;
@@ -1730,8 +2084,21 @@ export class DynamicTableFieldComponent implements OnChanges, OnDestroy {
     if (!this.tableConfig) {
       this.normalizedColumns = [];
       this.controlColumnFields = [];
+      this._totalsNodes = [];
+      this._lineBaseFields = [];
       return;
     }
+
+    // [[[II ESC:057-97 DOC:docs/documents/2026-08-08-057-propuesta-compras-v3.md#escenario-97
+    // `totals` se normaliza igual que columns y children: dict numerado o
+    // lista, misma funcion. `active: false` apaga el renglon completo. ]]]FI
+    this._totalsNodes = this.tableConfig.totals?.active === true
+      ? this.generalS.configuredChildNodes(this.tableConfig.totals?.fields)
+      : [];
+    const base = this.tableConfig.totals?.line_subtotal;
+    this._lineBaseFields = (typeof base === 'string' ? base.split(',') : (base || []))
+      .map((field: any) => String(field).trim())
+      .filter((field: string) => !!field);
 
     // [[[II ESC:030-06 columns acepta lista o dict numerado {0:...} (misma forma
     // que panel.fields); el normalizador de GeneralService es la fuente única. ]]]FI
@@ -1741,12 +2108,35 @@ export class DynamicTableFieldComponent implements OnChanges, OnDestroy {
     // Relaciones declaradas y targets bloqueados por derived default.edit:false.
     this._relationshipColumnFields = this.generalS.configuredRelationshipFields(this.normalizedColumns);
     this._derivedLockedFields = new Set<string>();
+    // [[[II ESC:057-71 DOC:docs/documents/2026-08-08-057-propuesta-compras-v3.md#escenario-71
+    // El MISMO campo puede comportarse distinto según QUIÉN lo derivó, así que
+    // además del conjunto global se guarda el mapa por columna padre. El global
+    // se conserva para el recorrido de fila que no sabe quién derivó.
+    this._derivedLockedByParent = new Map<string, Set<string>>();
+    // ]]]FI
+    // [[[II ESC:057-72 DOC:docs/documents/2026-08-08-057-propuesta-compras-v3.md#escenario-72
+    // La derivación de la columna ORIGEN gobierna SÓLO la fila traída, así que
+    // NO entra en el conjunto global. Si entrara, un producto derivado con
+    // `edit: false` para la fila traída cerraría también la columna de una fila
+    // capturada a mano, donde el usuario sí tiene que poder elegirlo.
+    const columnaOrigen = this._tableSourcesContract()?.column || '';
+    // ]]]FI
     this.normalizedColumns.forEach((column: any) => {
-      this.generalS.configuredChildNodes(column?.children?.fields?.derived).forEach((node: any) => {
+      const nodos = this.generalS.configuredChildNodes(column?.children?.fields?.derived);
+      const porPadre = new Set<string>();
+      nodos.forEach((node: any) => {
         const targetColumn = this.normalizedColumns.find((candidate: any) => candidate?.field === node.field);
         const effectiveEdit = node?.default?.edit ?? targetColumn?.default?.edit ?? true;
-        if (effectiveEdit === false && node.field) this._derivedLockedFields.add(node.field);
+        if (effectiveEdit === false && node.field) {
+          if (column?.field !== columnaOrigen) this._derivedLockedFields.add(node.field);
+          porPadre.add(node.field);
+        }
       });
+      // [[[II ESC:057-71 Se registra aunque quede vacío: «esta derivación existe
+      // y no bloquea nada» no es lo mismo que «no hay derivación». ]]]FI
+      if (column?.field && nodos.length) {
+        this._derivedLockedByParent.set(column.field, porPadre);
+      }
     });
     this.controlColumnFields = this.normalizedColumns
       .map((column: any) => column?.field)
@@ -1854,6 +2244,9 @@ export class DynamicTableFieldComponent implements OnChanges, OnDestroy {
   private clearTableRuntimeCaches(): void {
     this.tableRowEditStateCache = {};
     this.tableCellClassCache = {};
+    // [[[II ESC:057-97 Los totales dependen de los VALORES de las filas, no solo
+    // de la configuracion: se recalculan en el mismo ciclo que el resto. ]]]FI
+    this._tableTotalsCache = null;
     this._publishEditingState();
   }
 

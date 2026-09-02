@@ -101,6 +101,106 @@ describe('GeneralService', () => {
   });
   // ]]]FI
 
+  // [[[II ESC:057-129 DOC:docs/documents/2026-08-08-057-propuesta-compras-v3.md#escenario-129
+  describe('enrichRowRelationDataFromColumns: las columnas <relación>_data_<campo>', () => {
+    /** La misma respuesta de arriba: el código y el nombre viven DOS saltos
+     *  más adentro (partida → producto → producto base). */
+    const respuesta = () => ({
+      data: [{
+        id: 'detalle-1',
+        type: 'supplier-request-detail',
+        attributes: { requested: '3.000' },
+        relationships: { product: { data: { id: 'producto-1', type: 'product' } } },
+      }],
+      included: [
+        {
+          id: 'producto-1',
+          type: 'product',
+          attributes: { use_name: 'NO' },
+          relationships: { base_product: { data: { id: 'base-1', type: 'base-product' } } },
+        },
+        { id: 'base-1', type: 'base-product', attributes: { code: 'PR-01', name: 'DIESEL' } },
+      ],
+    });
+
+    /** Las columnas TAL CUAL las declara la configuración del pedido. */
+    const columnas = () => ({
+      0: { field: 'product', option_label: 'base_product_data_name' },
+      1: {
+        field: 'product_data_code',
+        relationship_field: 'product',
+        option_label: 'base_product_data_code',
+      },
+      2: {
+        field: 'product_data_name',
+        relationship_field: 'product',
+        option_label: 'base_product_data_name',
+      },
+      3: { field: 'requested' },
+    });
+
+    const filas = (resp: any) => service.DJAtoObject({
+      respDJA: resp, fields: { product: { option_label: 'base_product_data_name' } },
+    }) as any[];
+
+    it('llena el código y la descripción desde el included de la MISMA respuesta', () => {
+      const resp = respuesta();
+      const [fila] = service.enrichRowRelationDataFromColumns(
+        filas(resp), resp, columnas());
+
+      expect(fila['product_data_code']).toBe('PR-01');
+      expect(fila['product_data_name']).toBe('DIESEL');
+      // La relación y su etiqueta siguen intactas.
+      expect(fila['product']).toBe('producto-1');
+      expect(fila['product__name']).toBe('DIESEL');
+    });
+
+    it('cada columna usa SU option_label, no el de la relación', () => {
+      const resp = respuesta();
+      const cols: any = columnas();
+      cols[1].option_label = 'base_product_data_code,base_product_data_name';
+
+      const [fila] = service.enrichRowRelationDataFromColumns(filas(resp), resp, cols);
+
+      expect(fila['product_data_code']).toBe('PR-01 DIESEL');
+    });
+
+    it('NO pisa un valor que la fila ya trae (captura local del usuario)', () => {
+      const resp = respuesta();
+      const previas = filas(resp).map((f: any) => ({ ...f, product_data_code: 'MÍO' }));
+
+      const [fila] = service.enrichRowRelationDataFromColumns(previas, resp, columnas());
+
+      expect(fila['product_data_code']).toBe('MÍO');
+      expect(fila['product_data_name']).toBe('DIESEL');
+    });
+
+    it('ignora las columnas que no declaran las DOS mitades del contrato', () => {
+      const resp = respuesta();
+      const cols: any = {
+        // Sin `relationship_field`: no se sabe de qué relación cuelga.
+        0: { field: 'product_data_code', option_label: 'base_product_data_code' },
+        // Sin forma `<relación>_data_<campo>`: es un campo propio de la partida.
+        1: { field: 'requested', relationship_field: 'product', option_label: 'code' },
+      };
+
+      const [fila] = service.enrichRowRelationDataFromColumns(filas(resp), resp, cols);
+
+      expect(fila['product_data_code']).toBeUndefined();
+      expect(fila['requested']).toBe('3.000');
+    });
+
+    it('sin included devuelve las filas tal cual, sin romperse', () => {
+      const resp: any = respuesta();
+      const originales = filas(resp);
+      delete resp.included;
+
+      expect(service.enrichRowRelationDataFromColumns(originales, resp, columnas()))
+        .toBe(originales);
+    });
+  });
+  // ]]]FI
+
   // [[[II ESC:036-01 DOC:docs/documents/2026-08-04-036-meta-sources-tabla-derivada.md#escenario-01
   describe('baseDJA: meta del resource object', () => {
     it('publica data.meta cuando la conversión lo pide', () => {
