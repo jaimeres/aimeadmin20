@@ -641,6 +641,23 @@ export class GeneralService {
       }
 
 
+      // [[[II ESC:057-137 DOC:docs/documents/2026-08-08-057-propuesta-compras-v3.md#escenario-137
+      // Los campos `<relación>_data_<campo>` que declara la configuración se
+      // resuelven desde `included`, para CUALQUIER consumidor —la lista, el
+      // formulario, la tabla— y no sólo para las sugerencias del autocomplete.
+      //
+      // Sin esto la columna «Código de solicitud» de las partidas llegaba vacía:
+      // el valor no es un atributo del recurso, vive en su relación, y nadie lo
+      // traía. No se declara nada nuevo: la clave ya lo dice todo.
+      if (included) {
+        const relacionadas = Object.keys(fields || {})
+          .filter((clave) => !!this._relationDataFieldParts(clave));
+        if (relacionadas.length) {
+          this._applyRelationDataFields(data, included as any[], relacionadas);
+        }
+      }
+      // ]]]FI
+
       data.created_at = this.timeZone(dja.attributes?.created_at);
       data.modified_at = this.timeZone(dja.attributes?.modified_at);
       data.inactivated_at = this.timeZone(dja.attributes?.inactivated_at);
@@ -1229,10 +1246,35 @@ export class GeneralService {
       ?? null;
   }
 
-  private _includedRelationValue(includedItem: any, relationData: any, attribute: string): any {
+  private _includedRelationValue(includedItem: any, relationData: any, attribute: string,
+                                 included?: any[]): any {
     if (attribute === 'id') return includedItem?.id ?? relationData?.id ?? '';
     if (attribute === 'type') return includedItem?.type ?? relationData?.type ?? '';
-    return includedItem?.attributes?.[attribute];
+
+    const directo = includedItem?.attributes?.[attribute];
+    if (directo !== undefined && directo !== null && directo !== '') return directo;
+
+    // [[[II ESC:057-136 DOC:docs/documents/2026-08-08-057-propuesta-compras-v3.md#escenario-136
+    // LA CADENA `_data_` NO TIENE PROFUNDIDAD FIJA. `product_data_name` es un
+    // salto; `product_data_base_product_data_name` son dos, y hasta ahora el
+    // segundo devolvía `undefined` en silencio.
+    //
+    // Ocurre siempre que el atributo legible vive más adentro: la partida de un
+    // pedido no publica nombre —lo toma de su producto, que a su vez lo toma del
+    // producto base—, así que etiquetar «Partida de pedido» exige recorrer dos.
+    //
+    // No se declara nada nuevo: es el MISMO separador y el mismo resolvedor,
+    // aplicado otra vez sobre el recurso que se acaba de encontrar.
+    if (Array.isArray(included) && this._relationDataFieldParts(attribute)) {
+      const fuente: any = {
+        id: includedItem?.id, ...(includedItem?.attributes || {}),
+        relationships: includedItem?.relationships,
+      };
+      this._applyRelationDataFields(fuente, included, [attribute]);
+      return fuente[attribute];
+    }
+    // ]]]FI
+    return directo;
   }
 
   private _applyRelationDataFields(row: any, included: any[], requestedFields: string[]): void {
@@ -1251,7 +1293,7 @@ export class GeneralService {
       if (Array.isArray(relationData)) {
         const values = relationData
           .map((item: any) => this._findIncludedItem(included, item))
-          .map((includedItem: any, index: number) => this._includedRelationValue(includedItem, relationData[index], parts.attribute))
+          .map((includedItem: any, index: number) => this._includedRelationValue(includedItem, relationData[index], parts.attribute, included))
           .filter((value: any) => value !== undefined && value !== null && value !== '');
         if (values.length) row[fieldName] = values.join(', ');
         return;
@@ -1260,7 +1302,7 @@ export class GeneralService {
       const includedItem = this._findIncludedItem(included, relationData);
       if (!includedItem) return;
 
-      const value = this._includedRelationValue(includedItem, relationData, parts.attribute);
+      const value = this._includedRelationValue(includedItem, relationData, parts.attribute, included);
       if (value !== undefined && value !== null) {
         row[fieldName] = value;
       }

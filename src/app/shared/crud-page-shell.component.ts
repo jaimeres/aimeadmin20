@@ -1,5 +1,8 @@
 import { Component, Input } from '@angular/core';
 import { SelectModule } from 'primeng/select';
+// [[[II ESC:057-157 Diálogo de firma; se comparte con las pantallas que no usan este shell. ]]]FI
+import { CustomAuthorizationComponent }
+  from '../components/custom-authorization/custom-authorization.component';
 import { LOCAL_BASE } from './components.index';
 import { PRIME_MODULES } from './primeng.index';
 import { TaskModuleLoaderComponent } from '../components/task-module-loader/task-module-loader.component';
@@ -43,6 +46,7 @@ export interface ShellSaveConfig {
   selector: 'app-crud-page-shell',
   standalone: true,
   imports: [SelectModule, TaskModuleLoaderComponent, CustomSourceDocumentsComponent,
+    CustomAuthorizationComponent,
     ...PRIME_MODULES, ...LOCAL_BASE],
   template: `
     <p-confirmdialog />
@@ -108,6 +112,14 @@ export interface ShellSaveConfig {
       [visible]="crud.actionsSelectionDialogVisible"
       (visibleChange)="crud.onVisibleChange($event)"
     />
+
+    <!-- [[[II ESC:057-157 DOC:docs/documents/2026-08-08-057-propuesta-compras-v3.md#escenario-157
+      Firma de una autorización desde el botón verde. Es un componente y no
+      marcado suelto porque las pantallas de pedido y de solicitud NO usan este
+      shell: tienen plantilla propia, y el diálogo tiene que estar en las tres.
+    -->
+    <app-custom-authorization [crud]="crud" />
+    <!-- ]]]FI -->
 
     <p-dialog
       [(visible)]="crud.formDialogVisible[$any(crud.typeDefault)]"

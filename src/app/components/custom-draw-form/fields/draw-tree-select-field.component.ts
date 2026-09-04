@@ -1,4 +1,4 @@
-// [[[II ESC:031-04 DOC:docs/documents/2026-07-18-031-optimizacion-navegacion-activos.md#escenario-04
+// [[[II ESC:031-04 DOC:docs/documents/2026-07-18-031-optimizacion-navegacion-activos.md#escenario-04 ESC:001-19 DOC:docs/documents/2026-05-16_001_consolidacion_dropdown_types_y_fix_escenarios.md#escenario-19
 // Campo tree-select extraído del template de CustomDrawForm para cargarse con
 // @defer solo cuando un formulario contiene este tipo. Markup idéntico al
 // ng-template original (trazabilidad previa: docs 2026-06-04_020 virtual
@@ -17,7 +17,7 @@ import { AutoFocusModule } from 'primeng/autofocus';
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [CommonModule, ReactiveFormsModule, TreeSelectModule, FloatLabelModule, ButtonModule, AutoFocusModule],
   template: `
-    <p-floatlabel variant="on">
+    <p-floatlabel variant="on" class="tree-select-field">
       <p-treeSelect display="chip" [metaKeySelection]="false" selectionMode="checkbox"
         [options]="options()" [pAutoFocus]="fieldConfig().autofocus"
         [formControl]="control()" key="id" [appendTo]="'body'" [showClear]="true"
@@ -25,7 +25,7 @@ import { AutoFocusModule } from 'primeng/autofocus';
         (onNodeSelect)="nodeChangeAction.emit($event)"
         (onNodeUnselect)="nodeChangeAction.emit($event)"
         (onNodeExpand)="nodeExpandAction.emit($event)" [containerStyleClass]="'height-input-custom'"
-        [panelStyleClass]="'custom-tree-select-panel'" class="height-input-custom"
+        [panelStyleClass]="'custom-tree-select-panel'" class="height-input-custom tree-select-control"
         [filter]="fieldConfig().filter_local !== undefined ? fieldConfig().filter_local : false"
         [virtualScroll]="fieldConfig().virtual_scrolling?.active === true && virtualReady()"
         [virtualScrollItemSize]="60" [scrollHeight]="fieldConfig().scroll_height || '220px'"
@@ -33,23 +33,49 @@ import { AutoFocusModule } from 'primeng/autofocus';
         [filterBy]="fieldConfig().filter_by ? fieldConfig().filter_by + ',label,filter_text' : 'label,filter_text'" />
 
       <button *ngIf="fieldConfig().reload_icon !== undefined ? fieldConfig().reload_icon : false" type="button" pButton
-        icon="pi pi-replay" class="height-icon-custom" style="width: 40px !important;"
+        icon="pi pi-replay" class="height-icon-custom tree-select-action" style="width: 40px !important;"
         (click)="reloadAction.emit(fieldConfig().field)"></button>
       <!-- [[[II ESC:001-18 DOC:docs/documents/2026-05-16_001_consolidacion_dropdown_types_y_fix_escenarios.md#escenario-18 -->
       <button *ngIf="fieldConfig().additional_search?.active === true" type="button" pButton
-        icon="pi pi-search" class="height-icon-custom" style="width: 40px !important;"
+        icon="pi pi-search" class="height-icon-custom tree-select-action" style="width: 40px !important;"
         title="Buscar en el servidor" [disabled]="fieldConfig().readonly === true"
         (click)="searchAction.emit(fieldConfig().field)"></button>
       <!-- ]]]FI -->
-      <button *ngIf="fieldConfig().icon" type="button" pButton [icon]="fieldConfig().icon.icon" class="height-icon-custom"
+      <button *ngIf="fieldConfig().icon" type="button" pButton [icon]="fieldConfig().icon.icon" class="height-icon-custom tree-select-action"
         style="width: 40px !important;"></button>
-      <button *ngIf="fieldConfig()?.icon2" type="button" pButton [icon]="fieldConfig().icon2.icon" class="height-icon-custom"
+      <button *ngIf="fieldConfig()?.icon2" type="button" pButton [icon]="fieldConfig().icon2.icon" class="height-icon-custom tree-select-action"
         style="width: 40px !important;"></button>
       <label [for]="fieldConfig().field">
         {{ fieldConfig()?.label }}
       </label>
     </p-floatlabel>
-  `
+  `,
+  styles: [`
+    :host {
+      display: block;
+      min-width: 0;
+      max-width: 100%;
+      width: 100%;
+    }
+
+    .tree-select-field {
+      display: flex;
+      align-items: stretch;
+      min-width: 0;
+      width: 100%;
+    }
+
+    .tree-select-control {
+      flex: 1 1 auto;
+      min-width: 0;
+      width: 1% !important;
+    }
+
+    .tree-select-action {
+      flex: 0 0 40px;
+      min-width: 40px;
+    }
+  `]
 })
 export class DrawTreeSelectFieldComponent {
   fieldConfig = input.required<any>();

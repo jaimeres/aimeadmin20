@@ -33,6 +33,17 @@ export class BillsComponent extends CRUD implements OnInit {
     this.typeDefault = 'bill';
     this.app[this.typeDefault] = 'purchases/bill';
     this.module[this.typeDefault] = 'CO';
+
+    // [[[II ESC:057-157 DOC:docs/documents/2026-08-08-057-propuesta-compras-v3.md#escenario-157
+    // Seguimiento de autorización de ESTE documento. Con esto el menú verde
+    // ofrece «Autorizar nivel N» cuando hay firmas pendientes; si el tenant no
+    // declaró niveles, no hay pendientes y el grupo no aparece.
+    this.authorizationTracker['bill'] = {
+      app: 'purchases/bill-authorization',
+      type: 'bill-authorization',
+      field: 'bill',
+    };
+    // ]]]FI
     this.initCRUD();
   }
   // ]]]FI

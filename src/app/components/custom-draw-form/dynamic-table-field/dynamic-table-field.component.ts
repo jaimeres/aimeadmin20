@@ -363,9 +363,23 @@ export class DynamicTableFieldComponent implements OnChanges, OnDestroy {
     if (source === 'base') return base;
 
     if (source === 'frozen') {
-      const control = row?.get?.(node.from || 'applied_taxes');
-      if (!control) return null;
-      return this._frozenContribution(node, control.value);
+      // [[[II ESC:057-148 DOC:docs/documents/2026-08-08-057-propuesta-compras-v3.md#escenario-148
+      // LA FOTO CONGELADA NO ES UNA CELDA. `applied_taxes` es el JSON que el
+      // servidor guarda en la partida; no se captura, no se muestra y no tiene
+      // por qué ser columna. Por eso se lee de los DATOS de la fila —el objeto
+      // que `_createNoFormDataTableRowFormGroup` cuelga del FormGroup— y sólo
+      // se cae al control cuando la tabla sí la declara como columna.
+      //
+      // Antes se exigía el control y, al no existir, `_rowContribution`
+      // devolvía `null` y el pie descartaba el renglón COMPLETO: por eso sólo
+      // se veían «Subtotal» y «Cargas adicionales». El dato ya venía del
+      // servidor en cada partida.
+      const campo = node.from || 'applied_taxes';
+      const control = row?.get?.(campo);
+      const crudo = control ? control.value : (row as any)?.[this.tableRowSourceFlag]?.[campo];
+      if (crudo === undefined || crudo === null) return null;
+      return this._frozenContribution(node, crudo);
+      // ]]]FI
     }
 
     const control = row?.get?.(node.from || node.field);

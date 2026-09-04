@@ -10,6 +10,9 @@ import { ConversionCRUD } from '../../utils/conversion-crud.class';
 import { ConfirmationService, PRIME_MODULES } from '../../shared/primeng.index';
 import { LOCAL_BASE } from '../../shared/components.index';
 import { MenuItem } from 'primeng/api';
+// [[[II ESC:057-157 Diálogo de firma; esta pantalla no usa el shell. ]]]FI
+import { CustomAuthorizationComponent }
+  from '../../components/custom-authorization/custom-authorization.component';
 
 @Component({
   selector: 'app-request',
@@ -17,6 +20,7 @@ import { MenuItem } from 'primeng/api';
     CommonModule,
     ...PRIME_MODULES,
     ...LOCAL_BASE,
+    CustomAuthorizationComponent,
   ],
   templateUrl: './request.component.html',
   styleUrl: './request.component.scss',
@@ -76,6 +80,20 @@ export class RequestComponent extends ConversionCRUD implements OnInit {
 
     this.app['request'] = 'purchases/request';
     this.module['request'] = 'CO';
+
+    // [[[II ESC:057-157 DOC:docs/documents/2026-08-08-057-propuesta-compras-v3.md#escenario-157
+    // Sólo en la posición del DOCUMENTO. En «Detalle de Solicitud» lo
+    // seleccionado es una PARTIDA, y las partidas no se autorizan: la firma es
+    // del documento — `_DOCUMENT_TYPE_MAP` en
+    // apps/purchases/services/authorization_services.py:26 sólo mapea los cuatro
+    // documentos, y pedir el seguimiento con el id de una partida no devolvería
+    // nada.
+    this.authorizationTracker['request'] = {
+      app: 'purchases/request-authorization',
+      type: 'request-authorization',
+      field: 'request',
+    };
+    // ]]]FI
 
 
     // request-detail no siempre soporta is_active como filtro de listado.

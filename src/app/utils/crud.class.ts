@@ -536,12 +536,29 @@ export class CRUD extends Vars implements OnChanges  /*implements OnInit*/ {
     //console.log('¿¿¿¿¿¿¿¿¿¿¿¿¿¿¿¿¿¿¿¿¿¿¿¿¿', fields_prefixes);
     // Lista plana de strings para detectar si el field empieza con algún prefijo,
     // tolerando ambas formas (array de strings o objeto { prefix: config }).
-    const prefixList: string[] = Array.isArray(fields_prefixes)
-      ? fields_prefixes.filter((p: any) => typeof p === 'string')
-      : Object.keys(fields_prefixes);
+    // [[[II ESC:057-139 DOC:docs/documents/2026-08-08-057-propuesta-compras-v3.md#escenario-139
+    // La lista sale del NORMALIZADOR, que entiende las tres formas en que se
+    // puede declarar `fields_prefixes`. La versión anterior filtraba por
+    // `typeof === 'string'` sobre un array de OBJETOS —que es la forma real—,
+    // así que devolvía una lista VACÍA: ningún campo de prefijo se reconocía
+    // como tal y todos acababan pedidos como sparse field inexistente.
+    const prefixList: string[] = this._normalizeFieldsPrefixes(posIndex)
+      .map(({ prefix }) => prefix);
+    // ]]]FI
 
     // [[[II ESC:005-04 DOC:docs/documents/2026-05-31_005_columnas-form-data-y-tree-select-nombres.md#escenario-04
     let requiresFormData = false;
+    // ]]]FI
+
+    // [[[II ESC:057-139 DOC:docs/documents/2026-08-08-057-propuesta-compras-v3.md#escenario-139
+    // Prefijos declarados `kind: 'parent'` y la RELACIÓN de cada uno, que es su
+    // `filter`. Se lee con el normalizador que ya entiende las tres formas en
+    // que se puede declarar `fields_prefixes`; no se interpreta el nombre.
+    const prefijosPadre = new Map<string, string>();
+    for (const { prefix, config } of this._normalizeFieldsPrefixes(posIndex)) {
+      const relacion = typeof config?.filter === 'string' ? config.filter.trim() : '';
+      if (config?.kind === 'parent' && relacion) prefijosPadre.set(prefix, relacion);
+    }
     // ]]]FI
 
     selectedColumns.forEach((obj) => {
@@ -562,10 +579,9 @@ export class CRUD extends Vars implements OnChanges  /*implements OnInit*/ {
       }
       // ]]]FI
 
-      //debe saltarse el valor si el campo inicial igual que cualquieda de los valores de array fields_prefixes
-      if (prefixList.length && prefixList.some(prefix => selectedField.startsWith(prefix))) {
-        return;
-      }
+      // [[[II ESC:057-139 Un campo de prefijo no se pide como campo propio; qué
+      // hacer con él lo decide su `kind`, más abajo. Antes se saltaba aquí
+      // TODOS, pero como `prefixList` venía vacía el corte no ocurría nunca. ]]]FI
 
       //estrategicamente va al inicio
       //|||esta primera parte tambiene sta pensada para los productos
@@ -578,6 +594,22 @@ export class CRUD extends Vars implements OnChanges  /*implements OnInit*/ {
       } else if (obj.field.includes('__text')) {
         const dividedField = obj.field.split('__text')[0]; // Obtenemos la primera parte dividida
         fields += dividedField + ',';
+      // [[[II ESC:057-139 DOC:docs/documents/2026-08-08-057-propuesta-compras-v3.md#escenario-139
+      // Un campo de PREFIJO no es un atributo del recurso y no se pide como
+      // sparse field: `fields[...]=request_data_code` no existe en el servidor.
+      //
+      // ||| Y NO SE DEDUCE LA RELACIÓN PARTIENDO EL NOMBRE. Se hizo así en un
+      // primer intento y rompió otra pantalla: `maintenance_document_data_*` es
+      // un prefijo `kind: 'child'` —se carga con su PROPIO GET, no con un
+      // `include`— y pedir `include=maintenance_document` respondía 400. La
+      // relación la dice la CONFIGURACIÓN (`fields_prefixes`), no el nombre.
+      } else if (prefijosPadre.has(this._prefixOf(selectedField, prefixList))) {
+        include += prefijosPadre.get(this._prefixOf(selectedField, prefixList)) + ',';
+      } else if (prefixList.some((prefix: string) => selectedField.startsWith(prefix))) {
+        // Prefijo declarado que NO es padre (p.ej. `kind: 'child'`): lo resuelve
+        // su propio flujo, aquí no se pide nada.
+        return;
+      // ]]]FI
       } else {
         fields += obj.field + ',';
       }
@@ -589,8 +621,15 @@ export class CRUD extends Vars implements OnChanges  /*implements OnInit*/ {
     }
     // ]]]FI
 
-    this.fields[posIndex] = include + fields.slice(0, -1);
-    this.include[posIndex] = include.slice(0, -1);
+    // [[[II ESC:057-137 DOC:docs/documents/2026-08-08-057-propuesta-compras-v3.md#escenario-137
+    // Sin duplicados: varias columnas `<relación>_data_<campo>` de la MISMA
+    // relación pedían la relación una vez cada una (`include=request,request,
+    // request`). No rompe nada, pero ensucia la petición y el log.
+    const unicos = (lista: string) => Array.from(new Set(
+      lista.split(',').map((parte) => parte.trim()).filter((parte) => !!parte)));
+    this.fields[posIndex] = unicos(include + fields).join(',');
+    this.include[posIndex] = unicos(include).join(',');
+    // ]]]FI
   }
 
   // [[[II ESC:021-02 DOC:docs/documents/2026-06-05_021_crud-onshow-maximize-small-screens.md#escenario-02
@@ -2765,6 +2804,16 @@ export class CRUD extends Vars implements OnChanges  /*implements OnInit*/ {
    * columna canónica a `this.cols()` (o `this.include[pos]`) — no inferirla
    * desde el prefijo.
    */
+  // [[[II ESC:057-139 DOC:docs/documents/2026-08-08-057-propuesta-compras-v3.md#escenario-139
+  /** Prefijo DECLARADO al que pertenece un campo, o '' si no pertenece a ninguno. */
+  protected _prefixOf(field: string, prefixes: string[]): string {
+    for (const prefix of prefixes || []) {
+      if (prefix && field.startsWith(prefix)) return prefix;
+    }
+    return '';
+  }
+  // ]]]FI
+
   protected _includeForParentPrefixes(pos: any, baseInclude: string): string {
     return baseInclude;
   }
@@ -7076,7 +7125,135 @@ export class CRUD extends Vars implements OnChanges  /*implements OnInit*/ {
 
     this.getStatus({ module: this.module[this.pos()], id, ids_task });
     //}
+    // [[[II ESC:057-157 DOC:docs/documents/2026-08-08-057-propuesta-compras-v3.md#escenario-157
+    // El grupo de autorización NO se pide aquí: `dependentStatus` hace
+    // `startMenu.set(...)` —REEMPLAZA el menú—, así que agregarlo en paralelo lo
+    // perdía en cuanto respondían los estados. Se agrega dentro de `getStatus`,
+    // después de las tareas, que es el mismo orden que ellas ya seguían.
+    // ]]]FI
   }
+
+  // [[[II ESC:057-157 DOC:docs/documents/2026-08-08-057-propuesta-compras-v3.md#escenario-157
+  /**
+   * Seguimiento de autorización del documento de ESTA posición.
+   *
+   * Vacío por omisión: un recurso sin autorizaciones no declara nada y el menú
+   * verde no cambia. Cada pantalla que sí las tenga declara su ruta y el nombre
+   * de la relación hacia el documento — no hay un recurso único de
+   * autorizaciones, cada módulo guarda las suyas junto a su documento.
+   */
+  public authorizationTracker: { [pos: string]: { app: string; type: string; field: string } } = {};
+
+  /** Firmas del documento seleccionado, para el diálogo. */
+  public authorizationRows = signal<any[]>([]);
+  // Propiedad plana y no señal: es el mismo idioma que usan los demás diálogos
+  // del shell (`[(visible)]="crud.formDialogVisible[...]"`), y `p-dialog` sólo
+  // materializa su contenido con el enlace de dos vías.
+  public authorizationDialogVisible = false;
+  public authorizationTarget = signal<any>(null);
+  public authorizationSending = signal<boolean>(false);
+  public authorizationUsername = '';
+  public authorizationPassword = '';
+  public authorizationComment = '';
+
+  /**
+   * Agrega al menú verde el grupo de autorización, si lo hay.
+   *
+   * Se suma con el MISMO patrón que las tareas —separador y `startMenu.update`,
+   * ver `getTask` más abajo en esta clase— para que sea un grupo más del menú y
+   * no una pantalla aparte.
+   *
+   * Sólo se ofrece lo que está PENDIENTE. El orden de la escalera lo impone el
+   * servidor (`apps/authorizations/resolution_services.py`); aquí no se replica,
+   * porque sería la misma regla escrita dos veces.
+   */
+  protected loadAuthorizationActions(): void {
+    const tracker = this.authorizationTracker[this.pos()];
+    const documento = this.selected()[0];
+    this.authorizationRows.set([]);
+    if (!tracker || !documento?.id) return;
+
+    this.crudS.getObject({
+      app: tracker.app,
+      type: tracker.type,
+      filter: `filter[${tracker.field}]=${documento.id}`,
+    }).subscribe({
+      next: (resp: any) => {
+        const filas = this.DJAtoObject({ resp }) || [];
+        this.authorizationRows.set(filas);
+
+        const pendientes = filas.filter((f: any) => f.authorization_status === 'P');
+        if (!pendientes.length) return;
+
+        const items = pendientes.map((f: any) => ({
+          label: `Autorizar nivel ${f.level}`,
+          command: () => this.openAuthorizationDialog(f),
+        }));
+        this.startMenu.update((current) => [...current, { separator: true }, ...items]);
+      },
+      // Un documento sin autorizaciones, o un usuario sin permiso sobre ellas,
+      // no debe romper el menú: simplemente no se agrega el grupo.
+      error: () => { },
+    });
+  }
+
+  public openAuthorizationDialog(fila: any): void {
+    this.authorizationTarget.set(fila);
+    this.authorizationUsername = '';
+    this.authorizationPassword = '';
+    this.authorizationComment = '';
+    this.authorizationDialogVisible = true;
+  }
+
+  /**
+   * Firma o rechaza el nivel seleccionado.
+   *
+   * Las credenciales siguen los dos escenarios de
+   * `apps/authorizations/credential_services.py:36`:
+   *
+   * - usuario VACÍO: firma el usuario de la sesión y se le pide SU contraseña;
+   * - usuario LLENO: firma otra persona y se validan sus credenciales.
+   *
+   * Por eso el usuario es opcional en el diálogo y la contraseña no lo es.
+   */
+  public resolveAuthorization(estado: 'A' | 'R'): void {
+    const fila = this.authorizationTarget();
+    const tracker = this.authorizationTracker[this.pos()];
+    if (!fila || !tracker || this.authorizationSending()) return;
+
+    if (!this.authorizationPassword) {
+      this.messageS.changeMessage(
+        'Escriba la contraseña para autorizar.', null, {}, 'warn');
+      return;
+    }
+
+    this.authorizationSending.set(true);
+    this.crudS.edit({
+      id: fila.id,
+      formData: {
+        authorization_status: estado,
+        comment: this.authorizationComment || '',
+        username: this.authorizationUsername || '',
+        password: this.authorizationPassword,
+      },
+      app: tracker.app,
+      type: tracker.type,
+    }).subscribe({
+      next: () => {
+        this.authorizationSending.set(false);
+        this.authorizationDialogVisible = false;
+        this.authorizationPassword = '';
+        this.messageS.changeMessage(
+          estado === 'A' ? 'Autorizado.' : 'Rechazado.', null, {}, 'success');
+        this.getAll({ pos: this.pos() });
+      },
+      error: (err: any) => {
+        this.authorizationSending.set(false);
+        this.messageS.changeMessage('No se pudo firmar la autorización.', err, this.customField());
+      },
+    });
+  }
+  // ]]]FI
 
   /**
    * Maneja la selección de registros secundarios
@@ -7463,6 +7640,9 @@ export class CRUD extends Vars implements OnChanges  /*implements OnInit*/ {
     if ((this.sharedS as any).data[cacheKey] && !force) {
       this.dependentStatus((this.sharedS as any).data[cacheKey], module, id);
       this.getTask({ module, ids_task });
+      // [[[II ESC:057-157 DOC:docs/documents/2026-08-08-057-propuesta-compras-v3.md#escenario-157
+      this.loadAuthorizationActions();
+      // ]]]FI
       return;
     }
 
@@ -7473,6 +7653,9 @@ export class CRUD extends Vars implements OnChanges  /*implements OnInit*/ {
         (this.sharedS as any).data[cacheKey] = this.DJAtoObject({ resp });
         this.dependentStatus((this.sharedS as any).data[cacheKey], module, id);
         this.getTask({ module, ids_task });
+        // [[[II ESC:057-157 DOC:docs/documents/2026-08-08-057-propuesta-compras-v3.md#escenario-157
+        this.loadAuthorizationActions();
+        // ]]]FI
         this.showBlocked(false);
       },
       error: (err: any) => {

@@ -1,4 +1,7 @@
 import { Component, OnInit, signal } from '@angular/core';
+// [[[II ESC:057-157 Diálogo de firma; esta pantalla no usa el shell. ]]]FI
+import { CustomAuthorizationComponent }
+  from '../../components/custom-authorization/custom-authorization.component';
 import { CRUD } from '../../utils/crud.class';
 import { ConfirmationService, MenuItem } from 'primeng/api';
 import { AssetService } from '../services/asset.service';
@@ -34,6 +37,7 @@ type ChatMessage = {
     CustomTaskTreeComponent,
     ...PRIME_MODULES,
     ...LOCAL_BASE,
+    CustomAuthorizationComponent,
 
     //QUITAR
     TagModule,
@@ -88,6 +92,20 @@ export class MaintenanceComponent extends CRUD implements OnInit {
     //Inicializa los valores por defecto para completar las funciones crud del servicio
     this.typeDefault = 'maintenance';
     this.app[this.typeDefault] = 'assets/maintenance';
+
+    // [[[II ESC:057-157 DOC:docs/documents/2026-08-08-057-propuesta-compras-v3.md#escenario-157
+    // La autorización es TRANSVERSAL: los niveles se declaran por
+    // `authorization_type` (código de MODULES_CHOICES), así que el mismo
+    // catálogo y el mismo menú sirven fuera de compras. Mantenimiento guarda sus
+    // firmas en `maintenance-authorization`
+    // (apps/assets/models/maintenance.py:400) y con esta línea el botón verde le
+    // ofrece «Autorizar nivel N» igual que a un documento de compras.
+    this.authorizationTracker['maintenance'] = {
+      app: 'assets/maintenance-authorization',
+      type: 'maintenance-authorization',
+      field: 'maintenance',
+    };
+    // ]]]FI
     this.module[this.typeDefault] = 'MA';
 
 

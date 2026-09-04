@@ -100,6 +100,15 @@ export const appRoutes: Routes = [
         canActivate: [appCanActivateGuardChild],
         loadChildren: () => import('./app/purchases/purchase.routes')
       },
+      // Módulo TRANSVERSAL: los niveles se declaran por `authorization_type`
+      // (código de MODULES_CHOICES), así que el mismo catálogo sirve a compras
+      // y a cualquier otro módulo que declare sus niveles.
+      {
+        path: 'authorizations',
+        data: { breadcrumb: 'Autorizaciones' },
+        canActivate: [appCanActivateGuardChild],
+        loadChildren: () => import('./app/authorizations/authorizations.routes')
+      },
       {
         path: 'assets',
         data: { breadcrumb: 'Activos' },

@@ -209,3 +209,10 @@
 
 <app-task-module-loader *ngIf="tasksModule()" [tasksModule]="tasksModule()" (closeDialog)="closeTaskModule()">
 </app-task-module-loader>
+
+<!-- [[[II ESC:057-157 DOC:docs/documents/2026-08-08-057-propuesta-compras-v3.md#escenario-157
+  Esta pantalla no usa `app-crud-page-shell`, así que el diálogo de firma se
+  incluye aquí. El estado vive en la clase CRUD, igual que en el shell.
+-->
+<app-custom-authorization [crud]="crudPage" />
+<!-- ]]]FI -->

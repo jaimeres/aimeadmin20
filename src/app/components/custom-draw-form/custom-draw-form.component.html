@@ -454,6 +454,30 @@
   </p-floatlabel>
 </ng-template>
 
+<!-- [[[II ESC:057-153 DOC:docs/documents/2026-08-08-057-propuesta-compras-v3.md#escenario-153
+  El formulario dinámico resolvía 20 tipos y `input-password` NO era uno, así
+  que un campo declarado así en la configuración quedaba sin rama y no se
+  dibujaba: estaba en `fields`, en el `grid`, con `hide: false`, y aun así no
+  aparecía. Es lo que impedía FIRMAR una autorización desde el formulario
+  estándar, porque el servidor pide la contraseña y no había dónde escribirla.
+
+  Calcado de `inputTextTemplate`; sólo cambia el `type` y que no se autocompleta
+  con la contraseña guardada del navegador.
+-->
+<ng-template #inputPasswordTemplate let-fieldConfig="fieldConfig">
+  <p-floatlabel variant="on">
+    <input type="password" pInputText [formControl]="$any(formGroupSignal()?.get(fieldConfig.field))"
+      [readonly]="fieldConfig.readonly === true" style="padding-top: 0.5rem !important;"
+      [pAutoFocus]="fieldConfig.autofocus" class="height-input-custom" [attr.data-focus-field]="fieldConfig.field"
+      autocomplete="new-password"
+      (keydown.enter)="onKeydownEnter($event, fieldConfig)" (keydown.tab)="onKeydownTab($event, fieldConfig)" />
+    <label [for]="fieldConfig.field">
+      {{ fieldConfig?.label }}
+    </label>
+  </p-floatlabel>
+</ng-template>
+<!-- ]]]FI -->
+
 <!-- TEMPLATE REUTILIZABLE PARA TOGGLE-BUTTON -->
 <ng-template #toggleButtonTemplate let-fieldConfig="fieldConfig">
   <p-toggleButton [pAutoFocus]="fieldConfig.autofocus" styleClass="height-input-custom"
@@ -649,6 +673,11 @@
               <ng-container *ngTemplateOutlet="inputTextTemplate; context: {fieldConfig: card.value}"></ng-container>
             </div>
 
+            <!-- [[[II ESC:057-153 Sin esta rama la contraseña de la firma no se dibuja. ]]]FI -->
+            <div *ngSwitchCase="'input-password'">
+              <ng-container *ngTemplateOutlet="inputPasswordTemplate; context: {fieldConfig: card.value}"></ng-container>
+            </div>
+
             <div *ngSwitchCase="'textarea'">
               <ng-container *ngTemplateOutlet="textareaTemplate; context: {fieldConfig: card.value}"></ng-container>
             </div>
@@ -738,6 +767,11 @@
 
       <div *ngSwitchCase="'input-text'">
         <ng-container *ngTemplateOutlet="inputTextTemplate; context: {fieldConfig: entry.value}"></ng-container>
+      </div>
+
+      <!-- [[[II ESC:057-153 Sin esta rama la contraseña de la firma no se dibuja. ]]]FI -->
+      <div *ngSwitchCase="'input-password'">
+        <ng-container *ngTemplateOutlet="inputPasswordTemplate; context: {fieldConfig: entry.value}"></ng-container>
       </div>
 
       <div *ngSwitchCase="'toggle-button'">
@@ -846,6 +880,11 @@
 
               <div *ngSwitchCase="'input-text'">
                 <ng-container *ngTemplateOutlet="inputTextTemplate; context: {fieldConfig: card.value}"></ng-container>
+              </div>
+
+              <!-- [[[II ESC:057-153 Sin esta rama la contraseña de la firma no se dibuja. ]]]FI -->
+              <div *ngSwitchCase="'input-password'">
+                <ng-container *ngTemplateOutlet="inputPasswordTemplate; context: {fieldConfig: card.value}"></ng-container>
               </div>
 
               <p-inputgroup *ngSwitchCase="'dropdown'">

@@ -148,6 +148,16 @@
 - **Contratos legados rechazados:** `subsidiaries: true` y el contrato transitorio `{ "ids": [], "names": [] }` ya no consultan ni conceden alcance alternativo. El cliente muestra el formato `{ "filter": {} }` esperado.
 - **Compatibilidad:** no se agregan reintentos ni se reduce la cantidad de opciones cargadas; tampoco cambian los `choice`, campos dinámicos, escrituras ni el valor serializado de las relaciones.
 
+<a id="escenario-19"></a>
+## Escenario 19: Contención visual del TreeSelect con chips y acciones
+
+- **Fecha de ajuste:** 2026-09-02.
+- **Objetivo:** impedir que una multiselección con chips expanda el campo fuera de su columna y oculte la flecha desplegable o los botones configurados.
+- **Alcance:** únicamente el layout del componente standalone de `tree-select`; no cambia la configuración, el modo de selección, los valores del `FormControl`, la serialización, el overlay ni el reemplazo móvil por `listbox`.
+- **Decisión:** el host y el `p-floatlabel` ocupan el ancho disponible y admiten contracción; el `p-treeSelect` consume el espacio restante con `min-width: 0`, mientras cada acción conserva 40 px. Los chips siguen usando `display="chip"` y la etiqueta interna de PrimeNG conserva su recorte horizontal.
+- **Compatibilidad:** se preservan selección checkbox, limpieza, expansión lazy, recarga, búsqueda complementaria, iconos configurados y el ancho de columna declarado por cada formulario.
+- **Validación:** el spec del componente comprueba en un ancho restringido de 220 px dos chips renderizados, la presencia de la flecha y el botón de recarga sin contracción ni desborde.
+
 ## Pendientes
 
 - °°° Revisar por qué varios campos del formulario se vuelven `null` después de inicializarse con `default.value` distinto de `null`. SOLUCIONADO parcialmente para `tree-select`, `multi-select` y `classifiers` en el escenario 08.
@@ -162,6 +172,8 @@
 - `src/app/utils/types/crud.types.ts`
 - `src/app/components/custom-draw-form/custom-draw-form.component.ts`
 - `src/app/components/custom-draw-form/custom-draw-form.component.html`
+- `src/app/components/custom-draw-form/fields/draw-tree-select-field.component.ts`
+- `src/app/components/custom-draw-form/fields/draw-tree-select-field.component.spec.ts`
 - `src/app/components/custom-draw-form/dynamic-dropdown-data.service.ts`
 - `src/app/components/custom-draw-form/dynamic-dropdown-data.service.spec.ts`
 - `src/app/components/custom-draw-form/dynamic-table-field/dynamic-table-field.component.ts`

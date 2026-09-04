@@ -105,6 +105,20 @@ export class AppMenu {
       ]
     },
     // ]]]FI
+    // Autorizaciones: transversal, no cuelga de Compras. La bandeja va primero
+    // porque es la pantalla de uso diario; el catálogo lo toca quien administra.
+    {
+      label: 'Autorizaciones',
+      items: [
+        {
+          label: 'Autorizaciones',
+          items: [
+            { label: 'Por autorizar', icon: 'pi pi-fw pi-check-square', routerLink: ['/authorizations/approvals'] },
+            { label: 'Niveles y firmantes', icon: 'pi pi-fw pi-sitemap', routerLink: ['/authorizations/levels'] },
+          ]
+        },
+      ]
+    },
     /*
         {
           label: 'Compras',

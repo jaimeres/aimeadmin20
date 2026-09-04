@@ -37,6 +37,17 @@ export class DeliveryNotesComponent extends ConversionCRUD implements OnInit {
     this.typeDefault = 'delivery-note';
     this.app[this.typeDefault] = 'purchases/delivery-note';
     this.module[this.typeDefault] = 'CO';
+
+    // [[[II ESC:057-157 DOC:docs/documents/2026-08-08-057-propuesta-compras-v3.md#escenario-157
+    // Seguimiento de autorización de ESTE documento. Con esto el menú verde
+    // ofrece «Autorizar nivel N» cuando hay firmas pendientes; si el tenant no
+    // declaró niveles, no hay pendientes y el grupo no aparece.
+    this.authorizationTracker['delivery-note'] = {
+      app: 'purchases/delivery-note-authorization',
+      type: 'delivery-note-authorization',
+      field: 'delivery_note',
+    };
+    // ]]]FI
     this.initCRUD();
   }
   // ]]]FI

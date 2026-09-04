@@ -87,6 +87,43 @@ describe('GeneralService', () => {
       expect(flat[0]['product__name']).toBe('');
     });
 
+    // [[[II ESC:057-136 DOC:docs/documents/2026-08-08-057-propuesta-compras-v3.md#escenario-136
+    it('la cadena `_data_` resuelve a cualquier profundidad, no sólo un salto', () => {
+      // Una partida de PEDIDO no publica nombre: lo toma de su producto, que a
+      // su vez lo toma del producto base. Son DOS saltos desde la partida.
+      const resp: any = {
+        data: [{
+          id: 'remision-detalle-1',
+          type: 'delivery-note-detail',
+          attributes: { requested: '2.100' },
+          relationships: { supplier_request_detail: {
+            data: { id: 'pedido-detalle-1', type: 'supplier-request-detail' } } },
+        }],
+        included: [
+          {
+            id: 'pedido-detalle-1', type: 'supplier-request-detail',
+            attributes: { requested: '2.100' },
+            relationships: { product: { data: { id: 'producto-1', type: 'product' } } },
+          },
+          {
+            id: 'producto-1', type: 'product', attributes: { use_name: 'NO' },
+            relationships: { base_product: { data: { id: 'base-1', type: 'base-product' } } },
+          },
+          { id: 'base-1', type: 'base-product', attributes: { code: 'PR-01', name: 'DIESEL' } },
+        ],
+      };
+
+      const flat: any = service.DJAtoObject({
+        respDJA: resp,
+        fields: { supplier_request_detail: {
+          option_label: 'product_data_base_product_data_name' } },
+      });
+
+      expect(flat[0]['supplier_request_detail']).toBe('pedido-detalle-1');
+      expect(flat[0]['supplier_request_detail__name']).toBe('DIESEL');
+    });
+    // ]]]FI
+
     it('option_label "name" se ignora a propósito y usa el fallback del recurso', () => {
       const resp: any = respuesta();
       resp.included[0].attributes.name = 'Nombre propio';

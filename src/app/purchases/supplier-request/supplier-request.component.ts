@@ -13,6 +13,9 @@ import { CustomSourceDocumentsComponent }
   from '../../components/custom-source-documents/custom-source-documents.component';
 // ]]]FI
 import { PurchaseService } from '../services/purchase.service';
+// [[[II ESC:057-157 Diálogo de firma; esta pantalla no usa el shell. ]]]FI
+import { CustomAuthorizationComponent }
+  from '../../components/custom-authorization/custom-authorization.component';
 import { LOCAL_BASE } from '../../shared/components.index';
 import { PRIME_MODULES } from '../../shared/primeng.index';
 import { CommonModule } from '@angular/common';
@@ -30,6 +33,7 @@ import { InputTextModule } from 'primeng/inputtext';
     ButtonModule,
     InputTextModule,
     ...LOCAL_BASE,
+    CustomAuthorizationComponent,
     ...PRIME_MODULES,
     CustomSourceDocumentsComponent,
   ],
@@ -58,6 +62,17 @@ export class SupplierRequestComponent extends ConversionCRUD implements OnInit {
     this.typeDefault = 'supplier-request';
     this.app[this.typeDefault] = 'purchases/supplier-request';
     this.module[this.typeDefault] = 'CO';
+
+    // [[[II ESC:057-157 DOC:docs/documents/2026-08-08-057-propuesta-compras-v3.md#escenario-157
+    // Seguimiento de autorización de ESTE documento. Con esto el menú verde
+    // ofrece «Autorizar nivel N» cuando hay firmas pendientes; si el tenant no
+    // declaró niveles, no hay pendientes y el grupo no aparece.
+    this.authorizationTracker['supplier-request'] = {
+      app: 'purchases/supplier-request-authorization',
+      type: 'supplier-request-authorization',
+      field: 'supplier_request',
+    };
+    // ]]]FI
     this.initCRUD();
   }
 
