@@ -2368,6 +2368,23 @@ export class CustomDrawFormComponent implements OnInit, OnDestroy {
         : null;
       if (found) return found;
     }
+    // [[[II ESC:007-15 DOC:docs/documents/2026-05-29-007-children-fields-contrato-unificado.md#escenario-15
+    // DIAGNÓSTICO TEMPORAL, pareja del anterior. Aquí el padre tiene valor pero
+    // NO se pudo recuperar su opción: se devuelve el id crudo y aguas abajo el
+    // filtro comparará `C013` contra `MECANICA`. Si el fallo intermitente nace
+    // aquí, este aviso sale ANTES que el de «filtro dejó al hijo sin opciones».
+    if (raw !== null && raw !== undefined && raw !== '') {
+      console.warn('[BOS children] no se recuperó la opción del padre; se usa el id crudo', {
+        campo: field,
+        canonico: canonical,
+        valorCrudo: raw,
+        clavesConOpciones: candidates.filter(
+          (c) => Array.isArray(this.dropdownOptionsSignal()[c])),
+        tamanoPorClave: candidates.map(
+          (c) => [c, (this.dropdownOptionsSignal()[c] || []).length]),
+      });
+    }
+    // ]]]FI
     return raw;
   }
 
@@ -3094,6 +3111,37 @@ export class CustomDrawFormComponent implements OnInit, OnDestroy {
       const filtered = this._applyClientFilter({
         options: rows, fieldConfig, parentField, parentOption, childFilterGroup, isServer,
       });
+      // [[[II ESC:007-15 DOC:docs/documents/2026-05-29-007-children-fields-contrato-unificado.md#escenario-15
+      // DIAGNÓSTICO TEMPORAL — «a veces no cargan algunos campos children».
+      //
+      // El fallo es intermitente y no se ha podido reproducir a voluntad, así
+      // que se instrumenta el ÚNICO punto donde se distingue de un dato vacío
+      // legítimo: el hijo declaraba opciones y el filtro las dejó en cero.
+      //
+      // La hipótesis a confirmar o descartar es que `parentValue` cayó al id
+      // CRUDO del padre (`C013`) en vez de a su `filter_group` (`MECANICA`),
+      // porque el objeto de la opción del padre no estaba disponible cuando se
+      // reevaluó la cascada. Por eso se imprime de dónde salió el valor.
+      //
+      // Retirar cuando el escenario se cierre.
+      if (rows.length && !filtered.length) {
+        console.warn('[BOS children] filtro dejó al hijo sin opciones', {
+          padre: parentField,
+          hijo: targetField,
+          parentOptionEsObjeto: !!(parentOption && typeof parentOption === 'object'),
+          parentOptionCrudo: parentOption,
+          childFilterGroup,
+          parentValue,
+          valorDelGrupoEnElPadre: (parentOption && typeof parentOption === 'object')
+            ? parentOption[childFilterGroup] : undefined,
+          opcionesDeclaradas: rows.length,
+          gruposDisponibles: Array.from(new Set(
+            rows.map((fila: any) => fila?.[childFilterGroup]))).slice(0, 12),
+          condiciones: fieldConfig?.filter?.conditions,
+          origenDeLasOpciones: isServer ? 'servidor' : 'estáticas',
+        });
+      }
+      // ]]]FI
       const positioned = this._applyResultPosition(
         filtered, fieldConfig?.filter?.result_position ?? fieldConfig?.result_position ?? 'all'
       );

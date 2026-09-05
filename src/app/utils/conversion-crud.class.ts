@@ -512,6 +512,54 @@ protected _pickSourceDocument(pos: any, contract: any): any {
   return null;
 }
 
+// [[[II ESC:057-159 DOC:docs/documents/2026-08-08-057-propuesta-compras-v3.md#escenario-159
+/**
+ * Mensaje que impide traer las partidas de un documento sin autorizar, o
+ * `null` si se puede traer.
+ *
+ * NO CONSULTA NADA. Lee la respuesta que el jalado ya recibió: el documento
+ * origen viaja en `included` porque `sources.include` lo declara, y su
+ * `authorization_state` es un campo del serializer del documento
+ * (`PurchaseDocumentAuthorizationStateMixin`). Añadir una petición aquí sería
+ * una por jalada en un camino transversal a los cuatro documentos.
+ *
+ * Estados (`apps/authorizations/states.py`): `A` autorizado, `PA` parcialmente,
+ * `P` pendiente, `R` rechazado. Un tenant que NO declara niveles obtiene `A`
+ * —`is_fully_authorized` es verdadero cuando no hay niveles obligatorios—, así
+ * que esta guarda es invisible para quien no usa autorizaciones.
+ *
+ * FALLA ABIERTO a propósito en tres casos: sin partidas (no hay nada que
+ * bloquear y el aviso de siempre es más útil), sin el documento en `included`
+ * (la configuración no lo declaró y aquí no se puede saber) y sin el campo
+ * (servidor viejo). El candado real es del servidor, que revalida al guardar.
+ */
+protected _sourceAuthorizationBlock(
+  resp: any, contract: any, documentId: any, documentLabel: string, rows: any[],
+): string | null {
+  if (!Array.isArray(rows) || !rows.length) return null;
+
+  // El recurso del DOCUMENTO sale de `sources.filter`, que es su ForeignKey;
+  // `getAppType` ya tolera `_` contra `-`, así que no hay que declararlo aparte.
+  const documentType = this.crudS.getAppType(contract?.filter)?.type;
+  if (!documentType) return null;
+
+  const incluidos = Array.isArray(resp?.included) ? resp.included : [];
+  const documento = incluidos.find((entrada: any) =>
+    String(entrada?.type) === String(documentType)
+    && String(entrada?.id) === String(documentId));
+  const estado = documento?.attributes?.authorization_state;
+  if (estado === undefined || estado === null || estado === '') return null;
+  if (estado === 'A') return null;
+
+  const nombre = documentLabel || documentId;
+  const detalle = estado === 'R'
+    ? 'fue rechazado'
+    : 'tiene niveles obligatorios pendientes';
+  return `No se tomaron las partidas: ${nombre} ${detalle}. `
+    + 'Fírmelo primero y vuelva a traerlo.';
+}
+// ]]]FI
+
 // [[[II ESC:057-54 DOC:docs/documents/2026-08-08-057-propuesta-compras-v3.md#escenario-54
 /**
  * Cómo se llama en pantalla el documento origen elegido.
@@ -1253,6 +1301,26 @@ protected pullSourceDocument(options: { pos?: any; document?: any; field?: any }
       // código ni la descripción, cuelgan de su producto. ]]]FI
       const conDerivados = this.generalS.enrichRowRelationDataFromColumns(
         Array.isArray(rows) ? rows : [rows], resp, table?.columns);
+      // [[[II ESC:057-159 DOC:docs/documents/2026-08-08-057-propuesta-compras-v3.md#escenario-159
+      // EL DOCUMENTO SIN AUTORIZAR NO ENTRA A LA TABLA.
+      //
+      // Se decide con la MISMA respuesta que acaba de llegar: `sources.include`
+      // ya trae el documento origen y su `authorization_state` viaja en él, así
+      // que no hay una segunda consulta. Autorizar es transversal y este camino
+      // lo usan los cuatro documentos: agregar una petición por jalada sería una
+      // sobrecarga en el flujo más caliente de compras.
+      //
+      // El servidor sigue siendo el candado —`assert_source_authorized` rechaza
+      // al guardar—; esto sólo evita que el usuario arme el documento completo
+      // para que se lo rechacen al final.
+      const bloqueo = this._sourceAuthorizationBlock(
+        resp, contract, documentId, documentLabel, conDerivados);
+      if (bloqueo) {
+        this.messageS.changeMessage(bloqueo, null, {}, 'warn');
+        this._undoSourceGesture();
+        return;
+      }
+      // ]]]FI
       this._appendSourceRows(
         pos, table, contract, conDerivados, resp,
         { id: documentId, label: documentLabel },
